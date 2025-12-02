@@ -16,9 +16,15 @@ export function useFileManagement(session: Session, isPlaying: boolean) {
       const fileId = `${file.name}-${Date.now()}`;
       const sourceId = `source_${fileId}`;
 
-      // Session을 통해 새 트랙 생성 (Undo 가능)
+      // AudioEngine을 통해 새 트랙 생성
       const trackNumber = session.getTrackCount() + 1;
-      const newTrack = session.addTrack(`Track ${trackNumber}`);
+      const newTrack = engine.addTrack(`Track ${trackNumber}`);
+      
+      // Session의 routes 배열에 추가 및 세션 상태 업데이트
+      const routes = session.getRoutes();
+      if (!routes.includes(newTrack)) {
+        session.addRoutes([newTrack]);
+      }
 
       // AudioRegion 생성
       const region = new AudioRegion(buffer, sourceId, {

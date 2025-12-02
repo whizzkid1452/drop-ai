@@ -191,27 +191,6 @@ export class Session {
     });
   }
 
-  /**
-   * 트랙 추가 (내부 메서드)
-   * @private
-   */
-  private addTrackInner(name?: string): Track {
-    const trackName = name || `Track ${this.getTrackCount() + 1}`;
-    const track = this.audioEngine.addTrack(trackName);
-
-    this.routes.push(track);
-    return track;
-  }
-
-  /**
-   * 트랙 추가 (Ardour 스타일)
-   */
-  addTrack(name?: string): Track {
-    const track = this.addTrackInner(name);
-    this.setDirty(true);
-    this.emitEvent('track-added');
-    return track;
-  }
 
   /**
    * Bus 추가
@@ -700,7 +679,10 @@ export class Session {
 
     // 트랙 복원
     for (const trackData of data.project.tracks) {
-      const track = this.addTrack(trackData.name);
+      const track = this.audioEngine.addTrack(trackData.name);
+      // routes 배열에 추가
+      this.routes.push(track);
+      
       track.setVolume(trackData.volume);
       track.setMuted(trackData.muted);
       track.setSolo(trackData.solo);
