@@ -1,0 +1,23 @@
+# 개발 환경을 위한 Dockerfile
+FROM node:22-alpine
+
+# pnpm 설치
+RUN npm install -g pnpm
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# package.json과 pnpm-lock.yaml 복사
+COPY package.json pnpm-lock.yaml ./
+
+# 의존성 설치
+RUN pnpm install
+
+# 소스 코드 복사
+COPY . .
+
+# 포트 노출 (Vite 기본 포트)
+EXPOSE 5173
+
+# 개발 서버 시작
+CMD ["pnpm", "dev", "--host", "0.0.0.0"]

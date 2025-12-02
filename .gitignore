@@ -1,0 +1,79 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules
+
+# Build outputs
+dist
+dist-ssr
+*.local
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
+# Testing
+coverage
+.nyc_output
+*.lcov
+
+# Cache
+.cache
+.parcel-cache
+.turbo
+.eslintcache
+.stylelintcache
+
+# TypeScript
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+
+# Optional: Audio test files (if generated)
+*.wav
+*.mp3
+*.ogg
+!public/**/*.wav
+!public/**/*.mp3
+!public/**/*.ogg
+
+reference
