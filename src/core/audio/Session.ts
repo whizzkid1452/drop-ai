@@ -14,8 +14,6 @@ import { AudioEngine } from './AudioEngine';
 import { Track } from './Track';
 import { Bus } from './Bus';
 import { Route } from './Route';
-import { Playlist, type PlaylistItem } from './Playlist';
-import type { Region } from './Region';
 import { UndoStack, type Command } from './UndoStack';
 import { BufferManager } from './BufferManager';
 import { AudioRegion } from './AudioRegion';
@@ -50,7 +48,6 @@ export type SessionEventListener = (event: SessionEventType) => void;
 export class Session {
   private audioEngine: AudioEngine;
   private routes: Route[] = []; // RouteList (Track과 Bus 포함)
-  private playlists: Map<string, Playlist> = new Map(); // Playlist 중앙 관리
   private undoStack: UndoStack;
   private state: number = SessionStateFlags.Writable;
   private metadata: SessionMetadata;
@@ -202,10 +199,6 @@ export class Session {
     const trackName = name || `Track ${this.getTrackCount() + 1}`;
     const track = this.audioEngine.addTrack(trackName);
 
-    // Playlist 생성 및 등록
-    const playlist = track.getPlaylist();
-    this.playlists.set(playlist.getName(), playlist);
-
     this.routes.push(track);
     return track;
   }
@@ -249,12 +242,6 @@ export class Session {
           continue;
         }
 
-        // Track인 경우 Playlist 등록
-        if (route instanceof Track) {
-          const playlist = route.getPlaylist();
-          this.playlists.set(playlist.getName(), playlist);
-        }
-
         this.routes.push(route);
         addedRoutes.push(route);
       }
@@ -280,12 +267,8 @@ export class Session {
       return;
     }
 
-    // Track인 경우 Playlist 제거
+    // Track인 경우 AudioEngine에서 제거
     if (route instanceof Track) {
-      const playlist = route.getPlaylist();
-      this.playlists.delete(playlist.getName());
-
-      // AudioEngine에서 제거
       this.audioEngine.removeTrack(route);
     }
 
@@ -310,9 +293,6 @@ export class Session {
       return;
     }
 
-    // Playlist 참조 저장 (undo용)
-    const playlist = track.getPlaylist();
-
     this.executeCommand({
       execute: () => {
         this.removeTrackInner(track);
@@ -322,8 +302,6 @@ export class Session {
       undo: () => {
         // 트랙 복원
         this.routes.splice(index, 0, track);
-        // Playlist 복원
-        this.playlists.set(playlist.getName(), playlist);
         // AudioEngine에 다시 연결
         const masterGain = (this.audioEngine as any).masterGain;
         if (masterGain) {
@@ -348,8 +326,7 @@ export class Session {
     const routeInfos = routes
       .map(route => {
         const index = this.routes.indexOf(route);
-        const playlist = route instanceof Track ? route.getPlaylist() : null;
-        return { route, index, playlist };
+        return { route, index };
       })
       .filter(info => info.index !== -1);
 
@@ -377,9 +354,6 @@ export class Session {
         for (let i = routeInfos.length - 1; i >= 0; i--) {
           const info = routeInfos[i];
           this.routes.splice(info.index, 0, info.route);
-          if (info.playlist) {
-            this.playlists.set(info.playlist.getName(), info.playlist);
-          }
           // AudioEngine에 다시 연결
           const masterGain = (this.audioEngine as any).masterGain;
           if (masterGain && info.route instanceof Track) {
@@ -461,151 +435,6 @@ export class Session {
    */
   isDeletingRoutes(): boolean {
     return this.routeDeletionInProgress;
-  }
-
-  /**
-   * Playlist 가져오기 (이름으로)
-   */
-  getPlaylistByName(name: string): Playlist | null {
-    return this.playlists.get(name) || null;
-  }
-
-  /**
-   * 모든 Playlist 가져오기
-   */
-  getPlaylists(): Playlist[] {
-    return Array.from(this.playlists.values());
-  }
-
-  /**
-   * Playlist 등록 (내부 메서드)
-   * @private
-   */
-  registerPlaylist(playlist: Playlist): void {
-    this.playlists.set(playlist.getName(), playlist);
-  }
-
-  /**
-   * Playlist 제거 (내부 메서드)
-   * @private
-   */
-  unregisterPlaylist(playlist: Playlist): void {
-    this.playlists.delete(playlist.getName());
-  }
-
-  /**
-   * Playlist에 Region 추가 (Undo 가능)
-   */
-  addRegionToPlaylist(
-    playlist: Playlist,
-    region: Region,
-    position: number,
-    layer?: number
-  ): void {
-    const oldItems = [...playlist.getItems()];
-
-    this.executeCommand({
-      execute: () => {
-        playlist.addRegion(region, position, layer);
-        this.setDirty(true);
-      },
-      undo: () => {
-        // 이전 상태로 복원
-        playlist.clear();
-        oldItems.forEach(item => {
-          playlist.addRegion(item.region, item.position, item.layer);
-        });
-        this.setDirty(true);
-      },
-      description: `Add region "${region.getName()}" to playlist "${playlist.getName()}"`,
-    });
-  }
-
-  /**
-   * Playlist에서 Item 제거 (Undo 가능)
-   */
-  removeItemFromPlaylist(playlist: Playlist, item: PlaylistItem): void {
-    const oldItems = [...playlist.getItems()];
-    const index = oldItems.indexOf(item);
-
-    if (index === -1) {
-      return;
-    }
-
-    this.executeCommand({
-      execute: () => {
-        playlist.removeItem(item);
-        this.setDirty(true);
-      },
-      undo: () => {
-        // 이전 상태로 복원
-        playlist.clear();
-        oldItems.forEach(oldItem => {
-          playlist.addRegion(oldItem.region, oldItem.position, oldItem.layer);
-        });
-        this.setDirty(true);
-      },
-      description: `Remove region "${item.region.getName()}" from playlist "${playlist.getName()}"`,
-    });
-  }
-
-  /**
-   * PlaylistItem 이동 (Undo 가능)
-   */
-  movePlaylistItem(
-    playlist: Playlist,
-    item: PlaylistItem,
-    newPosition: number
-  ): void {
-    const oldPosition = item.position;
-
-    if (oldPosition === newPosition) {
-      return;
-    }
-
-    this.executeCommand({
-      execute: () => {
-        playlist.moveItem(item, newPosition);
-        this.setDirty(true);
-      },
-      undo: () => {
-        playlist.moveItem(item, oldPosition);
-        this.setDirty(true);
-      },
-      description: `Move region "${item.region.getName()}" in playlist "${playlist.getName()}"`,
-    });
-  }
-
-  /**
-   * PlaylistItem 분할 (Undo 가능)
-   */
-  splitPlaylistItem(
-    playlist: Playlist,
-    item: PlaylistItem,
-    splitTime: number
-  ): [PlaylistItem | null, PlaylistItem | null] {
-    const oldItems = [...playlist.getItems()];
-    const [leftItem, rightItem] = playlist.splitItem(item, splitTime);
-
-    if (leftItem && rightItem) {
-      this.executeCommand({
-        execute: () => {
-          // 이미 splitItem에서 실행됨
-          this.setDirty(true);
-        },
-        undo: () => {
-          // 이전 상태로 복원
-          playlist.clear();
-          oldItems.forEach(oldItem => {
-            playlist.addRegion(oldItem.region, oldItem.position, oldItem.layer);
-          });
-          this.setDirty(true);
-        },
-        description: `Split region "${item.region.getName()}" in playlist "${playlist.getName()}"`,
-      });
-    }
-
-    return [leftItem, rightItem];
   }
 
   /**
@@ -805,16 +634,6 @@ export class Session {
       };
     });
 
-    // Playlist 데이터 (사용되지 않는 Playlist 포함)
-    const playlistData = Array.from(this.playlists.values()).map(playlist => ({
-      name: playlist.getName(),
-      items: playlist.getItems().map(item => ({
-        regionId: item.region.getId(),
-        position: item.position,
-        layer: item.layer,
-      })),
-    }));
-
     return {
       metadata: { ...this.metadata },
       project: {
@@ -822,7 +641,6 @@ export class Session {
         bpm: this.metadata.bpm,
         sampleRate: this.metadata.sampleRate,
         tracks: trackData,
-        playlists: playlistData,
         regions: Array.from(regionsMap.values()), // Region 정보 추가
       },
       state: this.state,
@@ -1056,7 +874,6 @@ export class Session {
     BufferManager.dispose();
     
     this.routes = [];
-    this.playlists.clear();
     this.undoStack.clear();
     this.eventListeners.clear();
   }
