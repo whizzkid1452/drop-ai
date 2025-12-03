@@ -36,6 +36,7 @@
     "@tanstack/react-query": "^5.62.13",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-router-dom": "^7.10.0",
     "wavesurfer.js": "^7.10.1"
   },
   "devDependencies": {

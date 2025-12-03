@@ -1,5 +1,5 @@
 import { DropZonePage } from "@/components/DropZone/DropZonePage";
-import { DefaultLayout } from "@/components/Layout/DefaultLayout";
+import { DefaultLayout } from "@/components/Layouts/DefaultLayout";
 
 export const DropZoneView = () => {
     return (
