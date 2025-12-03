@@ -8,3 +8,5 @@ export const DawView = () => {
         </DefaultLayout>
     );
 };
+
+export default DawView;

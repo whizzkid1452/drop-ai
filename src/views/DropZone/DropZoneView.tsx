@@ -8,3 +8,5 @@ export const DropZoneView = () => {
         </DefaultLayout>
     );
 };
+
+export default DropZoneView;
