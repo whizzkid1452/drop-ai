@@ -1,5 +1,10 @@
+import { DropZonePage } from "@/components/DropZone/DropZonePage";
+
 export function HomePage() {
     return(
-        <>Home</>
+        <>
+            <div>Home</div>
+            <DropZonePage />
+        </>
     )
 }
