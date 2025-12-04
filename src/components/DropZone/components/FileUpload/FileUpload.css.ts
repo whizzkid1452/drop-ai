@@ -127,6 +127,34 @@ export const audioPreview = style({
   borderRadius: '8px',
 });
 
+export const editButton = style({
+  marginTop: '1.5rem',
+  padding: '0.875rem 2.5rem',
+  backgroundColor: '#667eea',
+  color: '#ffffff',
+  border: 'none',
+  borderRadius: '8px',
+  fontSize: '1rem',
+  fontWeight: 600,
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
+  width: '100%',
+  maxWidth: '300px',
+  marginLeft: 'auto',
+  marginRight: 'auto',
+  display: 'block',
+  
+  ':hover': {
+    backgroundColor: '#764ba2',
+    transform: 'translateY(-2px)',
+    boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',
+  },
+  
+  ':active': {
+    transform: 'translateY(0)',
+  },
+});
+
 export const errorMessage = style({
   marginTop: '1rem',
   padding: '1rem',
@@ -155,6 +183,7 @@ export const loadingIndicator = style({
   borderRadius: '50%',
   animation: `${pulse} 1s linear infinite`,
 });
+
 
 
 
