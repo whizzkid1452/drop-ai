@@ -1,5 +1,5 @@
 // React 훅 import
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 // 타입 import
 import type { AudioFile } from '../components/types';
 // 유틸리티 함수 import
@@ -43,6 +43,11 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
       setIsLoading(true);
       setError(null);
 
+      // 이전 파일의 Object URL 해제 (메모리 누수 방지)
+      if (uploadedFile?.url) {
+        URL.revokeObjectURL(uploadedFile.url);
+      }
+
       // 파일 검증 (형식, 크기)
       const validationError = validateFile(file);
       if (validationError) {
@@ -52,6 +57,7 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
         return;
       }
 
+      /* @note whizzkid 추후 스토리지 저장 필요 */ 
       try {
         // File 객체로부터 Object URL 생성 (브라우저 메모리상의 임시 URL)
         const url = URL.createObjectURL(file);
@@ -89,7 +95,7 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
         setIsLoading(false);
       }
     },
-    [onFileUploaded] // 의존성 배열: onFileUploaded가 변경되면 함수 재생성
+    [onFileUploaded, uploadedFile] // 의존성 배열: onFileUploaded와 uploadedFile이 변경되면 함수 재생성
   );
 
   /**
@@ -97,10 +103,26 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
    * 업로드된 파일, 에러, 로딩 상태를 모두 초기화합니다.
    */
   const reset = useCallback(() => {
+    // 이전 Object URL 해제
+    if (uploadedFile?.url) {
+      URL.revokeObjectURL(uploadedFile.url);
+    }
     setUploadedFile(null);
     setError(null);
     setIsLoading(false);
-  }, []);
+  }, [uploadedFile]);
+
+  /**
+   * 메모리 누수 방지를 위한 Object URL cleanup
+   * 컴포넌트 언마운트 시 또는 파일 변경 시 이전 URL을 해제합니다.
+   */
+  useEffect(() => {
+    return () => {
+      if (uploadedFile?.url) {
+        URL.revokeObjectURL(uploadedFile.url);
+      }
+    };
+  }, [uploadedFile]);
 
   // 파일 업로드 관련 상태와 함수들 반환
   return {
