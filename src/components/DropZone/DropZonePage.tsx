@@ -1,10 +1,14 @@
 import { FileUpload } from './components/FileUpload/FileUpload';
 import type { AudioFile } from './components/FileUpload/components/types';
+import { useTracks } from '@/contexts/TrackContext';
 
 export function DropZonePage() {
+  const { addTrack } = useTracks();
+
   const handleFileUploaded = (file: AudioFile) => {
     console.log('File uploaded:', file);
-    // TODO: 파일 업로드 후 처리 로직 추가
+    // 트랙 컨텍스트에 추가
+    addTrack(file);
   };
 
   return (
