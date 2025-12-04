@@ -7,18 +7,7 @@ import path from 'path';
 export default defineConfig({
   base: process.env.BASE_URL || '/',
   plugins: [
-    react({
-      babel: {
-        plugins: [
-          [
-            '@locator/babel-jsx/dist',
-            {
-              env: 'development',
-            },
-          ],
-        ],
-      },
-    }),
+    react(),
     vanillaExtractPlugin(),
   ],
   resolve: {
