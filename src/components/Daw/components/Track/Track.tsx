@@ -36,6 +36,7 @@ interface TrackProps {
  * ```
  */
 export function Track({ track, index, onRemove }: TrackProps) {
+
   /**
    * 재생 시간을 포맷팅하는 함수
    * 

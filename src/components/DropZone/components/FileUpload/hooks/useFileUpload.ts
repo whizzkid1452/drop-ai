@@ -1,5 +1,5 @@
 // React 훅 import
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 // 타입 import
 import type { AudioFile } from '../components/types';
 // 유틸리티 함수 import
@@ -113,16 +113,14 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
   }, [uploadedFile]);
 
   /**
-   * 메모리 누수 방지를 위한 Object URL cleanup
-   * 컴포넌트 언마운트 시 또는 파일 변경 시 이전 URL을 해제합니다.
+   * 메모리 누수 방지: cleanup effect 제거
+   * 
+   * TrackContext에 추가된 파일의 URL은 계속 사용해야 하므로,
+   * 컴포넌트 언마운트 시 URL을 revoke하지 않습니다.
+   * URL 해제는 TrackContext의 removeTrack/clearTracks에서 처리합니다.
+   * 
+   * 같은 파일을 다시 업로드할 때의 이전 URL 해제는 processFile 내부에서 처리됩니다.
    */
-  useEffect(() => {
-    return () => {
-      if (uploadedFile?.url) {
-        URL.revokeObjectURL(uploadedFile.url);
-      }
-    };
-  }, [uploadedFile]);
 
   // 파일 업로드 관련 상태와 함수들 반환
   return {
