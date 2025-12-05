@@ -9,7 +9,11 @@
 ```
 src/components/Daw/
 ├── utils/
-│   └── audioExport.ts              # 오디오 export 핵심 로직
+│   ├── audioExport.ts              # 오디오 export 핵심 로직
+│   ├── audioUtils.ts               # 오디오 처리 유틸리티 (로드, 디코딩, 믹싱, 정규화)
+│   ├── wavConverter.ts             # WAV 파일 변환 유틸리티
+│   ├── constants.ts                # Export 관련 상수
+│   └── types.ts                    # Export 관련 타입 정의
 ├── components/
 │   └── ExportButton/
 │       ├── ExportButton.tsx        # Export 버튼 컴포넌트
@@ -47,387 +51,84 @@ src/components/Daw/
 
 ## 구현 세부사항
 
-### 1. Export 유틸리티 (`src/components/Daw/utils/audioExport.ts`)
+### 1. Export 메인 함수 (`src/components/Daw/utils/audioExport.ts`)
 
-#### 상수 정의
+실제 구현된 메인 export 함수입니다. 오디오 처리 유틸리티와 WAV 변환 유틸리티를 조합하여 전체 export 프로세스를 관리합니다.
 
-```typescript
-/** 기본 샘플레이트 (Hz) */
-const DEFAULT_SAMPLE_RATE = 44100;
-
-/** 기본 비트 깊이 */
-const DEFAULT_BIT_DEPTH: 16 | 24 | 32 | 'float' = 16;
-
-/** WAV 파일 포맷 상수 */
-const WAV_CONSTANTS = {
-  RIFF_HEADER_SIZE: 8,
-  PCM_FMT_CHUNK_SIZE: 16,
-  FLOAT_FMT_CHUNK_SIZE: 18,
-  PCM_DATA_CHUNK_OFFSET: 44,
-  FLOAT_DATA_CHUNK_OFFSET: 46,
-  PCM_AUDIO_FORMAT: 1,
-  FLOAT_AUDIO_FORMAT: 3,
-  FLOAT_BITS_PER_SAMPLE: 32,
-  FLOAT_BYTES_PER_SAMPLE: 4,
-} as const;
-
-/** PCM 비트 깊이별 최대값 */
-const PCM_MAX_VALUES = {
-  16: 32767,
-  24: 8388607,
-  32: 2147483647,
-} as const;
-```
-
-#### 타입 정의
-
-```typescript
-/**
- * Export 설정 옵션
- * Ardour의 ExportSettings를 참고하여 웹 환경에 맞게 구현
- */
-export interface ExportSettings {
-  /** 샘플레이트 (Hz), 기본값: 44100 */
-  sampleRate?: number;
-  /** 비트 깊이 (16, 24, 32, 또는 'float'), 기본값: 16 */
-  bitDepth?: 16 | 24 | 32 | 'float';
-  /** 정규화 여부, 기본값: false */
-  normalize?: boolean;
-  /** 출력 파일명 (확장자 제외), 기본값: 'export' */
-  filename?: string;
-}
+````12:151:src/components/Daw/utils/audioExport.ts
+// ============================================================================
+// Export 메인 함수
+// ============================================================================
 
 /**
- * Export 진행 상태 정보
+ * 진행 상태 업데이트 헬퍼
  */
-export interface ExportProgress {
-  /** 진행률 (0-100) */
-  progress: number;
-  /** 현재 단계 설명 */
-  stage: 'loading' | 'mixing' | 'encoding' | 'complete';
-}
-```
-
-#### 오디오 파일 로드 및 디코딩
-
-```typescript
-/**
- * 오디오 파일을 ArrayBuffer로 로드하는 함수
- */
-async function loadAudioFile(audioFile: AudioFile): Promise<ArrayBuffer> {
-  const response = await fetch(audioFile.url);
-  if (!response.ok) {
-    throw new Error(`Failed to load audio file: ${audioFile.name}`);
-  }
-  return response.arrayBuffer();
-}
-
-/**
- * ArrayBuffer를 AudioBuffer로 디코딩하는 함수
- */
-async function decodeAudioData(
-  audioContext: AudioContext,
-  arrayBuffer: ArrayBuffer
-): Promise<AudioBuffer> {
-  try {
-    return await audioContext.decodeAudioData(arrayBuffer);
-  } catch (error) {
-    throw new Error(
-      `Failed to decode audio data: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
-  }
-}
-```
-
-#### 오디오 정규화
-
-```typescript
-/**
- * 오디오 버퍼를 정규화하는 함수
- * 모든 샘플의 최대값을 찾아 0dBFS로 정규화
- */
-function normalizeAudioBuffer(
-  audioContext: AudioContext,
-  audioBuffer: AudioBuffer
-): AudioBuffer {
-  let maxValue = 0;
-
-  // 모든 채널의 최대값 찾기
-  for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
-    const data = audioBuffer.getChannelData(channel);
-    for (let i = 0; i < data.length; i++) {
-      maxValue = Math.max(maxValue, Math.abs(data[i]));
-    }
-  }
-
-  // 최대값이 0이거나 이미 정규화된 경우 정규화 불필요
-  if (maxValue === 0 || maxValue >= 1.0) {
-    return audioBuffer;
-  }
-
-  // 정규화 계수 계산 (0dBFS로 정규화)
-  const normalizationFactor = 1.0 / maxValue;
-
-  // 새로운 버퍼 생성 및 정규화 적용
-  const normalizedBuffer = audioContext.createBuffer(
-    audioBuffer.numberOfChannels,
-    audioBuffer.length,
-    audioBuffer.sampleRate
-  );
-
-  for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
-    const inputData = audioBuffer.getChannelData(channel);
-    const outputData = normalizedBuffer.getChannelData(channel);
-    for (let i = 0; i < inputData.length; i++) {
-      outputData[i] = inputData[i] * normalizationFactor;
-    }
-  }
-
-  return normalizedBuffer;
-}
-```
-
-#### 오디오 믹싱
-
-```typescript
-/**
- * 여러 오디오 버퍼를 하나로 믹싱하는 함수
- */
-async function mixAudioBuffers(
-  audioContext: AudioContext,
-  audioBuffers: AudioBuffer[],
-  targetSampleRate: number
-): Promise<AudioBuffer> {
-  if (audioBuffers.length === 0) {
-    throw new Error('No audio buffers to mix');
-  }
-
-  // 가장 긴 길이와 최대 채널 수 찾기
-  let maxLength = 0;
-  let maxChannels = 1;
-
-  for (const buffer of audioBuffers) {
-    maxLength = Math.max(maxLength, buffer.length);
-    maxChannels = Math.max(maxChannels, buffer.numberOfChannels);
-  }
-
-  // 리샘플링이 필요한 경우 처리
-  const resampledBuffers: AudioBuffer[] = [];
-  for (const buffer of audioBuffers) {
-    if (buffer.sampleRate !== targetSampleRate) {
-      const resampled = resampleBuffer(audioContext, buffer, targetSampleRate);
-      resampledBuffers.push(resampled);
-    } else {
-      resampledBuffers.push(buffer);
-    }
-  }
-
-  // 믹싱된 버퍼 생성
-  const mixedBuffer = audioContext.createBuffer(
-    maxChannels,
-    Math.ceil(maxLength),
-    targetSampleRate
-  );
-
-  // 모든 버퍼를 믹싱
-  for (const buffer of resampledBuffers) {
-    for (let channel = 0; channel < maxChannels; channel++) {
-      const mixedChannel = mixedBuffer.getChannelData(channel);
-      const sourceChannel = buffer.getChannelData(
-        Math.min(channel, buffer.numberOfChannels - 1)
-      );
-
-      for (let i = 0; i < sourceChannel.length; i++) {
-        mixedChannel[i] += sourceChannel[i];
-      }
-    }
-  }
-
-  // 클리핑 방지 (오버플로우 방지)
-  for (let channel = 0; channel < maxChannels; channel++) {
-    const channelData = mixedBuffer.getChannelData(channel);
-    for (let i = 0; i < channelData.length; i++) {
-      channelData[i] = clampSample(channelData[i]);
-    }
-  }
-
-  return mixedBuffer;
-}
-```
-
-#### 리샘플링
-
-```typescript
-/**
- * 오디오 버퍼를 리샘플링하는 함수 (선형 보간)
- */
-function resampleBuffer(
-  audioContext: AudioContext,
-  audioBuffer: AudioBuffer,
-  targetSampleRate: number
-): AudioBuffer {
-  const ratio = targetSampleRate / audioBuffer.sampleRate;
-  const newLength = Math.ceil(audioBuffer.length * ratio);
-  const newBuffer = audioContext.createBuffer(
-    audioBuffer.numberOfChannels,
-    newLength,
-    targetSampleRate
-  );
-
-  for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
-    const inputData = audioBuffer.getChannelData(channel);
-    const outputData = newBuffer.getChannelData(channel);
-
-    for (let i = 0; i < newLength; i++) {
-      const srcIndex = i / ratio;
-      const srcIndexFloor = Math.floor(srcIndex);
-      const srcIndexCeil = Math.min(srcIndexFloor + 1, inputData.length - 1);
-      const t = srcIndex - srcIndexFloor;
-
-      // 선형 보간
-      outputData[i] =
-        inputData[srcIndexFloor] * (1 - t) + inputData[srcIndexCeil] * t;
-    }
-  }
-
-  return newBuffer;
-}
-```
-
-#### WAV 파일 생성
-
-WAV 파일 생성은 여러 단계로 나뉩니다:
-
-1. **헤더 정보 계산**
-
-```typescript
-function calculateWavHeaderInfo(
-  audioBuffer: AudioBuffer,
-  bitDepth: 16 | 24 | 32 | 'float'
-): WavHeaderInfo {
-  const bytesPerSample = BYTES_PER_SAMPLE[bitDepth];
-  const dataSize =
-    audioBuffer.length * audioBuffer.numberOfChannels * bytesPerSample;
-  const dataChunkOffset =
-    bitDepth === 'float'
-      ? WAV_CONSTANTS.FLOAT_DATA_CHUNK_OFFSET
-      : WAV_CONSTANTS.PCM_DATA_CHUNK_OFFSET;
-  const totalSize = dataChunkOffset + 8 + dataSize;
-
-  return {
-    dataChunkOffset,
-    totalSize,
-    dataSize,
-    bytesPerSample,
-  };
-}
-```
-
-2. **RIFF 헤더 작성**
-
-```typescript
-function writeRiffHeader(view: DataView, totalSize: number): void {
-  writeString(view, 0, 'RIFF');
-  view.setUint32(4, totalSize - WAV_CONSTANTS.RIFF_HEADER_SIZE, true);
-  writeString(view, 8, 'WAVE');
-  writeString(view, 12, 'fmt ');
-}
-```
-
-3. **fmt Chunk 작성 (PCM vs Float)**
-
-**PCM 형식:**
-
-```typescript
-function writePcmFmtChunk(
-  view: DataView,
-  numberOfChannels: number,
-  sampleRate: number,
-  bytesPerSample: number,
-  bitDepth: 16 | 24 | 32
+function updateProgress(
+  onProgress: ((progress: ExportProgress) => void) | undefined,
+  progress: number,
+  stage: ExportProgress['stage']
 ): void {
-  view.setUint32(16, WAV_CONSTANTS.PCM_FMT_CHUNK_SIZE, true); // 16바이트
-  view.setUint16(20, WAV_CONSTANTS.PCM_AUDIO_FORMAT, true); // 1 = PCM
-  view.setUint16(22, numberOfChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * numberOfChannels * bytesPerSample, true);
-  view.setUint16(32, numberOfChannels * bytesPerSample, true);
-  view.setUint16(34, bitDepth, true);
+  onProgress?.({
+    progress: Math.max(0, Math.min(100, progress)),
+    stage,
+  });
 }
-```
 
-**Float 형식:**
+/**
+ * 모든 오디오 트랙을 로드하고 디코딩
+ */
+async function loadAndDecodeTracks(
+  audioContext: AudioContext,
+  tracks: AudioFile[],
+  onProgress?: (progress: ExportProgress) => void
+): Promise<AudioBuffer[]> {
+  const audioBuffers: AudioBuffer[] = [];
+  const totalTracks = tracks.length;
 
-```typescript
-function writeFloatFmtChunk(
-  view: DataView,
-  numberOfChannels: number,
-  sampleRate: number
-): void {
-  view.setUint32(16, WAV_CONSTANTS.FLOAT_FMT_CHUNK_SIZE, true); // 18바이트 (확장)
-  view.setUint16(20, WAV_CONSTANTS.FLOAT_AUDIO_FORMAT, true); // 3 = IEEE float
-  view.setUint16(22, numberOfChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(
-    28,
-    sampleRate * numberOfChannels * WAV_CONSTANTS.FLOAT_BYTES_PER_SAMPLE,
-    true
-  );
-  view.setUint16(
-    32,
-    numberOfChannels * WAV_CONSTANTS.FLOAT_BYTES_PER_SAMPLE,
-    true
-  );
-  view.setUint16(34, WAV_CONSTANTS.FLOAT_BITS_PER_SAMPLE, true);
-  view.setUint16(36, 0, true); // extension size (확장 헤더 크기)
-}
-```
+  for (let i = 0; i < tracks.length; i++) {
+    const track = tracks[i];
+    const progress = (i / totalTracks) * 50;
+    updateProgress(onProgress, progress, 'loading');
 
-**Float 확장 헤더 설명:**
-
-- Float 포맷은 확장 헤더를 사용합니다
-- fmt chunk size: 18바이트 (PCM은 16바이트, 추가 2바이트는 extension size 필드)
-- extension size: 0 (현재는 사용하지 않지만, 향후 확장을 위해 공간 확보)
-- 이는 WAV 파일 포맷 스펙에서 float 포맷을 지원하기 위한 표준 구조입니다
-
-4. **오디오 데이터 작성**
-
-```typescript
-function writeAudioData(
-  view: DataView,
-  audioBuffer: AudioBuffer,
-  bitDepth: 16 | 24 | 32 | 'float',
-  startOffset: number
-): void {
-  let offset = startOffset;
-  const { length, numberOfChannels } = audioBuffer;
-
-  for (let i = 0; i < length; i++) {
-    for (let channel = 0; channel < numberOfChannels; channel++) {
-      const sample = audioBuffer.getChannelData(channel)[i];
-
-      switch (bitDepth) {
-        case 'float':
-          offset = writeFloatSample(view, offset, sample);
-          break;
-        case 16:
-          offset = writePcm16Sample(view, offset, sample);
-          break;
-        case 24:
-          offset = writePcm24Sample(view, offset, sample);
-          break;
-        case 32:
-          offset = writePcm32Sample(view, offset, sample);
-          break;
-      }
+    try {
+      const arrayBuffer = await loadAudioFile(track);
+      const audioBuffer = await decodeAudioData(audioContext, arrayBuffer);
+      audioBuffers.push(audioBuffer);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`Failed to load track: ${track.name}`, error);
+      throw new Error(`Failed to load track "${track.name}": ${errorMessage}`);
     }
   }
+
+  return audioBuffers;
 }
-```
 
-#### 메인 Export 함수
-
-```typescript
+/**
+ * 여러 오디오 트랙을 하나의 WAV 파일로 내보내는 함수
+ * Ardour의 export_session 함수를 참고하여 웹 환경에 맞게 구현
+ *
+ * @param tracks - 내보낼 오디오 트랙 배열
+ * @param settings - Export 설정 옵션
+ * @param onProgress - 진행 상태 콜백 함수 (선택적)
+ * @returns Promise<Blob> - 생성된 WAV 파일 Blob
+ * @throws {Error} 트랙이 없거나 처리 중 오류 발생 시
+ *
+ * @example
+ * ```typescript
+ * const blob = await exportTracks(tracks, {
+ *   sampleRate: 44100,
+ *   bitDepth: 16,
+ *   normalize: true,
+ *   filename: 'my-export'
+ * }, (progress) => {
+ *   console.log(`진행률: ${progress.progress}%`);
+ * });
+ *
+ * // 파일 다운로드
+ * downloadBlob(blob, 'my-export.wav');
+ * ```
+ */
 export async function exportTracks(
   tracks: AudioFile[],
   settings: ExportSettings = {},
@@ -483,24 +184,167 @@ export async function exportTracks(
 
     return wavBlob;
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Export failed:', error);
     throw new Error(`Export failed: ${errorMessage}`);
   } finally {
     // AudioContext 정리
     if (audioContext && audioContext.state !== 'closed') {
-      await audioContext.close().catch(err => {
+      await audioContext.close().catch((err) => {
         console.warn('Failed to close AudioContext:', err);
       });
     }
   }
 }
-```
 
-### 2. Export 버튼 컴포넌트 (`src/components/Daw/components/ExportButton/ExportButton.tsx`)
+/**
+ * Blob을 파일로 다운로드하는 헬퍼 함수
+ *
+ * @param blob - 다운로드할 Blob
+ * @param filename - 파일명 (확장자 포함)
+ * @throws {Error} 다운로드 실패 시
+ */
+export function downloadBlob(blob: Blob, filename: string): void {
+  try {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.style.display = 'none';
+
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+
+    // URL 정리 (약간의 지연 후 정리하여 다운로드가 완료되도록 함)
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 100);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Failed to download blob: ${errorMessage}`);
+  }
+}
+````
+
+**주요 특징:**
+
+- **모듈화된 구조**: 오디오 처리 로직은 `audioUtils.ts`로, WAV 변환 로직은 `wavConverter.ts`로 분리
+- **진행 상태 추적**: 각 단계별로 진행률을 업데이트하여 사용자에게 피드백 제공
+- **에러 처리**: 각 단계에서 발생할 수 있는 에러를 적절히 처리하고 사용자에게 명확한 메시지 제공
+- **리소스 정리**: AudioContext를 적절히 정리하여 메모리 누수 방지
+
+### 2. 오디오 처리 유틸리티 (`src/components/Daw/utils/audioUtils.ts`)
+
+오디오 파일 로드, 디코딩, 믹싱, 정규화 등의 핵심 로직을 담당합니다. 이 파일은 `audioExport.ts`에서 import되어 사용됩니다.
+
+**주요 함수들:**
+
+- `loadAudioFile(audioFile: AudioFile): Promise<ArrayBuffer>` - 오디오 파일을 ArrayBuffer로 로드
+- `decodeAudioData(audioContext: AudioContext, arrayBuffer: ArrayBuffer): Promise<AudioBuffer>` - ArrayBuffer를 AudioBuffer로 디코딩
+- `normalizeAudioBuffer(audioContext: AudioContext, audioBuffer: AudioBuffer): AudioBuffer` - 오디오 버퍼를 0dBFS로 정규화
+- `mixAudioBuffers(audioContext: AudioContext, audioBuffers: AudioBuffer[], targetSampleRate: number): Promise<AudioBuffer>` - 여러 오디오 버퍼를 하나로 믹싱
+- `resampleBuffer(audioContext: AudioContext, audioBuffer: AudioBuffer, targetSampleRate: number): AudioBuffer` - 오디오 버퍼 리샘플링 (선형 보간)
+- `clampSample(sample: number): number` - 샘플 값을 [-1, 1] 범위로 제한
+
+### 3. WAV 변환 유틸리티 (`src/components/Daw/utils/wavConverter.ts`)
+
+AudioBuffer를 WAV 파일 형식의 Blob으로 변환하는 로직을 담당합니다.
+
+**주요 함수들:**
+
+- `audioBufferToWav(audioBuffer: AudioBuffer, bitDepth: 16 | 24 | 32 | 'float'): Blob` - AudioBuffer를 WAV Blob으로 변환
+- `calculateWavHeaderInfo(audioBuffer: AudioBuffer, bitDepth: 16 | 24 | 32 | 'float'): WavHeaderInfo` - WAV 헤더 정보 계산
+- `writeRiffHeader(view: DataView, totalSize: number): void` - RIFF 헤더 작성
+- `writePcmFmtChunk(...)` - PCM 형식 fmt chunk 작성
+- `writeFloatFmtChunk(...)` - Float 형식 fmt chunk 작성
+- `writeAudioData(...)` - 오디오 데이터 작성
+- `writePcm16Sample(...)`, `writePcm24Sample(...)`, `writePcm32Sample(...)`, `writeFloatSample(...)` - 비트 깊이별 샘플 작성
+
+### 4. 상수 및 타입 정의
+
+**`src/components/Daw/utils/constants.ts`:**
 
 ```typescript
+/** 기본 샘플레이트 (Hz) */
+export const DEFAULT_SAMPLE_RATE = 44100;
+
+/** 기본 비트 깊이 */
+export const DEFAULT_BIT_DEPTH: 16 | 24 | 32 | 'float' = 16;
+
+/** WAV 파일 포맷 상수 */
+export const WAV_CONSTANTS = {
+  RIFF_HEADER_SIZE: 8,
+  PCM_FMT_CHUNK_SIZE: 16,
+  FLOAT_FMT_CHUNK_SIZE: 18,
+  PCM_DATA_CHUNK_OFFSET: 44,
+  FLOAT_DATA_CHUNK_OFFSET: 46,
+  PCM_AUDIO_FORMAT: 1,
+  FLOAT_AUDIO_FORMAT: 3,
+  FLOAT_BITS_PER_SAMPLE: 32,
+  FLOAT_BYTES_PER_SAMPLE: 4,
+} as const;
+
+/** PCM 비트 깊이별 최대값 */
+export const PCM_MAX_VALUES = {
+  16: 32767,
+  24: 8388607,
+  32: 2147483647,
+} as const;
+
+/** 비트 깊이별 샘플당 바이트 수 */
+export const BYTES_PER_SAMPLE = {
+  16: 2,
+  24: 3,
+  32: 4,
+  float: 4,
+} as const;
+```
+
+**`src/components/Daw/utils/types.ts`:**
+
+```typescript
+/**
+ * Export 설정 옵션
+ * Ardour의 ExportSettings를 참고하여 웹 환경에 맞게 구현
+ */
+export interface ExportSettings {
+  /** 샘플레이트 (Hz), 기본값: 44100 */
+  sampleRate?: number;
+  /** 비트 깊이 (16, 24, 32, 또는 'float'), 기본값: 16 */
+  bitDepth?: 16 | 24 | 32 | 'float';
+  /** 정규화 여부, 기본값: false */
+  normalize?: boolean;
+  /** 출력 파일명 (확장자 제외), 기본값: 'export' */
+  filename?: string;
+}
+
+/**
+ * Export 진행 상태 정보
+ */
+export interface ExportProgress {
+  /** 진행률 (0-100) */
+  progress: number;
+  /** 현재 단계 설명 */
+  stage: 'loading' | 'mixing' | 'encoding' | 'complete';
+}
+
+/**
+ * WAV 헤더 정보
+ */
+export interface WavHeaderInfo {
+  dataChunkOffset: number;
+  totalSize: number;
+  dataSize: number;
+  bytesPerSample: number;
+}
+```
+
+### 5. Export 버튼 컴포넌트 (`src/components/Daw/components/ExportButton/ExportButton.tsx`)
+
+실제 구현된 Export 버튼 컴포넌트입니다.
+
+```45:126:src/components/Daw/components/ExportButton/ExportButton.tsx
 export function ExportButton({
   tracks,
   settings,
@@ -511,6 +355,11 @@ export function ExportButton({
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * Export 실행 함수
+   *
+   * 모든 트랙을 로드하고 믹싱한 후 WAV 파일로 내보냅니다.
+   */
   const handleExport = useCallback(async () => {
     if (tracks.length === 0) {
       setError('내보낼 트랙이 없습니다.');
@@ -543,6 +392,7 @@ export function ExportButton({
     }
   }, [tracks, settings, onExportComplete, onExportError]);
 
+  // 트랙이 없으면 버튼 비활성화
   const isDisabled = tracks.length === 0 || isExporting;
 
   return (
@@ -579,11 +429,33 @@ export function ExportButton({
 }
 ```
 
-### 3. DawPage 통합
+**주요 특징:**
 
-```typescript
+- **상태 관리**: `isExporting`, `progress`, `error` 상태를 관리하여 UI 업데이트
+- **진행 상태 표시**: 실시간 진행률을 진행률 바와 텍스트로 표시
+- **에러 처리**: 에러 발생 시 사용자에게 명확한 메시지 표시
+- **접근성**: `aria-label`과 `role="alert"`를 사용하여 접근성 향상
+
+### 6. DawPage 통합 (`src/components/Daw/DawPage.tsx`)
+
+실제 구현된 DawPage 컴포넌트입니다. ExportButton을 헤더에 통합하여 사용자가 쉽게 접근할 수 있도록 했습니다.
+
+```6:43:src/components/Daw/DawPage.tsx
 export function DawPage() {
   const { tracks, removeTrack } = useTracks();
+
+  if (tracks.length === 0) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.emptyState}>
+          <h2 className={styles.emptyTitle}>트랙이 없습니다</h2>
+          <p className={styles.emptyMessage}>
+            파일을 업로드하면 여기에 트랙이 표시됩니다.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.container}>
@@ -594,11 +466,26 @@ export function DawPage() {
           <ExportButton tracks={tracks} />
         </div>
       </div>
-      {/* ... 트랙 리스트 ... */}
+      <div className={styles.trackList}>
+        {tracks.map((track, index) => (
+          <Track
+            key={`${track.name}-${index}`}
+            track={track}
+            index={index}
+            onRemove={removeTrack}
+          />
+        ))}
+      </div>
     </div>
   );
 }
 ```
+
+**주요 특징:**
+
+- **빈 상태 처리**: 트랙이 없을 때 사용자에게 안내 메시지 표시
+- **헤더 통합**: ExportButton을 헤더 오른쪽에 배치하여 접근성 향상
+- **트랙 카운트**: 현재 트랙 개수를 표시하여 사용자에게 정보 제공
 
 ## 레퍼런스 분석: Ardour의 Export 방식
 
@@ -1007,7 +894,7 @@ ardour-export -b float -B /path/to/session my-session
 ```typescript
 import { exportTracks, downloadBlob } from '@/components/Daw/utils/audioExport';
 
-// 기본 설정으로 export
+// 기본 설정으로 export (44100Hz, 16-bit, 정규화 없음)
 const blob = await exportTracks(tracks);
 downloadBlob(blob, 'export.wav');
 ```
@@ -1025,7 +912,7 @@ const blob = await exportTracks(
   },
   progress => {
     console.log(`진행률: ${progress.progress}%`);
-    console.log(`단계: ${progress.stage}`);
+    console.log(`단계: ${progress.stage}`); // 'loading' | 'mixing' | 'encoding' | 'complete'
   }
 );
 
@@ -1033,6 +920,14 @@ downloadBlob(blob, 'my-export.wav');
 ```
 
 ### React 컴포넌트에서 사용
+
+**기본 사용 (DawPage에서 사용하는 방식):**
+
+```tsx
+<ExportButton tracks={tracks} />
+```
+
+**커스텀 설정과 함께 사용:**
 
 ```tsx
 <ExportButton
@@ -1218,9 +1113,30 @@ function writeDataChunkHeader(
 - 오프셋 계산 오류 시 파일이 재생되지 않음
 - 현재 코드는 동적으로 오프셋을 계산해 PCM/Float 모두 지원
 
-## clamp?
+## clamp 함수 설명
 
-클램프 = 값을 지정된 범위 안으로 제한
-clampSample = 오디오 샘플을 [-1, 1]로 제한
-목적 = 클리핑(왜곡) 방지
-사용 위치 = 믹싱 후, WAV 변환 시
+**클램프(Clamp)** = 값을 지정된 범위 안으로 제한하는 함수입니다.
+
+### clampSample 함수
+
+`clampSample` 함수는 오디오 샘플 값을 [-1, 1] 범위로 제한합니다.
+
+**목적:**
+
+- 클리핑(왜곡) 방지: 믹싱 과정에서 여러 트랙을 합칠 때 값이 [-1, 1] 범위를 벗어날 수 있습니다.
+- 오버플로우 방지: 범위를 벗어난 값은 왜곡을 일으키므로 제한이 필요합니다.
+
+**사용 위치:**
+
+- 믹싱 후: 여러 오디오 버퍼를 합친 후 각 샘플을 클램프
+- WAV 변환 시: 최종 변환 전 샘플 값 검증
+
+**구현 예시:**
+
+```typescript
+function clampSample(sample: number): number {
+  return Math.max(-1, Math.min(1, sample));
+}
+```
+
+이 함수는 `audioUtils.ts`에 구현되어 있으며, `mixAudioBuffers` 함수에서 사용됩니다.
