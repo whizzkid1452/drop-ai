@@ -1,10 +1,10 @@
 import { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
+import { DropZoneView } from '@/views/DropZone/DropZoneView';
 
-// Lazy load components
+// Lazy load components (only for heavy components)
 const HomeView = lazy(() => import('@/views/Home/HomeView'));
 const DawView = lazy(() => import('@/views/Daw/DawView'));
-const DropZoneView = lazy(() => import('@/views/DropZone/DropZoneView'));
 
 // Loading fallback component
 const LoadingFallback = () => (
