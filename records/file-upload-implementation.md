@@ -17,7 +17,7 @@ src/components/DropZone/components/FileUpload/
 │ └── ErrorMessage.tsx # 에러 메시지 컴포넌트
 ├── hooks/
 │ ├── useDragAndDrop.ts # 드래그 앤 드롭 로직 훅
-│ └── useFileUpload.ts # 파일 업로드 로직 훅
+│ └── useAudioFileUpload.ts # 오디오 파일 업로드 로직 훅
 ├── utils/
 │ ├── audioMetadata.ts # 오디오 메타데이터 추출 유틸
 │ └── fileValidation.ts # 파일 검증 유틸
@@ -185,10 +185,12 @@ export function useDragAndDrop({ onDrop }: UseDragAndDropOptions) {
 }
 ```
 
-### 파일 업로드 훅 (`hooks/useFileUpload.ts`)
+### 오디오 파일 업로드 훅 (`hooks/useAudioFileUpload.ts`)
 
 ```typescript
-export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
+export function useAudioFileUpload({
+  onFileUploaded,
+}: UseAudioFileUploadOptions = {}) {
   const [uploadedFile, setUploadedFile] = useState<AudioFile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -481,8 +483,10 @@ export function validateFile(file: File): string | null {
 **비동기 처리 및 상태 관리**
 
 ```typescript
-// hooks/useFileUpload.ts
-export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
+// hooks/useAudioFileUpload.ts
+export function useAudioFileUpload({
+  onFileUploaded,
+}: UseAudioFileUploadOptions = {}) {
   const processFile = useCallback(
     async (file: File) => {
       setIsLoading(true);

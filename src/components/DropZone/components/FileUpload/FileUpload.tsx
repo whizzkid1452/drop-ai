@@ -5,7 +5,7 @@ import * as styles from './FileUpload.css';
 // 타입 import
 import type { FileUploadProps } from './components/types';
 // 커스텀 훅 import
-import { useFileUpload } from './hooks/useFileUpload';
+import { useAudioFileUpload } from './hooks/useAudioFileUpload';
 import { useDragAndDrop } from './hooks/useDragAndDrop';
 // 컴포넌트 import
 import { DropHere } from './components/DropHere';
@@ -20,7 +20,7 @@ import { ErrorMessage } from './components/ErrorMessage';
  */
 export function FileUpload({ onFileUploaded }: FileUploadProps) {
   // 파일 업로드 관련 상태와 함수들
-  const { uploadedFile, error, isLoading, processFile } = useFileUpload({
+  const { uploadedFile, error, isLoading, processFile } = useAudioFileUpload({
     onFileUploaded,
   });
 

@@ -8,21 +8,21 @@ import { getFileDuration } from '../utils/audioMetadata';
 import { ERROR_MESSAGES } from '../components/constants';
 
 /**
- * useFileUpload 훅의 옵션 인터페이스
+ * useAudioFileUpload 훅의 옵션 인터페이스
  */
-interface UseFileUploadOptions {
+interface UseAudioFileUploadOptions {
   onFileUploaded?: (file: AudioFile) => void; // 파일 업로드 완료 시 호출되는 콜백 함수
 }
 
 /**
- * 파일 업로드 기능을 제공하는 커스텀 훅
+ * 오디오 파일 업로드 기능을 제공하는 커스텀 훅
  * 파일 검증, 메타데이터 추출, 상태 관리를 담당합니다.
  * 
  * @param options - 훅 옵션 (선택적)
  * @param options.onFileUploaded - 파일 업로드 완료 시 호출되는 콜백 함수
  * @returns 파일 업로드 관련 상태와 함수들
  */
-export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
+export function useAudioFileUpload({ onFileUploaded }: UseAudioFileUploadOptions = {}) {
   // 업로드된 파일 정보를 저장하는 상태
   const [uploadedFile, setUploadedFile] = useState<AudioFile | null>(null);
   // 에러 메시지를 저장하는 상태
