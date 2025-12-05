@@ -3,3 +3,6 @@ export function DawPage() {
         <>Daw</>
     )
 }
+
+// Lazy loading을 위한 default export
+export default DawPage;
