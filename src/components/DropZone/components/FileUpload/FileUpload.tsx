@@ -11,6 +11,7 @@ import { useDragAndDrop } from './hooks/useDragAndDrop';
 import { DropHere } from './components/DropHere';
 import { AudioPreview } from './components/AudioPreview';
 import { ErrorMessage } from './components/ErrorMessage';
+import { LargeFileConfirmDialog } from './components/LargeFileConfirmDialog';
 
 /**
  * 음원 파일 업로드 컴포넌트
@@ -20,7 +21,17 @@ import { ErrorMessage } from './components/ErrorMessage';
  */
 export function FileUpload({ onFileUploaded }: FileUploadProps) {
   // 파일 업로드 관련 상태와 함수들
-  const { uploadedFile, error, isLoading, processFile } = useAudioFileUpload({
+  const {
+    uploadedFile,
+    error,
+    isLoading,
+    processFile,
+    isLargeFileDialogOpen,
+    setIsLargeFileDialogOpen,
+    pendingFileSize,
+    onLargeFileConfirm,
+    onLargeFileCancel,
+  } = useAudioFileUpload({
     onFileUploaded,
   });
 
@@ -66,6 +77,15 @@ export function FileUpload({ onFileUploaded }: FileUploadProps) {
 
       {/* 오디오 미리보기 플레이어 */}
       {uploadedFile && <AudioPreview file={uploadedFile} />}
+
+      {/* 큰 파일 확인 다이얼로그 */}
+      <LargeFileConfirmDialog
+        open={isLargeFileDialogOpen}
+        onOpenChange={setIsLargeFileDialogOpen}
+        fileSize={pendingFileSize}
+        onConfirm={onLargeFileConfirm}
+        onCancel={onLargeFileCancel}
+      />
     </div>
   );
 }

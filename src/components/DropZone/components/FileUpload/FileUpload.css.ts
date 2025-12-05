@@ -156,4 +156,87 @@ export const loadingIndicator = style({
   animation: `${pulse} 1s linear infinite`,
 });
 
+// 다이얼로그 스타일
+export const dialogOverlay = style({
+  position: 'fixed',
+  inset: 0,
+  backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  zIndex: 1000,
+});
+
+export const dialogContent = style({
+  position: 'fixed',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  backgroundColor: '#1a1a1a',
+  borderRadius: '12px',
+  padding: '2rem',
+  minWidth: '400px',
+  maxWidth: '90vw',
+  border: '1px solid rgba(102, 126, 234, 0.3)',
+  boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)',
+  zIndex: 1001,
+});
+
+export const dialogTitle = style({
+  fontSize: '1.5rem',
+  fontWeight: 600,
+  color: '#ffffff',
+  margin: 0,
+  marginBottom: '1rem',
+});
+
+export const dialogDescription = style({
+  fontSize: '1rem',
+  color: '#b0b0b0',
+  margin: 0,
+  marginBottom: '2rem',
+  lineHeight: '1.6',
+});
+
+export const dialogActions = style({
+  display: 'flex',
+  gap: '1rem',
+  justifyContent: 'flex-end',
+});
+
+export const dialogCancelButton = style({
+  padding: '0.75rem 1.5rem',
+  backgroundColor: 'transparent',
+  color: '#b0b0b0',
+  border: '1px solid rgba(255, 255, 255, 0.2)',
+  borderRadius: '8px',
+  fontSize: '1rem',
+  fontWeight: 500,
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
+  
+  ':hover': {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+});
+
+export const dialogConfirmButton = style({
+  padding: '0.75rem 1.5rem',
+  backgroundColor: '#667eea',
+  color: '#ffffff',
+  border: 'none',
+  borderRadius: '8px',
+  fontSize: '1rem',
+  fontWeight: 500,
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
+  
+  ':hover': {
+    backgroundColor: '#764ba2',
+    transform: 'translateY(-1px)',
+  },
+  
+  ':active': {
+    transform: 'translateY(0)',
+  },
+});
+
 
