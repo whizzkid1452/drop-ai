@@ -4,6 +4,13 @@
 
 업로드된 오디오 파일을 DAW 페이지에서 트랙으로 표시하는 기능을 구현했습니다. Context API를 사용하여 라우트 간 상태 공유를 구현하고, 각 트랙을 독립적으로 관리할 수 있는 UI를 제공합니다.
 
+### 구현 데모
+
+<video controls width="100%">
+  <source src="./media/track-display-implementation.mp4" type="video/mp4">
+  브라우저가 비디오 태그를 지원하지 않습니다.
+</video>
+
 ## 파일 구조
 
 ```
