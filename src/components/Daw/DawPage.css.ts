@@ -14,6 +14,12 @@ export const header = style({
   marginBottom: '24px',
 });
 
+export const headerRight = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '16px',
+});
+
 export const title = style({
   fontSize: '28px',
   fontWeight: '600',
