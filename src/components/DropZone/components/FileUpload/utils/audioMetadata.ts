@@ -1,4 +1,3 @@
-// 상수 import
 import { ERROR_MESSAGES } from '../components/constants';
 
 /**
