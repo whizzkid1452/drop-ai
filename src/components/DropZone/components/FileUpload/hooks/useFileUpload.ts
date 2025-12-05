@@ -1,4 +1,3 @@
-// React 훅 import
 import { useState, useCallback, useEffect } from 'react';
 // 타입 import
 import type { AudioFile } from '../components/types';

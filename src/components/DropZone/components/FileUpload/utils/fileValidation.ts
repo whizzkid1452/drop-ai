@@ -1,4 +1,3 @@
-// 상수 import
 import { ACCEPTED_AUDIO_TYPES, MAX_FILE_SIZE, MAX_FILE_SIZE_MB, ERROR_MESSAGES } from '../components/constants';
 
 /**
