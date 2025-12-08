@@ -13,6 +13,8 @@
 
 ## 파일 구조
 
+### 초기 구현 구조
+
 ```
 src/
 ├── contexts/
@@ -24,7 +26,32 @@ src/
 │   │   └── components/
 │   │       └── Track/
 │   │           ├── Track.tsx       # 개별 트랙 컴포넌트
-│   │           └── Track.css.ts   # 트랙 스타일
+│   │           └── Track.css.ts  # 트랙 스타일
+│   └── DropZone/
+│       └── DropZonePage.tsx       # 파일 업로드 시 트랙 추가 로직
+└── App.tsx                         # TrackProvider 추가
+```
+
+### 파형 기능 추가 후 구조 (업데이트)
+
+```
+src/
+├── contexts/
+│   └── TrackContext.tsx          # 트랙 전역 상태 관리 Context
+├── components/
+│   ├── Daw/
+│   │   ├── DawPage.tsx            # DAW 메인 페이지
+│   │   ├── DawPage.css.ts         # DAW 페이지 스타일
+│   │   └── components/
+│   │       └── Track/
+│   │           ├── Track.tsx              # 메인 트랙 컴포넌트
+│   │           ├── Track.css.ts           # 트랙 스타일
+│   │           ├── components/
+│   │           │   ├── TrackHeader.tsx     # 트랙 헤더 컴포넌트
+│   │           │   └── TrackControls.tsx   # 재생/줌 컨트롤 컴포넌트
+│   │           └── utils/
+│   │               ├── useWaveSurfer.ts    # WaveSurfer 초기화 훅
+│   │               └── format.ts          # 포맷팅 유틸리티
 │   └── DropZone/
 │       └── DropZonePage.tsx       # 파일 업로드 시 트랙 추가 로직
 └── App.tsx                         # TrackProvider 추가
@@ -51,12 +78,22 @@ src/
 
 ### 3. 개별 트랙 컴포넌트 (Track)
 
+#### 초기 구현 (HTML5 audio)
+
 - **트랙 정보 표시**:
   - 트랙 번호 (1부터 시작)
   - 파일명
   - 재생 시간 (분:초 형식)
   - 파일 크기 (B/KB/MB 자동 변환)
 - **오디오 재생**: HTML5 audio 요소를 통한 오디오 재생
+- **트랙 제거**: 제거 버튼을 통한 개별 트랙 삭제
+
+#### 파형 기능 추가 후 (WaveSurfer.js)
+
+- **트랙 정보 표시**: TrackHeader 컴포넌트로 분리
+- **파형 시각화**: WaveSurfer.js를 통한 실시간 파형 렌더링
+- **재생 제어**: 파형 뷰어를 통한 재생/일시정지
+- **줌 기능**: 파형 확대/축소 (0-200 범위)
 - **트랙 제거**: 제거 버튼을 통한 개별 트랙 삭제
 
 ## 구현 세부사항
@@ -613,6 +650,7 @@ interface TrackWithRegions extends AudioFile {
 - **React**: v18.3.1
 - **TypeScript**: ~5.8.3
 - **Context API**: React 기본 제공
+- **WaveSurfer.js**: v7.10.1 (오디오 파형 시각화)
 - **Vanilla Extract**: CSS-in-TS 스타일링
 
 ## 주요 특징
@@ -638,18 +676,596 @@ interface TrackWithRegions extends AudioFile {
 - 트랙 관리 로직이 Context에 집중되어 확장 용이
 - 새로운 트랙 기능 추가 시 Context만 수정
 
-## 향후 개선 사항
+## 트랙 파형 표시 기능 구현 (추가 작업)
 
+### 작업 개요
+
+기존 HTML5 audio 컨트롤을 WaveSurfer.js 기반 파형 뷰어로 교체하여 DAW 스타일의 파형 트랙을 구현했습니다. 컴포넌트를 모듈화하여 유지보수성을 향상시켰습니다.
+
+### 주요 변경 사항
+
+1. **WaveSurfer.js 통합**: 오디오 파형 시각화 라이브러리 도입
+2. **컴포넌트 모듈화**: Track 컴포넌트를 TrackHeader, TrackControls, useWaveSurfer로 분리
+3. **재생/일시정지 기능**: 파형 뷰어를 통한 오디오 재생 제어
+4. **줌 기능**: 파형 확대/축소 기능 제공
+
+### 파일 구조 (업데이트)
+
+```
+src/
+└── components/
+    └── Daw/
+        └── components/
+            └── Track/
+                ├── Track.tsx              # 메인 트랙 컴포넌트 (리팩토링)
+                ├── Track.css.ts           # 트랙 스타일
+                ├── components/
+                │   ├── TrackHeader.tsx    # 트랙 헤더 (정보 표시)
+                │   └── TrackControls.tsx   # 재생/줌 컨트롤
+                └── utils/
+                    ├── useWaveSurfer.ts   # WaveSurfer 초기화 훅
+                    └── format.ts          # 포맷팅 유틸리티
+```
+
+### 구현 세부사항
+
+#### 1. useWaveSurfer 커스텀 훅 (`utils/useWaveSurfer.ts`)
+
+WaveSurfer 인스턴스 생성 및 상태 관리를 담당하는 커스텀 훅입니다.
+
+```typescript
+export function useWaveSurfer(url: string) {
+  const waveformRef = useRef<HTMLDivElement | null>(null);
+  const wavesurferRef = useRef<WaveSurfer | null>(null);
+  const [{ isReady, isPlaying, zoomLevel }, setState] =
+    useState<WaveSurferState>({
+      isReady: false,
+      isPlaying: false,
+      zoomLevel: 0,
+    });
+
+  useEffect(() => {
+    if (!waveformRef.current) return;
+
+    const wavesurfer = WaveSurfer.create({
+      container: waveformRef.current,
+      url,
+      height: 120,
+      waveColor: '#3a7bfd',
+      progressColor: '#8fb2ff',
+      cursorColor: '#ffcc66',
+      barWidth: 2,
+      barGap: 1,
+      barRadius: 2,
+      normalize: true,
+    });
+
+    wavesurferRef.current = wavesurfer;
+
+    // 이벤트 핸들러 등록
+    wavesurfer.on('ready', () =>
+      setState(prev => ({ ...prev, isReady: true }))
+    );
+    wavesurfer.on('play', () =>
+      setState(prev => ({ ...prev, isPlaying: true }))
+    );
+    wavesurfer.on('pause', () =>
+      setState(prev => ({ ...prev, isPlaying: false }))
+    );
+    wavesurfer.on('finish', () =>
+      setState(prev => ({ ...prev, isPlaying: false }))
+    );
+
+    return () => {
+      setState({ isReady: false, isPlaying: false, zoomLevel: 0 });
+      wavesurfer.destroy();
+      wavesurferRef.current = null;
+    };
+  }, [url]);
+
+  const togglePlayPause = () => {
+    const wavesurfer = wavesurferRef.current;
+    if (!wavesurfer) return;
+    wavesurfer.isPlaying() ? wavesurfer.pause() : wavesurfer.play();
+  };
+
+  const updateZoom = (value: number) => {
+    setState(prev => ({ ...prev, zoomLevel: value }));
+    wavesurferRef.current?.zoom(value);
+  };
+
+  return {
+    waveformRef,
+    isReady,
+    isPlaying,
+    zoomLevel,
+    togglePlayPause,
+    updateZoom,
+  };
+}
+```
+
+**주요 특징:**
+
+- WaveSurfer 인스턴스 생명주기 관리
+- 재생 상태 자동 동기화
+- 컴포넌트 언마운트 시 리소스 정리
+- 줌 레벨 상태 관리
+
+#### 2. TrackHeader 컴포넌트 (`components/TrackHeader.tsx`)
+
+트랙 정보 표시를 담당하는 컴포넌트입니다.
+
+```typescript
+export function TrackHeader({ track, index, onRemove }: TrackHeaderProps) {
+  return (
+    <div className={styles.trackHeader}>
+      <div className={styles.trackInfo}>
+        <span className={styles.trackNumber}>{index + 1}</span>
+        <div className={styles.trackDetails}>
+          <span className={styles.trackName}>{track.name}</span>
+          <span className={styles.trackMeta}>
+            {formatDuration(track.duration)} • {track.formattedSize}
+          </span>
+        </div>
+      </div>
+      {onRemove && (
+        <button
+          className={styles.removeButton}
+          onClick={() => onRemove(index)}
+          aria-label="트랙 제거"
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+}
+```
+
+**주요 특징:**
+
+- 트랙 번호, 파일명, 메타데이터 표시
+- 제거 버튼 조건부 렌더링
+- 포맷팅 유틸리티 재사용
+
+#### 3. TrackControls 컴포넌트 (`components/TrackControls.tsx`)
+
+재생 및 줌 컨트롤을 제공하는 컴포넌트입니다.
+
+```typescript
+export function TrackControls({
+  index,
+  isReady,
+  isPlaying,
+  zoomLevel,
+  onPlayToggle,
+  onZoomChange,
+}: TrackControlsProps) {
+  return (
+    <div className={styles.controls}>
+      <div className={styles.controlGroup}>
+        <button
+          className={styles.actionButton}
+          onClick={onPlayToggle}
+          disabled={!isReady}
+        >
+          {isPlaying ? '일시정지' : '재생'}
+        </button>
+      </div>
+      <div className={styles.controlGroup}>
+        <label className={styles.sliderLabel} htmlFor={`zoom-${index}`}>
+          줌
+        </label>
+        <input
+          id={`zoom-${index}`}
+          type="range"
+          min={0}
+          max={200}
+          step={10}
+          value={zoomLevel}
+          onChange={(event) => onZoomChange(Number(event.target.value))}
+          className={styles.slider}
+        />
+      </div>
+    </div>
+  );
+}
+```
+
+**주요 특징:**
+
+- 재생/일시정지 토글 버튼
+- 줌 슬라이더 (0-200 범위)
+- 준비 상태에 따른 버튼 비활성화
+
+#### 4. Track 컴포넌트 리팩토링 (`Track.tsx`)
+
+메인 Track 컴포넌트를 단순화하여 하위 컴포넌트와 훅을 조합하는 구조로 변경했습니다.
+
+```typescript
+export function Track({ track, index, onRemove }: TrackProps) {
+  const {
+    waveformRef,
+    isReady,
+    isPlaying,
+    zoomLevel,
+    togglePlayPause,
+    updateZoom,
+  } = useWaveSurfer(track.url);
+
+  return (
+    <div className={styles.track}>
+      <TrackHeader track={track} index={index} onRemove={onRemove} />
+      <div className={styles.trackContent}>
+        <div
+          ref={waveformRef}
+          className={styles.waveformContainer}
+          aria-label="파형 뷰"
+        />
+        <TrackControls
+          index={index}
+          isReady={isReady}
+          isPlaying={isPlaying}
+          zoomLevel={zoomLevel}
+          onPlayToggle={togglePlayPause}
+          onZoomChange={updateZoom}
+        />
+      </div>
+    </div>
+  );
+}
+```
+
+**주요 특징:**
+
+- 관심사 분리: UI 로직과 WaveSurfer 로직 분리
+- 재사용성 향상: 하위 컴포넌트 독립적 사용 가능
+- 가독성 향상: 메인 컴포넌트가 간결해짐
+
+#### 5. 포맷팅 유틸리티 분리 (`utils/format.ts`)
+
+포맷팅 함수를 별도 파일로 분리하여 재사용성을 높였습니다.
+
+```typescript
+export const formatDuration = (seconds?: number) => {
+  if (!seconds) return '--:--';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
+export const formatFileSize = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+```
+
+### 스타일 업데이트 (`Track.css.ts`)
+
+파형 컨테이너 및 컨트롤 스타일 추가:
+
+```typescript
+export const waveformContainer = style({
+  width: '100%',
+  minHeight: '120px',
+  backgroundColor: '#0f0f10',
+  border: '1px solid #1f1f1f',
+  borderRadius: '4px',
+  overflow: 'hidden',
+});
+
+export const controls = style({
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: '12px',
+  justifyContent: 'space-between',
+});
+
+export const actionButton = style({
+  backgroundColor: '#1a1a1a',
+  color: '#ffffff',
+  border: '1px solid #2c2c2c',
+  borderRadius: '4px',
+  padding: '6px 10px',
+  cursor: 'pointer',
+  fontSize: '0.85rem',
+  transition: 'all 0.15s ease',
+  ':hover': {
+    borderColor: '#3a7bfd',
+    color: '#bcd2ff',
+  },
+  ':disabled': {
+    opacity: 0.5,
+    cursor: 'not-allowed',
+  },
+});
+```
+
+### 설계 결정 사항
+
+#### 1. 컴포넌트 모듈화
+
+**이유:**
+
+- 단일 책임 원칙 준수
+- 각 컴포넌트의 독립적 테스트 가능
+- 코드 재사용성 향상
+
+**결과:**
+
+- TrackHeader: 트랙 정보 표시만 담당
+- TrackControls: 재생/줌 컨트롤만 담당
+- useWaveSurfer: WaveSurfer 로직만 담당
+
+#### 2. 커스텀 훅 사용
+
+**이유:**
+
+- WaveSurfer 인스턴스 생명주기 관리
+- 상태 관리 로직 캡슐화
+- 컴포넌트에서 비즈니스 로직 분리
+
+**결과:**
+
+- Track 컴포넌트가 선언적 구조로 변경
+- WaveSurfer 관련 로직 재사용 가능
+
+#### 3. WaveSurfer.js 선택
+
+**이유:**
+
+- 웹 표준 기반 오디오 파형 시각화
+- 활발한 커뮤니티 및 문서화
+- 플러그인 시스템으로 확장 가능
+
+**대안 고려:**
+
+- Web Audio API 직접 사용: 구현 복잡도 높음
+- 다른 라이브러리: WaveSurfer가 가장 성숙한 솔루션
+
+### 기술 스택 (업데이트)
+
+- **React**: v18.3.1
+- **TypeScript**: ~5.8.3
+- **WaveSurfer.js**: v7.10.1
+- **Vanilla Extract**: CSS-in-TS 스타일링
+
+### 주요 기능
+
+#### 1. 파형 시각화
+
+- 실시간 오디오 파형 렌더링
+- 정규화된 파형 표시
+- 커스터마이징 가능한 색상 및 스타일
+
+#### 2. 재생 제어
+
+- 재생/일시정지 토글
+- 재생 상태 자동 동기화
+- 준비 상태에 따른 UI 피드백
+
+#### 3. 줌 기능
+
+- 0-200 범위의 줌 레벨 조절
+- 실시간 파형 확대/축소
+- 슬라이더를 통한 직관적 제어
+
+## Export 기능과의 연결 구조
+
+### 데이터 흐름
+
+트랙 관리와 Export 기능은 다음과 같이 연결되어 있습니다:
+
+```
+TrackContext (전역 상태)
+    ↓ tracks: AudioFile[]
+DawPage
+    ↓ tracks prop
+ExportButton
+    ↓ tracks parameter
+exportTracks()
+    ↓ AudioFile[] 처리
+WAV 파일 생성 및 다운로드
+```
+
+### 연결 세부사항
+
+#### 1. TrackContext에서 트랙 관리
+
+```typescript
+// src/contexts/TrackContext.tsx
+interface TrackContextValue {
+  tracks: AudioFile[]; // 전역 트랙 목록
+  addTrack: (file: AudioFile) => void;
+  removeTrack: (index: number) => void;
+  clearTracks: () => void;
+}
+```
+
+**역할:**
+
+- 업로드된 오디오 파일들을 전역 상태로 관리
+- 모든 트랙 정보를 `AudioFile[]` 타입으로 저장
+- Export 기능에서 사용할 트랙 데이터의 소스
+
+#### 2. DawPage에서 트랙 전달
+
+```typescript
+// src/components/Daw/DawPage.tsx
+export function DawPage() {
+  const { tracks, removeTrack } = useTracks();  // TrackContext에서 트랙 가져오기
+
+  return (
+    <div className={styles.container}>
+      <div className={styles.header}>
+        <h1 className={styles.title}>트랙 목록</h1>
+        <div className={styles.headerRight}>
+          <span className={styles.trackCount}>{tracks.length}개 트랙</span>
+          <ExportButton tracks={tracks} />  {/* 트랙 배열을 ExportButton에 전달 */}
+        </div>
+      </div>
+      {/* 트랙 리스트 표시 */}
+    </div>
+  );
+}
+```
+
+**역할:**
+
+- `useTracks()` 훅을 통해 TrackContext에서 트랙 목록 가져오기
+- ExportButton 컴포넌트에 `tracks` prop으로 전달
+- 트랙 개수 표시 및 Export 버튼 위치 결정
+
+#### 3. ExportButton에서 트랙 수신
+
+```typescript
+// src/components/Daw/components/ExportButton/ExportButton.tsx
+interface ExportButtonProps {
+  tracks: AudioFile[];  // 내보낼 오디오 트랙 배열
+  settings?: ExportSettings;
+  onExportComplete?: () => void;
+  onExportError?: (error: Error) => void;
+}
+
+export function ExportButton({ tracks, settings, ... }: ExportButtonProps) {
+  const handleExport = useCallback(async () => {
+    if (tracks.length === 0) {
+      setError('내보낼 트랙이 없습니다.');
+      return;
+    }
+
+    const blob = await exportTracks(tracks, settings, (progressInfo) => {
+      setProgress(progressInfo.progress);
+    });
+
+    downloadBlob(blob, `${settings?.filename || 'export'}.wav`);
+  }, [tracks, settings, ...]);
+}
+```
+
+**역할:**
+
+- `tracks` prop으로 트랙 배열 수신
+- 트랙이 없으면 버튼 비활성화
+- `exportTracks()` 함수에 트랙 배열 전달
+- 진행 상태 표시 및 에러 처리
+
+#### 4. exportTracks 함수에서 트랙 처리
+
+```typescript
+// src/components/Daw/components/ExportButton/utils/audioExport.ts
+export async function exportTracks(
+  tracks: AudioFile[], // AudioFile 타입의 트랙 배열
+  settings: ExportSettings = {},
+  onProgress?: (progress: ExportProgress) => void
+): Promise<Blob> {
+  if (tracks.length === 0) {
+    throw new Error('No tracks to export');
+  }
+
+  // 1. AudioContext 생성
+  const audioContext = new AudioContext({ sampleRate });
+
+  // 2. 모든 트랙 로드 및 디코딩
+  const audioBuffers = await loadAndDecodeTracks(
+    audioContext,
+    tracks, // AudioFile[] 전달
+    onProgress
+  );
+
+  // 3. 모든 버퍼를 하나로 믹싱
+  const mixedBuffer = await mixAudioBuffers(
+    audioContext,
+    audioBuffers,
+    sampleRate
+  );
+
+  // 4. WAV 파일로 변환
+  const wavBlob = audioBufferToWav(finalBuffer, bitDepth);
+  return wavBlob;
+}
+```
+
+**역할:**
+
+- `AudioFile[]` 타입의 트랙 배열을 받아서 처리
+- 각 트랙의 `url` 속성을 사용하여 오디오 파일 로드
+- 모든 트랙을 하나의 오디오 버퍼로 믹싱
+- WAV 파일 Blob 생성 및 반환
+
+### AudioFile 타입 구조
+
+Export 기능에서 사용하는 `AudioFile` 타입은 다음과 같습니다:
+
+```typescript
+// src/components/DropZone/components/FileUpload/components/types.ts
+export interface AudioFile {
+  file: File; // 원본 File 객체
+  name: string; // 파일명
+  size: number; // 파일 크기 (바이트)
+  type: string; // MIME 타입
+  duration?: number; // 재생 시간 (초)
+  url: string; // Object URL (exportTracks에서 사용)
+}
+```
+
+**Export에서 사용하는 속성:**
+
+- `url`: 오디오 파일을 로드하기 위한 Object URL
+- `name`: 에러 메시지에 파일명 표시용
+
+### 연결 요약
+
+| 단계 | 컴포넌트/함수   | 데이터 타입               | 역할                             |
+| ---- | --------------- | ------------------------- | -------------------------------- |
+| 1    | TrackContext    | `AudioFile[]`             | 전역 트랙 상태 관리              |
+| 2    | DawPage         | `AudioFile[]`             | TrackContext에서 트랙 가져오기   |
+| 3    | ExportButton    | `AudioFile[]` (prop)      | 트랙 배열 수신 및 Export 버튼 UI |
+| 4    | exportTracks()  | `AudioFile[]` (parameter) | 트랙 배열을 WAV 파일로 변환      |
+| 5    | loadAudioFile() | `AudioFile.url`           | Object URL로 오디오 파일 로드    |
+
+### 주요 특징
+
+1. **단방향 데이터 흐름**
+   - TrackContext → DawPage → ExportButton → exportTracks
+   - 데이터는 항상 위에서 아래로 흐름
+
+2. **타입 안정성**
+   - 모든 단계에서 `AudioFile[]` 타입 사용
+   - TypeScript로 타입 체크 보장
+
+3. **상태 공유**
+   - TrackContext를 통한 전역 상태 관리
+   - Export 기능이 항상 최신 트랙 목록 사용
+
+4. **독립성**
+   - Export 기능은 Track 컴포넌트와 독립적
+   - TrackContext의 트랙 데이터만 사용
+
+### 향후 개선 사항
+
+- [x] 트랙 파형 표시 (spec.md p2) ✅
 - [ ] 트랙 순서 변경 기능 (드래그 앤 드롭)
 - [ ] 트랙 이름 편집 기능
 - [ ] 트랙별 볼륨 제어 (spec.md p1)
 - [ ] 트랙별 패닝 제어 (spec.md p2)
 - [ ] 트랙 솔로/뮤트 기능 (spec.md p2)
-- [ ] 트랙 파형 표시 (spec.md p2)
 - [ ] 트랙 상태 영구 저장 (LocalStorage/IndexedDB)
 - [ ] 트랙 복제 기능
+- [ ] 파형 클릭 시 재생 위치 이동
+- [ ] 파형 드래그로 재생 위치 조절
+- [ ] Export 시 트랙별 볼륨/패닝 적용
+- [ ] 선택된 트랙만 Export 기능
 
 ## 관련 문서
+
+- [FileUpload 구현 기록](./file-upload-implementation.md)
+- [Audio Export 구현 기록](./audio-export-implementation.md)
+- [Router 설정 기록](./router-setup.md)
+- [Spec 문서](../spec.md)
 
 - [FileUpload 구현 기록](./file-upload-implementation.md)
 - [Router 설정 기록](./router-setup.md)
