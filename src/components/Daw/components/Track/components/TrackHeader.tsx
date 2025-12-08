@@ -1,6 +1,5 @@
 import type { AudioFile } from '@/components/DropZone/components/FileUpload/components/types';
 import * as styles from '../Track.css';
-import { formatDuration } from '../utils/format';
 
 interface TrackHeaderProps {
   track: AudioFile;
@@ -17,7 +16,7 @@ export function TrackHeader({ track, index, onRemove }: TrackHeaderProps) {
         <div className={styles.trackDetails}>
           <span className={styles.trackName}>{track.name}</span>
           <span className={styles.trackMeta}>
-            {formatDuration(track.duration)} • {track.formattedSize}
+            {track.formattedDuration || '--:--'} • {track.formattedSize}
           </span>
         </div>
       </div>

@@ -5,6 +5,7 @@ export interface AudioFile {
   formattedSize: string; // 포맷팅된 파일 크기 (예: "1.00 MB")
   type: string;
   duration?: number;
+  formattedDuration?: string; // 포맷팅된 재생 시간 (예: "2:05")
   url: string;
 }
 

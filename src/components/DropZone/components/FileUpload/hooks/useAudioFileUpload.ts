@@ -5,6 +5,7 @@ import type { AudioFile } from '../components/types';
 // 유틸리티 함수 import
 import { getFileDuration } from '../utils/audioMetadata';
 import { formatFileSize } from '@/utils/formatFileSize';
+import { formatDuration } from '@/utils/formatDuration';
 // 상수 import
 import { ERROR_MESSAGES, MAX_FILE_SIZE, ACCEPTED_AUDIO_TYPES } from '../components/constants';
 
@@ -77,6 +78,7 @@ export function useAudioFileUpload({ onFileUploaded }: UseAudioFileUploadOptions
           formattedSize: formatFileSize(file.size), // 포맷팅된 파일 크기
           type: file.type, // MIME 타입
           duration,       // 재생 시간 (초)
+          formattedDuration: duration ? formatDuration(duration) : undefined, // 포맷팅된 재생 시간
           url,            // Object URL (미리보기용)
         };
 
