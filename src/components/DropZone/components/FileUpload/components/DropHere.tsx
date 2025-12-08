@@ -62,7 +62,6 @@ export function DropHere({
     <div
       {...getRootProps({
         className: `${styles.dropZone} ${dragActive ? styles.dropZoneActive : ''}`,
-        onClick: handleButtonClick,
       })}
     >
       {/* 숨겨진 파일 input 요소 */}
