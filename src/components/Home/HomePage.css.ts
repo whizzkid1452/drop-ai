@@ -4,7 +4,7 @@ import { wave } from '@/styles/global.css';
 export const container = style({
   width: '100%',
   height: '100vh',
-  backgroundColor: '#1a1a1a',
+  backgroundColor: '#0a0a0a',
   color: '#ffffff',
   display: 'flex',
   flexDirection: 'column',
@@ -22,11 +22,11 @@ export const backgroundGrid = style({
   width: '100%',
   height: '100%',
   backgroundImage: `
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px)
   `,
-  backgroundSize: '40px 40px',
-  opacity: 0.5,
+  backgroundSize: '20px 20px',
+  opacity: 0.4,
   pointerEvents: 'none',
 });
 
@@ -36,37 +36,36 @@ export const content = style({
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  gap: '2rem',
+  gap: '1.5rem',
   padding: '2rem',
   textAlign: 'center',
 });
 
 export const logo = style({
   fontSize: '4.5rem',
-  fontWeight: 700,
-  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)',
-  WebkitBackgroundClip: 'text',
-  WebkitTextFillColor: 'transparent',
-  backgroundClip: 'text',
+  fontWeight: 600,
+  color: '#ffffff',
   margin: 0,
-  letterSpacing: '-0.02em',
-  textShadow: '0 0 40px rgba(118, 75, 162, 0.3)',
+  letterSpacing: '-0.03em',
+  textShadow: '0 2px 8px rgba(0, 0, 0, 0.5)',
+  fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
 });
 
 export const subtitle = style({
-  fontSize: '1.5rem',
+  fontSize: '0.875rem',
   fontWeight: 400,
-  color: '#b0b0b0',
+  color: '#888888',
   margin: 0,
-  letterSpacing: '0.02em',
+  letterSpacing: '0.01em',
+  textTransform: 'uppercase',
 });
 
 export const accentLine = style({
-  width: '60px',
-  height: '3px',
-  background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
-  borderRadius: '2px',
-  margin: '1rem 0',
+  width: '80px',
+  height: '2px',
+  background: '#333333',
+  borderRadius: '1px',
+  margin: '0.5rem 0',
 });
 
 export const waveAnimation = style({
@@ -74,10 +73,10 @@ export const waveAnimation = style({
   bottom: 0,
   left: 0,
   width: '100%',
-  height: '200px',
-  background: 'linear-gradient(to top, rgba(118, 75, 162, 0.1) 0%, transparent 100%)',
+  height: '150px',
+  background: 'linear-gradient(to top, rgba(0, 0, 0, 0.3) 0%, transparent 100%)',
   pointerEvents: 'none',
-  animation: `${wave} 3s ease-in-out infinite`,
+  animation: `${wave} 4s ease-in-out infinite`,
 });
 
 export const glowEffect = style({
@@ -85,11 +84,11 @@ export const glowEffect = style({
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
-  width: '600px',
-  height: '600px',
-  background: 'radial-gradient(circle, rgba(118, 75, 162, 0.15) 0%, transparent 70%)',
+  width: '800px',
+  height: '800px',
+  background: 'radial-gradient(circle, rgba(255, 255, 255, 0.02) 0%, transparent 70%)',
   borderRadius: '50%',
   pointerEvents: 'none',
-  filter: 'blur(60px)',
+  filter: 'blur(80px)',
 });
 

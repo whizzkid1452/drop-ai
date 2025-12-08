@@ -8,27 +8,26 @@ export const container = style({
 });
 
 export const dropZone = style({
-  border: '2px dashed #667eea',
-  borderRadius: '12px',
-  padding: '3rem 2rem',
+  border: '1px solid #333333',
+  borderRadius: '4px',
+  padding: '4rem 2rem',
   textAlign: 'center',
   cursor: 'pointer',
-  transition: 'all 0.3s ease',
-  backgroundColor: 'rgba(102, 126, 234, 0.05)',
+  transition: 'all 0.2s ease',
+  backgroundColor: '#0a0a0a',
   position: 'relative',
   overflow: 'hidden',
   
   ':hover': {
-    borderColor: '#764ba2',
-    backgroundColor: 'rgba(118, 75, 162, 0.1)',
-    transform: 'translateY(-2px)',
+    borderColor: '#444444',
+    backgroundColor: '#0f0f0f',
   },
 });
 
 export const dropZoneActive = style({
-  borderColor: '#764ba2',
-  backgroundColor: 'rgba(118, 75, 162, 0.15)',
-  transform: 'scale(1.02)',
+  borderColor: '#555555',
+  backgroundColor: '#111111',
+  borderStyle: 'solid',
 });
 
 export const dropZoneContent = style({
@@ -41,21 +40,25 @@ export const dropZoneContent = style({
 
 export const icon = style({
   fontSize: '3rem',
-  color: '#667eea',
+  color: '#888888',
   marginBottom: '0.5rem',
+  opacity: 0.6,
 });
 
 export const title = style({
-  fontSize: '1.5rem',
-  fontWeight: 600,
+  fontSize: '1.25rem',
+  fontWeight: 500,
   color: '#ffffff',
   margin: 0,
+  letterSpacing: '-0.01em',
 });
 
 export const subtitle = style({
-  fontSize: '1rem',
-  color: '#b0b0b0',
+  fontSize: '0.875rem',
+  color: '#666666',
   margin: 0,
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
 });
 
 export const fileInput = style({
@@ -63,25 +66,27 @@ export const fileInput = style({
 });
 
 export const button = style({
-  marginTop: '1rem',
-  padding: '0.75rem 2rem',
-  backgroundColor: '#667eea',
+  marginTop: '1.5rem',
+  padding: '0.625rem 1.5rem',
+  backgroundColor: '#1a1a1a',
   color: '#ffffff',
-  border: 'none',
-  borderRadius: '8px',
-  fontSize: '1rem',
-  fontWeight: 500,
+  border: '1px solid #333333',
+  borderRadius: '2px',
+  fontSize: '0.875rem',
+  fontWeight: 400,
   cursor: 'pointer',
-  transition: 'all 0.2s ease',
+  transition: 'all 0.15s ease',
   pointerEvents: 'auto',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
   
   ':hover': {
-    backgroundColor: '#764ba2',
-    transform: 'translateY(-1px)',
+    backgroundColor: '#222222',
+    borderColor: '#444444',
   },
   
   ':active': {
-    transform: 'translateY(0)',
+    backgroundColor: '#1a1a1a',
   },
 });
 
@@ -129,29 +134,30 @@ export const audioPreview = style({
 
 export const editButton = style({
   marginTop: '1.5rem',
-  padding: '0.875rem 2.5rem',
-  backgroundColor: '#667eea',
+  padding: '0.75rem 2rem',
+  backgroundColor: '#1a1a1a',
   color: '#ffffff',
-  border: 'none',
-  borderRadius: '8px',
-  fontSize: '1rem',
-  fontWeight: 600,
+  border: '1px solid #333333',
+  borderRadius: '2px',
+  fontSize: '0.875rem',
+  fontWeight: 400,
   cursor: 'pointer',
-  transition: 'all 0.2s ease',
+  transition: 'all 0.15s ease',
   width: '100%',
   maxWidth: '300px',
   marginLeft: 'auto',
   marginRight: 'auto',
   display: 'block',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
   
   ':hover': {
-    backgroundColor: '#764ba2',
-    transform: 'translateY(-2px)',
-    boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',
+    backgroundColor: '#222222',
+    borderColor: '#444444',
   },
   
   ':active': {
-    transform: 'translateY(0)',
+    backgroundColor: '#1a1a1a',
   },
 });
 
@@ -178,8 +184,8 @@ export const loadingIndicator = style({
   display: 'inline-block',
   width: '20px',
   height: '20px',
-  border: '3px solid rgba(102, 126, 234, 0.3)',
-  borderTopColor: '#667eea',
+  border: '2px solid #333333',
+  borderTopColor: '#888888',
   borderRadius: '50%',
   animation: `${pulse} 1s linear infinite`,
 });

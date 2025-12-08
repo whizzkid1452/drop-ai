@@ -63,8 +63,6 @@ export function DropHere({
       />
       {/* 드롭 영역 내부 콘텐츠 */}
       <div className={styles.dropZoneContent}>
-        {/* 음악 아이콘 */}
-        <div className={styles.icon}>🎵</div>
         {/* 제목 (로딩 중이면 "Processing..." 표시) */}
         <h2 className={styles.title}>
           {isLoading ? UI_MESSAGES.TITLE_PROCESSING : UI_MESSAGES.TITLE_UPLOAD}
