@@ -1,5 +1,5 @@
 import type { AudioFile } from '@/components/DropZone/components/FileUpload/components/types';
-import { AUDIO_SAMPLE_MIN, AUDIO_SAMPLE_MAX } from './constants';
+import { AUDIO_SAMPLE_MIN, AUDIO_SAMPLE_MAX } from '../constants';
 
 /**
  * 오디오 샘플 값을 [-1, 1] 범위로 제한
@@ -199,4 +199,5 @@ export async function mixAudioBuffers(
 
   return mixedBuffer;
 }
+
 

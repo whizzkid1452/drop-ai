@@ -3,9 +3,9 @@ import {
   BYTES_PER_SAMPLE,
   PCM_MAX_VALUES,
   DEFAULT_BIT_DEPTH,
-} from './constants';
+} from '../constants';
 import { clampSample } from './audioUtils';
-import type { WavHeaderInfo } from './types';
+import type { WavHeaderInfo } from '../types';
 
 /**
  * WAV 헤더 정보 계산
@@ -232,4 +232,5 @@ export function audioBufferToWav(
 
   return new Blob([buffer], { type: 'audio/wav' });
 }
+
 

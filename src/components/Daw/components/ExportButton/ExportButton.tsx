@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { exportTracks, downloadBlob, type ExportSettings } from '../../utils/audioExport';
+import { exportTracks, downloadBlob, type ExportSettings } from './utils/audioExport';
 import type { AudioFile } from '@/components/DropZone/components/FileUpload/components/types';
 import * as styles from './ExportButton.css';
 

@@ -1,6 +1,6 @@
 import type { AudioFile } from '@/components/DropZone/components/FileUpload/components/types';
-import { DEFAULT_SAMPLE_RATE, DEFAULT_BIT_DEPTH } from './constants';
-import type { ExportSettings, ExportProgress } from './types';
+import { DEFAULT_SAMPLE_RATE, DEFAULT_BIT_DEPTH } from '../constants';
+import type { ExportSettings, ExportProgress } from '../types';
 import {
   loadAudioFile,
   decodeAudioData,
@@ -181,3 +181,5 @@ export function downloadBlob(blob: Blob, filename: string): void {
 
 // 타입 재export (기존 import 경로 유지)
 export type { ExportSettings, ExportProgress };
+
+
