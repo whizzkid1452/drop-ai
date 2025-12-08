@@ -5,6 +5,8 @@ export const container = style({
   maxWidth: '1200px',
   margin: '0 auto',
   padding: '24px',
+  backgroundColor: '#0a0a0a',
+  minHeight: '100vh',
 });
 
 export const header = style({
@@ -12,6 +14,8 @@ export const header = style({
   justifyContent: 'space-between',
   alignItems: 'center',
   marginBottom: '24px',
+  paddingBottom: '16px',
+  borderBottom: '1px solid #333333',
 });
 
 export const headerRight = style({
@@ -21,20 +25,25 @@ export const headerRight = style({
 });
 
 export const title = style({
-  fontSize: '28px',
-  fontWeight: '600',
-  color: '#fff',
+  fontSize: '0.875rem',
+  fontWeight: '500',
+  color: '#ffffff',
   margin: 0,
+  textTransform: 'uppercase',
+  letterSpacing: '0.1em',
 });
 
 export const trackCount = style({
-  fontSize: '14px',
-  color: '#999',
+  fontSize: '0.75rem',
+  color: '#666666',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
 });
 
 export const trackList = style({
   display: 'flex',
   flexDirection: 'column',
+  gap: '8px',
 });
 
 export const emptyState = style({
@@ -47,15 +56,17 @@ export const emptyState = style({
 });
 
 export const emptyTitle = style({
-  fontSize: '24px',
-  fontWeight: '600',
-  color: '#fff',
-  marginBottom: '12px',
+  fontSize: '1rem',
+  fontWeight: '500',
+  color: '#ffffff',
+  marginBottom: '8px',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
 });
 
 export const emptyMessage = style({
-  fontSize: '16px',
-  color: '#999',
+  fontSize: '0.875rem',
+  color: '#666666',
 });
 
 

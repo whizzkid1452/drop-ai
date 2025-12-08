@@ -12,28 +12,33 @@ export const exportButton = style({
   alignItems: 'center',
   justifyContent: 'center',
   gap: '8px',
-  padding: '12px 24px',
-  backgroundColor: '#4CAF50',
-  color: '#fff',
-  border: 'none',
-  borderRadius: '8px',
-  fontSize: '16px',
-  fontWeight: '600',
+  padding: '0.625rem 1.5rem',
+  backgroundColor: '#1a1a1a',
+  color: '#ffffff',
+  border: '1px solid #333333',
+  borderRadius: '2px',
+  fontSize: '0.875rem',
+  fontWeight: '400',
   cursor: 'pointer',
-  transition: 'background-color 0.2s, opacity 0.2s',
+  transition: 'all 0.15s ease',
   minWidth: '120px',
-  minHeight: '48px',
+  minHeight: '36px',
   position: 'relative',
   overflow: 'hidden',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
 
   ':hover': {
-    backgroundColor: '#45a049',
+    backgroundColor: '#222222',
+    borderColor: '#444444',
   },
 
   ':disabled': {
-    backgroundColor: '#666',
+    backgroundColor: '#0a0a0a',
+    borderColor: '#222222',
+    color: '#444444',
     cursor: 'not-allowed',
-    opacity: 0.6,
+    opacity: 0.5,
   },
 });
 
@@ -49,25 +54,28 @@ export const progressText = style({
 
 export const progressBar = style({
   width: '100%',
-  height: '4px',
-  backgroundColor: 'rgba(255, 255, 255, 0.3)',
-  borderRadius: '2px',
+  height: '2px',
+  backgroundColor: '#333333',
+  borderRadius: '1px',
   overflow: 'hidden',
 });
 
 export const progressFill = style({
   height: '100%',
-  backgroundColor: '#fff',
+  backgroundColor: '#888888',
   transition: 'width 0.3s ease',
-  borderRadius: '2px',
+  borderRadius: '1px',
 });
 
 export const errorMessage = style({
   padding: '8px 12px',
-  backgroundColor: '#f44336',
-  color: '#fff',
-  borderRadius: '4px',
-  fontSize: '14px',
-  fontWeight: '500',
+  backgroundColor: '#1a0a0a',
+  color: '#ff4444',
+  borderRadius: '2px',
+  fontSize: '0.75rem',
+  fontWeight: '400',
+  border: '1px solid #ff4444',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
 });
 
