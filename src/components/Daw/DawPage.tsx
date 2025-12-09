@@ -1,6 +1,5 @@
 import { useTracks } from '@/contexts/TrackContext';
 import { Track } from './components/Track/Track';
-import { ExportButton } from './components/ExportButton/ExportButton';
 import * as styles from './DawPage.css';
 
 export function DawPage() {
@@ -23,10 +22,7 @@ export function DawPage() {
     <div className={styles.container}>
       <div className={styles.header}>
         <h1 className={styles.title}>트랙 목록</h1>
-        <div className={styles.headerRight}>
-          <span className={styles.trackCount}>{tracks.length}개 트랙</span>
-          <ExportButton tracks={tracks} />
-        </div>
+        <span className={styles.trackCount}>{tracks.length}개 트랙</span>
       </div>
       <div className={styles.trackList}>
         {tracks.map((track, index) => (
