@@ -2,8 +2,7 @@ import { style } from '@vanilla-extract/css';
 
 export const container = style({
   width: '100%',
-  maxWidth: '1200px',
-  margin: '0 auto',
+  margin: 0,
   padding: '24px',
   backgroundColor: '#0a0a0a',
   minHeight: '100vh',
