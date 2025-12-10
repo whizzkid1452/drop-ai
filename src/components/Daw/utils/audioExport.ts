@@ -51,10 +51,12 @@ export async function exportTracks(
     throw new Error('No tracks to export');
   }
 
-  const audioContext = new AudioContext({ sampleRate: DEFAULT_SAMPLE_RATE });
-  updateProgress(onProgress, 0);
+  let audioContext: AudioContext | null = null;
 
   try {
+    audioContext = new AudioContext({ sampleRate: DEFAULT_SAMPLE_RATE });
+    updateProgress(onProgress, 0);
+
     const audioBuffers = await loadAndDecodeTracks(
       audioContext,
       tracks,
@@ -80,7 +82,7 @@ export async function exportTracks(
     console.error('Export failed:', error);
     throw new Error(`Export failed: ${errorMessage}`);
   } finally {
-    if (audioContext.state !== 'closed') {
+    if (audioContext && audioContext.state !== 'closed') {
       await audioContext.close().catch((err) => {
         console.warn('Failed to close AudioContext:', err);
       });
