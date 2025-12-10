@@ -1,46 +1,15 @@
 import { useState, useCallback } from 'react';
-import { exportTracks, downloadBlob, type ExportSettings } from '../../utils/audioExport';
+import { exportTracks, downloadBlob } from '../../utils/audioExport';
 import type { AudioFile } from '@/components/DropZone/components/FileUpload/components/types';
 import * as styles from './ExportButton.css';
 
-/**
- * ExportButton 컴포넌트의 Props 타입 정의
- */
 interface ExportButtonProps {
-  /** 내보낼 오디오 트랙 배열 */
   tracks: AudioFile[];
-  /** Export 설정 옵션 (선택적) */
-  settings?: ExportSettings;
-  /** Export 완료 시 호출되는 콜백 함수 (선택적) */
-  onExportComplete?: () => void;
-  /** Export 실패 시 호출되는 콜백 함수 (선택적) */
-  onExportError?: (error: Error) => void;
 }
 
-/**
- * ExportButton 컴포넌트
- * 
- * 여러 오디오 트랙을 하나의 WAV 파일로 내보내는 버튼입니다.
- * 
- * @param tracks - 내보낼 오디오 트랙 배열
- * @param settings - Export 설정 옵션 (선택적)
- * @param onExportComplete - Export 완료 시 호출되는 콜백 함수 (선택적)
- * @param onExportError - Export 실패 시 호출되는 콜백 함수 (선택적)
- * 
- * @example
- * ```tsx
- * <ExportButton
- *   tracks={tracks}
- *   settings={{ filename: 'my-export' }}
- *   onExportComplete={() => console.log('Export complete!')}
- * />
- * ```
- */
+
 export function ExportButton({
   tracks,
-  settings,
-  onExportComplete,
-  onExportError,
 }: ExportButtonProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -67,21 +36,18 @@ export function ExportButton({
       });
 
       // 파일 다운로드
-      const filename = settings?.filename || 'export';
-      downloadBlob(blob, `${filename}.wav`);
+      downloadBlob(blob, 'export.wav');
 
       setIsExporting(false);
       setProgress(0);
-      onExportComplete?.();
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Export failed');
       setError(error.message);
       setIsExporting(false);
       setProgress(0);
-      onExportError?.(error);
       console.error('Export error:', error);
     }
-  }, [tracks, settings, onExportComplete, onExportError]);
+  }, [tracks]);
 
   // 트랙이 없으면 버튼 비활성화
   const isDisabled = tracks.length === 0 || isExporting;
