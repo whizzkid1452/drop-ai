@@ -3,7 +3,6 @@ import { DEFAULT_SAMPLE_RATE } from './constants';
 import type { ExportProgress } from './types';
 import {
   loadAudioFile,
-  decodeAudioData,
   mixAudioBuffers,
 } from './audioUtils';
 import { audioBufferToWav } from './wavConverter';
@@ -31,7 +30,7 @@ async function loadAndDecodeTracks(
 
     try {
       const arrayBuffer = await loadAudioFile(track);
-      const audioBuffer = await decodeAudioData(audioContext, arrayBuffer);
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
       audioBuffers.push(audioBuffer);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
