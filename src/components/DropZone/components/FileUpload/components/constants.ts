@@ -9,12 +9,10 @@ export const ACCEPTED_AUDIO_TYPES = [
   'audio/flac',
 ] as const;
 
-export const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
-
+export const MAX_FILE_SIZE = 100 * 1024 * 1024;
 export const MAX_FILE_SIZE_MB = MAX_FILE_SIZE / (1024 * 1024);
 
 export const ERROR_MESSAGES = {
-  UNSUPPORTED_FORMAT: 'Unsupported file format. Only MP3, WAV, OGG, AAC, and FLAC files are allowed.',
   FILE_TOO_LARGE: (maxSize: number) => `File size is too large. Maximum ${maxSize}MB is allowed.`,
   FILE_READ_ERROR: 'Unable to read the file.',
   PROCESSING_ERROR: 'An error occurred while processing the file.',
