@@ -62,7 +62,7 @@ export function ExportButton({
     setProgress(0);
 
     try {
-      const blob = await exportTracks(tracks, settings, (progressInfo) => {
+      const blob = await exportTracks(tracks, (progressInfo) => {
         setProgress(progressInfo.progress);
       });
 

@@ -58,16 +58,13 @@ async function loadAndDecodeTracks(
  * 여러 오디오 트랙을 하나의 WAV 파일로 내보내는 함수
  * 
  * @param tracks - 내보낼 오디오 트랙 배열
- * @param settings - Export 설정 옵션
  * @param onProgress - 진행 상태 콜백 함수 (선택적)
  * @returns Promise<Blob> - 생성된 WAV 파일 Blob
  * @throws {Error} 트랙이 없거나 처리 중 오류 발생 시
  * 
  * @example
  * ```typescript
- * const blob = await exportTracks(tracks, {
- *   filename: 'my-export'
- * }, (progress) => {
+ * const blob = await exportTracks(tracks, (progress) => {
  *   console.log(`진행률: ${progress.progress}%`);
  * });
  * 
@@ -77,7 +74,6 @@ async function loadAndDecodeTracks(
  */
 export async function exportTracks(
   tracks: AudioFile[],
-  settings: ExportSettings = {},
   onProgress?: (progress: ExportProgress) => void
 ): Promise<Blob> {
   if (tracks.length === 0) {
