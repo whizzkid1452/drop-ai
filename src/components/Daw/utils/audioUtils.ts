@@ -18,6 +18,7 @@ export async function loadAudioFile(audioFile: AudioFile): Promise<ArrayBuffer> 
 }
 
 //오디오 버퍼를 리샘플링하는 함수 (간단한 선형 보간)
+//@whizzkid 추후 다운샘플링 기능을 추가할때 안티앨리어싱 기능 추가
 
 export function resampleBuffer(
   audioContext: AudioContext,
