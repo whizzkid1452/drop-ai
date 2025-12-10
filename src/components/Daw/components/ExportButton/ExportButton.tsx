@@ -21,7 +21,6 @@ interface ExportButtonProps {
  * ExportButton 컴포넌트
  * 
  * 여러 오디오 트랙을 하나의 WAV 파일로 내보내는 버튼입니다.
- * Ardour의 export 기능을 참고하여 웹 환경에 맞게 구현했습니다.
  * 
  * @param tracks - 내보낼 오디오 트랙 배열
  * @param settings - Export 설정 옵션 (선택적)
@@ -32,12 +31,7 @@ interface ExportButtonProps {
  * ```tsx
  * <ExportButton
  *   tracks={tracks}
- *   settings={{
- *     sampleRate: 44100,
- *     bitDepth: 16,
- *     normalize: true,
- *     filename: 'my-export'
- *   }}
+ *   settings={{ filename: 'my-export' }}
  *   onExportComplete={() => console.log('Export complete!')}
  * />
  * ```

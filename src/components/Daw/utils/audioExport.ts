@@ -1,10 +1,9 @@
 import type { AudioFile } from '@/components/DropZone/components/FileUpload/components/types';
-import { DEFAULT_SAMPLE_RATE, DEFAULT_BIT_DEPTH } from './constants';
+import { DEFAULT_SAMPLE_RATE } from './constants';
 import type { ExportSettings, ExportProgress } from './types';
 import {
   loadAudioFile,
   decodeAudioData,
-  normalizeAudioBuffer,
   mixAudioBuffers,
 } from './audioUtils';
 import { audioBufferToWav } from './wavConverter';
@@ -18,12 +17,10 @@ import { audioBufferToWav } from './wavConverter';
  */
 function updateProgress(
   onProgress: ((progress: ExportProgress) => void) | undefined,
-  progress: number,
-  stage: ExportProgress['stage']
+  progress: number
 ): void {
   onProgress?.({
     progress: Math.max(0, Math.min(100, progress)),
-    stage,
   });
 }
 
@@ -41,7 +38,7 @@ async function loadAndDecodeTracks(
   for (let i = 0; i < tracks.length; i++) {
     const track = tracks[i];
     const progress = (i / totalTracks) * 50;
-    updateProgress(onProgress, progress, 'loading');
+    updateProgress(onProgress, progress);
 
     try {
       const arrayBuffer = await loadAudioFile(track);
@@ -59,7 +56,6 @@ async function loadAndDecodeTracks(
 
 /**
  * 여러 오디오 트랙을 하나의 WAV 파일로 내보내는 함수
- * Ardour의 export_session 함수를 참고하여 웹 환경에 맞게 구현
  * 
  * @param tracks - 내보낼 오디오 트랙 배열
  * @param settings - Export 설정 옵션
@@ -70,9 +66,6 @@ async function loadAndDecodeTracks(
  * @example
  * ```typescript
  * const blob = await exportTracks(tracks, {
- *   sampleRate: 44100,
- *   bitDepth: 16,
- *   normalize: true,
  *   filename: 'my-export'
  * }, (progress) => {
  *   console.log(`진행률: ${progress.progress}%`);
@@ -91,18 +84,12 @@ export async function exportTracks(
     throw new Error('No tracks to export');
   }
 
-  const {
-    sampleRate = DEFAULT_SAMPLE_RATE,
-    bitDepth = DEFAULT_BIT_DEPTH,
-    normalize = false,
-  } = settings;
-
   let audioContext: AudioContext | null = null;
 
   try {
     // 1. AudioContext 생성
-    audioContext = new AudioContext({ sampleRate });
-    updateProgress(onProgress, 0, 'loading');
+    audioContext = new AudioContext({ sampleRate: DEFAULT_SAMPLE_RATE });
+    updateProgress(onProgress, 0);
 
     // 2. 모든 오디오 파일 로드 및 디코딩
     const audioBuffers = await loadAndDecodeTracks(
@@ -111,29 +98,21 @@ export async function exportTracks(
       onProgress
     );
 
-    updateProgress(onProgress, 50, 'mixing');
+    updateProgress(onProgress, 50);
 
     // 3. 모든 버퍼를 하나로 믹싱
     const mixedBuffer = await mixAudioBuffers(
       audioContext,
       audioBuffers,
-      sampleRate
+      DEFAULT_SAMPLE_RATE
     );
 
-    updateProgress(onProgress, 75, 'mixing');
+    updateProgress(onProgress, 90);
 
-    // 4. 정규화 (옵션)
-    let finalBuffer = mixedBuffer;
-    if (normalize) {
-      finalBuffer = normalizeAudioBuffer(audioContext, mixedBuffer);
-    }
+    // 4. WAV 파일로 변환 (16-bit)
+    const wavBlob = audioBufferToWav(mixedBuffer);
 
-    updateProgress(onProgress, 90, 'encoding');
-
-    // 5. WAV 파일로 변환
-    const wavBlob = audioBufferToWav(finalBuffer, bitDepth);
-
-    updateProgress(onProgress, 100, 'complete');
+    updateProgress(onProgress, 100);
 
     return wavBlob;
   } catch (error) {
