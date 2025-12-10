@@ -68,26 +68,29 @@ export function Track({ track, index, onRemove }: TrackProps) {
    * 
    * 바이트 단위 숫자를 읽기 쉬운 형식으로 변환합니다.
    * - 1024 바이트 미만: "B" 단위
-   * - 1024 바이트 이상 ~ 1MB 미만: "KB" 단위 (소수점 1자리)
-   * - 1MB 이상: "MB" 단위 (소수점 1자리)
+   * - 1024 바이트 이상 ~ 1MiB 미만: "KiB" 단위 (소수점 1자리)
+   * - 1MiB 이상: "MiB" 단위 (소수점 1자리)
+   * 
+   * 참고: Ardour 레퍼런스 프로젝트 방식에 따라 1024 기반 계산을 사용합니다.
+   * KB(킬로바이트)는 1000 바이트, KiB(키비바이트)는 1024 바이트입니다.
    * 
    * @param bytes - 파일 크기 (바이트 단위)
-   * @returns 포맷팅된 파일 크기 문자열 (예: "1.5 MB", "256.0 KB")
+   * @returns 포맷팅된 파일 크기 문자열 (예: "1.5 MiB", "256.0 KiB")
    * 
    * @example
-   * formatFileSize(1024) // "1.0 KB"
-   * formatFileSize(1048576) // "1.0 MB"
+   * formatFileSize(1024) // "1.0 KiB"
+   * formatFileSize(1048576) // "1.0 MiB"
    * formatFileSize(512) // "512 B"
    */
   const formatFileSize = (bytes: number) => {
-    // 1KB 미만: 바이트 단위로 표시
+    // 1KiB 미만: 바이트 단위로 표시
     if (bytes < 1024) return `${bytes} B`;
     
-    // 1MB 미만: 킬로바이트 단위로 표시 (소수점 1자리)
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    // 1MiB 미만: 키비바이트 단위로 표시 (소수점 1자리)
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
     
-    // 1MB 이상: 메가바이트 단위로 표시 (소수점 1자리)
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    // 1MiB 이상: 메비바이트 단위로 표시 (소수점 1자리)
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
   };
 
   return (
