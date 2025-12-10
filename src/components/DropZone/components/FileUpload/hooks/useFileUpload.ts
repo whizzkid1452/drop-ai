@@ -18,10 +18,6 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
       setIsLoading(true);
       setError(null);
 
-      if (uploadedFile?.url) {
-        URL.revokeObjectURL(uploadedFile.url);
-      }
-
       const validationError = validateFile(file);
       if (validationError) {
         setError(validationError);
@@ -30,6 +26,9 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
       }
 
       /* @note whizzkid 추후 스토리지 저장 필요 */
+      // validation 통과 후에만 기존 파일 정리
+      uploadedFile?.dispose?.();
+
       try {
         const url = URL.createObjectURL(file);
         let duration: number | undefined;
@@ -47,6 +46,20 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
           type: file.type,
           duration,
           url,
+          // Object URL 정리 함수를 track에 포함시켜 추상화
+          // 중복 호출 방지 및 에러 처리 포함
+          dispose: (() => {
+            let disposed = false;
+            return () => {
+              if (disposed) return;
+              disposed = true;
+              try {
+                URL.revokeObjectURL(url);
+              } catch (err) {
+                console.warn('Failed to revoke Object URL:', err);
+              }
+            };
+          })(),
         };
 
         setUploadedFile(audioFile);
@@ -62,9 +75,8 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
   );
 
   const reset = useCallback(() => {
-    if (uploadedFile?.url) {
-      URL.revokeObjectURL(uploadedFile.url);
-    }
+    // 추상화된 cleanup 메서드를 통해 리소스 정리
+    uploadedFile?.dispose?.();
     setUploadedFile(null);
     setError(null);
     setIsLoading(false);

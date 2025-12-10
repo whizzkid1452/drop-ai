@@ -21,22 +21,22 @@ export function TrackProvider({ children }: { children: ReactNode }) {
   const removeTrack = useCallback((index: number) => {
     setTracks((prev) => {
       const newTracks = [...prev];
-      if (newTracks[index]?.url) {
-        URL.revokeObjectURL(newTracks[index].url);
-      }
+      // 추상화된 cleanup 메서드를 통해 리소스 정리
+      newTracks[index]?.dispose?.();
       newTracks.splice(index, 1);
       return newTracks;
     });
   }, []);
 
   const clearTracks = useCallback(() => {
-    tracks.forEach((track) => {
-      if (track.url) {
-        URL.revokeObjectURL(track.url);
-      }
+    setTracks((prev) => {
+      // 추상화된 cleanup 메서드를 통해 리소스 정리
+      prev.forEach((track) => {
+        track.dispose?.();
+      });
+      return [];
     });
-    setTracks([]);
-  }, [tracks]);
+  }, []);
 
   return (
     <TrackContext.Provider value={{ tracks, addTrack, removeTrack, clearTracks }}>
