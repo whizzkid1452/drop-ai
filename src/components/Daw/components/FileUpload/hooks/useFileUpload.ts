@@ -43,6 +43,7 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
           duration,
           formattedDuration: duration ? formatDuration(duration) : undefined,
           url,
+          volume: 1.0, // 기본 볼륨 레벨
         };
 
         uploadedFileRef.current = audioFile;

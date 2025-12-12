@@ -66,6 +66,12 @@ export function useWaveSurfer(url: string) {
     wavesurferRef.current?.zoom(value);
   };
 
+  const setVolume = (value: number) => {
+    // 0.0 ~ 1.0 범위로 제한
+    const clampedValue = Math.max(0, Math.min(1, value));
+    wavesurferRef.current?.setVolume(clampedValue);
+  };
+
   return {
     waveformRef,
     isReady,
@@ -73,6 +79,7 @@ export function useWaveSurfer(url: string) {
     zoomLevel,
     togglePlayPause,
     updateZoom,
+    setVolume,
   };
 }
 
