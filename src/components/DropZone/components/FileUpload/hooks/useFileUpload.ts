@@ -53,7 +53,6 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
           url,            // Object URL (미리보기용)
         };
 
-        // 업로드된 파일 상태 업데이트
         setUploadedFile(audioFile);
         onFileUploaded?.(audioFile);
       } catch (err) {
