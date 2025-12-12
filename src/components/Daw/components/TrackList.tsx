@@ -5,9 +5,14 @@ import * as styles from '../DawPage.css';
 interface TrackListProps {
   tracks: AudioFile[];
   onRemove: (index: number) => void;
+  onVolumeChange?: (index: number, volume: number) => void;
 }
 
-export function TrackList({ tracks, onRemove }: TrackListProps) {
+export function TrackList({
+  tracks,
+  onRemove,
+  onVolumeChange,
+}: TrackListProps) {
   return (
     <div className={styles.trackList}>
       {tracks.map((track, index) => (
@@ -16,6 +21,7 @@ export function TrackList({ tracks, onRemove }: TrackListProps) {
           track={track}
           index={index}
           onRemove={onRemove}
+          onVolumeChange={onVolumeChange}
         />
       ))}
     </div>
