@@ -12,26 +12,26 @@ export const hero = style({
   flexDirection: 'column',
   alignItems: 'center',
   textAlign: 'center',
-  gap: '0.75rem',
+  gap: '1.5rem',
   paddingTop: '2rem',
   paddingBottom: '2rem',
   marginBottom: '1.75rem',
 });
 
 export const heroTitle = style({
-  fontSize: '3.5rem',
-  fontWeight: 600,
+  fontSize: '5rem',
+  fontWeight: 650,
   color: '#ffffff',
   margin: 0,
-  letterSpacing: '-0.02em',
+  letterSpacing: '-0.03em',
 });
 
 export const heroSubtitle = style({
-  fontSize: '0.95rem',
+  fontSize: '0.875rem',
   fontWeight: 400,
-  color: '#aaaaaa',
+  color: '#888888',
   margin: 0,
-  letterSpacing: '0.04em',
+  letterSpacing: '0.01em',
   textTransform: 'uppercase',
 });
 
@@ -40,6 +40,7 @@ export const heroAccent = style({
   height: '2px',
   background: '#333333',
   borderRadius: '1px',
+  margin: '0.5rem 0',
 });
 
 export const dropZone = style({
