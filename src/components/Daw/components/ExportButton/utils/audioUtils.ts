@@ -136,16 +136,26 @@ export function resampleBuffer(
  * @param audioContext - Web Audio API 컨텍스트
  * @param audioBuffers - 믹싱할 오디오 버퍼 배열
  * @param targetSampleRate - 목표 샘플레이트
+ * @param volumes - 각 버퍼에 적용할 볼륨 레벨 배열 (0.0 ~ 1.0, 기본값: 1.0)
  * @returns Promise<AudioBuffer> - 믹싱된 오디오 버퍼
  * @throws {Error} 버퍼가 없을 경우
  */
 export async function mixAudioBuffers(
   audioContext: AudioContext,
   audioBuffers: AudioBuffer[],
-  targetSampleRate: number
+  targetSampleRate: number,
+  volumes?: number[]
 ): Promise<AudioBuffer> {
   if (audioBuffers.length === 0) {
     throw new Error('No audio buffers to mix');
+  }
+
+  // 볼륨 배열이 제공되지 않으면 모든 버퍼에 1.0 적용
+  const normalizedVolumes = volumes ?? audioBuffers.map(() => 1.0);
+  
+  // 볼륨 배열 길이가 버퍼 배열과 다르면 기본값 1.0으로 채움
+  while (normalizedVolumes.length < audioBuffers.length) {
+    normalizedVolumes.push(1.0);
   }
 
   // 가장 긴 길이와 최대 채널 수 찾기
@@ -175,8 +185,11 @@ export async function mixAudioBuffers(
     targetSampleRate
   );
 
-  // 모든 버퍼를 믹싱
-  for (const buffer of resampledBuffers) {
+  // 모든 버퍼를 볼륨과 함께 믹싱
+  for (let bufferIndex = 0; bufferIndex < resampledBuffers.length; bufferIndex++) {
+    const buffer = resampledBuffers[bufferIndex];
+    const volume = Math.max(0, Math.min(1, normalizedVolumes[bufferIndex] ?? 1.0));
+
     for (let channel = 0; channel < maxChannels; channel++) {
       const mixedChannel = mixedBuffer.getChannelData(channel);
       const sourceChannel = buffer.getChannelData(
@@ -184,7 +197,7 @@ export async function mixAudioBuffers(
       );
 
       for (let i = 0; i < sourceChannel.length; i++) {
-        mixedChannel[i] += sourceChannel[i];
+        mixedChannel[i] += sourceChannel[i] * volume;
       }
     }
   }

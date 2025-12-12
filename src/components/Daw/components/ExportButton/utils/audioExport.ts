@@ -113,11 +113,13 @@ export async function exportTracks(
 
     updateProgress(onProgress, 50, 'mixing');
 
-    // 3. 모든 버퍼를 하나로 믹싱
+    // 3. 모든 버퍼를 하나로 믹싱 (볼륨 적용)
+    const volumes = tracks.map((track) => track.volume ?? 1.0);
     const mixedBuffer = await mixAudioBuffers(
       audioContext,
       audioBuffers,
-      sampleRate
+      sampleRate,
+      volumes
     );
 
     updateProgress(onProgress, 75, 'mixing');
