@@ -1,5 +1,8 @@
 import type { AudioFile } from '@/components/Daw/components/FileUpload/components/types';
-import { AUDIO_SAMPLE_MIN, AUDIO_SAMPLE_MAX } from '../constants';
+import {
+  AUDIO_SAMPLE_MIN,
+  AUDIO_SAMPLE_MAX,
+} from '../../components/Daw/components/ExportButton/constants';
 
 /**
  * 오디오 샘플 값을 [-1, 1] 범위로 제한
@@ -10,12 +13,14 @@ export function clampSample(value: number): number {
 
 /**
  * 오디오 파일을 ArrayBuffer로 로드하는 함수
- * 
+ *
  * @param audioFile - 로드할 오디오 파일
  * @returns Promise<ArrayBuffer> - 오디오 데이터
  * @throws {Error} 파일 로드 실패 시
  */
-export async function loadAudioFile(audioFile: AudioFile): Promise<ArrayBuffer> {
+export async function loadAudioFile(
+  audioFile: AudioFile
+): Promise<ArrayBuffer> {
   const response = await fetch(audioFile.url);
   if (!response.ok) {
     throw new Error(`Failed to load audio file: ${audioFile.name}`);
@@ -24,27 +29,8 @@ export async function loadAudioFile(audioFile: AudioFile): Promise<ArrayBuffer> 
 }
 
 /**
- * ArrayBuffer를 AudioBuffer로 디코딩하는 함수
- * 
- * @param audioContext - Web Audio API 컨텍스트
- * @param arrayBuffer - 오디오 데이터
- * @returns Promise<AudioBuffer> - 디코딩된 오디오 버퍼
- * @throws {Error} 디코딩 실패 시
- */
-export async function decodeAudioData(
-  audioContext: AudioContext,
-  arrayBuffer: ArrayBuffer
-): Promise<AudioBuffer> {
-  try {
-    return await audioContext.decodeAudioData(arrayBuffer);
-  } catch (error) {
-    throw new Error(`Failed to decode audio data: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
-}
-
-/**
  * 오디오 버퍼를 정규화하는 함수
- * 
+ *
  * @param audioContext - Web Audio API 컨텍스트
  * @param audioBuffer - 정규화할 오디오 버퍼
  * @returns 정규화된 오디오 버퍼 (새로운 AudioBuffer)
@@ -92,7 +78,7 @@ export function normalizeAudioBuffer(
 
 /**
  * 오디오 버퍼를 리샘플링하는 함수 (간단한 선형 보간)
- * 
+ *
  * @param audioContext - Web Audio API 컨텍스트
  * @param audioBuffer - 리샘플링할 오디오 버퍼
  * @param targetSampleRate - 목표 샘플레이트
@@ -132,7 +118,7 @@ export function resampleBuffer(
 
 /**
  * 여러 오디오 버퍼를 하나로 믹싱하는 함수
- * 
+ *
  * @param audioContext - Web Audio API 컨텍스트
  * @param audioBuffers - 믹싱할 오디오 버퍼 배열
  * @param targetSampleRate - 목표 샘플레이트
@@ -152,7 +138,7 @@ export async function mixAudioBuffers(
 
   // 볼륨 배열이 제공되지 않으면 모든 버퍼에 1.0 적용
   const normalizedVolumes = volumes ?? audioBuffers.map(() => 1.0);
-  
+
   // 볼륨 배열 길이가 버퍼 배열과 다르면 기본값 1.0으로 채움
   while (normalizedVolumes.length < audioBuffers.length) {
     normalizedVolumes.push(1.0);
@@ -186,9 +172,16 @@ export async function mixAudioBuffers(
   );
 
   // 모든 버퍼를 볼륨과 함께 믹싱
-  for (let bufferIndex = 0; bufferIndex < resampledBuffers.length; bufferIndex++) {
+  for (
+    let bufferIndex = 0;
+    bufferIndex < resampledBuffers.length;
+    bufferIndex++
+  ) {
     const buffer = resampledBuffers[bufferIndex];
-    const volume = Math.max(0, Math.min(1, normalizedVolumes[bufferIndex] ?? 1.0));
+    const volume = Math.max(
+      0,
+      Math.min(1, normalizedVolumes[bufferIndex] ?? 1.0)
+    );
 
     for (let channel = 0; channel < maxChannels; channel++) {
       const mixedChannel = mixedBuffer.getChannelData(channel);
@@ -213,4 +206,36 @@ export async function mixAudioBuffers(
   return mixedBuffer;
 }
 
+export async function loadAndDecodeAudioFiles({
+  audioContext,
+  audioFiles,
+  onProgress,
+}: {
+  audioContext: AudioContext;
+  audioFiles: AudioFile[];
+  onProgress?: (progress: number) => void;
+}): Promise<AudioBuffer[]> {
+  const decodedAudioBuffers: AudioBuffer[] = [];
+  const totalTracks = audioFiles.length;
 
+  for (let i = 0; i < audioFiles.length; i++) {
+    const track = audioFiles[i];
+    const progress = (i / totalTracks) * 50;
+    onProgress?.(progress);
+
+    try {
+      const arrayBuffer = await loadAudioFile(track);
+
+      const decodedAudioBuffer =
+        await audioContext.decodeAudioData(arrayBuffer);
+      decodedAudioBuffers.push(decodedAudioBuffer);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error(`Failed to load track: ${track.name}`, error);
+      throw new Error(`Failed to load track "${track.name}": ${errorMessage}`);
+    }
+  }
+
+  return decodedAudioBuffers;
+}
