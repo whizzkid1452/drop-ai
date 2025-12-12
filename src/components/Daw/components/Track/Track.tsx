@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { AudioFile } from '../FileUpload/components/types';
 import * as styles from './Track.css';
 import { TrackControls } from './components/TrackControls';
@@ -26,32 +26,45 @@ export function Track({ track, index, onRemove, onVolumeChange }: TrackProps) {
 
   const {
     waveformRef,
+    wavesurfer,
     isReady,
     isPlaying,
     zoomLevel,
     togglePlayPause,
     updateZoom,
     setVolume: setWaveSurferVolume,
-  } = useWaveSurfer(track.url);
+  } = useWaveSurfer({
+    url: track.url,
+    // @wavesurfer/react 권장 방식: 이벤트 핸들러를 props로 전달
+    onReady: (ws) => {
+      // 초기 볼륨 설정
+      if (volume !== undefined) {
+        ws.setVolume(volume);
+      }
+    },
+  });
 
-  // WaveSurfer에 볼륨 적용
+  // WaveSurfer에 볼륨 적용 (isReady가 true일 때)
   useEffect(() => {
-    if (isReady) {
+    if (isReady && wavesurfer) {
       setWaveSurferVolume(volume);
     }
-  }, [isReady, volume, setWaveSurferVolume]);
+  }, [isReady, volume, wavesurfer, setWaveSurferVolume]);
 
   // track.volume이 외부에서 변경된 경우 동기화
   useEffect(() => {
     if (track.volume !== undefined && track.volume !== volume) {
       setVolume(track.volume);
     }
-  }, [track.volume]);
+  }, [track.volume, volume]);
 
-  const handleVolumeChange = (newVolume: number) => {
-    setVolume(newVolume);
-    onVolumeChange?.(index, newVolume);
-  };
+  const handleVolumeChange = useCallback(
+    (newVolume: number) => {
+      setVolume(newVolume);
+      onVolumeChange?.(index, newVolume);
+    },
+    [index, onVolumeChange]
+  );
 
   return (
     <div className={styles.track}>

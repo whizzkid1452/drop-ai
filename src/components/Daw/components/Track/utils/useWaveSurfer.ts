@@ -1,81 +1,93 @@
-import { useEffect, useRef, useState } from 'react';
-import WaveSurfer from 'wavesurfer.js';
+import { useRef, useState, useCallback, useEffect } from 'react';
+import { useWavesurfer } from '@wavesurfer/react';
+import type WaveSurfer from 'wavesurfer.js';
 
-interface WaveSurferState {
-  isReady: boolean;
-  isPlaying: boolean;
-  zoomLevel: number;
+interface UseWaveSurferOptions {
+  url: string;
+  onReady?: (wavesurfer: WaveSurfer) => void;
+  onPlay?: () => void;
+  onPause?: () => void;
+  onFinish?: () => void;
 }
 
 /**
  * WaveSurfer 초기화와 상태 관리를 담당하는 커스텀 훅
+ * @wavesurfer/react의 useWavesurfer를 사용하여 최적화된 구현
  */
-export function useWaveSurfer(url: string) {
+export function useWaveSurfer({
+  url,
+  onReady,
+  onPlay,
+  onPause,
+  onFinish,
+}: UseWaveSurferOptions) {
   const waveformRef = useRef<HTMLDivElement | null>(null);
-  const wavesurferRef = useRef<WaveSurfer | null>(null);
-  const [{ isReady, isPlaying, zoomLevel }, setState] = useState<WaveSurferState>({
-    isReady: false,
-    isPlaying: false,
-    zoomLevel: 0,
+  const [zoomLevel, setZoomLevel] = useState(0);
+
+  const { wavesurfer, isReady, isPlaying } = useWavesurfer({
+    container: waveformRef,
+    url,
+    height: 120,
+    waveColor: '#3a7bfd',
+    progressColor: '#8fb2ff',
+    cursorColor: '#ffcc66',
+    barWidth: 2,
+    barGap: 1,
+    barRadius: 2,
+    normalize: true,
   });
 
+  // @wavesurfer/react의 useWavesurfer 훅은 이벤트 핸들러를 props로 받지 않으므로
+  // wavesurfer 인스턴스를 통해 직접 이벤트를 구독합니다
   useEffect(() => {
-    if (!waveformRef.current) return;
-
-    const wavesurfer = WaveSurfer.create({
-      container: waveformRef.current,
-      url,
-      height: 120,
-      waveColor: '#3a7bfd',
-      progressColor: '#8fb2ff',
-      cursorColor: '#ffcc66',
-      barWidth: 2,
-      barGap: 1,
-      barRadius: 2,
-      normalize: true,
-    });
-
-    wavesurferRef.current = wavesurfer;
-
-    const handleReady = () =>
-      setState((prev) => ({ ...prev, isReady: true, zoomLevel: 0 }));
-    const handlePlay = () => setState((prev) => ({ ...prev, isPlaying: true }));
-    const handlePause = () => setState((prev) => ({ ...prev, isPlaying: false }));
-    const handleFinish = () => setState((prev) => ({ ...prev, isPlaying: false }));
-
-    wavesurfer.on('ready', handleReady);
-    wavesurfer.on('play', handlePlay);
-    wavesurfer.on('pause', handlePause);
-    wavesurfer.on('finish', handleFinish);
-
-    return () => {
-      setState({ isReady: false, isPlaying: false, zoomLevel: 0 });
-      wavesurfer.destroy();
-      wavesurferRef.current = null;
-    };
-  }, [url]);
-
-  const togglePlayPause = () => {
-    const wavesurfer = wavesurferRef.current;
     if (!wavesurfer) return;
-    wavesurfer.isPlaying() ? wavesurfer.pause() : wavesurfer.play();
-  };
 
-  const updateZoom = (value: number) => {
-    setState((prev) => ({ ...prev, zoomLevel: value }));
-    wavesurferRef.current?.zoom(value);
-  };
+    const handleReady = () => {
+      setZoomLevel(0);
+      onReady?.(wavesurfer);
+    };
 
-  const setVolume = (value: number) => {
-    // 0.0 ~ 1.0 범위로 제한
-    const clampedValue = Math.max(0, Math.min(1, value));
-    wavesurferRef.current?.setVolume(clampedValue);
-  };
+    // 이벤트 구독
+    if (onReady) wavesurfer.on('ready', handleReady);
+    if (onPlay) wavesurfer.on('play', onPlay);
+    if (onPause) wavesurfer.on('pause', onPause);
+    if (onFinish) wavesurfer.on('finish', onFinish);
+
+    // Cleanup: 컴포넌트 언마운트 시 이벤트 구독 해제
+    return () => {
+      if (onReady) wavesurfer.un('ready', handleReady);
+      if (onPlay) wavesurfer.un('play', onPlay);
+      if (onPause) wavesurfer.un('pause', onPause);
+      if (onFinish) wavesurfer.un('finish', onFinish);
+    };
+  }, [wavesurfer, onReady, onPlay, onPause, onFinish]);
+
+  const togglePlayPause = useCallback(() => {
+    wavesurfer?.playPause();
+  }, [wavesurfer]);
+
+  const updateZoom = useCallback(
+    (value: number) => {
+      setZoomLevel(value);
+      wavesurfer?.zoom(value);
+    },
+    [wavesurfer]
+  );
+
+  const setVolume = useCallback(
+    (value: number) => {
+      // 0.0 ~ 1.0 범위로 제한
+      const clampedValue = Math.max(0, Math.min(1, value));
+      wavesurfer?.setVolume(clampedValue);
+    },
+    [wavesurfer]
+  );
 
   return {
     waveformRef,
-    isReady,
-    isPlaying,
+    wavesurfer,
+    isReady: isReady ?? false,
+    isPlaying: isPlaying ?? false,
     zoomLevel,
     togglePlayPause,
     updateZoom,
