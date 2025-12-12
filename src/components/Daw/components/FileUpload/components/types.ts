@@ -19,3 +19,4 @@ export interface FileUploadProps {
   autoReset?: boolean; // 업로드 후 자동으로 상태 초기화
 }
 
+
