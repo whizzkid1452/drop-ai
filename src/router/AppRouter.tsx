@@ -2,7 +2,6 @@ import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Lazy load components
-const HomeView = lazy(() => import('@/views/Home/HomeView'));
 const DawView = lazy(() => import('@/views/Daw/DawView'));
 
 // Loading fallback component
@@ -21,7 +20,7 @@ export function AppRouter() {
   return (
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
-        <Route path="/" element={<HomeView />} />
+        <Route path="/" element={<Navigate to="/daw" replace />} />
         <Route path="/daw" element={<DawView />} />
         <Route path="/dropzone" element={<Navigate to="/daw" replace />} />
       </Routes>
