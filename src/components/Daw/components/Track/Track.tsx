@@ -17,27 +17,6 @@ interface TrackProps {
   onRemove?: (index: number) => void;
 }
 
-/**
- * Track 컴포넌트
- * 
- * 개별 오디오 트랙을 표시하는 컴포넌트입니다.
- * - 트랙 번호, 파일명, 재생 시간, 파일 크기 표시
- * - HTML5 audio 플레이어를 통한 오디오 재생 기능
- * - 트랙 제거 기능 (선택적)
- * 
- * @param track - 표시할 오디오 파일 정보
- * @param index - 트랙의 인덱스 (트랙 번호 계산에 사용)
- * @param onRemove - 트랙 제거 콜백 함수 (선택적)
- * 
- * @example
- * ```tsx
- * <Track 
- *   track={audioFile} 
- *   index={0} 
- *   onRemove={handleRemove} 
- * />
- * ```
- */
 export function Track({ track, index, onRemove }: TrackProps) {
   const {
     waveformRef,

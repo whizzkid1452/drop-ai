@@ -7,6 +7,11 @@ export interface AudioFile {
   duration?: number;
   formattedDuration?: string; // 포맷팅된 재생 시간 (예: "2:05")
   url: string;
+  /**
+   * 리소스 정리 함수 (예: Object URL 해제)
+   * TrackContext는 이 함수를 통해 추상화된 방식으로 cleanup을 수행합니다.
+   */
+  dispose?: () => void;
 }
 
 export interface FileUploadProps {
