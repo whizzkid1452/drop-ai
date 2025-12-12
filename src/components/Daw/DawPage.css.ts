@@ -68,5 +68,7 @@ export const emptyMessage = style({
   color: '#666666',
 });
 
-
+export const uploadSection = style({
+  marginBottom: '24px',
+});
 

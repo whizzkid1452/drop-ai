@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import type { AudioFile } from '@/components/DropZone/components/FileUpload/components/types';
+import type { AudioFile } from '@/components/Daw/components/FileUpload/components/types';
 
 interface TrackContextValue {
   tracks: AudioFile[];

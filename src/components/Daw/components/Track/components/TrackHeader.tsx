@@ -1,4 +1,4 @@
-import type { AudioFile } from '@/components/DropZone/components/FileUpload/components/types';
+import type { AudioFile } from '@/components/Daw/components/FileUpload/components/types';
 import * as styles from '../Track.css';
 
 interface TrackHeaderProps {

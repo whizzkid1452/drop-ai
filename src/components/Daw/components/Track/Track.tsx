@@ -1,4 +1,4 @@
-import type { AudioFile } from '@/components/DropZone/components/FileUpload/components/types';
+import type { AudioFile } from '../FileUpload/components/types';
 import * as styles from './Track.css';
 import { TrackControls } from './components/TrackControls';
 import { TrackHeader } from './components/TrackHeader';

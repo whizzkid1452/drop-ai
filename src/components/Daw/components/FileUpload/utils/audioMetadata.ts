@@ -22,3 +22,4 @@ export function getFileDuration(file: File): Promise<number> {
     audio.src = url;
   });
 }
+

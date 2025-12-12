@@ -7,11 +7,17 @@ import { DropHere } from './components/DropHere';
 import { AudioPreview } from './components/AudioPreview';
 import { ErrorMessage } from './components/ErrorMessage';
 
-export function FileUpload({ onFileUploaded }: FileUploadProps) {
+export function FileUpload({ onFileUploaded, autoReset = false }: FileUploadProps) {
   const navigate = useNavigate();
 
-  const { uploadedFile, error, isLoading, parseAudioFile } = useFileUpload({
-    onFileUploaded,
+  const { uploadedFile, error, isLoading, parseAudioFile, reset } = useFileUpload({
+    onFileUploaded: (file) => {
+      onFileUploaded?.(file);
+      if (autoReset) {
+        // autoReset이 true이면 업로드 후 상태 초기화
+        setTimeout(() => reset(), 100);
+      }
+    },
   });
 
   const handleNavigateToDaw = useCallback(() => {

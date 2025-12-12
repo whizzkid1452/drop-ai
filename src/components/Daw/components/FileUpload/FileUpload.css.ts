@@ -190,6 +190,3 @@ export const loadingIndicator = style({
   animation: `${pulse} 1s linear infinite`,
 });
 
-
-
-

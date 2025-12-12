@@ -1,4 +1,4 @@
-import type { AudioFile } from '@/components/DropZone/components/FileUpload/components/types';
+import type { AudioFile } from '@/components/Daw/components/FileUpload/components/types';
 import { DEFAULT_SAMPLE_RATE, DEFAULT_BIT_DEPTH } from '../constants';
 import type { ExportSettings, ExportProgress } from '../types';
 import {
