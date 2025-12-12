@@ -159,4 +159,11 @@ export const slider = style({
   },
 });
 
+export const sliderValue = style({
+  color: '#888888',
+  fontSize: '0.75rem',
+  minWidth: '40px',
+  textAlign: 'right',
+});
+
 
