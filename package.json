@@ -33,8 +33,10 @@
     "@radix-ui/react-toast": "^1.2.15",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-query": "^5.62.13",
+    "@wavesurfer/react": "^1.0.12",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-dropzone": "^14.3.8",
     "react-router-dom": "^7.10.0",
     "wavesurfer.js": "^7.10.1"
   },
