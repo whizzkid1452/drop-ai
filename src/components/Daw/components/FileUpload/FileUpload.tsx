@@ -10,7 +10,7 @@ import { ErrorMessage } from './components/ErrorMessage';
 export function FileUpload({ onFileUploaded, autoReset = false }: FileUploadProps) {
   const navigate = useNavigate();
 
-  const { uploadedFile, error, isLoading, parseAudioFile, reset } = useFileUpload({
+  const { uploadedFile, error, isLoading, parseAudioFile, reset, setError } = useFileUpload({
     onFileUploaded: (file) => {
       onFileUploaded?.(file);
       if (autoReset) {
@@ -30,6 +30,7 @@ export function FileUpload({ onFileUploaded, autoReset = false }: FileUploadProp
         <DropHere
           isLoading={isLoading}
           onFileDrop={parseAudioFile}
+          onError={setError}
         />
       )}
 

@@ -1,10 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { AudioFile } from '../components/types';
-import { validateFile } from '../utils/fileValidation';
 import { getFileDuration } from '../utils/audioMetadata';
 import { formatFileSize } from '@/components/Daw/utils/formatFileSize';
 import { formatDuration } from '@/components/Daw/utils/formatDuration';
-// 상수 import
 import { ERROR_MESSAGES } from '../components/constants';
 
 interface UseFileUploadOptions {
@@ -15,22 +13,16 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
   const [uploadedFile, setUploadedFile] = useState<AudioFile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const uploadedFileRef = useRef<AudioFile | null>(null);
 
   const parseAudioFile = useCallback(
     async (file: File) => {
       setIsLoading(true);
       setError(null);
 
-      const validationError = validateFile(file);
-      if (validationError) {
-        setError(validationError);
-        setIsLoading(false);
-        return;
-      }
-
       /* @note whizzkid 추후 스토리지 저장 필요 */
-      // validation 통과 후에만 기존 파일 정리
-      uploadedFile?.dispose?.();
+      // react-dropzone에서 이미 검증 완료된 파일이므로 바로 처리
+      uploadedFileRef.current?.dispose?.();
 
       try {
         const url = URL.createObjectURL(file);
@@ -43,16 +35,17 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
         }
 
         const audioFile: AudioFile = {
-          file,           // 원본 File 객체
-          name: file.name, // 파일명
-          size: file.size, // 파일 크기
-          formattedSize: formatFileSize(file.size), // 포맷팅된 파일 크기
-          type: file.type, // MIME 타입
-          duration,       // 재생 시간 (초)
-          formattedDuration: duration ? formatDuration(duration) : undefined, // 포맷팅된 재생 시간
-          url,            // Object URL (미리보기용)
+          file,
+          name: file.name,
+          size: file.size,
+          formattedSize: formatFileSize(file.size),
+          type: file.type,
+          duration,
+          formattedDuration: duration ? formatDuration(duration) : undefined,
+          url,
         };
 
+        uploadedFileRef.current = audioFile;
         setUploadedFile(audioFile);
         onFileUploaded?.(audioFile);
       } catch (err) {
@@ -62,16 +55,16 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
         setIsLoading(false);
       }
     },
-    [onFileUploaded, uploadedFile]
+    [onFileUploaded]
   );
 
   const reset = useCallback(() => {
-    // 추상화된 cleanup 메서드를 통해 리소스 정리
-    uploadedFile?.dispose?.();
+    uploadedFileRef.current?.dispose?.();
+    uploadedFileRef.current = null;
     setUploadedFile(null);
     setError(null);
     setIsLoading(false);
-  }, [uploadedFile]);
+  }, []);
 
   return {
     uploadedFile,
@@ -79,5 +72,6 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
     isLoading,
     parseAudioFile,
     reset,
+    setError,
   };
 }
