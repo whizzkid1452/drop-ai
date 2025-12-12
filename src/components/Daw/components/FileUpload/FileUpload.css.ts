@@ -3,8 +3,43 @@ import { style, keyframes } from '@vanilla-extract/css';
 export const container = style({
   position: 'relative',
   width: '100%',
-  maxWidth: '600px',
-  margin: '2rem auto',
+  maxWidth: '720px',
+  margin: '0 auto',
+});
+
+export const hero = style({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  textAlign: 'center',
+  gap: '0.75rem',
+  paddingTop: '2rem',
+  paddingBottom: '2rem',
+  marginBottom: '1.75rem',
+});
+
+export const heroTitle = style({
+  fontSize: '3.5rem',
+  fontWeight: 600,
+  color: '#ffffff',
+  margin: 0,
+  letterSpacing: '-0.02em',
+});
+
+export const heroSubtitle = style({
+  fontSize: '0.95rem',
+  fontWeight: 400,
+  color: '#aaaaaa',
+  margin: 0,
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase',
+});
+
+export const heroAccent = style({
+  width: '80px',
+  height: '2px',
+  background: '#333333',
+  borderRadius: '1px',
 });
 
 export const dropZone = style({

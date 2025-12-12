@@ -67,6 +67,34 @@ export const heroSection = style({
   marginBottom: '2rem',
 });
 
+export const heroActions = style({
+  display: 'flex',
+  gap: '12px',
+});
+
+export const primaryButton = style({
+  padding: '12px 20px',
+  borderRadius: '10px',
+  border: '1px solid #2d2d2d',
+  background: 'linear-gradient(135deg, #1a1a1a 0%, #111111 100%)',
+  color: '#ffffff',
+  cursor: 'pointer',
+  fontSize: '0.95rem',
+  transition: 'transform 0.1s ease, box-shadow 0.2s ease, border-color 0.2s ease',
+  boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
+  selectors: {
+    '&:hover': {
+      transform: 'translateY(-1px)',
+      borderColor: '#3a3a3a',
+      boxShadow: '0 10px 30px rgba(0,0,0,0.45)',
+    },
+    '&:active': {
+      transform: 'translateY(0)',
+      borderColor: '#555555',
+    },
+  },
+});
+
 export const logo = style({
   fontSize: '4.5rem',
   fontWeight: 600,
@@ -162,5 +190,20 @@ export const trackList = style({
   display: 'flex',
   flexDirection: 'column',
   gap: '8px',
+});
+
+export const modalOverlay = style({
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  width: '100vw',
+  height: '100vh',
+  backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  backdropFilter: 'blur(6px)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 10,
+  padding: '16px',
 });
 

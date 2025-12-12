@@ -7,6 +7,7 @@ import * as styles from './DawPage.css';
 
 export function DawPage() {
   const [tracks, setTracks] = useState<AudioFile[]>([]);
+  const [pendingFile, setPendingFile] = useState<AudioFile | null>(null);
 
   const addTrack = useCallback((file: AudioFile) => {
     setTracks((prev) => [...prev, file]);
@@ -23,8 +24,16 @@ export function DawPage() {
   }, []);
 
   const handleFileUploaded = (file: AudioFile) => {
-    addTrack(file);
+    // 새로운 업로드가 들어오면 이전 미리보기 리소스를 정리
+    pendingFile?.dispose?.();
+    setPendingFile(file);
   };
+
+  const handleEdit = useCallback(() => {
+    if (!pendingFile) return;
+    addTrack(pendingFile);
+    setPendingFile(null);
+  }, [addTrack, pendingFile]);
 
   return (
     <div className={styles.container}>
@@ -32,36 +41,40 @@ export function DawPage() {
       <div className={styles.glowEffect} />
       <div className={styles.waveAnimation} />
 
-      <div className={styles.heroSection}>
-        <h1 className={styles.logo}>Drop.ai</h1>
-        <div className={styles.accentLine} />
-        <p className={styles.subtitle}>Browser-based audio editing tool</p>
-      </div>
-
-      <div className={styles.header}>
-        <h1 className={styles.title}>트랙 목록</h1>
-        {tracks.length > 0 && (
-          <div className={styles.headerRight}>
-            <span className={styles.trackCount}>{tracks.length}개 트랙</span>
-            <ExportButton tracks={tracks} />
-          </div>
-        )}
-      </div>
-
-      <div className={styles.uploadSection}>
-        <FileUpload onFileUploaded={handleFileUploaded} autoReset={true} />
-      </div>
-
       {tracks.length > 0 && (
-        <div className={styles.trackList}>
-          {tracks.map((track, index) => (
-            <Track
-              key={`${track.name}-${index}`}
-              track={track}
-              index={index}
-              onRemove={removeTrack}
-            />
-          ))}
+        <>
+          <div className={styles.header}>
+            <h1 className={styles.title}>트랙 목록</h1>
+            <div className={styles.headerRight}>
+              <span className={styles.trackCount}>{tracks.length}개 트랙</span>
+              <ExportButton tracks={tracks} />
+            </div>
+          </div>
+
+          <div className={styles.trackList}>
+            {tracks.map((track, index) => (
+              <Track
+                key={`${track.name}-${index}`}
+                track={track}
+                index={index}
+                onRemove={removeTrack}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      {(pendingFile || tracks.length === 0) && (
+        <div className={styles.modalOverlay}>
+
+            <div>
+              <FileUpload
+                onFileUploaded={handleFileUploaded}
+                onEdit={handleEdit}
+                autoReset={true}
+              />
+            </div>
+
         </div>
       )}
     </div>

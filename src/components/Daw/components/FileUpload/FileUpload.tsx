@@ -1,5 +1,3 @@
-import { useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import * as styles from './FileUpload.css';
 import type { FileUploadProps } from './components/types';
 import { useFileUpload } from './hooks/useFileUpload';
@@ -7,25 +5,29 @@ import { DropHere } from './components/DropHere';
 import { AudioPreview } from './components/AudioPreview';
 import { ErrorMessage } from './components/ErrorMessage';
 
-export function FileUpload({ onFileUploaded, autoReset = false }: FileUploadProps) {
-  const navigate = useNavigate();
-
+export function FileUpload({ onFileUploaded, onEdit, autoReset = false }: FileUploadProps) {
   const { uploadedFile, error, isLoading, parseAudioFile, reset, setError } = useFileUpload({
     onFileUploaded: (file) => {
       onFileUploaded?.(file);
-      if (autoReset) {
-        // autoReset이 true이면 업로드 후 상태 초기화
-        setTimeout(() => reset(), 100);
-      }
     },
   });
 
-  const handleNavigateToDaw = useCallback(() => {
-    navigate('/daw');
-  }, [navigate]);
+  const handleEditHere = () => {
+    if (!uploadedFile) return;
+    onEdit?.(uploadedFile);
+    if (autoReset) {
+      reset();
+    }
+  };
 
   return (
     <div className={styles.container}>
+      <div className={styles.hero}>
+        <h1 className={styles.heroTitle}>Drop.ai</h1>
+        <div className={styles.heroAccent} />
+        <p className={styles.heroSubtitle}>Browser-based audio editing tool</p>
+      </div>
+
       {!uploadedFile && (
         <DropHere
           isLoading={isLoading}
@@ -40,7 +42,7 @@ export function FileUpload({ onFileUploaded, autoReset = false }: FileUploadProp
         <>
           <AudioPreview file={uploadedFile} />
           <button
-            onClick={handleNavigateToDaw}
+            onClick={handleEditHere}
             className={styles.editButton}
           >
             Edit Here!
