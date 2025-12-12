@@ -2,8 +2,8 @@ import { useState, useCallback } from 'react';
 import type { AudioFile } from '../components/types';
 import { validateFile } from '../utils/fileValidation';
 import { getFileDuration } from '../utils/audioMetadata';
-import { formatFileSize } from '@/utils/formatFileSize';
-import { formatDuration } from '@/utils/formatDuration';
+import { formatFileSize } from '@/components/Daw/utils/formatFileSize';
+import { formatDuration } from '@/components/Daw/utils/formatDuration';
 // 상수 import
 import { ERROR_MESSAGES } from '../components/constants';
 
@@ -81,5 +81,3 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
     reset,
   };
 }
-
-
