@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useWavesurfer } from '@wavesurfer/react';
 import type { AudioFile } from '../FileUpload/components/types';
 import * as styles from './Track.css';
 import { TrackControls } from './components/TrackControls';
 import { TrackHeader } from './components/TrackHeader';
-import { useWaveSurfer } from './utils/useWaveSurfer';
 
 /**
  * Track 컴포넌트의 Props 타입 정의
@@ -23,33 +23,49 @@ interface TrackProps {
 export function Track({ track, index, onRemove, onVolumeChange }: TrackProps) {
   // 로컬 볼륨 상태 (track.volume을 초기값으로 사용)
   const [volume, setVolume] = useState(track.volume ?? 1.0);
+  const [zoomLevel, setZoomLevel] = useState(0);
+  const waveformRef = useRef<HTMLDivElement | null>(null);
 
-  const {
-    waveformRef,
-    wavesurfer,
-    isReady,
-    isPlaying,
-    zoomLevel,
-    togglePlayPause,
-    updateZoom,
-    setVolume: setWaveSurferVolume,
-  } = useWaveSurfer({
+  // @wavesurfer/react의 useWavesurfer 훅 직접 사용
+  const { wavesurfer, isReady, isPlaying } = useWavesurfer({
+    container: waveformRef,
     url: track.url,
-    // @wavesurfer/react 권장 방식: 이벤트 핸들러를 props로 전달
-    onReady: (ws) => {
-      // 초기 볼륨 설정
-      if (volume !== undefined) {
-        ws.setVolume(volume);
-      }
-    },
+    height: 120,
+    waveColor: '#3a7bfd',
+    progressColor: '#8fb2ff',
+    cursorColor: '#ffcc66',
+    barWidth: 2,
+    barGap: 1,
+    barRadius: 2,
+    normalize: true,
   });
 
-  // WaveSurfer에 볼륨 적용 (isReady가 true일 때)
+  // 초기 볼륨 설정 및 ready 이벤트 처리
+  useEffect(() => {
+    if (!wavesurfer) return;
+
+    const handleReady = () => {
+      setZoomLevel(0);
+      // 초기 볼륨 설정
+      if (volume !== undefined) {
+        wavesurfer.setVolume(volume);
+      }
+    };
+
+    wavesurfer.on('ready', handleReady);
+
+    return () => {
+      wavesurfer.un('ready', handleReady);
+    };
+  }, [wavesurfer, volume]);
+
+  // WaveSurfer에 볼륨 적용 (볼륨 변경 시)
   useEffect(() => {
     if (isReady && wavesurfer) {
-      setWaveSurferVolume(volume);
+      const clampedValue = Math.max(0, Math.min(1, volume));
+      wavesurfer.setVolume(clampedValue);
     }
-  }, [isReady, volume, wavesurfer, setWaveSurferVolume]);
+  }, [isReady, volume, wavesurfer]);
 
   // track.volume이 외부에서 변경된 경우 동기화
   useEffect(() => {
@@ -57,6 +73,18 @@ export function Track({ track, index, onRemove, onVolumeChange }: TrackProps) {
       setVolume(track.volume);
     }
   }, [track.volume, volume]);
+
+  const togglePlayPause = useCallback(() => {
+    wavesurfer?.playPause();
+  }, [wavesurfer]);
+
+  const updateZoom = useCallback(
+    (value: number) => {
+      setZoomLevel(value);
+      wavesurfer?.zoom(value);
+    },
+    [wavesurfer]
+  );
 
   const handleVolumeChange = useCallback(
     (newVolume: number) => {
@@ -80,8 +108,8 @@ export function Track({ track, index, onRemove, onVolumeChange }: TrackProps) {
 
         <TrackControls
           index={index}
-          isReady={isReady}
-          isPlaying={isPlaying}
+          isReady={isReady ?? false}
+          isPlaying={isPlaying ?? false}
           zoomLevel={zoomLevel}
           volume={volume}
           onPlayToggle={togglePlayPause}
