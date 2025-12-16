@@ -4,12 +4,12 @@ import {
   PCM_MAX_VALUES,
   DEFAULT_BIT_DEPTH,
 } from '../constants';
-import { clampSample } from './audioUtils';
+import { clampSample } from '../../../../../logics/audio/audioUtils';
 import type { WavHeaderInfo } from '../types';
 
 /**
  * WAV 헤더 정보 계산
- * 
+ *
  * WAV 파일 구조:
  * - RIFF 헤더: 12 bytes ('RIFF' + size + 'WAVE')
  * - fmt chunk: 24 bytes (PCM) or 26 bytes (Float) ('fmt ' + size + data)
@@ -20,16 +20,18 @@ export function calculateWavHeaderInfo(
   bitDepth: 16 | 24 | 32 | 'float'
 ): WavHeaderInfo {
   const bytesPerSample = BYTES_PER_SAMPLE[bitDepth];
-  const dataSize = audioBuffer.length * audioBuffer.numberOfChannels * bytesPerSample;
-  
+  const dataSize =
+    audioBuffer.length * audioBuffer.numberOfChannels * bytesPerSample;
+
   // fmt chunk 크기: 'fmt ' (4) + size (4) + data (16 or 18)
-  const fmtChunkSize = bitDepth === 'float' 
-    ? 4 + 4 + WAV_CONSTANTS.FLOAT_FMT_CHUNK_SIZE 
-    : 4 + 4 + WAV_CONSTANTS.PCM_FMT_CHUNK_SIZE;
-  
+  const fmtChunkSize =
+    bitDepth === 'float'
+      ? 4 + 4 + WAV_CONSTANTS.FLOAT_FMT_CHUNK_SIZE
+      : 4 + 4 + WAV_CONSTANTS.PCM_FMT_CHUNK_SIZE;
+
   // data chunk 시작 위치: RIFF 헤더 (12) + fmt chunk
   const dataChunkOffset = 12 + fmtChunkSize;
-  
+
   // 전체 파일 크기: RIFF 헤더 (12) + fmt chunk + data chunk 헤더 (8) + 데이터
   const totalSize = 12 + fmtChunkSize + 8 + dataSize;
 
@@ -92,15 +94,23 @@ function writeFloatFmtChunk(
   view.setUint16(20, WAV_CONSTANTS.FLOAT_AUDIO_FORMAT, true);
   view.setUint16(22, numberOfChannels, true);
   view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * numberOfChannels * WAV_CONSTANTS.FLOAT_BYTES_PER_SAMPLE, true);
-  view.setUint16(32, numberOfChannels * WAV_CONSTANTS.FLOAT_BYTES_PER_SAMPLE, true);
+  view.setUint32(
+    28,
+    sampleRate * numberOfChannels * WAV_CONSTANTS.FLOAT_BYTES_PER_SAMPLE,
+    true
+  );
+  view.setUint16(
+    32,
+    numberOfChannels * WAV_CONSTANTS.FLOAT_BYTES_PER_SAMPLE,
+    true
+  );
   view.setUint16(34, WAV_CONSTANTS.FLOAT_BITS_PER_SAMPLE, true);
   view.setUint16(36, 0, true); // extension size
 }
 
 /**
  * WAV 파일 data chunk 헤더 작성
- * 
+ *
  * @param view - DataView
  * @param dataSize - 오디오 데이터 크기
  * @param dataChunkOffset - data chunk 시작 위치 ('data' 문자열 위치)
@@ -119,7 +129,11 @@ function writeDataChunkHeader(
 /**
  * 오디오 샘플을 WAV 데이터로 작성 (Float 형식)
  */
-function writeFloatSample(view: DataView, offset: number, sample: number): number {
+function writeFloatSample(
+  view: DataView,
+  offset: number,
+  sample: number
+): number {
   view.setFloat32(offset, clampSample(sample), true);
   return offset + 4;
 }
@@ -127,7 +141,11 @@ function writeFloatSample(view: DataView, offset: number, sample: number): numbe
 /**
  * 오디오 샘플을 WAV 데이터로 작성 (PCM 16-bit)
  */
-function writePcm16Sample(view: DataView, offset: number, sample: number): number {
+function writePcm16Sample(
+  view: DataView,
+  offset: number,
+  sample: number
+): number {
   const intSample = Math.round(clampSample(sample) * PCM_MAX_VALUES[16]);
   view.setInt16(offset, intSample, true);
   return offset + 2;
@@ -137,7 +155,11 @@ function writePcm16Sample(view: DataView, offset: number, sample: number): numbe
  * 오디오 샘플을 WAV 데이터로 작성 (PCM 24-bit)
  * 24-bit PCM은 signed 정수로 저장되며, 리틀 엔디안 형식으로 저장됩니다.
  */
-function writePcm24Sample(view: DataView, offset: number, sample: number): number {
+function writePcm24Sample(
+  view: DataView,
+  offset: number,
+  sample: number
+): number {
   const clamped = clampSample(sample);
   // 24-bit signed 정수 범위: -8388608 ~ 8388607
   const intSample = Math.round(clamped * PCM_MAX_VALUES[24]);
@@ -153,7 +175,11 @@ function writePcm24Sample(view: DataView, offset: number, sample: number): numbe
 /**
  * 오디오 샘플을 WAV 데이터로 작성 (PCM 32-bit)
  */
-function writePcm32Sample(view: DataView, offset: number, sample: number): number {
+function writePcm32Sample(
+  view: DataView,
+  offset: number,
+  sample: number
+): number {
   const intSample = Math.round(clampSample(sample) * PCM_MAX_VALUES[32]);
   view.setInt32(offset, intSample, true);
   return offset + 4;
@@ -195,7 +221,7 @@ function writeAudioData(
 
 /**
  * AudioBuffer를 WAV 파일로 변환하는 함수
- * 
+ *
  * @param audioBuffer - 변환할 오디오 버퍼
  * @param bitDepth - 비트 깊이 (16, 24, 32, 또는 'float')
  * @returns Blob - WAV 파일 Blob
@@ -213,7 +239,11 @@ export function audioBufferToWav(
 
   // fmt chunk 작성
   if (bitDepth === 'float') {
-    writeFloatFmtChunk(view, audioBuffer.numberOfChannels, audioBuffer.sampleRate);
+    writeFloatFmtChunk(
+      view,
+      audioBuffer.numberOfChannels,
+      audioBuffer.sampleRate
+    );
   } else {
     writePcmFmtChunk(
       view,
@@ -232,5 +262,3 @@ export function audioBufferToWav(
 
   return new Blob([buffer], { type: 'audio/wav' });
 }
-
-
