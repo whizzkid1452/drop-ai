@@ -3,17 +3,37 @@ import {
   loadAndDecodeAudioFiles,
   mixAudioBuffers,
   normalizeAudioBuffer,
-} from '../../../../../logics/audio/audioUtils';
-import { DEFAULT_BIT_DEPTH } from '@/logics/audio/wavConverter';
-import type { ExportProgress, ExportSettings } from '../types';
-import { audioBufferToWav } from '@/logics/audio/wavConverter';
+  extractVolumesFromTracks,
+  extractPansFromTracks,
+} from './audioUtils';
+import { DEFAULT_SAMPLE_RATE } from './audioConstants';
+import { DEFAULT_BIT_DEPTH } from './wavConverter';
+import { audioBufferToWav } from './wavConverter';
 
-/** 기본 샘플레이트 (Hz) */
-const DEFAULT_SAMPLE_RATE = 44100;
+/**
+ * Export 진행 상태 정보
+ */
+export interface ExportProgress {
+  /** 진행률 (0-100) */
+  progress: number;
+  /** 현재 단계 설명 */
+  stage: 'loading' | 'mixing' | 'encoding' | 'complete';
+}
 
-// ============================================================================
-// Export 메인 함수
-// ============================================================================
+/**
+ * Export 설정 옵션
+ * Ardour의 ExportSettings를 참고하여 웹 환경에 맞게 구현
+ */
+export interface ExportSettings {
+  /** 샘플레이트 (Hz), 기본값: 44100 */
+  sampleRate?: number;
+  /** 비트 깊이 (16, 24, 32, 또는 'float'), 기본값: 16 */
+  bitDepth?: 16 | 24 | 32 | 'float';
+  /** 정규화 여부, 기본값: false */
+  normalize?: boolean;
+  /** 출력 파일명 (확장자 제외), 기본값: 'export' */
+  filename?: string;
+}
 
 /**
  * 진행 상태 업데이트 헬퍼
@@ -88,8 +108,8 @@ export async function exportTracks(
     updateProgress(onProgress, 50, 'mixing');
 
     // 3. 모든 버퍼를 하나로 믹싱 (볼륨 및 패닝 적용)
-    const volumes = tracks.map(track => track.volume ?? 1.0);
-    const pans = tracks.map(track => track.pan ?? 0.0);
+    const volumes = extractVolumesFromTracks(tracks);
+    const pans = extractPansFromTracks(tracks);
     const mixedBuffer = await mixAudioBuffers(
       audioContext,
       audioBuffers,
@@ -129,35 +149,3 @@ export async function exportTracks(
   }
 }
 
-/**
- * Blob을 파일로 다운로드하는 헬퍼 함수
- *
- * @param blob - 다운로드할 Blob
- * @param filename - 파일명 (확장자 포함)
- * @throws {Error} 다운로드 실패 시
- */
-export function downloadBlob(blob: Blob, filename: string): void {
-  try {
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.style.display = 'none';
-
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-
-    // URL 정리 (약간의 지연 후 정리하여 다운로드가 완료되도록 함)
-    setTimeout(() => {
-      URL.revokeObjectURL(url);
-    }, 100);
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`Failed to download blob: ${errorMessage}`);
-  }
-}
-
-// 타입 재export (기존 import 경로 유지)
-export type { ExportProgress, ExportSettings };

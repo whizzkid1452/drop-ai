@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { exportTracks, downloadBlob, type ExportSettings } from './utils/audioExport';
+import { exportTracks, type ExportSettings } from '@/logics/audio/audioExport';
+import { downloadBlob } from './utils/fileDownload';
 import type { AudioFile } from '@/components/Daw/components/FileUpload/components/types';
 import * as styles from './ExportButton.css';
 

@@ -1,4 +1,9 @@
-import { resampleBuffer } from './audioBufferProcessor';
+import {
+  normalizeVolumeArray,
+  normalizePanArray,
+  findMaxDimensions,
+  resampleBuffersIfNeeded,
+} from './audioUtilsHelpers';
 
 /**
  * 여러 오디오 버퍼를 하나로 믹싱하는 함수
@@ -80,69 +85,4 @@ export async function mixAudioBuffers(
   return renderedBuffer;
 }
 
-/**
- * 볼륨 배열을 정규화하는 헬퍼 함수
- */
-function normalizeVolumeArray(
-  volumes: number[] | undefined,
-  bufferCount: number
-): number[] {
-  const normalized = volumes ?? Array(bufferCount).fill(1.0);
-  while (normalized.length < bufferCount) {
-    normalized.push(1.0);
-  }
-  return normalized;
-}
-
-/**
- * 패닝 배열을 정규화하는 헬퍼 함수
- */
-function normalizePanArray(
-  pans: number[] | undefined,
-  bufferCount: number
-): number[] {
-  const normalized = pans ?? Array(bufferCount).fill(0.0);
-  while (normalized.length < bufferCount) {
-    normalized.push(0.0);
-  }
-  return normalized;
-}
-
-/**
- * 버퍼 배열에서 최대 길이와 채널 수를 찾는 헬퍼 함수
- */
-function findMaxDimensions(audioBuffers: AudioBuffer[]): {
-  maxLength: number;
-  maxChannels: number;
-} {
-  let maxLength = 0;
-  let maxChannels = 1;
-
-  for (const buffer of audioBuffers) {
-    maxLength = Math.max(maxLength, buffer.length);
-    maxChannels = Math.max(maxChannels, buffer.numberOfChannels);
-  }
-
-  return { maxLength, maxChannels };
-}
-
-/**
- * 필요한 경우 버퍼를 리샘플링하는 헬퍼 함수
- */
-function resampleBuffersIfNeeded(
-  audioContext: AudioContext,
-  audioBuffers: AudioBuffer[],
-  targetSampleRate: number
-): AudioBuffer[] {
-  const resampledBuffers: AudioBuffer[] = [];
-  for (const buffer of audioBuffers) {
-    if (buffer.sampleRate !== targetSampleRate) {
-      const resampled = resampleBuffer(audioContext, buffer, targetSampleRate);
-      resampledBuffers.push(resampled);
-    } else {
-      resampledBuffers.push(buffer);
-    }
-  }
-  return resampledBuffers;
-}
 
