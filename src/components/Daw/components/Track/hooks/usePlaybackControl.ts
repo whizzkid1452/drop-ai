@@ -42,6 +42,7 @@ export function usePlaybackControl(
 
   /**
    * 재생 시간 업데이트
+   * 정확한 재생 시간을 계산하여 상태 업데이트
    */
   const updateCurrentTime = useCallback(() => {
     if (!playbackState.isPlaying || !audioContextRef.current || !audioBufferRef.current) {
@@ -50,21 +51,23 @@ export function usePlaybackControl(
 
     const audioContext = audioContextRef.current;
     const audioBuffer = audioBufferRef.current;
-    const elapsed =
-      audioContext.currentTime -
-      playbackState.getStartTime() +
-      playbackState.getPausedTime();
+    
+    // 정확한 경과 시간 계산
+    const elapsed = playbackState.calculateCurrentPlaybackTime(audioContext.currentTime);
     const bufferDuration = audioBuffer.duration;
 
-    if (elapsed >= bufferDuration) {
+    // 재생 시간을 duration으로 제한
+    const clampedTime = Math.min(elapsed, bufferDuration);
+
+    if (clampedTime >= bufferDuration) {
       // 재생 완료
       stopPlayback();
       playbackState.resetState();
       onTimeUpdate?.(0, bufferDuration);
       onPlaybackEnd?.();
     } else {
-      playbackState.setTime(elapsed);
-      onTimeUpdate?.(elapsed, bufferDuration);
+      playbackState.setTime(clampedTime);
+      onTimeUpdate?.(clampedTime, bufferDuration);
       playbackState.requestAnimationFrame(updateCurrentTime);
     }
   }, [
@@ -108,13 +111,20 @@ export function usePlaybackControl(
 
     // 재생 시작
     const pausedTime = playbackState.getPausedTime();
+    
+    // 오디오 버퍼 길이를 초과하지 않도록 제한
+    const startOffset = Math.max(0, Math.min(pausedTime, audioBuffer.duration));
+    
+    // 재생 시작 시간 기록 (오프셋을 고려하여 조정)
     playbackState.recordStartTime(audioContext.currentTime);
     
     try {
-      source.start(0, pausedTime);
+      // 정확한 오프셋 위치에서 재생 시작
+      source.start(0, startOffset);
     } catch (err) {
       console.error('오디오 재생 시작 실패:', err);
       sourceNodeRef.current = null;
+      playbackState.setPlaying(false);
       return;
     }
 
@@ -141,11 +151,25 @@ export function usePlaybackControl(
 
   /**
    * 일시정지
+   * 정확한 일시정지 시점을 계산하여 저장
    */
   const pausePlayback = useCallback(() => {
+    if (!audioContextRef.current || !playbackState.isPlaying) {
+      return;
+    }
+
+    // 정확한 현재 재생 시간 계산
+    const audioContext = audioContextRef.current;
+    const accurateCurrentTime = playbackState.calculateCurrentPlaybackTime(
+      audioContext.currentTime
+    );
+
+    // 재생 중지
     stopPlayback();
-    playbackState.recordPausedTime(playbackState.currentTime);
-  }, [stopPlayback, playbackState]);
+    
+    // 정확한 일시정지 시간 기록
+    playbackState.recordPausedTime(accurateCurrentTime);
+  }, [stopPlayback, playbackState, audioContextRef]);
 
   /**
    * 재생/일시정지 토글
