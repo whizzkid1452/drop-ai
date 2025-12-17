@@ -1,31 +1,50 @@
 import type { AudioFile } from '@/components/Daw/components/FileUpload/components/types';
 
-/**
- * 오디오 파일을 ArrayBuffer로 로드하는 함수
- *
- * @param audioFile - 로드할 오디오 파일
- * @returns Promise<ArrayBuffer> - 오디오 데이터
- * @throws {Error} 파일 로드 실패 시
- */
-export async function loadAudioFile(
-  audioFile: AudioFile
+
+// URL에서 오디오 파일을 ArrayBuffer로 로드하는 내부 헬퍼 함수
+async function fetchRawAudioData(
+  url: string,
+  fileName?: string
 ): Promise<ArrayBuffer> {
-  const response = await fetch(audioFile.url);
+  const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`Failed to load audio file: ${audioFile.name}`);
+    const errorMessage = fileName
+      ? `Failed to load audio file: ${fileName}`
+      : `오디오 파일 로딩 실패: ${response.status} ${response.statusText}`;
+    throw new Error(errorMessage);
   }
   return response.arrayBuffer();
 }
 
-/**
- * 여러 오디오 파일을 로드하고 디코딩하는 함수
- *
- * @param audioContext - Web Audio API 컨텍스트
- * @param audioFiles - 로드할 오디오 파일 배열
- * @param onProgress - 진행 상태 콜백 (0 ~ 100)
- * @returns Promise<AudioBuffer[]> - 디코딩된 오디오 버퍼 배열
- * @throws {Error} 파일 로드 또는 디코딩 실패 시
- */
+// AudioFile 객체에서 ArrayBuffer를 로드하는 함수
+// loadAndDecodeAudioFiles에서만 사용
+export async function loadAudioFile(
+  audioFile: AudioFile
+): Promise<ArrayBuffer> {
+  const rawAudioData = await fetchRawAudioData(audioFile.url, audioFile.name);
+  return rawAudioData;
+}
+
+// URL에서 오디오 파일을 로드하고 AudioBuffer로 디코딩
+// useAudioPlayback에서 단일 파일 재생 시 사용
+export async function loadAudioBuffer(
+  audioUrl: string,
+  audioContext: AudioContext
+): Promise<AudioBuffer> {
+  try {
+    const rawAudioData = await fetchRawAudioData(audioUrl);
+    const decodedAudioBuffer = await audioContext.decodeAudioData(rawAudioData);
+    return decodedAudioBuffer;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`오디오 디코딩 실패: ${error.message}`);
+    }
+    throw new Error('알 수 없는 오디오 로딩 오류가 발생했습니다.');
+  }
+}
+
+// 여러 오디오 파일을 순차적으로 로드하고 디코딩하는 함수
+// audioExport에서 여러 트랙을 하나로 합칠 때 사용
 export async function loadAndDecodeAudioFiles({
   audioContext,
   audioFiles,
@@ -35,57 +54,53 @@ export async function loadAndDecodeAudioFiles({
   audioFiles: AudioFile[];
   onProgress?: (progress: number) => void;
 }): Promise<AudioBuffer[]> {
-  const decodedAudioBuffers: AudioBuffer[] = [];
-  const totalTracks = audioFiles.length;
+  const decodedBuffersForExport: AudioBuffer[] = [];
+  const totalTrackCount = audioFiles.length;
 
-  for (let i = 0; i < audioFiles.length; i++) {
-    const track = audioFiles[i];
-    const progress = (i / totalTracks) * 50;
-    onProgress?.(progress);
+  for (let trackIndex = 0; trackIndex < audioFiles.length; trackIndex++) {
+    const currentTrack = audioFiles[trackIndex];
+    const loadingProgress = (trackIndex / totalTrackCount) * 50;
+    onProgress?.(loadingProgress);
 
     try {
-      const arrayBuffer = await loadAudioFile(track);
-
-      const decodedAudioBuffer =
-        await audioContext.decodeAudioData(arrayBuffer);
-      decodedAudioBuffers.push(decodedAudioBuffer);
+      const rawAudioData = await loadAudioFile(currentTrack);
+      const decodedBufferForExport =
+        await audioContext.decodeAudioData(rawAudioData);
+      decodedBuffersForExport.push(decodedBufferForExport);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
-      console.error(`Failed to load track: ${track.name}`, error);
-      throw new Error(`Failed to load track "${track.name}": ${errorMessage}`);
+      console.error(`Failed to load track: ${currentTrack.name}`, error);
+      throw new Error(`Failed to load track "${currentTrack.name}": ${errorMessage}`);
     }
   }
 
-  return decodedAudioBuffers;
+  return decodedBuffersForExport;
 }
 
-/**
- * 오디오 파일의 재생 시간(초)을 추출하는 함수
- *
- * @param file - 재생 시간을 추출할 오디오 파일
- * @returns Promise<number> - 재생 시간(초)
- * @throws {Error} 파일 읽기 실패 시
- */
+// File 객체에서 재생 시간(초)만 추출하는 함수
+// useFileUpload에서 파일 업로드 시 duration만 필요할 때 사용
+// HTML Audio 엘리먼트 사용 (Web Audio API 미사용)
 export function getFileDuration(file: File): Promise<number> {
   return new Promise((resolve, reject) => {
-    const audio = new Audio();
-    const url = URL.createObjectURL(file);
+    const audioElement = new Audio();
+    const objectUrl = URL.createObjectURL(file);
 
     const cleanup = () => {
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(objectUrl);
     };
 
-    audio.addEventListener('loadedmetadata', () => {
+    audioElement.addEventListener('loadedmetadata', () => {
+      const durationInSeconds = audioElement.duration;
       cleanup();
-      resolve(audio.duration);
+      resolve(durationInSeconds);
     });
 
-    audio.addEventListener('error', () => {
+    audioElement.addEventListener('error', () => {
       cleanup();
       reject(new Error('Unable to read the file.'));
     });
 
-    audio.src = url;
+    audioElement.src = objectUrl;
   });
 }

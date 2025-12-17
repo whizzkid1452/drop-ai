@@ -17,6 +17,7 @@
 // 파일 로드 관련
 export {
   loadAudioFile,
+  loadAudioBuffer,
   loadAndDecodeAudioFiles,
   getFileDuration,
 } from './audioFileLoader';
