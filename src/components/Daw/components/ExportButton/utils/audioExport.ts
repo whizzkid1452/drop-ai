@@ -4,9 +4,12 @@ import {
   mixAudioBuffers,
   normalizeAudioBuffer,
 } from '../../../../../logics/audio/audioUtils';
-import { DEFAULT_BIT_DEPTH, DEFAULT_SAMPLE_RATE } from '../constants';
+import { DEFAULT_BIT_DEPTH } from '@/logics/audio/wavConverter';
 import type { ExportProgress, ExportSettings } from '../types';
-import { audioBufferToWav } from './wavConverter';
+import { audioBufferToWav } from '@/logics/audio/wavConverter';
+
+/** 기본 샘플레이트 (Hz) */
+const DEFAULT_SAMPLE_RATE = 44100;
 
 // ============================================================================
 // Export 메인 함수

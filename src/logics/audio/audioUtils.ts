@@ -1,8 +1,8 @@
 import type { AudioFile } from '@/components/Daw/components/FileUpload/components/types';
-import {
-  AUDIO_SAMPLE_MIN,
-  AUDIO_SAMPLE_MAX,
-} from '../../components/Daw/components/ExportButton/constants';
+
+/** 오디오 샘플 범위 제한 */
+const AUDIO_SAMPLE_MIN = -1;
+const AUDIO_SAMPLE_MAX = 1;
 
 /**
  * 오디오 샘플 값을 [-1, 1] 범위로 제한
@@ -238,4 +238,34 @@ export async function loadAndDecodeAudioFiles({
   }
 
   return decodedAudioBuffers;
+}
+
+/**
+ * 오디오 파일의 재생 시간(초)을 추출하는 함수
+ *
+ * @param file - 재생 시간을 추출할 오디오 파일
+ * @returns Promise<number> - 재생 시간(초)
+ * @throws {Error} 파일 읽기 실패 시
+ */
+export function getFileDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const audio = new Audio();
+    const url = URL.createObjectURL(file);
+
+    const cleanup = () => {
+      URL.revokeObjectURL(url);
+    };
+
+    audio.addEventListener('loadedmetadata', () => {
+      cleanup();
+      resolve(audio.duration);
+    });
+
+    audio.addEventListener('error', () => {
+      cleanup();
+      reject(new Error('Unable to read the file.'));
+    });
+
+    audio.src = url;
+  });
 }
