@@ -101,6 +101,13 @@ export const waveformContainer = style({
   border: '1px solid #1f1f1f',
   borderRadius: '4px',
   overflow: 'hidden',
+  position: 'relative',
+});
+
+export const waveformCanvas = style({
+  width: '100%',
+  height: '120px',
+  display: 'block',
 });
 
 export const controls = style({

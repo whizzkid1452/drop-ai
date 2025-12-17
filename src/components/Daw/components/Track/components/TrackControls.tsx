@@ -4,11 +4,9 @@ interface TrackControlsProps {
   index: number;
   isReady: boolean;
   isPlaying: boolean;
-  zoomLevel: number;
   volume: number;
   pan: number;
   onPlayToggle: () => void;
-  onZoomChange: (value: number) => void;
   onVolumeChange: (value: number) => void;
   onPanChange: (value: number) => void;
 }
@@ -17,11 +15,9 @@ export function TrackControls({
   index,
   isReady,
   isPlaying,
-  zoomLevel,
   volume,
   pan,
   onPlayToggle,
-  onZoomChange,
   onVolumeChange,
   onPanChange,
 }: TrackControlsProps) {
@@ -73,22 +69,6 @@ export function TrackControls({
         <span className={styles.sliderValue}>
           {pan === 0 ? '중앙' : pan > 0 ? `R${Math.round(pan * 100)}` : `L${Math.round(Math.abs(pan) * 100)}`}
         </span>
-      </div>
-
-      <div className={styles.controlGroup}>
-        <label className={styles.sliderLabel} htmlFor={`zoom-${index}`}>
-          줌
-        </label>
-        <input
-          id={`zoom-${index}`}
-          type="range"
-          min={0}
-          max={200}
-          step={10}
-          value={zoomLevel}
-          onChange={(event) => onZoomChange(Number(event.target.value))}
-          className={styles.slider}
-        />
       </div>
     </div>
   );

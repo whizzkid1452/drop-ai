@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import type { AudioFile } from '../FileUpload/components/types';
 import * as styles from './Track.css';
 import { TrackControls } from './components/TrackControls';
@@ -25,8 +25,6 @@ interface TrackProps {
 }
 
 export function Track({ track, index, onRemove, onVolumeChange, onPanChange }: TrackProps) {
-  const [zoomLevel, setZoomLevel] = useState(0);
-
   // 볼륨 및 패닝 상태 관리
   const { volume, pan, handleVolumeChange, handlePanChange } = useTrackAudio(
     track,
@@ -35,13 +33,13 @@ export function Track({ track, index, onRemove, onVolumeChange, onPanChange }: T
     onPanChange
   );
 
-  // WaveSurfer 파형 시각화
-  const { waveformRef, updateZoom, updateProgress, resetProgress } = useWaveform(
+  // Canvas 파형 시각화
+  const { canvasRef, updateProgress, resetProgress } = useWaveform(
     track.url,
     undefined // onSeek는 필요시 추가 가능
   );
 
-  // 재생 시간 업데이트 시 WaveSurfer 위치 동기화
+  // 재생 시간 업데이트 시 Canvas 위치 동기화
   const handleTimeUpdate = useCallback(
     (currentTime: number, duration: number) => {
       updateProgress(currentTime, duration);
@@ -49,7 +47,7 @@ export function Track({ track, index, onRemove, onVolumeChange, onPanChange }: T
     [updateProgress]
   );
 
-  // 재생 완료 시 WaveSurfer 위치 초기화
+  // 재생 완료 시 Canvas 위치 초기화
   const handlePlaybackEnd = useCallback(() => {
     resetProgress();
   }, [resetProgress]);
@@ -63,36 +61,27 @@ export function Track({ track, index, onRemove, onVolumeChange, onPanChange }: T
     handlePlaybackEnd
   );
 
-  // 줌 레벨 변경 핸들러
-  const handleZoomChange = useCallback(
-    (value: number) => {
-      setZoomLevel(value);
-      updateZoom(value);
-    },
-    [updateZoom]
-  );
-
   return (
     <div className={styles.track}>
       <TrackHeader track={track} index={index} onRemove={onRemove} />
 
       {/* 트랙 콘텐츠 영역: 파형 및 에디팅 컨트롤 */}
       <div className={styles.trackContent}>
-        <div
-          ref={waveformRef}
-          className={styles.waveformContainer}
-          aria-label="파형 뷰"
-        />
+        <div className={styles.waveformContainer}>
+          <canvas
+            ref={canvasRef}
+            className={styles.waveformCanvas}
+            aria-label="파형 뷰"
+          />
+        </div>
 
         <TrackControls
           index={index}
           isReady={isReady}
           isPlaying={isPlaying}
-          zoomLevel={zoomLevel}
           volume={volume}
           pan={pan}
           onPlayToggle={togglePlayPause}
-          onZoomChange={handleZoomChange}
           onVolumeChange={handleVolumeChange}
           onPanChange={handlePanChange}
         />

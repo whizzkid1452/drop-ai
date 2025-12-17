@@ -9,7 +9,7 @@ export interface AudioFile {
   url: string;
   /**
    * 볼륨 레벨 (0.0 ~ 1.0, 기본값: 1.0)
-   * 재생 시 WaveSurfer의 setVolume()에 사용되고, Export 시 믹싱에 적용됩니다.
+   * 재생 시 Web Audio API의 GainNode에 사용되고, Export 시 믹싱에 적용됩니다.
    */
   volume?: number;
   /**

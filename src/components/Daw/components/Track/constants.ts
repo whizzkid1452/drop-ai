@@ -1,5 +1,5 @@
 /**
- * WaveSurfer 파형 시각화 설정
+ * Canvas 파형 시각화 설정
  */
 export const WAVEFORM_CONFIG = {
   height: 120,
@@ -10,15 +10,6 @@ export const WAVEFORM_CONFIG = {
   barGap: 1,
   barRadius: 2,
   normalize: true,
-} as const;
-
-/**
- * 줌 레벨 범위
- */
-export const ZOOM_LEVEL = {
-  MIN: 0,
-  MAX: 200,
-  STEP: 10,
 } as const;
 
 /**
