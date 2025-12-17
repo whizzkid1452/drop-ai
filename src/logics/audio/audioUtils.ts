@@ -117,12 +117,33 @@ export function resampleBuffer(
 }
 
 /**
+ * Equal Power Panning 알고리즘을 사용하여 패닝 게인 계산
+ * Web Audio API의 StereoPannerNode와 동일한 알고리즘 사용
+ * 
+ * @param pan - 패닝 값 (-1.0 ~ 1.0)
+ * @returns [leftGain, rightGain] - 좌우 채널 게인
+ */
+function calculatePanGains(pan: number): [number, number] {
+  // pan 값을 -1 ~ 1 범위로 제한
+  const clampedPan = Math.max(-1, Math.min(1, pan));
+  
+  // Equal Power Panning 공식 (Web Audio API StereoPannerNode와 동일)
+  // Left Channel Gain: cos(π/4 * (pan + 1))
+  // Right Channel Gain: sin(π/4 * (pan + 1))
+  const leftGain = Math.cos((Math.PI / 4) * (clampedPan + 1));
+  const rightGain = Math.sin((Math.PI / 4) * (clampedPan + 1));
+  
+  return [leftGain, rightGain];
+}
+
+/**
  * 여러 오디오 버퍼를 하나로 믹싱하는 함수
  *
  * @param audioContext - Web Audio API 컨텍스트
  * @param audioBuffers - 믹싱할 오디오 버퍼 배열
  * @param targetSampleRate - 목표 샘플레이트
  * @param volumes - 각 버퍼에 적용할 볼륨 레벨 배열 (0.0 ~ 1.0, 기본값: 1.0)
+ * @param pans - 각 버퍼에 적용할 패닝 레벨 배열 (-1.0 ~ 1.0, 기본값: 0.0)
  * @returns Promise<AudioBuffer> - 믹싱된 오디오 버퍼
  * @throws {Error} 버퍼가 없을 경우
  */
@@ -130,7 +151,8 @@ export async function mixAudioBuffers(
   audioContext: AudioContext,
   audioBuffers: AudioBuffer[],
   targetSampleRate: number,
-  volumes?: number[]
+  volumes?: number[],
+  pans?: number[]
 ): Promise<AudioBuffer> {
   if (audioBuffers.length === 0) {
     throw new Error('No audio buffers to mix');
@@ -142,6 +164,14 @@ export async function mixAudioBuffers(
   // 볼륨 배열 길이가 버퍼 배열과 다르면 기본값 1.0으로 채움
   while (normalizedVolumes.length < audioBuffers.length) {
     normalizedVolumes.push(1.0);
+  }
+
+  // 패닝 배열이 제공되지 않으면 모든 버퍼에 0.0 (중앙) 적용
+  const normalizedPans = pans ?? audioBuffers.map(() => 0.0);
+
+  // 패닝 배열 길이가 버퍼 배열과 다르면 기본값 0.0으로 채움
+  while (normalizedPans.length < audioBuffers.length) {
+    normalizedPans.push(0.0);
   }
 
   // 가장 긴 길이와 최대 채널 수 찾기
@@ -171,7 +201,7 @@ export async function mixAudioBuffers(
     targetSampleRate
   );
 
-  // 모든 버퍼를 볼륨과 함께 믹싱
+  // 모든 버퍼를 볼륨과 패닝과 함께 믹싱
   for (
     let bufferIndex = 0;
     bufferIndex < resampledBuffers.length;
@@ -182,15 +212,39 @@ export async function mixAudioBuffers(
       0,
       Math.min(1, normalizedVolumes[bufferIndex] ?? 1.0)
     );
+    const pan = normalizedPans[bufferIndex] ?? 0.0;
+    
+    // Equal Power Panning 게인 계산
+    const [leftGain, rightGain] = calculatePanGains(pan);
 
-    for (let channel = 0; channel < maxChannels; channel++) {
-      const mixedChannel = mixedBuffer.getChannelData(channel);
-      const sourceChannel = buffer.getChannelData(
-        Math.min(channel, buffer.numberOfChannels - 1)
-      );
+    // 스테레오 버퍼인 경우 (2채널 이상)
+    if (buffer.numberOfChannels >= 2 && maxChannels >= 2) {
+      // 스테레오 입력: 좌우 채널에 패닝 적용
+      const leftSource = buffer.getChannelData(0);
+      const rightSource = buffer.getChannelData(1);
+      
+      const mixedLeft = mixedBuffer.getChannelData(0);
+      const mixedRight = mixedBuffer.getChannelData(1);
+
+      for (let i = 0; i < leftSource.length; i++) {
+        // 왼쪽 채널: leftGain 적용
+        mixedLeft[i] += leftSource[i] * volume * leftGain;
+        // 오른쪽 채널: rightGain 적용
+        mixedRight[i] += rightSource[i] * volume * rightGain;
+      }
+    } else {
+      // 모노 입력: 단일 채널을 좌우로 분배
+      const sourceChannel = buffer.getChannelData(0);
+      const mixedLeft = mixedBuffer.getChannelData(0);
+      const mixedRight = maxChannels >= 2 ? mixedBuffer.getChannelData(1) : mixedLeft;
 
       for (let i = 0; i < sourceChannel.length; i++) {
-        mixedChannel[i] += sourceChannel[i] * volume;
+        const sample = sourceChannel[i] * volume;
+        // 모노 신호를 좌우 채널로 분배
+        mixedLeft[i] += sample * leftGain;
+        if (maxChannels >= 2) {
+          mixedRight[i] += sample * rightGain;
+        }
       }
     }
   }
