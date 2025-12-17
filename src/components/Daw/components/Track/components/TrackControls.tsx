@@ -6,9 +6,11 @@ interface TrackControlsProps {
   isPlaying: boolean;
   zoomLevel: number;
   volume: number;
+  pan: number;
   onPlayToggle: () => void;
   onZoomChange: (value: number) => void;
   onVolumeChange: (value: number) => void;
+  onPanChange: (value: number) => void;
 }
 
 export function TrackControls({
@@ -17,9 +19,11 @@ export function TrackControls({
   isPlaying,
   zoomLevel,
   volume,
+  pan,
   onPlayToggle,
   onZoomChange,
   onVolumeChange,
+  onPanChange,
 }: TrackControlsProps) {
   return (
     <div className={styles.controls}>
@@ -49,6 +53,26 @@ export function TrackControls({
           disabled={!isReady}
         />
         <span className={styles.sliderValue}>{Math.round(volume * 100)}%</span>
+      </div>
+
+      <div className={styles.controlGroup}>
+        <label className={styles.sliderLabel} htmlFor={`pan-${index}`}>
+          패닝
+        </label>
+        <input
+          id={`pan-${index}`}
+          type="range"
+          min={-100}
+          max={100}
+          step={1}
+          value={pan * 100}
+          onChange={(event) => onPanChange(Number(event.target.value) / 100)}
+          className={styles.slider}
+          disabled={!isReady}
+        />
+        <span className={styles.sliderValue}>
+          {pan === 0 ? '중앙' : pan > 0 ? `R${Math.round(pan * 100)}` : `L${Math.round(Math.abs(pan) * 100)}`}
+        </span>
       </div>
 
       <div className={styles.controlGroup}>
