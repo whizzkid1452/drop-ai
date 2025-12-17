@@ -13,6 +13,7 @@ export function DawPage() {
     handleFileUploaded,
     handleEdit,
     updateTrackVolume,
+    updateTrackPan,
   } = useDawTracks();
 
   const hasTracks = useMemo(() => tracks.length > 0, [tracks.length]);
@@ -34,6 +35,7 @@ export function DawPage() {
             tracks={tracks}
             onRemove={removeTrack}
             onVolumeChange={updateTrackVolume}
+            onPanChange={updateTrackPan}
           />
         </>
       )}

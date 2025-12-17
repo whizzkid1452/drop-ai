@@ -6,12 +6,14 @@ interface TrackListProps {
   tracks: AudioFile[];
   onRemove: (index: number) => void;
   onVolumeChange?: (index: number, volume: number) => void;
+  onPanChange?: (index: number, pan: number) => void;
 }
 
 export function TrackList({
   tracks,
   onRemove,
   onVolumeChange,
+  onPanChange,
 }: TrackListProps) {
   return (
     <div className={styles.trackList}>
@@ -22,6 +24,7 @@ export function TrackList({
           index={index}
           onRemove={onRemove}
           onVolumeChange={onVolumeChange}
+          onPanChange={onPanChange}
         />
       ))}
     </div>

@@ -49,6 +49,16 @@ export function useDawTracks() {
     });
   }, []);
 
+  const updateTrackPan = useCallback((index: number, pan: number) => {
+    setTracks((prev) => {
+      const newTracks = [...prev];
+      if (newTracks[index]) {
+        newTracks[index] = { ...newTracks[index], pan };
+      }
+      return newTracks;
+    });
+  }, []);
+
   // 언마운트 시 pendingFile 리소스 정리
   useEffect(() => {
     return () => disposeFile(pendingFile);
@@ -62,5 +72,6 @@ export function useDawTracks() {
     handleFileUploaded,
     handleEdit,
     updateTrackVolume,
+    updateTrackPan,
   };
 }
