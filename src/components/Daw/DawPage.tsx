@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { FileUpload } from './components/FileUpload/FileUpload';
-import { DawHeader } from './components/DawHeader';
-import { TrackList } from './components/TrackList';
+import { DawHeader } from './components/DawHeader/DawHeader';
+import { TrackList } from './components/TrackList/TrackList';
 import { useDawTracks } from './hooks/useDawTracks';
 import * as styles from './DawPage.css';
 

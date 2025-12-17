@@ -1,6 +1,6 @@
-import { Track } from './Track/Track';
-import type { AudioFile } from './FileUpload/components/types';
-import * as styles from '../DawPage.css';
+import { Track } from '../Track/Track';
+import type { AudioFile } from '../FileUpload/components/types';
+import * as styles from './TrackList.css';
 
 interface TrackListProps {
   tracks: AudioFile[];
