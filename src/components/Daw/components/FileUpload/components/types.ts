@@ -13,6 +13,12 @@ export interface AudioFile {
    */
   volume?: number;
   /**
+   * 패닝 레벨 (-1.0 ~ 1.0, 기본값: 0.0)
+   * -1.0: 완전히 왼쪽, 0.0: 중앙, 1.0: 완전히 오른쪽
+   * 재생 시 Web Audio API의 StereoPannerNode에 사용되고, Export 시 믹싱에 적용됩니다.
+   */
+  pan?: number;
+  /**
    * 리소스 정리 함수 (예: Object URL 해제)
    * TrackContext는 이 함수를 통해 추상화된 방식으로 cleanup을 수행합니다.
    */
