@@ -79,7 +79,7 @@ export function usePlaybackControl(
   /**
    * 재생 시작
    */
-  const startPlayback = useCallback(() => {
+  const startPlayback = useCallback(async () => {
     if (!audioContextRef.current || !audioBufferRef.current || !nodesRef.current) {
       return;
     }
@@ -88,9 +88,14 @@ export function usePlaybackControl(
     const audioBuffer = audioBufferRef.current;
     const nodes = nodesRef.current;
 
-    // AudioContext가 suspended 상태면 resume
+    // AudioContext가 suspended 상태면 resume (비동기 처리)
     if (audioContext.state === 'suspended') {
-      audioContext.resume();
+      try {
+        await audioContext.resume();
+      } catch (err) {
+        console.error('AudioContext resume 실패:', err);
+        return;
+      }
     }
 
     // 새로운 AudioBufferSourceNode 생성
@@ -104,7 +109,14 @@ export function usePlaybackControl(
     // 재생 시작
     const pausedTime = playbackState.getPausedTime();
     playbackState.recordStartTime(audioContext.currentTime);
-    source.start(0, pausedTime);
+    
+    try {
+      source.start(0, pausedTime);
+    } catch (err) {
+      console.error('오디오 재생 시작 실패:', err);
+      sourceNodeRef.current = null;
+      return;
+    }
 
     // 재생 완료 이벤트
     source.onended = () => {

@@ -1,6 +1,5 @@
 import type { AudioFile } from '@/components/Daw/components/FileUpload/components/types';
 
-
 // URL에서 오디오 파일을 ArrayBuffer로 로드하는 내부 헬퍼 함수
 async function fetchRawAudioData(
   url: string,

@@ -82,21 +82,23 @@ export function useAudioPlayback(
       audioBufferRef.current = null;
       nodesRef.current = null;
     };
-  }, [audioUrl, volume, pan, playbackState, stopPlayback]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioUrl]);
 
-  // 볼륨 변경 시 GainNode에 적용
+  // 볼륨 및 패닝 변경 시 노드 재생성 (volume, pan 변경 시)
   useEffect(() => {
-    if (nodesRef.current?.gainNode && audioContextRef.current) {
+    if (!audioContextRef.current || !audioBufferRef.current) return;
+
+    // 노드가 이미 생성되어 있고 재생 중이 아닐 때만 업데이트
+    if (nodesRef.current) {
       updateVolume(nodesRef.current.gainNode, volume, audioContextRef.current);
-    }
-  }, [volume]);
-
-  // 패닝 변경 시 StereoPannerNode에 적용
-  useEffect(() => {
-    if (nodesRef.current?.pannerNode && audioContextRef.current) {
       updatePan(nodesRef.current.pannerNode, pan, audioContextRef.current);
+    } else {
+      // 노드가 없으면 생성
+      const nodes = createAudioNodes(audioContextRef.current, volume, pan);
+      nodesRef.current = nodes;
     }
-  }, [pan]);
+  }, [volume, pan]);
 
   return {
     isReady: playbackState.isReady,
