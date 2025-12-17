@@ -12,19 +12,7 @@ export function usePlaybackState() {
   const [duration, setDuration] = useState(0);
 
   const startTimeRef = useRef<number>(0);
-  const pausedTimeRef = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
-  
-  /**
-   * 현재 재생 중인 실제 시간을 계산하는 함수
-   * AudioContext의 currentTime을 기반으로 정확한 재생 시간을 반환
-   */
-  const calculateCurrentPlaybackTime = useCallback((audioContextCurrentTime: number): number => {
-    if (startTimeRef.current === 0) {
-      return pausedTimeRef.current;
-    }
-    return audioContextCurrentTime - startTimeRef.current + pausedTimeRef.current;
-  }, []);
 
   /**
    * 재생 상태 초기화
@@ -32,7 +20,6 @@ export function usePlaybackState() {
   const resetState = useCallback(() => {
     setIsPlaying(false);
     setCurrentTime(0);
-    pausedTimeRef.current = 0;
     startTimeRef.current = 0;
   }, []);
 
@@ -55,20 +42,6 @@ export function usePlaybackState() {
    */
   const recordStartTime = useCallback((time: number) => {
     startTimeRef.current = time;
-  }, []);
-
-  /**
-   * 일시정지 시간 기록
-   */
-  const recordPausedTime = useCallback((time: number) => {
-    pausedTimeRef.current = time;
-  }, []);
-
-  /**
-   * 일시정지 시간 가져오기
-   */
-  const getPausedTime = useCallback(() => {
-    return pausedTimeRef.current;
   }, []);
 
   /**
@@ -125,15 +98,10 @@ export function usePlaybackState() {
     
     // 시간 관리
     recordStartTime,
-    recordPausedTime,
-    getPausedTime,
     getStartTime,
     
     // 애니메이션 프레임 관리
     requestAnimationFrame,
     cancelAnimationFrame,
-    
-    // 시간 계산
-    calculateCurrentPlaybackTime,
   };
 }

@@ -31,7 +31,7 @@ export function useAudioPlayback(
   const playbackState = usePlaybackState();
 
   // 재생 제어
-  const { togglePlayPause, stopPlayback } = usePlaybackControl(
+  const { startPlayback, stopPlayback } = usePlaybackControl(
     audioContextRef,
     audioBufferRef,
     nodesRef,
@@ -105,7 +105,7 @@ export function useAudioPlayback(
     isPlaying: playbackState.isPlaying,
     currentTime: playbackState.currentTime,
     duration: playbackState.duration,
-    togglePlayPause,
+    startPlayback,
     stopPlayback,
   };
 }

@@ -53,7 +53,7 @@ export function Track({ track, index, onRemove, onVolumeChange, onPanChange }: T
   }, [resetProgress]);
 
   // Web Audio API 재생 관리
-  const { isReady, isPlaying, togglePlayPause } = useAudioPlayback(
+  const { isReady, isPlaying, startPlayback } = useAudioPlayback(
     track.url,
     volume,
     pan,
@@ -81,7 +81,7 @@ export function Track({ track, index, onRemove, onVolumeChange, onPanChange }: T
           isPlaying={isPlaying}
           volume={volume}
           pan={pan}
-          onPlayToggle={togglePlayPause}
+          onPlayToggle={startPlayback}
           onVolumeChange={handleVolumeChange}
           onPanChange={handlePanChange}
         />

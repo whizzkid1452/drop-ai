@@ -27,9 +27,9 @@ export function TrackControls({
         <button
           className={styles.actionButton}
           onClick={onPlayToggle}
-          disabled={!isReady}
+          disabled={!isReady || isPlaying}
         >
-          {isPlaying ? '일시정지' : '재생'}
+          재생
         </button>
       </div>
 
