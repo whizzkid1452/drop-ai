@@ -1,8 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import type { AudioFile } from '../components/types';
 import { getFileDuration } from '../utils/audioMetadata';
-import { formatFileSize } from '@/components/Daw/utils/formatFileSize';
-import { formatDuration } from '@/components/Daw/utils/formatDuration';
+import { formatFileSize, formatDuration } from '@/components/Daw/utils/formatter';
 import { ERROR_MESSAGES } from '../components/constants';
 
 interface UseFileUploadOptions {
