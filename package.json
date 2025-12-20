@@ -34,10 +34,12 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-query": "^5.62.13",
     "@wavesurfer/react": "^1.0.12",
+    "es-toolkit": "^1.43.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-dropzone": "^14.3.8",
     "react-router-dom": "^7.10.0",
+    "react-simplikit": "^0.0.46",
     "wavesurfer.js": "^7.10.1",
     "zustand": "^5.0.9"
   },
