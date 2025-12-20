@@ -5,9 +5,8 @@ import { DropPage } from '@/components/Drop/DropPage';
 export function AppRouter() {
   return (
     <Routes>
-      <Route path="/" element={<DawPage />} />
-      <Route path="/drop" element={<DropPage />} />
+      <Route path="/" element={<DropPage />} />
+      <Route path="/daw" element={<DawPage />} />
     </Routes>
   );
 }
-
