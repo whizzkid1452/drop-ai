@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react';
-import type { AudioFile } from '../Daw/components/FileUpload/components/types';
+import { NavLink } from 'react-router-dom';
+import { useLoading } from 'react-simplikit';
 import { convertFileToAudioFile } from '../../logics/audio/convertFileToAudioFile';
+import type { AudioFile } from '../Daw/components/FileUpload/components/types';
 import { AudioPreview } from './components/AudioPreview';
 import { DropHere } from './components/DropHere';
 import { ErrorMessage } from './components/ErrorMessage';
 import * as styles from './DropPage.css';
-import { useLoading } from 'react-simplikit';
-import { NavLink } from 'react-router-dom';
 
 export function DropPage() {
   const [uploadedFile, setUploadedFile] = useState<null | AudioFile>(null);
@@ -14,8 +14,13 @@ export function DropPage() {
   const [isLoading, startLoading] = useLoading();
 
   const onFileDrop = useCallback(async (file: File) => {
-    const audioFile = await startLoading(convertFileToAudioFile(file));
-    setUploadedFile(audioFile);
+    const result = await startLoading(convertFileToAudioFile(file));
+    if (result == null) {
+      // @todo(@steinjun0): 추후 throw error + error boundary로 변경
+      setError('Failed to convert file to audio file');
+      return;
+    }
+    setUploadedFile(result.audioFile);
   }, []);
 
   return (

@@ -26,7 +26,7 @@ export async function convertFileToAudioFile(file: File) {
       volume: 1.0, // 기본 볼륨 레벨
     };
 
-    return audioFile;
+    return { audioFile, url };
   } catch (err) {
     console.error(err);
     return null;
