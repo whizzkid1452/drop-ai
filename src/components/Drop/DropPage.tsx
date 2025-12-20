@@ -5,15 +5,15 @@ import { AudioPreview } from './components/AudioPreview';
 import { DropHere } from './components/DropHere';
 import { ErrorMessage } from './components/ErrorMessage';
 import * as styles from './DropPage.css';
+import { useLoading } from 'react-simplikit';
 
 export function DropPage() {
   const [uploadedFile, setUploadedFile] = useState<null | AudioFile>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, startLoading] = useLoading();
+
   const onFileDrop = useCallback(async (file: File) => {
-    setIsLoading(true);
-    const audioFile = await convertFileToAudioFile(file);
-    setIsLoading(false);
+    const audioFile = await startLoading(convertFileToAudioFile(file));
     setUploadedFile(audioFile);
   }, []);
 
