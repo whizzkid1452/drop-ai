@@ -1,20 +1,21 @@
 import { useCallback, useState } from 'react';
 import type { AudioFile } from '../Daw/components/FileUpload/components/types';
-import { useFileUpload } from '../Daw/components/FileUpload/hooks/useFileUpload';
+import { convertFileToAudioFile } from '../../logics/audio/convertFileToAudioFile';
+import { AudioPreview } from './components/AudioPreview';
 import { DropHere } from './components/DropHere';
 import { ErrorMessage } from './components/ErrorMessage';
 import * as styles from './DropPage.css';
-import { AudioPreview } from './components/AudioPreview';
 
 export function DropPage() {
-  const { error, isLoading, addAudioFile, setError } = useFileUpload();
   const [uploadedFile, setUploadedFile] = useState<null | AudioFile>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const onFileDrop = useCallback(async (file: File) => {
-    const audioFile = await addAudioFile(file);
+    setIsLoading(true);
+    const audioFile = await convertFileToAudioFile(file);
+    setIsLoading(false);
     setUploadedFile(audioFile);
   }, []);
-
-  
 
   return (
     <div className={styles.container}>
@@ -34,12 +35,10 @@ export function DropPage() {
 
       {error && <ErrorMessage message={error} />}
 
-       {uploadedFile && (
+      {uploadedFile && (
         <>
           <AudioPreview file={uploadedFile} />
-          <button  className={styles.editButton}>
-            Edit Here!
-          </button>
+          <button className={styles.editButton}>Edit Here!</button>
         </>
       )}
     </div>
