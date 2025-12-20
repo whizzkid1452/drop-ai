@@ -25,7 +25,12 @@ export function DropPage() {
         <p className={styles.heroSubtitle}>Browser-based audio editing tool</p>
       </div>
 
-      {!uploadedFile && (
+      {uploadedFile ? (
+        <>
+          <AudioPreview file={uploadedFile} />
+          <button className={styles.editButton}>Edit Here!</button>
+        </>
+      ) : (
         <DropHere
           isLoading={isLoading}
           onFileDrop={onFileDrop}
@@ -33,14 +38,7 @@ export function DropPage() {
         />
       )}
 
-      {error && <ErrorMessage message={error} />}
-
-      {uploadedFile && (
-        <>
-          <AudioPreview file={uploadedFile} />
-          <button className={styles.editButton}>Edit Here!</button>
-        </>
-      )}
+      {error ? <ErrorMessage message={error} /> : null}
     </div>
   );
 }
