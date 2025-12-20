@@ -25,9 +25,8 @@ export const useAudioFileStore = create<AudioFileStore>()((set, get) => ({
   },
   addAudioFile: ({ url, audioFile }) => {
     set(state => {
-      return {
-        audioFiles: { ...state.audioFiles, [url]: audioFile },
-      };
+      state.audioFiles.set(url, audioFile);
+      return {};
     });
   },
   removeAudioFile: ({ url }) => {

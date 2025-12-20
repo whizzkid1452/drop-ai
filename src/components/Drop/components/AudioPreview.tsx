@@ -1,5 +1,5 @@
-import * as styles from '../FileUpload.css';
-import type { AudioFile } from './types';
+import * as styles from '../DropPage.css';
+import type { AudioFile } from '../../Daw/components/FileUpload/components/types';
 
 interface AudioPreviewProps {
   file: AudioFile;

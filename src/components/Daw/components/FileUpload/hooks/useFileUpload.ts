@@ -10,12 +10,11 @@ interface UseFileUploadOptions {
 }
 
 export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
-  const [uploadedFile, setUploadedFile] = useState<AudioFile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const uploadedFileRef = useRef<AudioFile | null>(null);
 
-  const parseAudioFile = useCallback(
+  const addAudioFile = useCallback(
     async (file: File) => {
       setIsLoading(true);
       setError(null);
@@ -47,11 +46,12 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
         };
 
         uploadedFileRef.current = audioFile;
-        setUploadedFile(audioFile);
         onFileUploaded?.(audioFile);
+        return audioFile;
       } catch (err) {
         setError(ERROR_MESSAGES.PROCESSING_ERROR);
         console.error(err);
+        return null
       } finally {
         setIsLoading(false);
       }
@@ -59,20 +59,10 @@ export function useFileUpload({ onFileUploaded }: UseFileUploadOptions = {}) {
     [onFileUploaded]
   );
 
-  const reset = useCallback(() => {
-    uploadedFileRef.current?.dispose?.();
-    uploadedFileRef.current = null;
-    setUploadedFile(null);
-    setError(null);
-    setIsLoading(false);
-  }, []);
-
   return {
-    uploadedFile,
     error,
     isLoading,
-    parseAudioFile,
-    reset,
+    addAudioFile,
     setError,
   };
 }

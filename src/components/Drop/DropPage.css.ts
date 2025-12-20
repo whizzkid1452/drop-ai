@@ -53,7 +53,7 @@ export const dropZone = style({
   backgroundColor: '#0a0a0a',
   position: 'relative',
   overflow: 'hidden',
-  
+
   ':hover': {
     borderColor: '#444444',
     backgroundColor: '#0f0f0f',
@@ -115,12 +115,12 @@ export const button = style({
   pointerEvents: 'auto',
   textTransform: 'uppercase',
   letterSpacing: '0.05em',
-  
+
   ':hover': {
     backgroundColor: '#222222',
     borderColor: '#444444',
   },
-  
+
   ':active': {
     backgroundColor: '#1a1a1a',
   },
@@ -147,7 +147,7 @@ export const fileInfoItem = style({
   padding: '0.5rem 0',
   borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
   fontSize: '0.9rem',
-  
+
   ':last-child': {
     borderBottom: 'none',
   },
@@ -186,12 +186,12 @@ export const editButton = style({
   display: 'block',
   textTransform: 'uppercase',
   letterSpacing: '0.05em',
-  
+
   ':hover': {
     backgroundColor: '#222222',
     borderColor: '#444444',
   },
-  
+
   ':active': {
     backgroundColor: '#1a1a1a',
   },
@@ -281,7 +281,7 @@ export const dialogCancelButton = style({
   fontWeight: 500,
   cursor: 'pointer',
   transition: 'all 0.2s ease',
-  
+
   ':hover': {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderColor: 'rgba(255, 255, 255, 0.3)',
@@ -298,15 +298,13 @@ export const dialogConfirmButton = style({
   fontWeight: 500,
   cursor: 'pointer',
   transition: 'all 0.2s ease',
-  
+
   ':hover': {
     backgroundColor: '#764ba2',
     transform: 'translateY(-1px)',
   },
-  
+
   ':active': {
     transform: 'translateY(0)',
   },
 });
-
-

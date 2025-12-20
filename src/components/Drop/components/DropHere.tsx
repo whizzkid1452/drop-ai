@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useDropzone, type Accept, type FileRejection } from 'react-dropzone';
-import * as styles from '../FileUpload.css';
-import { ACCEPTED_AUDIO_TYPES, MAX_FILE_SIZE, MAX_FILE_SIZE_MB, UI_MESSAGES, ERROR_MESSAGES } from './constants';
+import * as styles from '../DropPage.css';
+import { ACCEPTED_AUDIO_TYPES, MAX_FILE_SIZE, MAX_FILE_SIZE_MB, UI_MESSAGES, ERROR_MESSAGES } from '../../Daw/components/FileUpload/components/constants';
 
 interface DropHereProps {
   isLoading: boolean;
