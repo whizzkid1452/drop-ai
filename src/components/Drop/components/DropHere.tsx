@@ -1,15 +1,22 @@
 import { useMemo } from 'react';
 import { useDropzone, type Accept, type FileRejection } from 'react-dropzone';
 import * as styles from '../DropPage.css';
-import { ACCEPTED_AUDIO_TYPES, MAX_FILE_SIZE, MAX_FILE_SIZE_MB, UI_MESSAGES, ERROR_MESSAGES } from '../../Daw/components/FileUpload/components/constants';
+import {
+  ACCEPTED_AUDIO_TYPES,
+  MAX_FILE_SIZE,
+  MAX_FILE_SIZE_MB,
+  UI_MESSAGES,
+  ERROR_MESSAGES,
+} from '../../Daw/components/FileUpload/components/constants';
+import { useLoading } from 'react-simplikit';
 
 interface DropHereProps {
-  isLoading: boolean;
-  onFileDrop: (file: File) => void;
+  onFileDrop: (file: File) => Promise<void>;
   onError?: (error: string) => void;
 }
 
-export function DropHere({ isLoading, onFileDrop, onError }: DropHereProps) {
+export function DropHere({ onFileDrop, onError }: DropHereProps) {
+  const [isLoading, startLoading] = useLoading();
   const accept = useMemo<Accept>(
     () =>
       ACCEPTED_AUDIO_TYPES.reduce<Accept>((acc, type) => {
@@ -27,7 +34,7 @@ export function DropHere({ isLoading, onFileDrop, onError }: DropHereProps) {
     onDropAccepted: (acceptedFiles: File[]) => {
       const file = acceptedFiles[0];
       if (file) {
-        onFileDrop(file);
+        startLoading(onFileDrop(file));
       }
     },
     onDropRejected: (fileRejections: FileRejection[]) => {
@@ -62,7 +69,7 @@ export function DropHere({ isLoading, onFileDrop, onError }: DropHereProps) {
           <button
             type="button"
             className={styles.button}
-            onClick={(e) => {
+            onClick={e => {
               e.stopPropagation();
               open();
             }}
@@ -74,5 +81,3 @@ export function DropHere({ isLoading, onFileDrop, onError }: DropHereProps) {
     </div>
   );
 }
-
-
