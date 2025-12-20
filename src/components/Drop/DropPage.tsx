@@ -6,6 +6,7 @@ import { DropHere } from './components/DropHere';
 import { ErrorMessage } from './components/ErrorMessage';
 import * as styles from './DropPage.css';
 import { useLoading } from 'react-simplikit';
+import { NavLink } from 'react-router-dom';
 
 export function DropPage() {
   const [uploadedFile, setUploadedFile] = useState<null | AudioFile>(null);
@@ -28,7 +29,9 @@ export function DropPage() {
       {uploadedFile ? (
         <>
           <AudioPreview file={uploadedFile} />
-          <button className={styles.editButton}>Edit Here!</button>
+          <NavLink to="/daw" className={styles.editButton}>
+            Go to track
+          </NavLink>
         </>
       ) : (
         <DropHere
