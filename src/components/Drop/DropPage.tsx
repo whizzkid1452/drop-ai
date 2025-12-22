@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import type { AudioFile } from '../Daw/components/FileUpload/components/types';
 import { AudioDropHere } from './components/AudioDropHere';
-import { AudioPreview } from './components/AudioPreview';
 import * as styles from './DropPage.css';
 
 export function DropPage() {
@@ -18,7 +17,7 @@ export function DropPage() {
 
       {uploadedFile ? (
         <>
-          <AudioPreview file={uploadedFile} />
+          <audio src={uploadedFile.url} controls className={styles.audioPreview} />
           <NavLink to="/daw" className={styles.editButton}>
             Go to track
           </NavLink>
