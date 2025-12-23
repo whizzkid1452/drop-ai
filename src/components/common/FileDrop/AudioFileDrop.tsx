@@ -1,6 +1,6 @@
 import type { AudioFile } from '@/types/audioFile';
 import { convertFileToAudioFile } from '@/logics/audio/convertFileToAudioFile';
-import { useAudioFileStore } from '@/stores/use-audio-file-store';
+import { useAudioFileStore } from '@/stores/useAudioFileStore';
 import { useCallback } from 'react';
 import { BasicFileDrop } from './BaiscFileDrop';
 

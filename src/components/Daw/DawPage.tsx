@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useAudioFileStore } from '@/stores/use-audio-file-store';
+import { useAudioFileStore } from '@/stores/useAudioFileStore';
 import { AudioFileDrop } from '../common/FileDrop/AudioFileDrop';
 import { DawHeader } from './components/DawHeader';
 import { TrackList } from './components/TrackList';

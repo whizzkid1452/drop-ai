@@ -11,7 +11,7 @@ import {
   ACCEPTED_AUDIO_TYPES,
   MAX_FILE_SIZE,
   MAX_FILE_SIZE_MB,
-} from './constants/audio-constants';
+} from './constants/audioConstants';
 
 interface BasicFileDropProps {
   onFileDrop: (file: File) => Promise<void>;
