@@ -2,13 +2,16 @@ import { useMemo } from 'react';
 import { useDropzone, type Accept, type FileRejection } from 'react-dropzone';
 import * as styles from './FileDrop.css';
 import {
+  UI_MESSAGES,
+  ERROR_MESSAGES,
+} from '@/components/common/FileDrop/constants/constants';
+
+import { useLoading } from 'react-simplikit';
+import {
   ACCEPTED_AUDIO_TYPES,
   MAX_FILE_SIZE,
   MAX_FILE_SIZE_MB,
-  UI_MESSAGES,
-  ERROR_MESSAGES,
-} from '@/components/common/FileDrop/constants';
-import { useLoading } from 'react-simplikit';
+} from './constants/audio-constants';
 
 interface BasicFileDropProps {
   onFileDrop: (file: File) => Promise<void>;
