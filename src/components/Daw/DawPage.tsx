@@ -26,6 +26,11 @@ export function DawPage() {
               // @todo: 추가 예정
             }}
           />
+          <AudioFileDrop
+            onAudioFileDrop={() => {
+              // @todo: 추가시 트랙에 자동 추가 기능 추가 예정
+            }}
+          />
         </>
       ) : (
         <div className={styles.modalOverlay}>
