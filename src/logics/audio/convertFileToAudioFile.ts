@@ -1,4 +1,4 @@
-import type { AudioFile } from '../../components/Daw/components/FileUpload/components/types';
+import type { AudioFile } from '../../types/audioFile';
 import { getFileDuration } from '../../utils/audio/getAudioMetadata';
 import { formatDuration } from '@/utils/audio/formatDuration';
 import { formatFileSize } from '@/utils/audio/formatFileSize';

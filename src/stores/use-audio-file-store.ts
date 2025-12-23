@@ -1,4 +1,4 @@
-import type { AudioFile } from '@/components/Daw/components/FileUpload/components/types';
+import type { AudioFile } from '@/types/audioFile';
 import { create } from 'zustand';
 
 interface AudioFileStore {

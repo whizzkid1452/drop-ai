@@ -1,4 +1,4 @@
-import type { AudioFile } from '@/components/Daw/components/FileUpload/components/types';
+import type { AudioFile } from '@/types/audioFile';
 import { convertFileToAudioFile } from '@/logics/audio/convertFileToAudioFile';
 import { useAudioFileStore } from '@/stores/use-audio-file-store';
 import { useCallback } from 'react';

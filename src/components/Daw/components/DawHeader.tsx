@@ -1,5 +1,5 @@
 import { ExportButton } from '../components/ExportButton/ExportButton';
-import type { AudioFile } from '../components/FileUpload/components/types';
+import type { AudioFile } from '../../../types/audioFile';
 import * as styles from '../DawPage.css';
 
 interface DawHeaderProps {

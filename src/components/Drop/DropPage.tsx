@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import type { AudioFile } from '../Daw/components/FileUpload/components/types';
+import type { AudioFile } from '../../types/audioFile';
 import { AudioFileDrop } from '../common/FileDrop/AudioFileDrop';
 import * as styles from './DropPage.css';
 

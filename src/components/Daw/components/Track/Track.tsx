@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { AudioFile } from '../FileUpload/components/types';
+import type { AudioFile } from '../../../../types/audioFile';
 import * as styles from './Track.css';
 import { TrackControls } from './components/TrackControls';
 import { TrackHeader } from './components/TrackHeader';
@@ -7,7 +7,7 @@ import { useWaveSurfer } from './utils/useWaveSurfer';
 
 /**
  * Track 컴포넌트의 Props 타입 정의
- * 
+ *
  * @property track - 표시할 오디오 파일 정보 (AudioFile 타입)
  * @property index - 트랙의 인덱스 (0부터 시작, 트랙 번호 표시에 사용)
  * @property onRemove - 트랙 제거 콜백 함수 (선택적, 제공 시 제거 버튼 표시)
@@ -36,7 +36,7 @@ export function Track({ track, index, onRemove, onVolumeChange }: TrackProps) {
   } = useWaveSurfer({
     url: track.url,
     // @wavesurfer/react 권장 방식: 이벤트 핸들러를 props로 전달
-    onReady: (ws) => {
+    onReady: ws => {
       // 초기 볼륨 설정
       if (volume !== undefined) {
         ws.setVolume(volume);
@@ -92,4 +92,3 @@ export function Track({ track, index, onRemove, onVolumeChange }: TrackProps) {
     </div>
   );
 }
-
