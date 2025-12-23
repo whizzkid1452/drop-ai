@@ -1,18 +1,13 @@
 import { useMemo } from 'react';
-import { useAudioFileStore } from '@/stores/useAudioFileStore';
 import { AudioFileDrop } from '../common/FileDrop/AudioFileDrop';
 import { DawHeader } from './components/DawHeader';
 import { TrackList } from './components/TrackList';
 import * as styles from './DawPage.css';
+import { useTrackStore } from '@/stores/useTrackStore';
 
 export function DawPage() {
-  const audioFiles = useAudioFileStore(state => state.audioFiles);
-  const audios = useMemo(() => {
-    return Array.from(audioFiles.values());
-  }, [audioFiles]);
-
-  // @todo: audio를 track 개념으로 변환 필요
-  const hasTracks = useMemo(() => audios.length > 0, [audios.length]);
+  const tracks = useTrackStore(state => state.tracks);
+  const hasTracks = useMemo(() => tracks.size > 0, [tracks.size]);
 
   return (
     <div className={styles.container}>
@@ -22,9 +17,8 @@ export function DawPage() {
 
       {hasTracks ? (
         <>
-          <DawHeader trackCount={audios.length} tracks={audios} />
+          <DawHeader trackCount={tracks.size} />
           <TrackList
-            tracks={audios}
             onRemove={() => {
               // @todo: 추가 예정
             }}
