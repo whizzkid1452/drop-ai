@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import type { AudioFile } from '../../types/audioFile';
 import { AudioFileDrop } from '../common/FileDrop/AudioFileDrop';
@@ -6,6 +6,13 @@ import * as styles from './DropPage.css';
 
 export function DropPage() {
   const [uploadedFile, setUploadedFile] = useState<null | AudioFile>(null);
+
+  const onAudioFileDrop = useCallback((audioFile: AudioFile | null) => {
+    if (audioFile == null) {
+      return;
+    }
+    setUploadedFile(audioFile);
+  }, []);
 
   return (
     <div className={styles.container}>
@@ -27,7 +34,7 @@ export function DropPage() {
           </NavLink>
         </>
       ) : (
-        <AudioFileDrop onAudioFileDrop={setUploadedFile} />
+        <AudioFileDrop onAudioFileDrop={onAudioFileDrop} />
       )}
     </div>
   );
