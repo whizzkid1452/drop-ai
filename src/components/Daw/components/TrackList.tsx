@@ -2,7 +2,7 @@ import { useTrackStore } from '@/stores/useTrackStore';
 import WavesurferPlayer from '@wavesurfer/react';
 import { useMemo, useRef } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
-import * as styles from '../DawPage.css';
+import * as styles from './TrackList.css';
 
 export function TrackList() {
   const tracks = useTrackStore(state => state.tracks);
@@ -31,7 +31,7 @@ export function TrackList() {
       >
         Pause All
       </button>
-      <div style={{ display: 'flex', flexDirection: 'column', width: '500px' }}>
+      <div className={styles.tracksContainer}>
         {trackArray.map(track => {
           return (
             <WavesurferPlayer
