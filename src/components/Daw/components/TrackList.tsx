@@ -31,18 +31,34 @@ export function TrackList() {
       >
         Pause All
       </button>
-      {trackArray.map(track => {
-        return (
-          <WavesurferPlayer
-            key={track.id}
-            url={track.regions[0].audioFile.url}
-            onReady={ws => {
-              // trackStore에 wavesurfer 인스턴스 저장
-              wavesurferInstances.current.set(track.id, ws);
-            }}
-          />
-        );
-      })}
+      <div style={{ display: 'flex', flexDirection: 'column', width: '500px' }}>
+        {trackArray.map(track => {
+          return (
+            <WavesurferPlayer
+              key={track.id}
+              url={track.regions[0].audioFile.url}
+              onReady={ws => {
+                // trackStore에 wavesurfer 인스턴스 저장
+                wavesurferInstances.current.set(track.id, ws);
+              }}
+              onClick={wavesurfer => {
+                wavesurferInstances.current.forEach(ws => {
+                  if (ws === wavesurfer) {
+                    return;
+                  }
+                  if (ws.getCurrentTime() === wavesurfer.getCurrentTime()) {
+                    return;
+                  }
+                  ws.setTime(wavesurfer.getCurrentTime());
+                });
+              }}
+              dragToSeek={true}
+              minPxPerSec={3}
+              width={(track.regions[0].audioFile.duration ?? 1) * 3.1}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
