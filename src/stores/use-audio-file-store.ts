@@ -25,18 +25,20 @@ export const useAudioFileStore = create<AudioFileStore>()((set, get) => ({
   },
   addAudioFile: ({ url, audioFile }) => {
     set(state => {
-      state.audioFiles.set(url, audioFile);
-      return {};
+      const newAudioFiles = new Map(state.audioFiles);
+      newAudioFiles.set(url, audioFile);
+      return { audioFiles: newAudioFiles };
     });
   },
   removeAudioFile: ({ url }) => {
     set(state => {
-      const hasExisted = state.audioFiles.delete(url);
+      const newAudioFiles = new Map(state.audioFiles);
+      const hasExisted = newAudioFiles.delete(url);
       if (hasExisted) {
         /** @note 메모리 누수 방지를 위한 방어 코드 */
         URL.revokeObjectURL(url);
       }
-      return {};
+      return { audioFiles: newAudioFiles };
     });
   },
 }));

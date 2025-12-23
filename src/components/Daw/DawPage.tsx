@@ -6,10 +6,10 @@ import { TrackList } from './components/TrackList';
 import * as styles from './DawPage.css';
 
 export function DawPage() {
-  const { getAudioFiles } = useAudioFileStore();
+  const audioFiles = useAudioFileStore(state => state.audioFiles);
   const audios = useMemo(() => {
-    return Array.from(getAudioFiles().values());
-  }, [getAudioFiles]);
+    return Array.from(audioFiles.values());
+  }, [audioFiles]);
 
   // @todo: audio를 track 개념으로 변환 필요
   const hasTracks = useMemo(() => audios.length > 0, [audios.length]);
