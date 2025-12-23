@@ -18,15 +18,3 @@ export interface AudioFile {
    */
   dispose?: () => void;
 }
-
-export interface FileUploadProps {
-  onFileUploaded?: (file: AudioFile) => void;
-  /**
-   * 미리보기 상태에서 "Edit here" 버튼을 눌렀을 때 호출됩니다.
-   * 업로드된 파일을 트랙 목록 등 상위 컨텍스트로 전달할 때 사용합니다.
-   */
-  onEdit?: (file: AudioFile) => void;
-  autoReset?: boolean; // 업로드 후 자동으로 상태 초기화
-}
-
-
