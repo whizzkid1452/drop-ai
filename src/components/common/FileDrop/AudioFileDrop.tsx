@@ -2,13 +2,13 @@ import type { AudioFile } from '@/components/Daw/components/FileUpload/component
 import { convertFileToAudioFile } from '@/logics/audio/convertFileToAudioFile';
 import { useAudioFileStore } from '@/stores/use-audio-file-store';
 import { useCallback } from 'react';
-import { DropHere } from './DropHere';
+import { BasicFileDrop } from './BaiscFileDrop';
 
-export const AudioDropHere = ({
-  onAudioFileDrop,
-}: {
+interface AudioFileDrop {
   onAudioFileDrop: (audioFile: AudioFile | null) => Promise<void> | void;
-}) => {
+}
+
+export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDrop) => {
   const { addAudioFile, getAudioFile } = useAudioFileStore();
   const onFileDrop = useCallback(async (file: File) => {
     const audioFileData = await convertFileToAudioFile(file);
@@ -27,7 +27,7 @@ export const AudioDropHere = ({
   }, []);
 
   return (
-    <DropHere
+    <BasicFileDrop
       onFileDrop={async file => {
         const uploadedAudioFile = await onFileDrop(file);
         await onAudioFileDrop(uploadedAudioFile);

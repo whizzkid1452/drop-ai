@@ -1,21 +1,21 @@
 import { useMemo } from 'react';
 import { useDropzone, type Accept, type FileRejection } from 'react-dropzone';
-import * as styles from '../DropPage.css';
+import * as styles from './FileDrop.css';
 import {
   ACCEPTED_AUDIO_TYPES,
   MAX_FILE_SIZE,
   MAX_FILE_SIZE_MB,
   UI_MESSAGES,
   ERROR_MESSAGES,
-} from '../../Daw/components/FileUpload/components/constants';
+} from '@/components/common/FileDrop/constants';
 import { useLoading } from 'react-simplikit';
 
-interface DropHereProps {
+interface BasicFileDropProps {
   onFileDrop: (file: File) => Promise<void>;
   onError?: (error: string) => void;
 }
 
-export function DropHere({ onFileDrop, onError }: DropHereProps) {
+export function BasicFileDrop({ onFileDrop, onError }: BasicFileDropProps) {
   const [isLoading, startLoading] = useLoading();
   const accept = useMemo<Accept>(
     () =>
