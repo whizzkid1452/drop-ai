@@ -18,14 +18,7 @@ export function DawPage() {
       {hasTracks ? (
         <>
           <DawHeader trackCount={tracks.size} />
-          <TrackList
-            onRemove={() => {
-              // @todo: 추가 예정
-            }}
-            onVolumeChange={() => {
-              // @todo: 추가 예정
-            }}
-          />
+          <TrackList />
           <AudioFileDrop
             onAudioFileDrop={() => {
               // @todo: 추가시 트랙에 자동 추가 기능 추가 예정
