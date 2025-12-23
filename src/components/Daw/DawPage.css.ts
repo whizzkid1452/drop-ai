@@ -184,14 +184,6 @@ export const uploadSection = style({
   marginBottom: '24px',
 });
 
-export const trackList = style({
-  position: 'relative',
-  zIndex: 1,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '8px',
-});
-
 export const modalOverlay = style({
   position: 'fixed',
   top: 0,
