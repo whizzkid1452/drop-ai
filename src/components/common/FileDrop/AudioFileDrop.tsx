@@ -5,7 +5,7 @@ import { useCallback } from 'react';
 import { BasicFileDrop } from './BaiscFileDrop';
 
 interface AudioFileDrop {
-  onAudioFileDrop: (audioFile: AudioFile | null) => Promise<void> | void;
+  onAudioFileDrop?: (audioFile: AudioFile | null) => Promise<void> | void;
 }
 
 export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDrop) => {
@@ -30,7 +30,7 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDrop) => {
     <BasicFileDrop
       onFileDrop={async file => {
         const uploadedAudioFile = await onFileDrop(file);
-        await onAudioFileDrop(uploadedAudioFile);
+        await onAudioFileDrop?.(uploadedAudioFile);
       }}
     />
   );
