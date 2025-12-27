@@ -1,6 +1,10 @@
 import { useState, useCallback } from 'react';
-import { exportTracks, downloadBlob, type ExportSettings } from './utils/audioExport';
-import type { AudioFile } from '@/components/Daw/components/FileUpload/components/types';
+import {
+  exportTracks,
+  downloadBlob,
+  type ExportSettings,
+} from './utils/audioExport';
+import type { AudioFile } from '@/types/audioFile';
 import * as styles from './ExportButton.css';
 
 /**
@@ -19,15 +23,15 @@ interface ExportButtonProps {
 
 /**
  * ExportButton 컴포넌트
- * 
+ *
  * 여러 오디오 트랙을 하나의 WAV 파일로 내보내는 버튼입니다.
  * Ardour의 export 기능을 참고하여 웹 환경에 맞게 구현했습니다.
- * 
+ *
  * @param tracks - 내보낼 오디오 트랙 배열
  * @param settings - Export 설정 옵션 (선택적)
  * @param onExportComplete - Export 완료 시 호출되는 콜백 함수 (선택적)
  * @param onExportError - Export 실패 시 호출되는 콜백 함수 (선택적)
- * 
+ *
  * @example
  * ```tsx
  * <ExportButton
@@ -54,7 +58,7 @@ export function ExportButton({
 
   /**
    * Export 실행 함수
-   * 
+   *
    * 모든 트랙을 로드하고 믹싱한 후 WAV 파일로 내보냅니다.
    */
   const handleExport = useCallback(async () => {
@@ -68,7 +72,7 @@ export function ExportButton({
     setProgress(0);
 
     try {
-      const blob = await exportTracks(tracks, settings, (progressInfo) => {
+      const blob = await exportTracks(tracks, settings, progressInfo => {
         setProgress(progressInfo.progress);
       });
 
@@ -124,4 +128,3 @@ export function ExportButton({
     </div>
   );
 }
-

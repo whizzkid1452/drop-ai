@@ -1,4 +1,4 @@
-import type { AudioFile } from '@/components/Daw/components/FileUpload/components/types';
+import type { AudioFile } from '@/types/audioFile';
 import * as styles from '../Track.css';
 
 interface TrackHeaderProps {
@@ -33,4 +33,3 @@ export function TrackHeader({ track, index, onRemove }: TrackHeaderProps) {
     </div>
   );
 }
-

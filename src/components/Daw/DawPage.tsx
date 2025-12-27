@@ -1,25 +1,18 @@
 import { useMemo } from 'react';
-// import { FileUpload } from './components/FileUpload/FileUpload';
+import { useAudioFileStore } from '@/stores/use-audio-file-store';
+import { AudioFileDrop } from '../common/FileDrop/AudioFileDrop';
 import { DawHeader } from './components/DawHeader';
 import { TrackList } from './components/TrackList';
-import { useDawTracks } from './hooks/useDawTracks';
 import * as styles from './DawPage.css';
 
 export function DawPage() {
-  const {
-    tracks,
-    pendingFile,
-    removeTrack,
-    handleFileUploaded,
-    handleEdit,
-    updateTrackVolume,
-  } = useDawTracks();
+  const audioFiles = useAudioFileStore(state => state.audioFiles);
+  const audios = useMemo(() => {
+    return Array.from(audioFiles.values());
+  }, [audioFiles]);
 
-  const hasTracks = useMemo(() => tracks.length > 0, [tracks.length]);
-  const shouldShowUploader = useMemo(
-    () => Boolean(pendingFile || !hasTracks),
-    [hasTracks, pendingFile]
-  );
+  // @todo: audio를 track 개념으로 변환 필요
+  const hasTracks = useMemo(() => audios.length > 0, [audios.length]);
 
   return (
     <div className={styles.container}>
@@ -27,28 +20,30 @@ export function DawPage() {
       <div className={styles.glowEffect} />
       <div className={styles.waveAnimation} />
 
-      {hasTracks && (
+      {hasTracks ? (
         <>
-          <DawHeader trackCount={tracks.length} tracks={tracks} />
+          <DawHeader trackCount={audios.length} tracks={audios} />
           <TrackList
-            tracks={tracks}
-            onRemove={removeTrack}
-            onVolumeChange={updateTrackVolume}
+            tracks={audios}
+            onRemove={() => {
+              // @todo: 추가 예정
+            }}
+            onVolumeChange={() => {
+              // @todo: 추가 예정
+            }}
           />
         </>
-      )}
-      {/* 
-      {shouldShowUploader && (
+      ) : (
         <div className={styles.modalOverlay}>
           <div>
-            <FileUpload
-              onFileUploaded={handleFileUploaded}
-              onEdit={handleEdit}
-              autoReset={true}
+            <AudioFileDrop
+              onAudioFileDrop={() => {
+                // @todo: 추가시 트랙에 자동 추가 기능 추가 예정
+              }}
             />
           </div>
         </div>
-      )} */}
+      )}
     </div>
   );
 }

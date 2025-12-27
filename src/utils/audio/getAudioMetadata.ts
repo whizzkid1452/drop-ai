@@ -1,4 +1,4 @@
-import { ERROR_MESSAGES } from '../components/constants';
+import { ERROR_MESSAGES } from '@/components/common/FileDrop/constants/constants';
 
 export function getFileDuration(file: File): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -22,5 +22,3 @@ export function getFileDuration(file: File): Promise<number> {
     audio.src = url;
   });
 }
-
-

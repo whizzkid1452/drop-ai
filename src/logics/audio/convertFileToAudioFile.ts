@@ -1,7 +1,7 @@
-import type { AudioFile } from '../../components/Daw/components/FileUpload/components/types';
-import { getFileDuration } from '../../components/Daw/components/FileUpload/utils/audioMetadata';
-import { formatDuration } from '@/components/Daw/utils/formatDuration';
-import { formatFileSize } from '@/components/Daw/utils/formatFileSize';
+import type { AudioFile } from '../../types/audioFile';
+import { getFileDuration } from '../../utils/audio/getAudioMetadata';
+import { formatDuration } from '@/utils/audio/formatDuration';
+import { formatFileSize } from '@/utils/audio/formatFileSize';
 
 export async function convertFileToAudioFile(file: File) {
   try {

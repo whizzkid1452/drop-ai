@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { AudioFile } from '../components/FileUpload/components/types';
+import type { AudioFile } from '../../../types/audioFile';
 
 export function useDawTracks() {
   const [tracks, setTracks] = useState<AudioFile[]>([]);
@@ -10,19 +10,19 @@ export function useDawTracks() {
   }, []);
 
   const addTrack = useCallback((file: AudioFile) => {
-    setTracks((prev) => [...prev, file]);
+    setTracks(prev => [...prev, file]);
   }, []);
 
   const removeTrack = useCallback(
     (index: number) => {
-      setTracks((prev) => {
+      setTracks(prev => {
         const newTracks = [...prev];
         disposeFile(newTracks[index]);
         newTracks.splice(index, 1);
         return newTracks;
       });
     },
-    [disposeFile],
+    [disposeFile]
   );
 
   const handleFileUploaded = useCallback(
@@ -30,7 +30,7 @@ export function useDawTracks() {
       disposeFile(pendingFile);
       setPendingFile(file);
     },
-    [disposeFile, pendingFile],
+    [disposeFile, pendingFile]
   );
 
   const handleEdit = useCallback(() => {
@@ -40,7 +40,7 @@ export function useDawTracks() {
   }, [addTrack, pendingFile]);
 
   const updateTrackVolume = useCallback((index: number, volume: number) => {
-    setTracks((prev) => {
+    setTracks(prev => {
       const newTracks = [...prev];
       if (newTracks[index]) {
         newTracks[index] = { ...newTracks[index], volume };
