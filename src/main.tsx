@@ -2,11 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App.tsx';
-import setupLocatorUI from '@locator/runtime';
-
-if (process.env.NODE_ENV === 'development') {
-  setupLocatorUI();
-}
+import './styles/global.css';
 
 // TanStack Query 설정
 const queryClient = new QueryClient({
