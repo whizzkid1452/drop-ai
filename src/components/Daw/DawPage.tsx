@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { FileUpload } from './components/FileUpload/FileUpload';
+// import { FileUpload } from './components/FileUpload/FileUpload';
 import { DawHeader } from './components/DawHeader';
 import { TrackList } from './components/TrackList';
 import { useDawTracks } from './hooks/useDawTracks';
@@ -18,7 +18,7 @@ export function DawPage() {
   const hasTracks = useMemo(() => tracks.length > 0, [tracks.length]);
   const shouldShowUploader = useMemo(
     () => Boolean(pendingFile || !hasTracks),
-    [hasTracks, pendingFile],
+    [hasTracks, pendingFile]
   );
 
   return (
@@ -37,7 +37,7 @@ export function DawPage() {
           />
         </>
       )}
-
+      {/* 
       {shouldShowUploader && (
         <div className={styles.modalOverlay}>
           <div>
@@ -48,7 +48,7 @@ export function DawPage() {
             />
           </div>
         </div>
-      )}
+      )} */}
     </div>
   );
 }

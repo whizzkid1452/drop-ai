@@ -1,4 +1,4 @@
-import * as styles from '../FileUpload.css';
+import * as styles from '../DropPage.css';
 
 interface ErrorMessageProps {
   message: string;
