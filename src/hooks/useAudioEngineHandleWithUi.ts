@@ -36,6 +36,8 @@ export function useAudioEngineHandleWithUi() {
               updater: t => ({ ...t, pan: command.pan }),
             });
             break;
+          case AudioCommandType.GET_TRACK_INFO:
+            break;
         }
       },
     });

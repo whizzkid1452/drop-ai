@@ -39,7 +39,7 @@ export function CliInterface() {
     }
   };
 
-  const executeCommand = () => {
+  const executeCommand = async () => {
     const trimmedInput = input.trim();
     if (!trimmedInput) return;
 
@@ -54,8 +54,13 @@ export function CliInterface() {
       }
 
       // Execute command
-      handleAudioCommand(command as AudioCommand);
-      addLog(`Executed: ${command.type}`, 'success');
+      const result = await handleAudioCommand(command);
+
+      if (result !== undefined) {
+        addLog(JSON.stringify(result, null, 2), 'success');
+      } else {
+        addLog(`Executed: ${command.type}`, 'success');
+      }
       setInput(''); // Clear input on success
     } catch (err) {
       if (err instanceof Error) {

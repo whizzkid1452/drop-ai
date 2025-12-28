@@ -1,5 +1,6 @@
 import { AudioCommandType, type AudioCommand } from '@/types/audioEngine';
 import * as Tone from 'tone';
+import { useTrackStore } from '@/stores/useTrackStore';
 
 /**
  * AudioEngine (Tone.js Version)
@@ -75,8 +76,17 @@ export class AudioEngine {
           command.startTime
         );
         break;
+      case AudioCommandType.GET_TRACK_INFO:
+        result = this.getTrackInfo();
+        break;
     }
     callback?.({ command, result });
+    return result;
+  }
+
+  private getTrackInfo() {
+    const tracks = useTrackStore.getState().getTracks();
+    return Array.from(tracks.entries());
   }
 
   private initTrack(trackId: string) {
