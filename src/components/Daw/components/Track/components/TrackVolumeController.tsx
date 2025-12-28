@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import * as styles from '../Track.css';
 
-interface TrackControlsV2Props {
+interface TrackVolumeControllerProps {
   onVolumeChange: (volume: number) => void;
   initialVolume: number;
 }
 
-export function TrackControlsV2({
+export function TrackVolumeController({
   onVolumeChange,
   initialVolume,
-}: TrackControlsV2Props) {
+}: TrackVolumeControllerProps) {
   const id = crypto.randomUUID();
   const [volume, setVolume] = useState(initialVolume);
 

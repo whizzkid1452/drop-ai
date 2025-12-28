@@ -2,7 +2,7 @@ import { useTrackStore } from '@/stores/useTrackStore';
 import WavesurferPlayer from '@wavesurfer/react';
 import { useMemo, useState } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
-import { TrackControlsV2 } from './Track/components/TrackControlsV2';
+import { TrackVolumeController } from './Track/components/TrackVolumeController';
 import * as styles from './TrackList.css';
 
 export function TrackList() {
@@ -82,7 +82,7 @@ export function TrackList() {
                 width={(track.regions[0].audioFile.duration ?? 1) * 3.1}
               />
               {thisMedia ? (
-                <TrackControlsV2
+                <TrackVolumeController
                   initialVolume={thisMedia.volume}
                   onVolumeChange={vol => {
                     thisMedia.volume = vol;
