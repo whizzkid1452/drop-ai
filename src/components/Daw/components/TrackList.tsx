@@ -8,6 +8,7 @@ import type WaveSurfer from 'wavesurfer.js';
 import { useShallow } from 'zustand/react/shallow';
 import { TrackVolumeController } from './Track/components/TrackVolumeController';
 import * as styles from './TrackList.css';
+import { TrackPanController } from './Track/components/TrackPanController';
 
 export function TrackList() {
   const { tracks, updateTrack } = useTrackStore(
@@ -115,6 +116,19 @@ export function TrackList() {
                       type: 'SET_TRACK_VOLUME',
                       trackId: track.id,
                       volume: vol,
+                    });
+                  }}
+                />
+              ) : null}
+              {thisMedia ? (
+                <TrackPanController
+                  initialPan={track.pan ?? 0}
+                  onPanChange={pan => {
+                    // AudioEngine update is handled via Command Gateway & Callback
+                    handleAudioCommand({
+                      type: 'SET_TRACK_PAN',
+                      trackId: track.id,
+                      pan: pan,
                     });
                   }}
                 />
