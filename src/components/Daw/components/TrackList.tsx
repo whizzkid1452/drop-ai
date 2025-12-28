@@ -2,13 +2,11 @@ import { AudioEngine } from '@/logics/audio/audioEngine';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import { useTrackStore } from '@/stores/useTrackStore';
 import { AudioCommandType, type AudioCommand } from '@/types/audioEngine';
-import WavesurferPlayer from '@wavesurfer/react';
 import { useMemo, useState } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
 import { useShallow } from 'zustand/react/shallow';
-import { TrackVolumeController } from './Track/components/TrackVolumeController';
+import { TrackComponent } from './Track/TrackComponent';
 import * as styles from './TrackList.css';
-import { TrackPanController } from './Track/components/TrackPanController';
 
 export function TrackList() {
   const { tracks, updateTrack } = useTrackStore(
@@ -85,55 +83,32 @@ export function TrackList() {
           const thisMedia = thisWs?.getMediaElement();
 
           return (
-            <>
-              <WavesurferPlayer
-                key={track.id}
-                url={track.regions[0].audioFile.url}
-                onReady={ws => {
-                  // trackStore에 wavesurfer 인스턴스 저장
-                  setWavesurferInstances(prev => {
-                    const newMap = new Map(prev);
-                    newMap.set(track.id, ws);
-                    return newMap;
-                  });
-                  // Mute the visualization audio element because AudioEngine handles the sound
-                  ws.setVolume(0);
-                }}
-                onClick={_wavesurfer => {
-                  // Seek Logic needed later
-                }}
-                dragToSeek={true}
-                minPxPerSec={3}
-                width={(track.regions[0].audioFile.duration ?? 1) * 3.1}
-              />
-              {/* Volume Controller: Updates Store AND AudioEngine */}
-              {thisMedia ? (
-                <TrackVolumeController
-                  initialVolume={track.volume ?? 1}
-                  onVolumeChange={vol => {
-                    // AudioEngine update is handled via Command Gateway & Callback
-                    handleAudioCommand({
-                      type: 'SET_TRACK_VOLUME',
-                      trackId: track.id,
-                      volume: vol,
-                    });
-                  }}
-                />
-              ) : null}
-              {thisMedia ? (
-                <TrackPanController
-                  initialPan={track.pan ?? 0}
-                  onPanChange={pan => {
-                    // AudioEngine update is handled via Command Gateway & Callback
-                    handleAudioCommand({
-                      type: 'SET_TRACK_PAN',
-                      trackId: track.id,
-                      pan: pan,
-                    });
-                  }}
-                />
-              ) : null}
-            </>
+            <TrackComponent
+              track={track}
+              mediaElement={thisMedia ?? null}
+              onReady={ws => {
+                // trackStore에 wavesurfer 인스턴스 저장
+                setWavesurferInstances(prev => {
+                  const newMap = new Map(prev);
+                  newMap.set(track.id, ws);
+                  return newMap;
+                });
+              }}
+              onVolumeChange={vol =>
+                handleAudioCommand({
+                  type: 'SET_TRACK_VOLUME',
+                  trackId: track.id,
+                  volume: vol,
+                })
+              }
+              onPanChange={pan =>
+                handleAudioCommand({
+                  type: 'SET_TRACK_PAN',
+                  trackId: track.id,
+                  pan: pan,
+                })
+              }
+            />
           );
         })}
       </div>
