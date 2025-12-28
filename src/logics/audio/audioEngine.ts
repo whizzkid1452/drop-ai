@@ -138,4 +138,20 @@ export class AudioEngine {
       track.channel.pan.rampTo(pan, 0.1);
     }
   }
+  /** @todo: 추후 불필요한 캡슐화면 public으로 channel에 접근할 수도 있음 */
+  /**
+   * Get current track parameters (Volume, Pan) from the Engine
+   * This serves as the Source of Truth for audio export
+   */
+  public getTrackParams(
+    trackId: string
+  ): { volume: number; pan: number } | null {
+    const track = this.tracks.get(trackId);
+    if (!track) return null;
+
+    return {
+      volume: track.channel.volume.value, // dB
+      pan: track.channel.pan.value,
+    };
+  }
 }
