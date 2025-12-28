@@ -7,6 +7,7 @@ interface TrackStore {
   getTracks: () => Map<string, Track>;
   addTrack: ({ track }: { track: Track }) => void;
   removeTrack: ({ trackId }: { trackId: string }) => void;
+  updateTrack: ({ trackId, updates }: { trackId: string; updates: Partial<Track> }) => void;
 }
 
 export const useTrackStore = create<TrackStore>()((set, get) => ({
@@ -30,6 +31,17 @@ export const useTrackStore = create<TrackStore>()((set, get) => ({
       /** @note 레퍼런스를 변경하기 위해 새로운 맵을 생성 */
       const newTracks = new Map(state.tracks);
       newTracks.delete(trackId);
+      return { tracks: newTracks };
+    });
+  },
+  updateTrack: ({ trackId, updates }) => {
+    set(state => {
+      const track = state.tracks.get(trackId);
+      if (!track) return state;
+
+      /** @note 레퍼런스를 변경하기 위해 새로운 맵을 생성 */
+      const newTracks = new Map(state.tracks);
+      newTracks.set(trackId, { ...track, ...updates });
       return { tracks: newTracks };
     });
   },

@@ -5,12 +5,27 @@ export const container = style({
   width: '100%',
   height: '100vh',
   margin: 0,
-  padding: '24px',
+  padding: 0,
   backgroundColor: '#0a0a0a',
   minHeight: '100vh',
   position: 'relative',
-  overflow: 'auto',
+  overflow: 'hidden',
   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+});
+
+export const mainLayout = style({
+  display: 'flex',
+  width: '100%',
+  height: '100vh',
+  position: 'relative',
+  zIndex: 1,
+});
+
+export const contentArea = style({
+  flex: 1,
+  padding: '24px',
+  overflowY: 'auto',
+  overflowX: 'hidden',
 });
 
 export const backgroundGrid = style({
