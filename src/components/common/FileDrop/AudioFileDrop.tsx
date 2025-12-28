@@ -34,6 +34,7 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDrop) => {
           id: crypto.randomUUID(),
           regions: [
             {
+              id: crypto.randomUUID(),
               startTime: 0,
               endTime: uploadedAudioFile.duration ?? 0,
               audioFile: uploadedAudioFile,

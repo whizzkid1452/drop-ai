@@ -1,12 +1,13 @@
-import type { AudioFile } from "./audioFile";
+import type { AudioFile } from './audioFile';
 
 export const RegionStatus = {
   active: 'active',
   inactive: 'inactive',
 } as const;
-export type RegionStatus = typeof RegionStatus[keyof typeof RegionStatus];
+export type RegionStatus = (typeof RegionStatus)[keyof typeof RegionStatus];
 
 export interface Region {
+  id: string;
   startTime: number;
   endTime: number;
   audioFile: AudioFile;
@@ -19,7 +20,7 @@ export const TrackStatus = {
   solo: 'solo',
   normal: 'normal',
 } as const;
-export type TrackStatus = typeof TrackStatus[keyof typeof TrackStatus];
+export type TrackStatus = (typeof TrackStatus)[keyof typeof TrackStatus];
 
 export interface Track {
   id: string;
