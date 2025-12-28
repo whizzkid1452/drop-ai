@@ -1,5 +1,3 @@
-import { ERROR_MESSAGES } from '@/components/common/FileDrop/constants/constants';
-
 export function getFileDuration(file: File): Promise<number> {
   return new Promise((resolve, reject) => {
     const audio = new Audio();
@@ -16,7 +14,7 @@ export function getFileDuration(file: File): Promise<number> {
 
     audio.addEventListener('error', () => {
       cleanup();
-      reject(new Error(ERROR_MESSAGES.FILE_READ_ERROR));
+      reject(new Error('Unable to read the file.'));
     });
 
     audio.src = url;

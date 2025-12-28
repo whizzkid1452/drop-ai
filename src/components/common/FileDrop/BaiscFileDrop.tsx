@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { useDropzone, type Accept, type FileRejection } from 'react-dropzone';
 import * as styles from './FileDrop.css';
-import { UI_MESSAGES } from '@/components/common/FileDrop/constants/constants';
 
 import { useLoading } from 'react-simplikit';
 import {
@@ -62,9 +61,11 @@ export function BasicFileDrop({ onFileDrop, onError }: BasicFileDropProps) {
       <input {...getInputProps({ className: styles.fileInput })} />
       <div className={styles.dropZoneContent}>
         <h2 className={styles.title}>
-          {isLoading ? UI_MESSAGES.TITLE_PROCESSING : UI_MESSAGES.TITLE_UPLOAD}
+          {isLoading ? 'Processing...' : 'Upload Audio File'}
         </h2>
-        <p className={styles.subtitle}>{UI_MESSAGES.SUBTITLE}</p>
+        <p className={styles.subtitle}>
+          Drop an audio file here, or click to select one
+        </p>
         {isLoading && <div className={styles.loadingIndicator} />}
         {!isLoading && (
           <button
@@ -75,7 +76,7 @@ export function BasicFileDrop({ onFileDrop, onError }: BasicFileDropProps) {
               open();
             }}
           >
-            {UI_MESSAGES.BUTTON_SELECT}
+            Select File
           </button>
         )}
       </div>

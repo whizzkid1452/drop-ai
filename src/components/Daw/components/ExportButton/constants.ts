@@ -1,6 +1,3 @@
-/** 기본 샘플레이트 (Hz) */
-export const DEFAULT_SAMPLE_RATE = 44100;
-
 /** 기본 비트 깊이 */
 export const DEFAULT_BIT_DEPTH: 16 | 24 | 32 | 'float' = 16;
 
@@ -35,5 +32,3 @@ export const BYTES_PER_SAMPLE: Record<16 | 24 | 32 | 'float', number> = {
 /** 오디오 샘플 범위 제한 */
 export const AUDIO_SAMPLE_MIN = -1;
 export const AUDIO_SAMPLE_MAX = 1;
-
-

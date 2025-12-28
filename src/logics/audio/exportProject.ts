@@ -2,7 +2,7 @@ import * as Tone from 'tone';
 import { AudioEngine } from './audioEngine';
 import { audioBufferToWav } from '@/components/Daw/components/ExportButton/utils/wavConverter';
 import type { Track } from '@/types/track';
-import { loadAndDecodeAudioBuffer } from './toneUtils';
+import { loadAndDecodeAudioBuffer } from './loadAndDecodeAudioBuffer';
 
 /**
  * 프로젝트 전체를 오디오 파일로 내보냅니다.
