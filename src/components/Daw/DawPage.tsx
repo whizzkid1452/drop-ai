@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { AudioFileDrop } from '../common/FileDrop/AudioFileDrop';
 import { DawHeader } from './components/DawHeader';
 import { TrackList } from './components/TrackList';
+import { AIChat } from '../AIChat/AIChat';
 import * as styles from './DawPage.css';
 import { useTrackStore } from '@/stores/useTrackStore';
 
@@ -16,15 +17,20 @@ export function DawPage() {
       <div className={styles.waveAnimation} />
 
       {hasTracks ? (
-        <>
-          <DawHeader trackCount={tracks.size} />
-          <TrackList />
-          <AudioFileDrop
-            onAudioFileDrop={() => {
-              // @todo: 추가시 트랙에 자동 추가 기능 추가 예정
-            }}
-          />
-        </>
+        <div className={styles.mainContent}>
+          <div className={styles.tracksSection}>
+            <DawHeader trackCount={tracks.size} />
+            <TrackList />
+            <AudioFileDrop
+              onAudioFileDrop={() => {
+                // @todo: 추가시 트랙에 자동 추가 기능 추가 예정
+              }}
+            />
+          </div>
+          <div className={styles.aiChatSection}>
+            <AIChat />
+          </div>
+        </div>
       ) : (
         <div className={styles.modalOverlay}>
           <div>

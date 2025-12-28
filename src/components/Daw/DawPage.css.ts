@@ -199,3 +199,25 @@ export const modalOverlay = style({
   padding: '16px',
 });
 
+export const mainContent = style({
+  position: 'relative',
+  zIndex: 1,
+  display: 'grid',
+  gridTemplateColumns: '1fr 400px',
+  gap: '24px',
+  height: 'calc(100vh - 48px)',
+});
+
+export const tracksSection = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '24px',
+  overflow: 'hidden',
+});
+
+export const aiChatSection = style({
+  display: 'flex',
+  flexDirection: 'column',
+  overflow: 'hidden',
+});
+
