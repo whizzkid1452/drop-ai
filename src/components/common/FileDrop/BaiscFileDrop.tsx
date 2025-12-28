@@ -1,10 +1,7 @@
 import { useMemo } from 'react';
 import { useDropzone, type Accept, type FileRejection } from 'react-dropzone';
 import * as styles from './FileDrop.css';
-import {
-  UI_MESSAGES,
-  ERROR_MESSAGES,
-} from '@/components/common/FileDrop/constants/constants';
+import { UI_MESSAGES } from '@/components/common/FileDrop/constants/constants';
 
 import { useLoading } from 'react-simplikit';
 import {
@@ -15,7 +12,7 @@ import {
 
 interface BasicFileDropProps {
   onFileDrop: (file: File) => Promise<void>;
-  onError?: (error: string) => void;
+  onError?: (rejections: FileRejection[]) => void;
 }
 
 export function BasicFileDrop({ onFileDrop, onError }: BasicFileDropProps) {
@@ -47,11 +44,12 @@ export function BasicFileDrop({ onFileDrop, onError }: BasicFileDropProps) {
         // react-dropzone이 이미 에러 메시지를 제공하므로 직접 사용
         // 필요시 커스텀 메시지로 오버라이드
         if (error.code === 'file-too-large') {
-          onError?.(ERROR_MESSAGES.FILE_TOO_LARGE(MAX_FILE_SIZE_MB));
+          alert(`File size is too big. Max file size:${MAX_FILE_SIZE_MB}MB`);
         } else {
-          onError?.(error.message || 'File upload failed.');
+          alert(`File upload failed. ${error.code}: ${error.message}`);
         }
       }
+      onError?.(fileRejections);
     },
   });
 

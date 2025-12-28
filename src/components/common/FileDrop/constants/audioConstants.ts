@@ -9,5 +9,5 @@ export const ACCEPTED_AUDIO_TYPES = [
   'audio/flac',
 ] as const;
 
-export const MAX_FILE_SIZE = 100 * 1024 * 1024;
+export const MAX_FILE_SIZE = 500 * 1024 * 1024;
 export const MAX_FILE_SIZE_MB = MAX_FILE_SIZE / (1024 * 1024);
