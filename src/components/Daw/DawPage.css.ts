@@ -5,12 +5,65 @@ export const container = style({
   width: '100%',
   height: '100vh',
   margin: 0,
-  padding: '24px',
   backgroundColor: '#0a0a0a',
   minHeight: '100vh',
   position: 'relative',
+  display: 'flex',
+  fontFamily:
+    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  overflow: 'hidden',
+});
+
+export const mainContent = style({
+  flex: 1,
+  height: '100%',
+  position: 'relative',
+  padding: '24px',
   overflow: 'auto',
-  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+});
+
+export const cliPanel = style({
+  width: '350px',
+  height: '100%',
+  flexShrink: 0,
+  zIndex: 10,
+  backgroundColor: '#0f0f0f',
+  transition: 'width 0.3s ease-in-out, transform 0.3s ease-in-out',
+  overflow: 'hidden',
+  position: 'relative',
+});
+
+export const cliPanelCollapsed = style({
+  width: '0px',
+  borderLeft: 'none',
+});
+
+export const cliToggleButton = style({
+  position: 'absolute',
+  bottom: '20px',
+  right: '25px',
+  zIndex: 20,
+  width: '32px',
+  height: '32px',
+  borderRadius: '50%',
+  backgroundColor: '#1a1a1a',
+  border: '1px solid #333',
+  color: '#e0e0e0',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
+  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+  ':hover': {
+    backgroundColor: '#333',
+    transform: 'scale(1.1)',
+  },
+});
+
+export const cliToggleButtonOpen = style({
+  right: '360px',
+  backgroundColor: '#333',
 });
 
 export const backgroundGrid = style({
@@ -36,7 +89,8 @@ export const glowEffect = style({
   transform: 'translate(-50%, -50%)',
   width: '800px',
   height: '800px',
-  background: 'radial-gradient(circle, rgba(255, 255, 255, 0.02) 0%, transparent 70%)',
+  background:
+    'radial-gradient(circle, rgba(255, 255, 255, 0.02) 0%, transparent 70%)',
   borderRadius: '50%',
   pointerEvents: 'none',
   filter: 'blur(80px)',
@@ -49,7 +103,8 @@ export const waveAnimation = style({
   left: 0,
   width: '100%',
   height: '150px',
-  background: 'linear-gradient(to top, rgba(0, 0, 0, 0.3) 0%, transparent 100%)',
+  background:
+    'linear-gradient(to top, rgba(0, 0, 0, 0.3) 0%, transparent 100%)',
   pointerEvents: 'none',
   animation: `${wave} 4s ease-in-out infinite`,
   zIndex: 0,
@@ -80,7 +135,8 @@ export const primaryButton = style({
   color: '#ffffff',
   cursor: 'pointer',
   fontSize: '0.95rem',
-  transition: 'transform 0.1s ease, box-shadow 0.2s ease, border-color 0.2s ease',
+  transition:
+    'transform 0.1s ease, box-shadow 0.2s ease, border-color 0.2s ease',
   boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
   selectors: {
     '&:hover': {
@@ -198,4 +254,3 @@ export const modalOverlay = style({
   zIndex: 10,
   padding: '16px',
 });
-
