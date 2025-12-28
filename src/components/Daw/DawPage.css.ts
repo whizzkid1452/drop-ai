@@ -38,6 +38,22 @@ export const cliPanelCollapsed = style({
   borderLeft: 'none',
 });
 
+export const leftPanel = style({
+  width: '300px',
+  height: '100%',
+  flexShrink: 0,
+  zIndex: 10,
+  backgroundColor: '#0f0f0f',
+  transition: 'width 0.3s ease-in-out, transform 0.3s ease-in-out',
+  overflow: 'hidden',
+  position: 'relative',
+});
+
+export const leftPanelCollapsed = style({
+  width: '0px',
+  borderRight: 'none',
+});
+
 export const cliToggleButton = style({
   position: 'absolute',
   bottom: '20px',
@@ -63,6 +79,34 @@ export const cliToggleButton = style({
 
 export const cliToggleButtonOpen = style({
   right: '360px',
+  backgroundColor: '#333',
+});
+
+export const leftToggleButton = style({
+  position: 'absolute',
+  bottom: '20px',
+  left: '25px',
+  zIndex: 20,
+  width: '32px',
+  height: '32px',
+  borderRadius: '50%',
+  backgroundColor: '#1a1a1a',
+  border: '1px solid #333',
+  color: '#e0e0e0',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
+  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+  ':hover': {
+    backgroundColor: '#333',
+    transform: 'scale(1.1)',
+  },
+});
+
+export const leftToggleButtonOpen = style({
+  left: '310px',
   backgroundColor: '#333',
 });
 

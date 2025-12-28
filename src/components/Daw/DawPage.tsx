@@ -3,6 +3,7 @@ import { AudioFileDrop } from '../common/FileDrop/AudioFileDrop';
 import { DawHeader } from './components/DawHeader';
 import { TrackList } from './components/TrackList';
 import { CliInterface } from './components/CliInterface';
+import { TrackInfoSidebar } from './components/TrackInfoSidebar';
 import * as styles from './DawPage.css';
 import { useTrackStore } from '@/stores/useTrackStore';
 
@@ -10,10 +11,22 @@ export function DawPage() {
   const tracks = useTrackStore(state => state.tracks);
   const hasTracks = useMemo(() => tracks.size > 0, [tracks.size]);
   const [isCliOpen, setIsCliOpen] = useState(false);
+  const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
 
   return (
     <div className={styles.container}>
-      {/* CLI Toggle Button */}
+      {/* Left (Track Info) Toggle Button */}
+      <button
+        className={`${styles.leftToggleButton} ${
+          isTrackInfoOpen ? styles.leftToggleButtonOpen : ''
+        }`}
+        onClick={() => setIsTrackInfoOpen(!isTrackInfoOpen)}
+        title={isTrackInfoOpen ? 'Close Track Info' : 'Open Track Info'}
+      >
+        {isTrackInfoOpen ? '←' : '→'}
+      </button>
+
+      {/* Right (CLI) Toggle Button */}
       <button
         className={`${styles.cliToggleButton} ${isCliOpen ? styles.cliToggleButtonOpen : ''}`}
         onClick={() => setIsCliOpen(!isCliOpen)}
@@ -21,6 +34,14 @@ export function DawPage() {
       >
         {isCliOpen ? '→' : '←'}
       </button>
+
+      <div
+        className={`${styles.leftPanel} ${
+          !isTrackInfoOpen ? styles.leftPanelCollapsed : ''
+        }`}
+      >
+        <TrackInfoSidebar />
+      </div>
 
       <div className={styles.mainContent}>
         <div className={styles.backgroundGrid} />
