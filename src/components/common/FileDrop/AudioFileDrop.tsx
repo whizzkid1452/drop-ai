@@ -5,18 +5,20 @@ import { useTrackStore } from '@/stores/useTrackStore';
 import { RegionStatus, TrackStatus } from '@/types/track';
 import { useCallback } from 'react';
 import { BasicFileDrop } from './BaiscFileDrop';
+import { AudioEngine } from '@/logics/audio/audioEngine';
 
-interface AudioFileDrop {
+interface AudioFileDropProps {
   onAudioFileDrop?: (audioFile: AudioFile | null) => Promise<void> | void;
 }
 
-export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDrop) => {
+export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
   const { addAudioFile, getAudioFile } = useAudioFileStore();
   const { addTrack } = useTrackStore();
   const onFileDrop = useCallback(
     async (file: File) => {
       const audioFileData = await convertFileToAudioFile(file);
       if (audioFileData == null) {
+        onAudioFileDrop?.(null);
         return null;
       }
       addAudioFile({
@@ -25,16 +27,19 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDrop) => {
       });
       const uploadedAudioFile = getAudioFile({ url: audioFileData.url });
       if (uploadedAudioFile == null) {
+        onAudioFileDrop?.(null);
         return null;
       }
 
-      // AudioFileDrop은 자동으로 Track을 추가합니다.
+      const trackId = crypto.randomUUID();
+      const regionId = crypto.randomUUID();
+
       addTrack({
         track: {
-          id: crypto.randomUUID(),
+          id: trackId,
           regions: [
             {
-              id: crypto.randomUUID(),
+              id: regionId,
               startTime: 0,
               endTime: uploadedAudioFile.duration ?? 0,
               audioFile: uploadedAudioFile,
@@ -47,16 +52,29 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDrop) => {
         },
       });
 
+      // Direct Dependency: Load into AudioEngine immediately
+      AudioEngine.getInstance().execute({
+        command: {
+          type: 'LOAD_REGION',
+          trackId,
+          regionId,
+          url: uploadedAudioFile.url,
+          startTime: 0,
+        },
+      });
+
+      // Simple callback
+      onAudioFileDrop?.(uploadedAudioFile);
+
       return uploadedAudioFile;
     },
-    [addAudioFile, getAudioFile, addTrack]
+    [addAudioFile, getAudioFile, addTrack, onAudioFileDrop]
   );
 
   return (
     <BasicFileDrop
       onFileDrop={async file => {
-        const uploadedAudioFile = await onFileDrop(file);
-        await onAudioFileDrop?.(uploadedAudioFile);
+        await onFileDrop(file);
       }}
     />
   );
