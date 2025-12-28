@@ -1,5 +1,8 @@
-import type { Track } from '@/types/track';
+import type { Track, Region } from '@/types/track';
 import { create } from 'zustand';
+
+type NewRegion = Omit<Region, 'id'>;
+type NewTrack = Omit<Track, 'id' | 'regions'> & { regions: NewRegion[] };
 
 interface TrackStore {
   tracks: Map<string, Track>;
@@ -12,7 +15,7 @@ interface TrackStore {
     trackId: string;
     updater: (track: Track) => Track;
   }) => void;
-  addTrack: ({ track }: { track: Track }) => void;
+  addTrack: ({ track }: { track: NewTrack }) => Track;
   removeTrack: ({ trackId }: { trackId: string }) => void;
 }
 
@@ -39,12 +42,27 @@ export const useTrackStore = create<TrackStore>()((set, get) => ({
     });
   },
   addTrack: ({ track }) => {
+    const trackId = crypto.randomUUID();
+
+    const newRegions = track.regions.map(region => ({
+      ...region,
+      id: crypto.randomUUID(),
+    }));
+
+    const newTrack: Track = {
+      ...track,
+      id: trackId,
+      regions: newRegions,
+    };
+
     set(state => {
       /** @note 레퍼런스를 변경하기 위해 새로운 맵을 생성 */
       const newTracks = new Map(state.tracks);
-      newTracks.set(track.id, track);
+      newTracks.set(trackId, newTrack);
       return { tracks: newTracks };
     });
+
+    return newTrack;
   },
   removeTrack: ({ trackId }) => {
     set(state => {

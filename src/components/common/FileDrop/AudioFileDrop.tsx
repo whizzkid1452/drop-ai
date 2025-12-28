@@ -2,7 +2,6 @@ import type { AudioFile } from '@/types/audioFile';
 import { convertFileToAudioFile } from '@/logics/audio/convertFileToAudioFile';
 import { useAudioFileStore } from '@/stores/useAudioFileStore';
 import { useTrackStore } from '@/stores/useTrackStore';
-import { RegionStatus, TrackStatus } from '@/types/track';
 import { useCallback } from 'react';
 import { BasicFileDrop } from './BaiscFileDrop';
 import { AudioEngine } from '@/logics/audio/audioEngine';
@@ -10,6 +9,8 @@ import { AudioEngine } from '@/logics/audio/audioEngine';
 interface AudioFileDropProps {
   onAudioFileDrop?: (audioFile: AudioFile | null) => Promise<void> | void;
 }
+
+import { RegionStatus, TrackStatus } from '@/types/track';
 
 export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
   const { addAudioFile, getAudioFile } = useAudioFileStore();
@@ -31,15 +32,10 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
         return null;
       }
 
-      const trackId = crypto.randomUUID();
-      const regionId = crypto.randomUUID();
-
-      addTrack({
+      const newTrack = addTrack({
         track: {
-          id: trackId,
           regions: [
             {
-              id: regionId,
               startTime: 0,
               endTime: uploadedAudioFile.duration ?? 0,
               audioFile: uploadedAudioFile,
@@ -51,6 +47,9 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
           pan: 0,
         },
       });
+
+      const trackId = newTrack.id;
+      const regionId = newTrack.regions[0].id;
 
       // Direct Dependency: Load into AudioEngine immediately
       AudioEngine.getInstance().execute({
