@@ -1,19 +1,5 @@
 import { style } from '@vanilla-extract/css';
 
-export const track = style({
-  display: 'flex',
-  flexDirection: 'column',
-  border: '1px solid #333333',
-  borderRadius: '2px',
-  padding: '12px',
-  backgroundColor: '#0a0a0a',
-  transition: 'all 0.15s ease',
-  ':hover': {
-    backgroundColor: '#0f0f0f',
-    borderColor: '#444444',
-  },
-});
-
 export const trackHeader = style({
   display: 'flex',
   justifyContent: 'space-between',
@@ -87,22 +73,6 @@ export const removeButton = style({
   },
 });
 
-export const trackContent = style({
-  width: '100%',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '12px',
-});
-
-export const waveformContainer = style({
-  width: '100%',
-  minHeight: '120px',
-  backgroundColor: '#0f0f10',
-  border: '1px solid #1f1f1f',
-  borderRadius: '4px',
-  overflow: 'hidden',
-});
-
 export const controls = style({
   display: 'flex',
   flexWrap: 'wrap',
@@ -165,5 +135,3 @@ export const sliderValue = style({
   minWidth: '40px',
   textAlign: 'right',
 });
-
-

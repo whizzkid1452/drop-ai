@@ -11,7 +11,6 @@ export function DawHeader({ trackCount }: DawHeaderProps) {
       <h1 className={styles.title}>트랙 목록</h1>
       <div className={styles.headerRight}>
         <span className={styles.trackCount}>{trackCount}개 트랙</span>
-        {/* @todo: 추후 추가 예정 */}
         <ExportButton />
       </div>
     </div>
