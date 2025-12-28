@@ -50,6 +50,7 @@ export function TrackList() {
       <div className={styles.tracksContainer}>
         {trackArray.map(track => {
           const thisWs = wavesurferInstances.get(track.id);
+          const thisMedia = thisWs?.getMediaElement();
           return (
             <>
               <WavesurferPlayer
@@ -65,9 +66,11 @@ export function TrackList() {
                 }}
                 onClick={wavesurfer => {
                   wavesurferInstances.forEach(ws => {
+                    /** 동일한 트랙이면 패스 */
                     if (ws === wavesurfer) {
                       return;
                     }
+                    /** 동일한 시간이면 패스(무한 루프 방지) */
                     if (ws.getCurrentTime() === wavesurfer.getCurrentTime()) {
                       return;
                     }
@@ -78,11 +81,11 @@ export function TrackList() {
                 minPxPerSec={3}
                 width={(track.regions[0].audioFile.duration ?? 1) * 3.1}
               />
-              {thisWs ? (
+              {thisMedia ? (
                 <TrackControlsV2
-                  initialVolume={thisWs.getVolume()}
+                  initialVolume={thisMedia.volume}
                   onVolumeChange={vol => {
-                    thisWs.setVolume(vol);
+                    thisMedia.volume = vol;
                   }}
                 />
               ) : null}
