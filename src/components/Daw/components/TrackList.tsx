@@ -1,7 +1,6 @@
-import { AudioEngine } from '@/logics/audio/audioEngine';
-import { usePlaybackStore } from '@/stores/usePlaybackStore';
+import { useAudioEngineHandleWithUi } from '@/hooks/useAudioEngineHandleWithUi';
 import { useTrackStore } from '@/stores/useTrackStore';
-import { AudioCommandType, type AudioCommand } from '@/types/audioEngine';
+import { AudioCommandType } from '@/types/audioEngine';
 import { useMemo, useState } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
 import { useShallow } from 'zustand/react/shallow';
@@ -9,53 +8,14 @@ import { TrackComponent } from './Track/TrackComponent';
 import * as styles from './TrackList.css';
 
 export function TrackList() {
-  const { tracks, updateTrack } = useTrackStore(
-    useShallow(state => ({
-      tracks: state.tracks,
-      updateTrack: state.updateTrack,
-    }))
-  );
+  const tracks = useTrackStore(useShallow(state => state.tracks));
   const trackArray = useMemo(() => Array.from(tracks.values()), [tracks]);
 
   const [wavesurferInstances, setWavesurferInstances] = useState<
     Map<string, WaveSurfer>
   >(new Map());
 
-  const { setIsPlaying, setCurrentTime } = usePlaybackStore();
-
-  const handleAudioCommand = (command: AudioCommand) => {
-    AudioEngine.getInstance().execute({
-      command,
-      callback: ({ command: cmd }) => {
-        // Update Store based on command type
-        switch (cmd.type) {
-          case AudioCommandType.PLAY:
-            setIsPlaying(true);
-            break;
-          case AudioCommandType.PAUSE:
-            setIsPlaying(false);
-            break;
-          case AudioCommandType.STOP:
-            setIsPlaying(false);
-            setCurrentTime(0);
-            break;
-          case AudioCommandType.SET_TRACK_VOLUME:
-            updateTrack({
-              trackId: cmd.trackId,
-              updater: t => ({ ...t, volume: cmd.volume }),
-            });
-            break;
-          case AudioCommandType.SET_TRACK_PAN:
-            updateTrack({
-              trackId: cmd.trackId,
-              updater: t => ({ ...t, pan: cmd.pan }),
-            });
-            break;
-        }
-      },
-    });
-  };
-
+  const { handleAudioCommand } = useAudioEngineHandleWithUi();
   // Note: Manual AudioEngine initialization is now handled by useAudioSync
 
   const handlePlayAll = () => {
