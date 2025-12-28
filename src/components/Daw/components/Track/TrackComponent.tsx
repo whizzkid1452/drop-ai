@@ -1,8 +1,8 @@
-import WavesurferPlayer from '@wavesurfer/react';
-import { TrackVolumeController } from './components/TrackVolumeController';
-import { TrackPanController } from './components/TrackPanController';
-import type WaveSurfer from 'wavesurfer.js';
 import type { Track } from '@/types/track';
+import WavesurferPlayer from '@wavesurfer/react';
+import type WaveSurfer from 'wavesurfer.js';
+import { TrackPanController } from './components/TrackPanController';
+import { TrackVolumeController } from './components/TrackVolumeController';
 
 export const TrackComponent = ({
   mediaElement,
@@ -36,15 +36,12 @@ export const TrackComponent = ({
       {/* Volume Controller: Updates Store AND AudioEngine */}
       {mediaElement ? (
         <TrackVolumeController
-          initialVolume={track.volume ?? 1}
+          volume={track.volume ?? 1}
           onVolumeChange={onVolumeChange}
         />
       ) : null}
       {mediaElement ? (
-        <TrackPanController
-          initialPan={track.pan ?? 0}
-          onPanChange={onPanChange}
-        />
+        <TrackPanController pan={track.pan ?? 0} onPanChange={onPanChange} />
       ) : null}
     </>
   );

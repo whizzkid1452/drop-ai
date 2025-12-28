@@ -1,18 +1,15 @@
-import { useState } from 'react';
 import * as styles from '../Track.css';
 
 interface TrackVolumeControllerProps {
   onVolumeChange: (volume: number) => void;
-  initialVolume: number;
+  volume: number;
 }
 
 export function TrackVolumeController({
   onVolumeChange,
-  initialVolume,
+  volume,
 }: TrackVolumeControllerProps) {
   const id = crypto.randomUUID();
-  const [volume, setVolume] = useState(initialVolume);
-
   return (
     <div className={styles.controls}>
       <div className={styles.controlGroup}>
@@ -28,7 +25,6 @@ export function TrackVolumeController({
           value={volume * 100}
           onChange={event => {
             onVolumeChange(Number(event.target.value) / 100);
-            setVolume(Number(event.target.value) / 100);
           }}
           className={styles.slider}
         />

@@ -31,10 +31,11 @@ export const useTrackStore = create<TrackStore>()((set, get) => ({
         alert('Track not found');
         return {};
       }
-      /** @note 특정 트랙만 변경하기 때문에, 해당 트랙만 레퍼런스 변경 */
+      /** @todo 특정 트랙만 변경하기 때문에, 해당 트랙만 레퍼런스 변경 */
+      const newTracks = new Map(state.tracks);
       const newTrack: Track = { ...updater(track) };
-      state.tracks.set(trackId, newTrack);
-      return {};
+      newTracks.set(trackId, newTrack);
+      return { tracks: newTracks };
     });
   },
   addTrack: ({ track }) => {

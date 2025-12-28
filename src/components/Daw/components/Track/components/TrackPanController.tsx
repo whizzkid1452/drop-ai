@@ -1,17 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import * as styles from '../Track.css';
 
 interface TrackPanControllerProps {
   onPanChange: (volume: number) => void;
-  initialPan: number;
+  pan: number;
 }
 
 export function TrackPanController({
   onPanChange: onPanChange,
-  initialPan,
+  pan,
 }: TrackPanControllerProps) {
   const id = crypto.randomUUID();
-  const [pan, setPan] = useState(initialPan);
 
   const sliderValue = useMemo(() => {
     if (pan === -1) {
@@ -41,7 +40,6 @@ export function TrackPanController({
           value={pan * 100}
           onChange={event => {
             onPanChange(Number(event.target.value) / 100);
-            setPan(Number(event.target.value) / 100);
           }}
           className={styles.slider}
         />
