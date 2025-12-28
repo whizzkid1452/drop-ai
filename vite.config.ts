@@ -15,4 +15,15 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    headers: {
+      // WebGPU 및 SharedArrayBuffer 사용을 위한 Cross-Origin Isolation 설정
+      // WebLLM이 브라우저에서 정상 작동하기 위해 필수
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+      'Cross-Origin-Opener-Policy': 'same-origin',
+    },
+  },
+  optimizeDeps: {
+    exclude: ['@mlc-ai/web-llm'],
+  },
 });
