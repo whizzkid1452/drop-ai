@@ -2,11 +2,17 @@ import { useTrackStore } from '@/stores/useTrackStore';
 import WavesurferPlayer from '@wavesurfer/react';
 import { useMemo, useState } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
+import { useShallow } from 'zustand/react/shallow';
 import { TrackVolumeController } from './Track/components/TrackVolumeController';
 import * as styles from './TrackList.css';
 
 export function TrackList() {
-  const tracks = useTrackStore(state => state.tracks);
+  const { tracks, updateTrack } = useTrackStore(
+    useShallow(state => ({
+      tracks: state.tracks,
+      updateTrack: state.updateTrack,
+    }))
+  );
   const trackArray = useMemo(() => Array.from(tracks.values()), [tracks]);
 
   const [wavesurferInstances, setWavesurferInstances] = useState<
@@ -86,6 +92,15 @@ export function TrackList() {
                   initialVolume={thisMedia.volume}
                   onVolumeChange={vol => {
                     thisMedia.volume = vol;
+                    if (track.volume !== vol) {
+                      updateTrack({
+                        trackId: track.id,
+                        updater: track => ({
+                          ...track,
+                          volume: vol,
+                        }),
+                      });
+                    }
                   }}
                 />
               ) : null}

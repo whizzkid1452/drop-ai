@@ -5,6 +5,13 @@ interface TrackStore {
   tracks: Map<string, Track>;
   getTrack: ({ trackId }: { trackId: string }) => Track | undefined;
   getTracks: () => Map<string, Track>;
+  updateTrack: ({
+    trackId,
+    updater,
+  }: {
+    trackId: string;
+    updater: (track: Track) => Track;
+  }) => void;
   addTrack: ({ track }: { track: Track }) => void;
   removeTrack: ({ trackId }: { trackId: string }) => void;
 }
@@ -16,6 +23,19 @@ export const useTrackStore = create<TrackStore>()((set, get) => ({
   },
   getTrack: ({ trackId }) => {
     return get().tracks.get(trackId);
+  },
+  updateTrack: ({ trackId, updater }) => {
+    set(state => {
+      const track = state.tracks.get(trackId);
+      if (!track) {
+        alert('Track not found');
+        return {};
+      }
+      /** @note 특정 트랙만 변경하기 때문에, 해당 트랙만 레퍼런스 변경 */
+      const newTrack: Track = { ...updater(track) };
+      state.tracks.set(trackId, newTrack);
+      return {};
+    });
   },
   addTrack: ({ track }) => {
     set(state => {
