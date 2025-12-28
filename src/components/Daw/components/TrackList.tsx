@@ -1,4 +1,7 @@
+import { AudioEngine } from '@/logics/audio/audioEngine';
+import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import { useTrackStore } from '@/stores/useTrackStore';
+import { AudioCommandType, type AudioCommand } from '@/types/audioEngine';
 import WavesurferPlayer from '@wavesurfer/react';
 import { useMemo, useState } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
@@ -19,44 +22,67 @@ export function TrackList() {
     Map<string, WaveSurfer>
   >(new Map());
 
+  const { setIsPlaying, setCurrentTime } = usePlaybackStore();
+
+  const handleAudioCommand = (command: AudioCommand) => {
+    AudioEngine.getInstance().execute({
+      command,
+      callback: ({ command: cmd }) => {
+        // Update Store based on command type
+        switch (cmd.type) {
+          case AudioCommandType.PLAY:
+            setIsPlaying(true);
+            break;
+          case AudioCommandType.PAUSE:
+            setIsPlaying(false);
+            break;
+          case AudioCommandType.STOP:
+            setIsPlaying(false);
+            setCurrentTime(0);
+            break;
+          case AudioCommandType.SET_TRACK_VOLUME:
+            updateTrack({
+              trackId: cmd.trackId,
+              updater: t => ({ ...t, volume: cmd.volume }),
+            });
+            break;
+          case AudioCommandType.SET_TRACK_PAN:
+            updateTrack({
+              trackId: cmd.trackId,
+              updater: t => ({ ...t, pan: cmd.pan }),
+            });
+            break;
+        }
+      },
+    });
+  };
+
+  // Note: Manual AudioEngine initialization is now handled by useAudioSync
+
+  const handlePlayAll = () => {
+    handleAudioCommand({ type: AudioCommandType.PLAY });
+
+    // Visualize Sync (Optional: Start wavesurfer cursors)
+    wavesurferInstances.forEach(ws => ws.play());
+  };
+
+  const handlePauseAll = () => {
+    handleAudioCommand({ type: AudioCommandType.PAUSE });
+
+    // Visualize Sync
+    wavesurferInstances.forEach(ws => ws.pause());
+  };
+
   return (
     <div className={styles.trackList}>
       {/* @todo: 추후 디자인 수정 예정 */}
-      <button
-        onClick={() => {
-          wavesurferInstances.forEach(ws => {
-            // ws.play();
-            // ws는 visualize만 책임지기 때문에 WebAudioApi로 직접 재생합니다
-
-            const mediaElement = ws.getMediaElement();
-            mediaElement.play();
-            const audioContext = new AudioContext();
-            const source = audioContext.createMediaElementSource(mediaElement);
-            const panner = audioContext.createStereoPanner();
-            panner.pan.value = 1;
-            source.connect(panner);
-            panner.connect(audioContext.destination);
-          });
-        }}
-      >
-        Play All
-      </button>
-      <button
-        onClick={() => {
-          wavesurferInstances.forEach(ws => {
-            // ws.pause();
-            // ws는 visualize만 책임지기 때문에 WebAudioApi로 직접 재생합니다
-            const mediaElement = ws.getMediaElement();
-            mediaElement.pause();
-          });
-        }}
-      >
-        Pause All
-      </button>
+      <button onClick={handlePlayAll}>Play All</button>
+      <button onClick={handlePauseAll}>Pause All</button>
       <div className={styles.tracksContainer}>
         {trackArray.map(track => {
           const thisWs = wavesurferInstances.get(track.id);
           const thisMedia = thisWs?.getMediaElement();
+
           return (
             <>
               <WavesurferPlayer
@@ -69,38 +95,27 @@ export function TrackList() {
                     newMap.set(track.id, ws);
                     return newMap;
                   });
+                  // Mute the visualization audio element because AudioEngine handles the sound
+                  ws.setVolume(0);
                 }}
-                onClick={wavesurfer => {
-                  wavesurferInstances.forEach(ws => {
-                    /** 동일한 트랙이면 패스 */
-                    if (ws === wavesurfer) {
-                      return;
-                    }
-                    /** 동일한 시간이면 패스(무한 루프 방지) */
-                    if (ws.getCurrentTime() === wavesurfer.getCurrentTime()) {
-                      return;
-                    }
-                    ws.setTime(wavesurfer.getCurrentTime());
-                  });
+                onClick={_wavesurfer => {
+                  // Seek Logic needed later
                 }}
                 dragToSeek={true}
                 minPxPerSec={3}
                 width={(track.regions[0].audioFile.duration ?? 1) * 3.1}
               />
+              {/* Volume Controller: Updates Store AND AudioEngine */}
               {thisMedia ? (
                 <TrackVolumeController
-                  initialVolume={thisMedia.volume}
+                  initialVolume={track.volume ?? 1}
                   onVolumeChange={vol => {
-                    thisMedia.volume = vol;
-                    if (track.volume !== vol) {
-                      updateTrack({
-                        trackId: track.id,
-                        updater: track => ({
-                          ...track,
-                          volume: vol,
-                        }),
-                      });
-                    }
+                    // AudioEngine update is handled via Command Gateway & Callback
+                    handleAudioCommand({
+                      type: 'SET_TRACK_VOLUME',
+                      trackId: track.id,
+                      volume: vol,
+                    });
                   }}
                 />
               ) : null}
