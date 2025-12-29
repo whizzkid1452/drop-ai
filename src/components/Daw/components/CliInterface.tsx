@@ -1,7 +1,7 @@
 import { useState, useRef, type KeyboardEvent, useEffect } from 'react';
 import * as styles from './CliInterface.css';
 import { useAudioEngineHandleWithUi } from '@/hooks/useAudioEngineHandleWithUi';
-import type { AudioCommand } from '@/types/audioEngine';
+// import type { AudioCommand } from '@/types/audioEngine';
 
 interface LogItem {
   id: string;
@@ -78,13 +78,12 @@ export function CliInterface() {
         {logs.map(log => (
           <div
             key={log.id}
-            className={`${styles.logItem} ${
-              log.type === 'error'
+            className={`${styles.logItem} ${log.type === 'error'
                 ? styles.logItemError
                 : log.type === 'success'
                   ? styles.logItemSuccess
                   : ''
-            }`}
+              }`}
           >
             {log.message}
           </div>
