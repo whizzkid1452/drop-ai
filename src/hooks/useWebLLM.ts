@@ -22,7 +22,7 @@ export function useWebLLM() {
 
                 globalEngine = await CreateWebWorkerMLCEngine(
                     worker,
-                    'Phi-3.5-mini-instruct-q4f16_1-MLC',
+                    'Qwen2-0.5B-Instruct-q4f16_1-MLC',
                     {
                         initProgressCallback: (report: InitProgressReport) => {
                             setLoadingProgress(report.progress, report.text);

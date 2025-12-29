@@ -17,34 +17,43 @@ export function useAgent() {
         const trimmedContent = content.trim();
         if (!trimmedContent) return;
 
-        console.log('=== AGENT v2.1 START ===');
+        console.log('=== AGENT v2.6 START ===');
         console.log('[Agent] content:', trimmedContent);
 
-        // 1. KEYWORD FALLBACK
+        // 1. KEYWORD FALLBACK (Enhanced for Korean)
         const lowerContent = trimmedContent.toLowerCase();
         let manualActionTaken = false;
         let manualResponseLabel = "";
 
-        if (lowerContent.match(/play|시작|재생/)) {
+        // Play keywords: play, 시작, 재생, 틀어, 해
+        if (lowerContent.match(/play|시작|재생|틀어|해/)) {
             await handleAudioCommand({ type: AudioCommandType.PLAY });
             manualActionTaken = true;
             manualResponseLabel = "▶️ 재생 시작됨";
-        } else if (lowerContent.match(/pause|정지|멈춤/)) {
+        }
+        // Pause keywords: pause, 정지, 멈춤, 멈춰, 꺼
+        if (lowerContent.match(/pause|정지|멈춤|멈춰|꺼/)) {
             await handleAudioCommand({ type: AudioCommandType.PAUSE });
             manualActionTaken = true;
             manualResponseLabel = "⏸️ 정지됨";
         }
 
-        // 2. HARDWARE INFO
+        // 2. HARDWARE INFO (Robust check)
         let hardwareDetails = "Fetching...";
         try {
-            const adapter = await (navigator as any).gpu?.requestAdapter();
-            if (adapter) {
-                const info = await adapter.requestAdapterInfo();
-                hardwareDetails = `${info.vendor} - ${info.device}`;
+            if ('gpu' in navigator) {
+                const adapter = await (navigator as any).gpu.requestAdapter();
+                if (adapter) {
+                    const info = await adapter.requestAdapterInfo();
+                    hardwareDetails = `${info.vendor} - ${info.device}`;
+                } else {
+                    hardwareDetails = "WebGPU Adapter not found.";
+                }
+            } else {
+                hardwareDetails = "WebGPU not supported by browser.";
             }
-        } catch (e) {
-            hardwareDetails = "Error querying GPU.";
+        } catch (e: any) {
+            hardwareDetails = `GPU Query Error: ${e.message}`;
         }
 
         if (!engine) {
@@ -52,7 +61,6 @@ export function useAgent() {
             return;
         }
 
-        // Use Message type properly
         const userMsg: Message = {
             id: crypto.randomUUID(),
             role: 'user',
@@ -65,19 +73,28 @@ export function useAgent() {
         const assistantMsgId = crypto.randomUUID();
         const updateMessage = useAppStore.getState().actions.updateMessage;
 
-        addMessage({
+        const assistantMsg: Message = {
             id: assistantMsgId,
             role: 'assistant',
-            content: manualActionTaken ? `${manualResponseLabel} (AI 엔진 v2.1 분석 중...)` : "분석 중 (v2.1)...",
+            content: manualActionTaken ? `${manualResponseLabel} (AI v2.6 분석 중...)` : "분석 중 (v2.6)...",
             timestamp: Date.now()
-        });
+        };
+        addMessage(assistantMsg);
 
         try {
             const trackCount = Array.from(tracksMap.values()).length;
-            const prompt = `System: Audio Engineer assistant. Current project has ${trackCount} tracks.\nUser: ${trimmedContent}\nAssistant:`;
+            console.log(`[Agent v2.6] ${new Date().toLocaleTimeString()} - Calling chat.completions (Qwen2)...`);
 
-            console.log(`[Agent v2.2] ${new Date().toLocaleTimeString()} - Calling generate()...`);
-            const responseText = await engine.generate(prompt, { max_tokens: 64 });
+            const completion = await engine.chat.completions.create({
+                messages: [
+                    { role: 'system', content: `You are an AI Audio Engineer. ${trackCount} tracks. Respond briefly.` },
+                    { role: 'user', content: trimmedContent }
+                ],
+                max_tokens: 64,
+                temperature: 0.1,
+            });
+
+            const responseText = completion.choices[0].message.content || "";
 
             if (responseText && responseText.trim()) {
                 updateMessage(assistantMsgId, manualActionTaken
@@ -90,24 +107,24 @@ export function useAgent() {
             }
 
         } catch (err: any) {
-            console.error('[Agent v2.2] Failure:', err.message);
+            console.error('[Agent v2.6] AI Error:', err.message);
 
-            const isValidationError = err.message?.includes('contain either output text');
+            const isValidationError = err.message?.includes('contain either output text') || err.message === 'EMPTY_RESPONSE';
 
             if (manualActionTaken) {
-                updateMessage(assistantMsgId, `${manualResponseLabel}\n\n(AI v2.2 침묵: ${err.message})`);
+                updateMessage(assistantMsgId, `${manualResponseLabel}\n\n(AI v2.6 무응답: ${err.message})`);
                 setStatus('idle');
             } else {
-                const diagReport = `**[v2.2] AI 엔진 장애 보고서**
+                const diagReport = `**[v2.6] AI 엔진 장애 분석 (Qwen 모드)**
 - **하드웨어:** ${hardwareDetails}
 - **에러:** ${err.message}
 
 ${isValidationError ? `
-> [!CAUTION]
-> **브라우저에 예전 코드가 강력하게 캐싱되어 있습니다.**
-> 1. 브라우저에서 **F12**를 눌러 개발자 도구를 엽니다.
-> 2. 새로고침 버튼을 **우클릭**하고 **"캐시 비우기 및 강력 새로고침"**을 선택하세요.
-> 3. 하단의 **[Purge Cache]** 버튼을 눌러 모델을 다시 받으세요.` : ''}`;
+> [!IMPORTANT]
+> **저사양 모델 구동 실패:**
+> 가장 가벼운 모델 중 하나인 Qwen2-0.5B 구동에 실패했습니다. 이는 브라우저의 전역적인 GPU 리소스 부족입니다.
+> 1. 크롬을 완전히 종료 후 다시 실행해 보세요.
+> 2. 노트북이라면 전원 케이블을 연결해 보세요 (Battery Saver 모드 조심).` : ''}`;
 
                 updateMessage(assistantMsgId, diagReport);
                 setStatus('error');

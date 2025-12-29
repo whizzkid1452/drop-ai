@@ -36,7 +36,7 @@ export function AgentInterface() {
     return (
         <div className={styles.container}>
             <div className={styles.header}>
-                <div className={styles.title}>Drop AI Agent (v2.2-ULTRA-SAFE)</div>
+                <div className={styles.title}>Drop AI Agent (v2.6-QWEN-MODE)</div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     {status === 'generating' && (
                         <div className={styles.generatingStatus}>Thinking...</div>
