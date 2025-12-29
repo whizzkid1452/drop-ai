@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { AudioFileDrop } from '../common/FileDrop/AudioFileDrop';
 import { DawHeader } from './components/DawHeader';
 import { TrackList } from './components/TrackList';
-import { CliInterface } from './components/CliInterface';
+import { AgentInterface } from './components/Agent/AgentInterface';
 import { TrackInfoSidebar } from './components/TrackInfoSidebar';
 import * as styles from './DawPage.css';
 import { useTrackStore } from '@/stores/useTrackStore';
@@ -10,35 +10,33 @@ import { useTrackStore } from '@/stores/useTrackStore';
 export function DawPage() {
   const tracks = useTrackStore(state => state.tracks);
   const hasTracks = useMemo(() => tracks.size > 0, [tracks.size]);
-  const [isCliOpen, setIsCliOpen] = useState(false);
+  const [isAgentOpen, setIsAgentOpen] = useState(false);
   const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
 
   return (
     <div className={styles.container}>
       {/* Left (Track Info) Toggle Button */}
       <button
-        className={`${styles.leftToggleButton} ${
-          isTrackInfoOpen ? styles.leftToggleButtonOpen : ''
-        }`}
+        className={`${styles.leftToggleButton} ${isTrackInfoOpen ? styles.leftToggleButtonOpen : ''
+          }`}
         onClick={() => setIsTrackInfoOpen(!isTrackInfoOpen)}
         title={isTrackInfoOpen ? 'Close Track Info' : 'Open Track Info'}
       >
         {isTrackInfoOpen ? '←' : '→'}
       </button>
 
-      {/* Right (CLI) Toggle Button */}
+      {/* Right (Agent) Toggle Button */}
       <button
-        className={`${styles.cliToggleButton} ${isCliOpen ? styles.cliToggleButtonOpen : ''}`}
-        onClick={() => setIsCliOpen(!isCliOpen)}
-        title={isCliOpen ? 'Close CLI' : 'Open CLI'}
+        className={`${styles.cliToggleButton} ${isAgentOpen ? styles.cliToggleButtonOpen : ''}`}
+        onClick={() => setIsAgentOpen(!isAgentOpen)}
+        title={isAgentOpen ? 'Close Agent' : 'Open Agent'}
       >
-        {isCliOpen ? '→' : '←'}
+        {isAgentOpen ? '→' : '←'}
       </button>
 
       <div
-        className={`${styles.leftPanel} ${
-          !isTrackInfoOpen ? styles.leftPanelCollapsed : ''
-        }`}
+        className={`${styles.leftPanel} ${!isTrackInfoOpen ? styles.leftPanelCollapsed : ''
+          }`}
       >
         <TrackInfoSidebar />
       </div>
@@ -71,9 +69,9 @@ export function DawPage() {
         )}
       </div>
       <div
-        className={`${styles.cliPanel} ${!isCliOpen ? styles.cliPanelCollapsed : ''}`}
+        className={`${styles.cliPanel} ${!isAgentOpen ? styles.cliPanelCollapsed : ''}`}
       >
-        <CliInterface />
+        <AgentInterface />
       </div>
     </div>
   );

@@ -44,6 +44,7 @@ export function TrackList() {
 
           return (
             <TrackComponent
+              key={track.id}
               track={track}
               mediaElement={thisMedia ?? null}
               onReady={ws => {
