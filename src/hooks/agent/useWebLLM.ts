@@ -46,14 +46,28 @@ export function useWebLLM() {
     const purgeCache = async () => {
         try {
             console.log('Purging MLC Cache...');
+            
+            // IndexedDB 삭제 (메타데이터/설정)
             const databases = await window.indexedDB.databases();
             for (const db of databases) {
                 if (db.name?.startsWith('mlc-') || db.name?.includes('model')) {
-                    console.log(`Deleting DB: ${db.name}`);
+                    console.log(`Deleting IndexedDB: ${db.name}`);
                     window.indexedDB.deleteDatabase(db.name!);
                 }
             }
-            console.log('Cache purge requested. Reloading...');
+            
+            // Cache API 삭제 (실제 모델 파일)
+            if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                for (const cacheName of cacheNames) {
+                    if (cacheName.includes('mlc') || cacheName.includes('model') || cacheName.includes('web-llm')) {
+                        console.log(`Deleting Cache: ${cacheName}`);
+                        await caches.delete(cacheName);
+                    }
+                }
+            }
+            
+            console.log('Cache purge completed. Reloading...');
             window.location.reload();
         } catch (err) {
             console.error('Failed to purge cache:', err);
