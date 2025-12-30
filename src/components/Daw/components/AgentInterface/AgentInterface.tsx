@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import * as styles from './AgentInterface.css';
 import { useAppStore } from '@/stores/useAppStore';
-import { useAgent } from '@/hooks/useAgent';
-import { useWebLLM } from '@/hooks/useWebLLM';
+import { useAgent } from '@/hooks/agent/useAgent';
+import { useWebLLM } from '@/hooks/agent/useWebLLM';
 import { ActionButtons } from './components/ActionButtons';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { MessageList } from './components/MessageList';

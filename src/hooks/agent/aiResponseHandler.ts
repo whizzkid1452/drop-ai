@@ -1,7 +1,6 @@
 import { parseAndExecuteCommand, type CommandParserDependencies } from './commandParser';
 import { generateErrorDiagnostic } from './errorHandler';
 import { getHardwareInfo } from '@/utils/hardwareInfo';
-import type { Message } from '@/types/agent';
 
 export interface AIResponseHandlerDependencies extends CommandParserDependencies {
     engine: any; // WebLLM 엔진 타입

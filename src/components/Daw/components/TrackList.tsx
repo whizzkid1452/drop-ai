@@ -1,4 +1,4 @@
-import { useAudioEngineHandleWithUi } from '@/hooks/useAudioEngineHandleWithUi';
+import { useAudioEngineHandleWithUi } from '@/hooks/agent/useAudioEngineHandleWithUi';
 import { useTrackStore } from '@/stores/useTrackStore';
 import { AudioCommandType } from '@/types/audioEngine';
 import { useMemo, useState } from 'react';

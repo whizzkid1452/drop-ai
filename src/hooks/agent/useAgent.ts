@@ -1,9 +1,9 @@
-import { useWebLLM } from '@/hooks/useWebLLM';
+import { useWebLLM } from '@/hooks/agent/useWebLLM';
 import { useAppStore } from '@/stores/useAppStore';
 import { useTrackStore } from '@/stores/useTrackStore';
-import { useAudioEngineHandleWithUi } from '@/hooks/useAudioEngineHandleWithUi';
-import { handleAIResponse } from '@/agent/aiResponseHandler';
-import { createUserMessage, createAssistantMessage } from '@/agent/messageHelpers';
+import { useAudioEngineHandleWithUi } from '@/hooks/agent/useAudioEngineHandleWithUi';
+import { handleAIResponse } from '@/hooks/agent/aiResponseHandler';
+import { createUserMessage, createAssistantMessage } from '@/hooks/agent/messageHelpers';
 
 export function useAgent() {
     const { engine } = useWebLLM();

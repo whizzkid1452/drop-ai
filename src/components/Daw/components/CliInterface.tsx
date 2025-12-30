@@ -1,6 +1,6 @@
 import { useState, useRef, type KeyboardEvent, useEffect } from 'react';
 import * as styles from './CliInterface.css';
-import { useAudioEngineHandleWithUi } from '@/hooks/useAudioEngineHandleWithUi';
+import { useAudioEngineHandleWithUi } from '@/hooks/agent/useAudioEngineHandleWithUi';
 // import type { AudioCommand } from '@/types/audioEngine';
 
 interface LogItem {
