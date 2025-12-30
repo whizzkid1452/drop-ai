@@ -132,3 +132,51 @@ export const generatingStatus = style({
     fontStyle: 'italic',
     animation: `${statusGlow} 1.5s infinite`,
 });
+
+export const headerActions = style({
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+});
+
+export const actionButton = style({
+    fontSize: '10px',
+    padding: '2px 6px',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    ':hover': {
+        background: 'rgba(255,255,255,0.1)',
+        borderColor: 'rgba(255,255,255,0.2)',
+    },
+});
+
+export const dangerButton = style({
+    background: 'rgba(255,0,0,0.1)',
+    border: '1px solid rgba(255,0,0,0.2)',
+    color: '#ff4444',
+    ':hover': {
+        background: 'rgba(255,0,0,0.15)',
+        borderColor: 'rgba(255,0,0,0.3)',
+    },
+});
+
+export const welcomeMessage = style({
+    alignSelf: 'center',
+    opacity: 0.5,
+    textAlign: 'center',
+});
+
+export const messageContent = style({
+    whiteSpace: 'pre-wrap',
+});
+
+export const inputHint = style({
+    display: 'flex',
+    justifyContent: 'space-between',
+    fontSize: '10px',
+    opacity: 0.5,
+    marginTop: '4px',
+});
