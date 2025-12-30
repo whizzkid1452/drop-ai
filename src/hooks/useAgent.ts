@@ -1,13 +1,10 @@
 import { useWebLLM } from '@/hooks/useWebLLM';
 import { useAppStore } from '@/stores/useAppStore';
 import { useTrackStore } from '@/stores/useTrackStore';
-import { useAudioEngineHandleWithUi } from '@/hooks/useAudioEngineHandleWithUi';
 import type { Message } from '@/types/agent';
-import { AudioCommandType } from '@/types/audioEngine';
 
 export function useAgent() {
     const { engine } = useWebLLM();
-    const { handleAudioCommand } = useAudioEngineHandleWithUi();
 
     const addMessage = useAppStore((state) => state.actions.addMessage);
     const setStatus = useAppStore((state) => state.actions.setStatus);
@@ -17,28 +14,10 @@ export function useAgent() {
         const trimmedContent = content.trim();
         if (!trimmedContent) return;
 
-        console.log('=== AGENT v2.6 START ===');
+        console.log('=== AGENT v2.7 START (Pure AI) ===');
         console.log('[Agent] content:', trimmedContent);
 
-        // 1. KEYWORD FALLBACK (Enhanced for Korean)
-        const lowerContent = trimmedContent.toLowerCase();
-        let manualActionTaken = false;
-        let manualResponseLabel = "";
-
-        // Play keywords: play, 시작, 재생, 틀어, 해
-        if (lowerContent.match(/play|시작|재생|틀어|해/)) {
-            await handleAudioCommand({ type: AudioCommandType.PLAY });
-            manualActionTaken = true;
-            manualResponseLabel = "▶️ 재생 시작됨";
-        }
-        // Pause keywords: pause, 정지, 멈춤, 멈춰, 꺼
-        if (lowerContent.match(/pause|정지|멈춤|멈춰|꺼/)) {
-            await handleAudioCommand({ type: AudioCommandType.PAUSE });
-            manualActionTaken = true;
-            manualResponseLabel = "⏸️ 정지됨";
-        }
-
-        // 2. HARDWARE INFO (Robust check)
+        // 1. HARDWARE INFO (Robust check)
         let hardwareDetails = "Fetching...";
         try {
             if ('gpu' in navigator) {
@@ -76,14 +55,14 @@ export function useAgent() {
         const assistantMsg: Message = {
             id: assistantMsgId,
             role: 'assistant',
-            content: manualActionTaken ? `${manualResponseLabel} (AI v2.6 분석 중...)` : "분석 중 (v2.6)...",
+            content: "분석 중 (v2.7)...",
             timestamp: Date.now()
         };
         addMessage(assistantMsg);
 
         try {
             const trackCount = Array.from(tracksMap.values()).length;
-            console.log(`[Agent v2.6] ${new Date().toLocaleTimeString()} - Calling chat.completions (Qwen2)...`);
+            console.log(`[Agent v2.7] ${new Date().toLocaleTimeString()} - Calling chat.completions (Pure AI)...`);
 
             const completion = await engine.chat.completions.create({
                 messages: [
@@ -97,38 +76,30 @@ export function useAgent() {
             const responseText = completion.choices[0].message.content || "";
 
             if (responseText && responseText.trim()) {
-                updateMessage(assistantMsgId, manualActionTaken
-                    ? `${manualResponseLabel}\n\n${responseText}`
-                    : responseText
-                );
+                updateMessage(assistantMsgId, responseText);
                 setStatus('idle');
             } else {
                 throw new Error("EMPTY_RESPONSE");
             }
 
         } catch (err: any) {
-            console.error('[Agent v2.6] AI Error:', err.message);
+            console.error('[Agent v2.7] AI Error:', err.message);
 
             const isValidationError = err.message?.includes('contain either output text') || err.message === 'EMPTY_RESPONSE';
 
-            if (manualActionTaken) {
-                updateMessage(assistantMsgId, `${manualResponseLabel}\n\n(AI v2.6 무응답: ${err.message})`);
-                setStatus('idle');
-            } else {
-                const diagReport = `**[v2.6] AI 엔진 장애 분석 (Qwen 모드)**
+            const diagReport = `**[v2.7] AI 엔진 장애 분석 (Pure AI 모드)**
 - **하드웨어:** ${hardwareDetails}
 - **에러:** ${err.message}
 
 ${isValidationError ? `
 > [!IMPORTANT]
-> **저사양 모델 구동 실패:**
-> 가장 가벼운 모델 중 하나인 Qwen2-0.5B 구동에 실패했습니다. 이는 브라우저의 전역적인 GPU 리소스 부족입니다.
-> 1. 크롬을 완전히 종료 후 다시 실행해 보세요.
-> 2. 노트북이라면 전원 케이블을 연결해 보세요 (Battery Saver 모드 조심).` : ''}`;
+> **AI 엔진 무응답:**
+> 키워드 가로채기(Fallback) 기능이 비활성화된 상태에서 AI 엔진이 답변 생성에 실패했습니다.
+> 1. 브라우저의 전역적인 GPU 리소스 부족입니다.
+> 2. 크롬을 완전히 종료 후 다시 실행하거나 PC를 재부팅해 보세요.` : ''}`;
 
-                updateMessage(assistantMsgId, diagReport);
-                setStatus('error');
-            }
+            updateMessage(assistantMsgId, diagReport);
+            setStatus('error');
         }
     };
 
