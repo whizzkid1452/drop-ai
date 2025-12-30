@@ -1,9 +1,11 @@
-import { type CommandParserDependencies } from './commandParser';
 import { generateErrorDiagnostic } from './errorHandler';
 import { getHardwareInfo } from '@/utils/hardwareInfo';
+import type { AudioCommand } from '@/types/audioEngine';
+import type { Track } from '@/types/track';
 
-export interface AIResponseHandlerDependencies
-  extends CommandParserDependencies {
+export interface AIResponseHandlerDependencies {
+  handleAudioCommand: (command: AudioCommand) => Promise<any>;
+  getTracks: () => Track[];
   engine: any; // WebLLM 엔진 타입
   trackCount: number;
   userInput: string;
