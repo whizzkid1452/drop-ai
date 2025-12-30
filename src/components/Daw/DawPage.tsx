@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { AudioFileDrop } from '../common/FileDrop/AudioFileDrop';
 import { DawHeader } from './components/DawHeader';
 import { TrackList } from './components/TrackList';
-import { AgentInterface } from './components/Agent/AgentInterface';
+import { AgentInterface } from './components/AgentInterface/AgentInterface';
 import { TrackInfoSidebar } from './components/TrackInfoSidebar';
 import * as styles from './DawPage.css';
 import { useTrackStore } from '@/stores/useTrackStore';
