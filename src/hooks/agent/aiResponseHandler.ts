@@ -1,14 +1,15 @@
-import { parseAndExecuteCommand, type CommandParserDependencies } from './commandParser';
+import { type CommandParserDependencies } from './commandParser';
 import { generateErrorDiagnostic } from './errorHandler';
 import { getHardwareInfo } from '@/utils/hardwareInfo';
 
-export interface AIResponseHandlerDependencies extends CommandParserDependencies {
-    engine: any; // WebLLM 엔진 타입
-    trackCount: number;
-    userInput: string;
-    assistantMsgId: string;
-    updateMessage: (id: string, content: string) => void;
-    setStatus: (status: 'idle' | 'error') => void;
+export interface AIResponseHandlerDependencies
+  extends CommandParserDependencies {
+  engine: any; // WebLLM 엔진 타입
+  trackCount: number;
+  userInput: string;
+  assistantMsgId: string;
+  updateMessage: (id: string, content: string) => void;
+  setStatus: (status: 'idle' | 'error') => void;
 }
 
 /**
@@ -17,80 +18,129 @@ export interface AIResponseHandlerDependencies extends CommandParserDependencies
  * @returns 성공 여부
  */
 export async function handleAIResponse(
-    deps: AIResponseHandlerDependencies
+  deps: AIResponseHandlerDependencies
 ): Promise<boolean> {
-    const {
-        engine,
-        trackCount,
-        userInput,
-        assistantMsgId,
-        updateMessage,
-        setStatus,
-        ...commandDeps
-    } = deps;
+  const {
+    engine,
+    trackCount,
+    userInput,
+    assistantMsgId,
+    updateMessage,
+    setStatus,
+    ...commandDeps
+  } = deps;
 
-    const hardwareDetails = await getHardwareInfo();
+  const hardwareDetails = await getHardwareInfo();
 
-    try {
-        console.log(`[Agent v2.8 (Hybrid)] ${new Date().toLocaleTimeString()} - Calling chat.completions...`);
+  try {
+    console.log(
+      `[Agent v2.8 (Hybrid)] ${new Date().toLocaleTimeString()} - Calling chat.completions...`
+    );
 
-        const completion = await engine.chat.completions.create({
-            messages: [
-                { 
-                    role: 'system', 
-                    content: `You are an AI Audio Engineer. ${trackCount} tracks. Respond briefly.` 
-                },
-                { role: 'user', content: userInput }
-            ],
-            max_tokens: 64,
-            temperature: 0.1,
-        });
+    // 프롬프트 엔지니어링: Qwen2-0.5B (Small LLM) 최적화
+    const systemPrompt = `You are an AI assistant that controls a Digital Audio Workstation (DAW).
+You have access to ${trackCount} tracks.
+You MUST analyze the user's request and categorize it into one of these actions: PLAY, PAUSE, STOP, or NONE.
 
-        const responseText = completion.choices[0].message.content || "";
+If the user wants to PLAY/START music:
+Append {"type":"PLAY"} at the end.
 
-        // 명령어 파싱 및 실행 (AI 응답 여부와 무관하게 시도)
-        const commandResult = await parseAndExecuteCommand(userInput, commandDeps);
+If the user wants to PAUSE/STOP music:
+Append {"type":"PAUSE"} at the end.
 
-        if (responseText && responseText.trim()) {
-            // AI 응답 + 명령어 실행 결과
-            if (commandResult) {
-                updateMessage(assistantMsgId, `${responseText}\n\n${commandResult}`);
-            } else {
-                updateMessage(assistantMsgId, responseText);
-            }
-            setStatus('idle');
-            return true;
-        } else if (commandResult) {
-            // AI 응답 없지만 명령어는 실행됨
-            updateMessage(assistantMsgId, commandResult);
-            setStatus('idle');
-            return true;
-        } else {
-            // AI 응답도 없고 명령어도 아닌 경우
-            throw new Error("EMPTY_RESPONSE");
+If the user's request is NOT about playing/pausing (e.g. asking a question):
+Do NOT append any JSON.
+
+EXAMPLES:
+
+User: "Play music"
+Assistant: Starting playback.
+{"type":"PLAY"}
+
+User: "Stop the song"
+Assistant: Pausing audio.
+{"type":"PAUSE"}
+
+User: "How are you?"
+Assistant: I am ready to help with your music.
+
+User: "Start"
+Assistant: OK.
+{"type":"PLAY"}
+
+User: "Can you help me?"
+Assistant: Yes, I can control playback.
+
+User: "Pause please"
+Assistant: Paused.
+{"type":"PAUSE"}
+
+Response MUST be short. JSON MUST be on the last line.`;
+
+    const completion = await engine.chat.completions.create({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userInput },
+      ],
+      max_tokens: 100, // JSON 포함을 위해 약간 늘림
+      temperature: 0.1, // 명령 실행의 정확도를 위해 낮음
+    });
+
+    const fullResponse = completion.choices[0].message.content || '';
+    console.log('[AI Raw Response]:', fullResponse);
+
+    // JSON 명령어 추출 (마지막 라인 또는 문장 내 검색)
+    const jsonMatch = fullResponse.match(/\{"type":"(PLAY|PAUSE|STOP)"\}/);
+    let aiCommandType: string | null = null;
+    let cleanResponse = fullResponse;
+
+    if (jsonMatch) {
+      aiCommandType = jsonMatch[1];
+      // 사용자에게 보여줄 메시지에서 JSON 부분 제거
+      cleanResponse = fullResponse.replace(jsonMatch[0], '').trim();
+      if (aiCommandType) {
+        // AI가 명시적으로 명령을 내린 경우 실행
+        console.log('[AI Command Execution]', aiCommandType);
+        const { handleAudioCommand } = commandDeps;
+        // AudioCommandType 매핑 필요 (문자열 -> Enum)
+        const type =
+          aiCommandType === 'PLAY'
+            ? 'PLAY'
+            : aiCommandType === 'PAUSE'
+              ? 'PAUSE'
+              : aiCommandType === 'STOP'
+                ? 'STOP'
+                : null;
+
+        if (type) {
+          // @ts-ignore: AudioCommandType string mapping
+          await handleAudioCommand({ type });
         }
 
-    } catch (err: any) {
-        console.error('[Agent v2.8] AI Error:', err.message);
-
-        // AI 실패 시에도 명령어 실행 시도
-        const commandResult = await parseAndExecuteCommand(userInput, commandDeps);
-
-        if (commandResult) {
-            // 명령어가 있으면 실행 결과만 표시
-            updateMessage(
-                assistantMsgId,
-                `**AI 엔진 오류 발생 (명령어는 실행됨)**\n\n${commandResult}\n\n💡 AI 응답은 생성되지 않았지만 명령어는 정상 실행되었습니다.`
-            );
-            setStatus('idle');
-            return true;
-        }
-
-        // 명령어도 없으면 에러 메시지 표시
-        const diagReport = generateErrorDiagnostic(err, hardwareDetails);
-        updateMessage(assistantMsgId, diagReport);
-        setStatus('error');
-        return false;
+        // Clean response output
+        updateMessage(assistantMsgId, fullResponse);
+        setStatus('idle');
+        return true;
+      } else {
+        // 일반 대화
+        if (!cleanResponse) throw new Error('EMPTY_RESPONSE');
+        updateMessage(assistantMsgId, cleanResponse);
+        setStatus('idle');
+        return true;
+      }
+    } else {
+      // 일반 대화 (JSON이 없는 경우)
+      if (!cleanResponse) throw new Error('EMPTY_RESPONSE');
+      updateMessage(assistantMsgId, cleanResponse);
+      setStatus('idle');
+      return true;
     }
-}
+  } catch (err: any) {
+    console.error('[Agent v2.8] AI Error:', err.message);
 
+    const diagReport = generateErrorDiagnostic(err, hardwareDetails);
+    updateMessage(assistantMsgId, diagReport);
+    setStatus('error');
+    return false;
+  }
+}
