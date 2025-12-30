@@ -96,16 +96,6 @@ export const assistantMessage = style({
     border: '1px solid rgba(255, 255, 255, 0.1)',
 });
 
-export const toolCall = style({
-    marginTop: '8px',
-    fontSize: '12px',
-    padding: '8px',
-    backgroundColor: 'rgba(0, 255, 128, 0.05)',
-    borderLeft: '2px solid #00ff80',
-    fontFamily: 'monospace',
-    color: '#00ff80',
-});
-
 export const inputArea = style({
     padding: '16px',
     borderTop: '1px solid rgba(255, 255, 255, 0.1)',

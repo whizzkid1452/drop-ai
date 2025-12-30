@@ -97,11 +97,6 @@ export function AgentInterface() {
                             }`}
                     >
                         <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
-                        {msg.toolCalls?.map((tc) => (
-                            <div key={tc.id} className={styles.toolCall}>
-                                🛠️ Invoking: {tc.function.name}
-                            </div>
-                        ))}
                     </div>
                 ))}
                 <div ref={messageEndRef} />

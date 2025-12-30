@@ -4,13 +4,11 @@ import type { Message, AgentStatus } from '@/types/agent';
 export interface ChatSlice {
     messages: Message[];
     status: AgentStatus;
-    currentStreamToken: string;
 
     actions: {
         addMessage: (message: Message) => void;
         updateMessage: (id: string, content: string) => void;
         setStatus: (status: AgentStatus) => void;
-        appendToken: (token: string) => void;
         clearMessages: () => void;
     };
 }
@@ -18,7 +16,6 @@ export interface ChatSlice {
 export const createChatSlice: StateCreator<ChatSlice> = (set) => ({
     messages: [],
     status: 'idle',
-    currentStreamToken: '',
 
     actions: {
         addMessage: (message) =>
@@ -30,8 +27,6 @@ export const createChatSlice: StateCreator<ChatSlice> = (set) => ({
                 ),
             })),
         setStatus: (status) => set({ status }),
-        appendToken: (token) =>
-            set((state) => ({ currentStreamToken: state.currentStreamToken + token })),
         clearMessages: () => set({ messages: [] }),
     },
 });

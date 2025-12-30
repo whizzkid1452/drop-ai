@@ -150,7 +150,7 @@ export function useAgent() {
         const assistantMsg: Message = {
             id: assistantMsgId,
             role: 'assistant',
-            content: "분석 중 (v2.7)...",
+            content: "분석 중 (v2.8)...",
             timestamp: Date.now()
         };
         addMessage(assistantMsg);
