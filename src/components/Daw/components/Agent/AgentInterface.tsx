@@ -36,7 +36,7 @@ export function AgentInterface() {
     return (
         <div className={styles.container}>
             <div className={styles.header}>
-                <div className={styles.title}>Drop AI Agent (v2.7-PURE-AI-MODE)</div>
+                <div className={styles.title}>Drop AI Agent (v2.8-HYBRID-MODE)</div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     {status === 'generating' && (
                         <div className={styles.generatingStatus}>Thinking...</div>
@@ -113,7 +113,7 @@ export function AgentInterface() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder={isModelReady ? "Ask me to 'play', 'pause' or 'set volume'..." : "Waiting for model..."}
+                    placeholder={isModelReady ? "예: '재생해줘', '볼륨 50으로', 'pause', '왼쪽으로'" : "Waiting for model..."}
                     rows={1}
                     disabled={!isModelReady || status === 'generating'}
                 />
