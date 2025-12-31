@@ -84,14 +84,7 @@ export function parseAICommand(rawResponse: string): {
     const parsed = JSON.parse(jsonStr);
     const validated = AudioCommandSchema.safeParse(parsed);
 
-    if (validated.success) {
-      // Remove JSON from user-facing message
-      const cleanResponse = rawResponse.replace(jsonStr, '').trim();
-      return {
-        command: validated.data,
-        cleanResponse,
-      };
-    } else {
+    if (!validated.success) {
       // Validation failed - return error for self-correction
       // Zod v4 uses 'issues' instead of 'errors'
       const errorMsg = validated.error.issues
@@ -103,6 +96,13 @@ export function parseAICommand(rawResponse: string): {
         error: `Invalid command format: ${errorMsg}`,
       };
     }
+
+    // Remove JSON from user-facing message
+    const cleanResponse = rawResponse.replace(jsonStr, '').trim();
+    return {
+      command: validated.data,
+      cleanResponse,
+    };
   } catch (err) {
     return {
       command: null,

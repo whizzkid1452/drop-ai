@@ -1,5 +1,4 @@
-import { parseAICommand } from '@/types/audioCommand.schema';
-import { type AudioCommand } from '@/types/audioEngine';
+import { parseAICommand, type AudioCommand } from '@/types/audioCommand.schema';
 import type { Track } from '@/types/track';
 import { getHardwareInfo } from '@/utils/hardwareInfo';
 import { generateErrorDiagnostic } from './errorHandler';
