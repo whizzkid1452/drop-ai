@@ -41,14 +41,14 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal(AudioCommandType.SET_TRACK_PAN),
-    trackId: z.string().uuid('Invalid track ID format'),
+    trackId: z.uuid('Invalid track ID format'),
     pan: z.number().min(-1, 'Pan must be >= -1').max(1, 'Pan must be <= 1'),
   }),
   z.object({
     type: z.literal(AudioCommandType.LOAD_REGION),
-    trackId: z.string().uuid('Invalid track ID format'),
-    regionId: z.string().uuid('Invalid region ID format'),
-    url: z.string().url('Invalid URL format'),
+    trackId: z.uuid('Invalid track ID format'),
+    regionId: z.uuid('Invalid region ID format'),
+    url: z.url('Invalid URL format'),
     startTime: z.number().min(0, 'Start time must be >= 0'),
   }),
   z.object({
