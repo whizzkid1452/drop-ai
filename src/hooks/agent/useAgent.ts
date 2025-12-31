@@ -21,6 +21,7 @@ export function useAgent() {
     setMessages(prev => [...prev, message]);
   }, []);
 
+  /** @todo(@steinjun0): 좀 더 로직 응집도를 높여야함. updateMessage가 현 단계에서 G필수인지도 고민 필요 */
   const updateMessage = useCallback((id: string, content: string) => {
     setMessages(prev => prev.map(m => (m.id === id ? { ...m, content } : m)));
   }, []);
