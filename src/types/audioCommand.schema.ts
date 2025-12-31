@@ -1,5 +1,17 @@
 import { z } from 'zod';
 
+export const AudioCommandType = {
+  PLAY: 'PLAY',
+  PAUSE: 'PAUSE',
+  STOP: 'STOP',
+  SET_TRACK_VOLUME: 'SET_TRACK_VOLUME',
+  SET_TRACK_PAN: 'SET_TRACK_PAN',
+  LOAD_REGION: 'LOAD_REGION',
+  GET_TRACK_INFO: 'GET_TRACK_INFO',
+} as const;
+export type AudioCommandType =
+  (typeof AudioCommandType)[keyof typeof AudioCommandType];
+
 /**
  * Zod Schema for AI-generated Audio Commands
  *
@@ -11,30 +23,40 @@ import { z } from 'zod';
 
 export const AudioCommandSchema = z.discriminatedUnion('type', [
   z.object({
-    type: z.literal('PLAY'),
+    type: z.literal(AudioCommandType.PLAY),
   }),
   z.object({
-    type: z.literal('PAUSE'),
+    type: z.literal(AudioCommandType.PAUSE),
   }),
   z.object({
-    type: z.literal('STOP'),
+    type: z.literal(AudioCommandType.STOP),
   }),
   z.object({
-    type: z.literal('SET_TRACK_VOLUME'),
-    trackId: z.uuid('Invalid track ID format'),
+    type: z.literal(AudioCommandType.SET_TRACK_VOLUME),
+    trackId: z.string().uuid('Invalid track ID format'),
     volume: z
       .number()
       .min(0, 'Volume must be >= 0')
       .max(1, 'Volume must be <= 1'),
   }),
   z.object({
-    type: z.literal('SET_TRACK_PAN'),
+    type: z.literal(AudioCommandType.SET_TRACK_PAN),
     trackId: z.string().uuid('Invalid track ID format'),
     pan: z.number().min(-1, 'Pan must be >= -1').max(1, 'Pan must be <= 1'),
   }),
+  z.object({
+    type: z.literal(AudioCommandType.LOAD_REGION),
+    trackId: z.string().uuid('Invalid track ID format'),
+    regionId: z.string().uuid('Invalid region ID format'),
+    url: z.string().url('Invalid URL format'),
+    startTime: z.number().min(0, 'Start time must be >= 0'),
+  }),
+  z.object({
+    type: z.literal(AudioCommandType.GET_TRACK_INFO),
+  }),
 ]);
 
-export type AudioCommandFromAI = z.infer<typeof AudioCommandSchema>;
+export type AudioCommand = z.infer<typeof AudioCommandSchema>;
 
 /**
  * Parse and validate AI response JSON
@@ -43,7 +65,7 @@ export type AudioCommandFromAI = z.infer<typeof AudioCommandSchema>;
  * @returns Parsed command or null if no valid command found
  */
 export function parseAICommand(rawResponse: string): {
-  command: AudioCommandFromAI | null;
+  command: AudioCommand | null;
   cleanResponse: string;
   error?: string;
 } {

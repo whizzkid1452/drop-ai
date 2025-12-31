@@ -1,7 +1,10 @@
 import { AudioEngine } from '@/logics/audio/audioEngine';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import { useTrackStore } from '@/stores/useTrackStore';
-import { AudioCommandType, type AudioCommand } from '@/types/audioEngine';
+import {
+  AudioCommandType,
+  type AudioCommand,
+} from '@/types/audioCommand.schema';
 import { useShallow } from 'zustand/react/shallow';
 
 export function useAudioEngineHandleWithUi() {

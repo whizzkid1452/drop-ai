@@ -1,6 +1,9 @@
-import { AudioCommandType, type AudioCommand } from '@/types/audioEngine';
 import * as Tone from 'tone';
 import { useTrackStore } from '@/stores/useTrackStore';
+import {
+  AudioCommandType,
+  type AudioCommand,
+} from '@/types/audioCommand.schema';
 
 /**
  * AudioEngine (Tone.js Version)
