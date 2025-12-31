@@ -1,5 +1,6 @@
+import { useState, useCallback } from 'react';
+import type { Message, AgentStatus } from '@/types/agent';
 import { useWebLLM } from '@/hooks/agent/useWebLLM';
-import { useChatStore } from '@/stores/useChatStore';
 import { useTrackStore } from '@/stores/useTrackStore';
 import { useAudioEngineHandleWithUi } from '@/hooks/agent/useAudioEngineHandleWithUi';
 import { handleAIResponse } from '@/hooks/agent/aiResponseHandler';
@@ -9,11 +10,20 @@ import {
 } from '@/hooks/agent/messageHelpers';
 
 export function useAgent() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [status, setStatus] = useState<AgentStatus>('idle');
+
   const { engine } = useWebLLM();
-  const addMessage = useChatStore(state => state.actions.addMessage);
-  const setStatus = useChatStore(state => state.actions.setStatus);
   const tracksMap = useTrackStore(state => state.tracks);
   const { handleAudioCommand } = useAudioEngineHandleWithUi();
+
+  const addMessage = useCallback((message: Message) => {
+    setMessages(prev => [...prev, message]);
+  }, []);
+
+  const updateMessage = useCallback((id: string, content: string) => {
+    setMessages(prev => prev.map(m => (m.id === id ? { ...m, content } : m)));
+  }, []);
 
   const sendMessage = async (content: string) => {
     const trimmedContent = content.trim();
@@ -35,7 +45,6 @@ export function useAgent() {
     // 어시스턴트 메시지 생성 및 추가
     const assistantMsg = createAssistantMessage();
     addMessage(assistantMsg);
-    const updateMessage = useChatStore.getState().actions.updateMessage;
 
     // AI 응답 처리
     await handleAIResponse({
@@ -50,5 +59,5 @@ export function useAgent() {
     });
   };
 
-  return { sendMessage };
+  return { messages, status, sendMessage, addMessage, updateMessage };
 }

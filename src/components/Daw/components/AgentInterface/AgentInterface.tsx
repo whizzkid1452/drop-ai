@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import * as styles from './AgentInterface.css';
-import { useChatStore } from '@/stores/useChatStore';
 import { useAgentStore } from '@/stores/useAgentStore';
 import { useAgent } from '@/hooks/agent/useAgent';
 import { useWebLLM } from '@/hooks/agent/useWebLLM';
@@ -12,15 +11,13 @@ import { AGENT_VERSION } from './constants';
 
 export function AgentInterface() {
   const [input, setInput] = useState('');
-  const messages = useChatStore(state => state.messages);
-  const status = useChatStore(state => state.status);
   const isModelReady = useAgentStore(state => state.isModelReady);
   const modelLoadingProgress = useAgentStore(
     state => state.modelLoadingProgress
   );
   const modelLoadingText = useAgentStore(state => state.modelLoadingText);
 
-  const { sendMessage } = useAgent();
+  const { sendMessage, messages, status } = useAgent();
   const { resetEngine, purgeCache } = useWebLLM();
 
   const isGenerating = status === 'generating';
