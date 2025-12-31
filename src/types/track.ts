@@ -24,6 +24,7 @@ export type TrackStatus = (typeof TrackStatus)[keyof typeof TrackStatus];
 
 export interface Track {
   id: string;
+  name?: string; // 트랙 이름 (optional)
   regions: Array<Region>;
   /** @note 추후 중첩 상태가 발생할 수 있기 때문에 배열로 관리 */
   status: Array<TrackStatus>;

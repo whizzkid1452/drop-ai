@@ -1,6 +1,10 @@
 import { type CommandParserDependencies } from './commandParser';
 import { generateErrorDiagnostic } from './errorHandler';
 import { getHardwareInfo } from '@/utils/hardwareInfo';
+import { parseAICommand } from '@/types/audioCommand.schema';
+import { AudioCommandType, type AudioCommand } from '@/types/audioEngine';
+import { createShadowState, formatShadowStateForAI } from '@/utils/createShadowState';
+import { usePlaybackStore } from '@/stores/usePlaybackStore';
 
 export interface AIResponseHandlerDependencies
   extends CommandParserDependencies {
@@ -37,9 +41,21 @@ export async function handleAIResponse(
       `[Agent v2.8 (Hybrid)] ${new Date().toLocaleTimeString()} - Calling chat.completions...`
     );
 
+    // 🎯 Create Shadow State (lightweight context for AI)
+    const { currentTime, isPlaying, tempo } = usePlaybackStore.getState();
+    const shadowState = createShadowState(
+      commandDeps.getTracks(),
+      currentTime,
+      isPlaying,
+      tempo
+    );
+    const projectContext = formatShadowStateForAI(shadowState);
+
     // 프롬프트 엔지니어링: Qwen2-0.5B (Small LLM) 최적화
     const systemPrompt = `You are an AI assistant that controls a Digital Audio Workstation (DAW).
-You have access to ${trackCount} tracks.
+
+${projectContext}
+
 You MUST analyze the user's request and categorize it into one of these actions: PLAY, PAUSE, STOP, or NONE.
 
 If the user wants to PLAY/START music:
@@ -89,47 +105,45 @@ Response MUST be short. JSON MUST be on the last line.`;
     const fullResponse = completion.choices[0].message.content || '';
     console.log('[AI Raw Response]:', fullResponse);
 
-    // JSON 명령어 추출 (마지막 라인 또는 문장 내 검색)
-    const jsonMatch = fullResponse.match(/\{"type":"(PLAY|PAUSE|STOP)"\}/);
-    let aiCommandType: string | null = null;
-    let cleanResponse = fullResponse;
+    // 🔍 Zod-based validation (replaces regex parsing)
+    const { command, cleanResponse, error } = parseAICommand(fullResponse);
 
-    if (jsonMatch) {
-      aiCommandType = jsonMatch[1];
-      // 사용자에게 보여줄 메시지에서 JSON 부분 제거
-      cleanResponse = fullResponse.replace(jsonMatch[0], '').trim();
-      if (aiCommandType) {
-        // AI가 명시적으로 명령을 내린 경우 실행
-        console.log('[AI Command Execution]', aiCommandType);
-        const { handleAudioCommand } = commandDeps;
-        // AudioCommandType 매핑 필요 (문자열 -> Enum)
-        const type =
-          aiCommandType === 'PLAY'
-            ? 'PLAY'
-            : aiCommandType === 'PAUSE'
-              ? 'PAUSE'
-              : aiCommandType === 'STOP'
-                ? 'STOP'
-                : null;
+    if (error) {
+      // Validation failed - log for debugging (could implement self-correction here)
+      console.warn('[AI Command Validation Failed]:', error);
+      // For now, treat as normal conversation
+      updateMessage(assistantMsgId, cleanResponse || fullResponse);
+      setStatus('idle');
+      return true;
+    }
 
-        if (type) {
-          // @ts-ignore: AudioCommandType string mapping
-          await handleAudioCommand({ type });
-        }
+    if (command) {
+      // ✅ Valid command - execute it
+      console.log('[AI Command Execution]', command);
+      const { handleAudioCommand } = commandDeps;
 
-        // Clean response output
-        updateMessage(assistantMsgId, fullResponse);
-        setStatus('idle');
-        return true;
-      } else {
-        // 일반 대화
-        if (!cleanResponse) throw new Error('EMPTY_RESPONSE');
-        updateMessage(assistantMsgId, cleanResponse);
-        setStatus('idle');
-        return true;
-      }
+      // Map command.type to AudioCommandType enum
+      const commandTypeMap: Record<string, AudioCommandType> = {
+        PLAY: AudioCommandType.PLAY,
+        PAUSE: AudioCommandType.PAUSE,
+        STOP: AudioCommandType.STOP,
+        SET_TRACK_VOLUME: AudioCommandType.SET_TRACK_VOLUME,
+        SET_TRACK_PAN: AudioCommandType.SET_TRACK_PAN,
+      };
+
+      const audioCommand = {
+        ...command,
+        type: commandTypeMap[command.type],
+      } as AudioCommand; // Type assertion (safe because Zod already validated)
+
+      await handleAudioCommand(audioCommand);
+
+      // Show clean response (without JSON)
+      updateMessage(assistantMsgId, cleanResponse || '✅ Command executed');
+      setStatus('idle');
+      return true;
     } else {
-      // 일반 대화 (JSON이 없는 경우)
+      // No command - normal conversation
       if (!cleanResponse) throw new Error('EMPTY_RESPONSE');
       updateMessage(assistantMsgId, cleanResponse);
       setStatus('idle');

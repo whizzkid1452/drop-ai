@@ -6,12 +6,16 @@ import { AgentInterface } from './components/AgentInterface/AgentInterface';
 import { TrackInfoSidebar } from './components/TrackInfoSidebar';
 import * as styles from './DawPage.css';
 import { useTrackStore } from '@/stores/useTrackStore';
+import { useToneTransportSync } from '@/hooks/useToneTransportSync';
 
 export function DawPage() {
   const tracks = useTrackStore(state => state.tracks);
   const hasTracks = useMemo(() => tracks.size > 0, [tracks.size]);
   const [isAgentOpen, setIsAgentOpen] = useState(false);
   const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
+
+  // 🎯 Sync Tone.Transport (Audio Truth) with UI (Visual Truth)
+  useToneTransportSync();
 
   return (
     <div className={styles.container}>

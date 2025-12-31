@@ -1,5 +1,6 @@
 import type { Track, Region } from '@/types/track';
 import { create } from 'zustand';
+import { AudioEngine } from '@/logics/audio/audioEngine';
 
 type NewRegion = Omit<Region, 'id'>;
 type NewTrack = Omit<Track, 'id' | 'regions'> & { regions: NewRegion[] };
@@ -65,6 +66,14 @@ export const useTrackStore = create<TrackStore>()((set, get) => ({
     return newTrack;
   },
   removeTrack: ({ trackId }) => {
+    // 🔴 CRITICAL: Dispose Tone.js resources BEFORE removing from store
+    // This prevents memory leaks and background CPU usage
+    const disposed = AudioEngine.getInstance().disposeTrack(trackId);
+    
+    if (!disposed) {
+      console.warn(`[TrackStore] Failed to dispose track ${trackId}, but removing from store anyway`);
+    }
+
     set(state => {
       /** @note 레퍼런스를 변경하기 위해 새로운 맵을 생성 */
       const newTracks = new Map(state.tracks);

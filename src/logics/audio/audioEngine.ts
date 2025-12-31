@@ -164,4 +164,52 @@ export class AudioEngine {
       pan: track.channel.pan.value,
     };
   }
+
+  /**
+   * Dispose Track Resources (Prevent Memory Leak)
+   * - Disposes all Players in the track
+   * - Disposes the Channel
+   * - Removes from internal Map
+   * 
+   * MUST be called when removing a track to prevent:
+   * 1. Memory leaks
+   * 2. Background audio processing (CPU usage)
+   */
+  public disposeTrack(trackId: string): boolean {
+    const track = this.tracks.get(trackId);
+    if (!track) {
+      console.warn(`[AudioEngine] Track ${trackId} not found for disposal`);
+      return false;
+    }
+
+    try {
+      // 1. Dispose all Players
+      track.players.forEach((player, regionId) => {
+        player.dispose();
+        console.log(`[AudioEngine] Disposed Player: ${regionId}`);
+      });
+
+      // 2. Dispose Channel
+      track.channel.dispose();
+      console.log(`[AudioEngine] Disposed Channel: ${trackId}`);
+
+      // 3. Remove from Map
+      this.tracks.delete(trackId);
+      
+      console.log(`[AudioEngine] ✅ Track ${trackId} fully disposed`);
+      return true;
+    } catch (err) {
+      console.error(`[AudioEngine] Failed to dispose track ${trackId}:`, err);
+      return false;
+    }
+  }
+
+  /**
+   * Dispose ALL Tracks (for Project Close / Reset)
+   */
+  public disposeAllTracks(): void {
+    const trackIds = Array.from(this.tracks.keys());
+    trackIds.forEach(trackId => this.disposeTrack(trackId));
+    console.log(`[AudioEngine] ✅ Disposed ${trackIds.length} tracks`);
+  }
 }
