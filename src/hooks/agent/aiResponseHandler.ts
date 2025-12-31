@@ -1,7 +1,8 @@
-import { generateErrorDiagnostic } from './errorHandler';
-import { getHardwareInfo } from '@/utils/hardwareInfo';
-import type { AudioCommand } from '@/types/audioEngine';
+import { parseAICommand } from '@/types/audioCommand.schema';
+import { type AudioCommand } from '@/types/audioEngine';
 import type { Track } from '@/types/track';
+import { getHardwareInfo } from '@/utils/hardwareInfo';
+import { generateErrorDiagnostic } from './errorHandler';
 
 export interface AIResponseHandlerDependencies {
   handleAudioCommand: (command: AudioCommand) => Promise<any>;
@@ -29,7 +30,7 @@ export async function handleAIResponse(
     assistantMsgId,
     updateMessage,
     setStatus,
-    ...commandDeps
+    handleAudioCommand,
   } = deps;
 
   const hardwareDetails = await getHardwareInfo();
@@ -91,47 +92,27 @@ Response MUST be short. JSON MUST be on the last line.`;
     const fullResponse = completion.choices[0].message.content || '';
     console.log('[AI Raw Response]:', fullResponse);
 
-    // JSON 명령어 추출 (마지막 라인 또는 문장 내 검색)
-    const jsonMatch = fullResponse.match(/\{"type":"(PLAY|PAUSE|STOP)"\}/);
-    let aiCommandType: string | null = null;
-    let cleanResponse = fullResponse;
+    // 🔍 Zod-based validation (replaces regex parsing)
+    const { command, cleanResponse, error } = parseAICommand(fullResponse);
 
-    if (jsonMatch) {
-      aiCommandType = jsonMatch[1];
-      // 사용자에게 보여줄 메시지에서 JSON 부분 제거
-      cleanResponse = fullResponse.replace(jsonMatch[0], '').trim();
-      if (aiCommandType) {
-        // AI가 명시적으로 명령을 내린 경우 실행
-        console.log('[AI Command Execution]', aiCommandType);
-        const { handleAudioCommand } = commandDeps;
-        // AudioCommandType 매핑 필요 (문자열 -> Enum)
-        const type =
-          aiCommandType === 'PLAY'
-            ? 'PLAY'
-            : aiCommandType === 'PAUSE'
-              ? 'PAUSE'
-              : aiCommandType === 'STOP'
-                ? 'STOP'
-                : null;
+    if (error) {
+      // Validation failed - log for debugging (could implement self-correction here)
+      console.warn('[AI Command Validation Failed]:', error);
+      // For now, treat as normal conversation
+      updateMessage(assistantMsgId, cleanResponse || fullResponse);
+      setStatus('idle');
+      return true;
+    }
 
-        if (type) {
-          // @ts-ignore: AudioCommandType string mapping
-          await handleAudioCommand({ type });
-        }
+    if (command) {
+      console.log('[AI Command Execution]', command);
+      await handleAudioCommand(command);
 
-        // Clean response output
-        updateMessage(assistantMsgId, fullResponse);
-        setStatus('idle');
-        return true;
-      } else {
-        // 일반 대화
-        if (!cleanResponse) throw new Error('EMPTY_RESPONSE');
-        updateMessage(assistantMsgId, cleanResponse);
-        setStatus('idle');
-        return true;
-      }
+      updateMessage(assistantMsgId, cleanResponse || '✅ Command executed');
+      setStatus('idle');
+      return true;
     } else {
-      // 일반 대화 (JSON이 없는 경우)
+      // No command - normal conversation
       if (!cleanResponse) throw new Error('EMPTY_RESPONSE');
       updateMessage(assistantMsgId, cleanResponse);
       setStatus('idle');
