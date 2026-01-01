@@ -49,7 +49,7 @@ export async function handleAIResponse(
 
   console.log('[AI Raw Response]:', fullResponse);
 
-  const { command, removeJsonResponse, error } = parseAICommand(fullResponse);
+  const { command, error } = parseAICommand(fullResponse);
 
   if (command) {
     console.log('[AI Command Execution]', command);
@@ -57,10 +57,7 @@ export async function handleAIResponse(
     addMessage(createAssistantMessage('✅ Command executed'));
   }
 
-  updateMessage(
-    assistantMsgId,
-    removeJsonResponse || fullResponse || 'no response'
-  );
+  updateMessage(assistantMsgId, fullResponse || 'no response');
   setStatus(error ? 'error' : 'idle');
 
   return true;

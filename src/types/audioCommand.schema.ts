@@ -66,7 +66,6 @@ export type AudioCommand = z.infer<typeof AudioCommandSchema>;
  */
 export function parseAICommand(rawResponse: string): {
   command: AudioCommand | null;
-  removeJsonResponse: string;
   error?: string;
 } {
   // Extract JSON from response (supports both inline and last-line formats)
@@ -75,7 +74,6 @@ export function parseAICommand(rawResponse: string): {
   if (!jsonMatch) {
     return {
       command: null,
-      removeJsonResponse: rawResponse.trim(),
     };
   }
 
@@ -92,21 +90,16 @@ export function parseAICommand(rawResponse: string): {
         .join(', ');
       return {
         command: null,
-        removeJsonResponse: rawResponse,
         error: `Invalid command format: ${errorMsg}`,
       };
     }
 
-    // Remove JSON from user-facing message
-    const cleanResponse = rawResponse.replace(jsonStr, '').trim();
     return {
       command: validated.data,
-      removeJsonResponse: cleanResponse,
     };
   } catch (err) {
     return {
       command: null,
-      removeJsonResponse: rawResponse,
       error: `JSON parse error: ${
         err instanceof Error ? err.message : 'Unknown error'
       }`,
