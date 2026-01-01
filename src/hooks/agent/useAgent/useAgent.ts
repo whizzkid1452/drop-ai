@@ -3,11 +3,11 @@ import type { Message, AgentStatus } from '@/types/agent';
 import { useWebLLM } from '@/hooks/agent/useWebLLM';
 import { useTrackStore } from '@/stores/useTrackStore';
 import { useAudioEngineHandleWithUi } from '@/hooks/agent/useAudioEngineHandleWithUi';
-import { handleAIResponse } from '@/hooks/agent/aiResponseHandler';
+import { handleAIResponse } from '@/hooks/agent/useAgent/utils/aiResponseHandler';
 import {
   createUserMessage,
   createAssistantMessage,
-} from '@/hooks/agent/messageHelpers';
+} from '@/hooks/agent/useAgent/utils/messageHelpers';
 
 export function useAgent() {
   const [messages, setMessages] = useState<Message[]>([]);
