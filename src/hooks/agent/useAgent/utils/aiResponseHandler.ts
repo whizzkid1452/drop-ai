@@ -1,9 +1,8 @@
+import type { Message } from '@/types/agent';
 import { parseAICommand, type AudioCommand } from '@/types/audioCommand.schema';
 import type { Track } from '@/types/track';
-import { getHardwareInfo } from '@/utils/hardwareInfo';
 import { generateErrorDiagnostic } from './errorHandler';
 import { getSystemPrompt } from './getSystemPrompt';
-import type { Message } from '@/types/agent';
 import { createAssistantMessage } from './messageHelpers';
 
 export interface AIResponseHandlerDependencies {
@@ -37,8 +36,6 @@ export async function handleAIResponse(
     handleAudioCommand,
   } = deps;
 
-  const hardwareDetails = await getHardwareInfo();
-
   const systemPrompt = getSystemPrompt({ trackCount });
 
   let completion = null;
@@ -55,7 +52,7 @@ export async function handleAIResponse(
   } catch (err: any) {
     console.error('[Agent v2.8] AI Error:', err.message);
 
-    const diagReport = generateErrorDiagnostic(err, hardwareDetails);
+    const diagReport = await generateErrorDiagnostic(err);
     updateMessage(assistantMsgId, diagReport);
     setStatus('error');
     return false;
