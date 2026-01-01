@@ -35,47 +35,19 @@ export async function handleAIResponse(
 
   const hardwareDetails = await getHardwareInfo();
 
-  try {
-    const systemPrompt = getSystemPrompt({ trackCount });
+  const systemPrompt = getSystemPrompt({ trackCount });
 
-    const completion = await engine.chat.completions.create({
+  let completion = null;
+
+  try {
+    completion = await engine.chat.completions.create({
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userInput },
       ],
-      max_tokens: 100, // JSON 포함을 위해 약간 늘림
-      temperature: 0.1, // 명령 실행의 정확도를 위해 낮음
+      max_tokens: 100,
+      temperature: 0.1,
     });
-
-    const fullResponse = completion.choices[0].message.content || '';
-    console.log('[AI Raw Response]:', fullResponse);
-
-    // 🔍 Zod-based validation (replaces regex parsing)
-    const { command, cleanResponse, error } = parseAICommand(fullResponse);
-
-    if (error) {
-      // Validation failed - log for debugging (could implement self-correction here)
-      console.warn('[AI Command Validation Failed]:', error);
-      // For now, treat as normal conversation
-      updateMessage(assistantMsgId, cleanResponse || fullResponse);
-      setStatus('idle');
-      return true;
-    }
-
-    if (command) {
-      console.log('[AI Command Execution]', command);
-      await handleAudioCommand(command);
-
-      updateMessage(assistantMsgId, cleanResponse || '✅ Command executed');
-      setStatus('idle');
-      return true;
-    } else {
-      // No command - normal conversation
-      if (!cleanResponse) throw new Error('EMPTY_RESPONSE');
-      updateMessage(assistantMsgId, cleanResponse);
-      setStatus('idle');
-      return true;
-    }
   } catch (err: any) {
     console.error('[Agent v2.8] AI Error:', err.message);
 
@@ -83,5 +55,35 @@ export async function handleAIResponse(
     updateMessage(assistantMsgId, diagReport);
     setStatus('error');
     return false;
+  }
+
+  const fullResponse = completion.choices[0].message.content || '';
+  console.log('[AI Raw Response]:', fullResponse);
+
+  // 🔍 Zod-based validation (replaces regex parsing)
+  const { command, cleanResponse, error } = parseAICommand(fullResponse);
+
+  if (error) {
+    // Validation failed - log for debugging (could implement self-correction here)
+    console.warn('[AI Command Validation Failed]:', error);
+    // For now, treat as normal conversation
+    updateMessage(assistantMsgId, cleanResponse || fullResponse);
+    setStatus('idle');
+    return true;
+  }
+
+  if (command) {
+    console.log('[AI Command Execution]', command);
+    await handleAudioCommand(command);
+
+    updateMessage(assistantMsgId, cleanResponse || '✅ Command executed');
+    setStatus('idle');
+    return true;
+  } else {
+    // No command - normal conversation
+    if (!cleanResponse) throw new Error('EMPTY_RESPONSE');
+    updateMessage(assistantMsgId, cleanResponse);
+    setStatus('idle');
+    return true;
   }
 }
