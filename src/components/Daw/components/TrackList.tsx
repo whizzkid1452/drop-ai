@@ -1,11 +1,11 @@
-import { useAudioEngineHandleWithUi } from '@/hooks/useAudioEngineHandleWithUi';
+import { useAudioEngineHandleWithUi } from '@/hooks/agent/useAudioEngineHandleWithUi';
 import { useTrackStore } from '@/stores/useTrackStore';
-import { AudioCommandType } from '@/types/audioEngine';
 import { useMemo, useState } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
 import { useShallow } from 'zustand/react/shallow';
 import { TrackComponent } from './Track/TrackComponent';
 import * as styles from './TrackList.css';
+import { AudioCommandType } from '@/types/audioCommand.schema';
 
 export function TrackList() {
   const tracks = useTrackStore(useShallow(state => state.tracks));
@@ -44,6 +44,7 @@ export function TrackList() {
 
           return (
             <TrackComponent
+              key={track.id}
               track={track}
               mediaElement={thisMedia ?? null}
               onReady={ws => {
