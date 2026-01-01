@@ -13,10 +13,8 @@ export async function queryToLLM({
 }) {
   const systemPrompt = getSystemPrompt({ trackCount });
 
-  let completion = null;
-
   try {
-    completion = await engine.chat.completions.create({
+    const completion = await engine.chat.completions.create({
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userInput },

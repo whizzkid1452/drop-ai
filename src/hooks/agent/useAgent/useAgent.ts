@@ -14,7 +14,9 @@ export function useAgent() {
   const [status, setStatus] = useState<AgentStatus>('idle');
 
   const { engine } = useWebLLM();
-  const tracksMap = useTrackStore(state => state.tracks);
+  const trackCount = useTrackStore(
+    state => Array.from(state.tracks.values()).length
+  );
   const { handleAudioCommand } = useAudioEngineHandleWithUi();
 
   const addMessage = useCallback((message: Message) => {
@@ -30,10 +32,8 @@ export function useAgent() {
     const trimmedContent = content.trim();
     if (!trimmedContent) return;
 
-    console.log('=== AGENT v2.8 START (Hybrid Mode) ===');
-    console.log('[Agent] content:', trimmedContent);
-
     if (!engine) {
+      alert('Engine not initialized');
       console.error('[Agent] Engine not initialized');
       return;
     }
@@ -48,17 +48,15 @@ export function useAgent() {
     addMessage(assistantMsg);
 
     // AI 응답 처리
-    await handleAIResponse({
+    const { message, status: newStatus } = await handleAIResponse({
       engine,
-      trackCount: Array.from(tracksMap.values()).length,
+      trackCount,
       userInput: trimmedContent,
-      assistantMsgId: assistantMsg.id,
-      addMessage,
-      updateMessage,
-      setStatus: (status: 'idle' | 'error') => setStatus(status),
-      handleAudioCommand: handleAudioCommand as (command: any) => Promise<any>,
-      getTracks: () => Array.from(tracksMap.values()),
+      handleAudioCommand,
     });
+
+    updateMessage(assistantMsg.id, message);
+    setStatus(newStatus);
   };
 
   return { messages, status, sendMessage, addMessage, updateMessage };
