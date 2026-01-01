@@ -13,7 +13,7 @@ export async function generateErrorDiagnostic(error: Error) {
     error.message?.includes('contain either output text') ||
     error.message === 'EMPTY_RESPONSE';
 
-  const baseReport = `**[v2.8] AI 엔진 장애 분석 (Hybrid 모드)**
+  const baseReport = `
 - **하드웨어:** ${hardwareDetails}
 - **에러:** ${error.message}`;
 

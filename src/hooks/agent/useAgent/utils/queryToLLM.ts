@@ -27,7 +27,7 @@ export async function queryToLLM({
       error: null,
     } as const;
   } catch (err: any) {
-    console.error('[Agent v2.8] AI Error:', err.message);
+    console.error('AI Error:', err.message);
 
     const diagReport = await generateErrorDiagnostic(err);
     return { fullResponse: null, error: diagReport } as const;
