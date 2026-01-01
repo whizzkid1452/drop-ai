@@ -64,9 +64,7 @@ export async function handleAIResponse(
   const fullResponse = completion.choices[0].message.content || '';
   console.log('[AI Raw Response]:', fullResponse);
 
-  const { removeJsonResponse, status, command } = parseAIResponse({
-    fullResponse,
-  });
+  const { command, removeJsonResponse, error } = parseAICommand(fullResponse);
 
   if (command) {
     console.log('[AI Command Execution]', command);
@@ -78,36 +76,7 @@ export async function handleAIResponse(
     assistantMsgId,
     removeJsonResponse || fullResponse || 'no response'
   );
-  setStatus(status);
+  setStatus(error ? 'error' : 'idle');
 
   return true;
-}
-
-function parseAIResponse({ fullResponse }: { fullResponse: string }) {
-  const { command, removeJsonResponse, error } = parseAICommand(fullResponse);
-
-  if (error) {
-    // Validation failed - log for debugging (could implement self-correction here)
-    console.warn('[AI Command Validation Failed]:', error);
-    // For now, treat as normal conversation
-    return {
-      command,
-      removeJsonResponse,
-      status: 'error',
-    } as const;
-  }
-
-  if (!command) {
-    return {
-      command,
-      removeJsonResponse,
-      status: 'idle',
-    } as const;
-  }
-
-  return {
-    command,
-    removeJsonResponse,
-    status: 'idle',
-  } as const;
 }
