@@ -1,8 +1,11 @@
 import type { Message } from '@/types/agent';
-import { parseAICommand, type AudioCommand } from '@/types/audioCommand.schema';
+import {
+  parseAudioCommandString,
+  type AudioCommand,
+} from '@/types/audioCommand.schema';
 import type { Track } from '@/types/track';
 import { createAssistantMessage } from './messageHelpers';
-import { queryToLLM } from './queryToLLM';
+import { queryToLLM as queryToLLM } from './queryToLLM';
 
 export interface AIResponseHandlerDependencies {
   handleAudioCommand: (command: AudioCommand) => Promise<any>;
@@ -49,7 +52,9 @@ export async function handleAIResponse(
 
   console.log('[AI Raw Response]:', fullResponse);
 
-  const { command, error } = parseAICommand(fullResponse);
+  const { command, error } = parseAudioCommandString({
+    commandString: fullResponse,
+  });
 
   if (command) {
     console.log('[AI Command Execution]', command);

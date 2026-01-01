@@ -61,15 +61,19 @@ export type AudioCommand = z.infer<typeof AudioCommandSchema>;
 /**
  * Parse and validate AI response JSON
  *
- * @param rawResponse - Full AI response text (may contain JSON)
+ * @param commandString - Full AI response text (may contain JSON)
  * @returns Parsed command or null if no valid command found
  */
-export function parseAICommand(rawResponse: string): {
+export function parseAudioCommandString({
+  commandString,
+}: {
+  commandString: string;
+}): {
   command: AudioCommand | null;
   error?: string;
 } {
   // Extract JSON from response (supports both inline and last-line formats)
-  const jsonMatch = rawResponse.match(/\{[^}]+\}/);
+  const jsonMatch = commandString.match(/\{[^}]+\}/);
 
   if (!jsonMatch) {
     return {
