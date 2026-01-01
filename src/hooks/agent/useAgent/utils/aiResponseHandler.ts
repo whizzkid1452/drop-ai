@@ -3,6 +3,8 @@ import type { Track } from '@/types/track';
 import { getHardwareInfo } from '@/utils/hardwareInfo';
 import { generateErrorDiagnostic } from './errorHandler';
 import { getSystemPrompt } from './getSystemPrompt';
+import type { Message } from '@/types/agent';
+import { createAssistantMessage } from './messageHelpers';
 
 export interface AIResponseHandlerDependencies {
   handleAudioCommand: (command: AudioCommand) => Promise<any>;
@@ -11,6 +13,7 @@ export interface AIResponseHandlerDependencies {
   trackCount: number;
   userInput: string;
   assistantMsgId: string;
+  addMessage: (message: Message) => void;
   updateMessage: (id: string, content: string) => void;
   setStatus: (status: 'idle' | 'error') => void;
 }
@@ -28,6 +31,7 @@ export async function handleAIResponse(
     trackCount,
     userInput,
     assistantMsgId,
+    addMessage,
     updateMessage,
     setStatus,
     handleAudioCommand,
@@ -60,30 +64,50 @@ export async function handleAIResponse(
   const fullResponse = completion.choices[0].message.content || '';
   console.log('[AI Raw Response]:', fullResponse);
 
-  // 🔍 Zod-based validation (replaces regex parsing)
-  const { command, cleanResponse, error } = parseAICommand(fullResponse);
+  const { removeJsonResponse, status, command } = parseAIResponse({
+    fullResponse,
+  });
+
+  if (command) {
+    console.log('[AI Command Execution]', command);
+    await handleAudioCommand(command);
+    addMessage(createAssistantMessage('✅ Command executed'));
+  }
+
+  updateMessage(
+    assistantMsgId,
+    removeJsonResponse || fullResponse || 'no response'
+  );
+  setStatus(status);
+
+  return true;
+}
+
+function parseAIResponse({ fullResponse }: { fullResponse: string }) {
+  const { command, removeJsonResponse, error } = parseAICommand(fullResponse);
 
   if (error) {
     // Validation failed - log for debugging (could implement self-correction here)
     console.warn('[AI Command Validation Failed]:', error);
     // For now, treat as normal conversation
-    updateMessage(assistantMsgId, cleanResponse || fullResponse);
-    setStatus('idle');
-    return true;
+    return {
+      command,
+      removeJsonResponse,
+      status: 'error',
+    } as const;
   }
 
-  if (command) {
-    console.log('[AI Command Execution]', command);
-    await handleAudioCommand(command);
-
-    updateMessage(assistantMsgId, cleanResponse || '✅ Command executed');
-    setStatus('idle');
-    return true;
-  } else {
-    // No command - normal conversation
-    if (!cleanResponse) throw new Error('EMPTY_RESPONSE');
-    updateMessage(assistantMsgId, cleanResponse);
-    setStatus('idle');
-    return true;
+  if (!command) {
+    return {
+      command,
+      removeJsonResponse,
+      status: 'idle',
+    } as const;
   }
+
+  return {
+    command,
+    removeJsonResponse,
+    status: 'idle',
+  } as const;
 }

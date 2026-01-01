@@ -53,6 +53,7 @@ export function useAgent() {
       trackCount: Array.from(tracksMap.values()).length,
       userInput: trimmedContent,
       assistantMsgId: assistantMsg.id,
+      addMessage,
       updateMessage,
       setStatus: (status: 'idle' | 'error') => setStatus(status),
       handleAudioCommand: handleAudioCommand as (command: any) => Promise<any>,
