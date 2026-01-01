@@ -1,13 +1,13 @@
 import type { Message } from '@/types/agent';
 import { parseAICommand, type AudioCommand } from '@/types/audioCommand.schema';
 import type { Track } from '@/types/track';
-import { generateErrorDiagnostic } from './errorHandler';
-import { getSystemPrompt } from './getSystemPrompt';
 import { createAssistantMessage } from './messageHelpers';
+import { queryToLLM } from './queryToLLM';
 
 export interface AIResponseHandlerDependencies {
   handleAudioCommand: (command: AudioCommand) => Promise<any>;
   getTracks: () => Track[];
+  /** @todo engine 타입 추가 필요 */
   engine: any; // WebLLM 엔진 타입
   trackCount: number;
   userInput: string;
@@ -36,29 +36,17 @@ export async function handleAIResponse(
     handleAudioCommand,
   } = deps;
 
-  const systemPrompt = getSystemPrompt({ trackCount });
-
-  let completion = null;
-
-  try {
-    completion = await engine.chat.completions.create({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userInput },
-      ],
-      max_tokens: 100,
-      temperature: 0.1,
-    });
-  } catch (err: any) {
-    console.error('[Agent v2.8] AI Error:', err.message);
-
-    const diagReport = await generateErrorDiagnostic(err);
-    updateMessage(assistantMsgId, diagReport);
+  const { fullResponse, error: llmResponseError } = await queryToLLM({
+    engine,
+    trackCount,
+    userInput,
+  });
+  if (llmResponseError) {
+    updateMessage(assistantMsgId, llmResponseError);
     setStatus('error');
     return false;
   }
 
-  const fullResponse = completion.choices[0].message.content || '';
   console.log('[AI Raw Response]:', fullResponse);
 
   const { command, removeJsonResponse, error } = parseAICommand(fullResponse);
