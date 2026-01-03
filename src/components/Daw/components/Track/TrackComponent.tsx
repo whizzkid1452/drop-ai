@@ -1,4 +1,5 @@
 import type { Track } from '@/types/track';
+import { PIXELS_PER_SECOND } from '@/constants/dawConstants';
 import WavesurferPlayer from '@wavesurfer/react';
 import type WaveSurfer from 'wavesurfer.js';
 import { TrackPanController } from './components/TrackPanController';
@@ -30,8 +31,8 @@ export const TrackComponent = ({
           // Seek Logic needed later
         }}
         dragToSeek={true}
-        minPxPerSec={3}
-        width={(track.regions[0].audioFile.duration ?? 1) * 3.1}
+        minPxPerSec={PIXELS_PER_SECOND}
+        width={(track.regions[0].audioFile.duration ?? 1) * PIXELS_PER_SECOND}
       />
       {/* Volume Controller: Updates Store AND AudioEngine */}
       {mediaElement ? (
