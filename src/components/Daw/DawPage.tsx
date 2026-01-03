@@ -4,6 +4,7 @@ import { DawHeader } from './components/DawHeader';
 import { TrackList } from './components/TrackList';
 import { AgentInterface } from './components/AgentInterface/AgentInterface';
 import { TrackInfoSidebar } from './components/TrackInfoSidebar';
+import { TimeRuler } from './components/TimeRuler/TimeRuler';
 import * as styles from './DawPage.css';
 import { useTrackStore } from '@/stores/useTrackStore';
 
@@ -17,8 +18,9 @@ export function DawPage() {
     <div className={styles.container}>
       {/* Left (Track Info) Toggle Button */}
       <button
-        className={`${styles.leftToggleButton} ${isTrackInfoOpen ? styles.leftToggleButtonOpen : ''
-          }`}
+        className={`${styles.leftToggleButton} ${
+          isTrackInfoOpen ? styles.leftToggleButtonOpen : ''
+        }`}
         onClick={() => setIsTrackInfoOpen(!isTrackInfoOpen)}
         title={isTrackInfoOpen ? 'Close Track Info' : 'Open Track Info'}
       >
@@ -35,8 +37,9 @@ export function DawPage() {
       </button>
 
       <div
-        className={`${styles.leftPanel} ${!isTrackInfoOpen ? styles.leftPanelCollapsed : ''
-          }`}
+        className={`${styles.leftPanel} ${
+          !isTrackInfoOpen ? styles.leftPanelCollapsed : ''
+        }`}
       >
         <TrackInfoSidebar />
       </div>
@@ -49,6 +52,7 @@ export function DawPage() {
         {hasTracks ? (
           <>
             <DawHeader trackCount={tracks.size} />
+            <TimeRuler />
             <TrackList />
             <AudioFileDrop
               onAudioFileDrop={() => {
