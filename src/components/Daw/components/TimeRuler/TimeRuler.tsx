@@ -3,7 +3,8 @@ import { useTrackStore } from '@/stores/useTrackStore';
 import { PIXELS_PER_SECOND } from '@/constants/dawConstants';
 import * as styles from './TimeRuler.css';
 import type { Track } from '@/types/track';
-
+import { useAudioEngineHandleWithUi } from '@/hooks/agent/useAudioEngineHandleWithUi';
+import { AudioCommandType } from '@/types/audioCommand.schema';
 export const TimeRuler = memo(() => {
   const tracks = useTrackStore(state => state.tracks);
 
@@ -29,7 +30,25 @@ export const TimeRuler = memo(() => {
     return tickElements;
   }, [maxDuration]);
 
-  return <div className={styles.container}>{ticks}</div>;
+  const { handleAudioCommand } = useAudioEngineHandleWithUi();
+
+  const handleTimeClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    /** @warning it depends on PIXELS_PER_SECOND */
+    const time = Math.max(0, x / PIXELS_PER_SECOND);
+
+    handleAudioCommand({
+      type: AudioCommandType.SET_CURRENT_TIME,
+      time,
+    });
+  };
+
+  return (
+    <div className={styles.container} onClick={handleTimeClick}>
+      {ticks}
+    </div>
+  );
 });
 
 function formatTime(seconds: number): string {
