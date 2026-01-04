@@ -14,7 +14,8 @@ globalStyle('html, body, #root', {
 });
 
 globalStyle('body', {
-  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  fontFamily:
+    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   WebkitFontSmoothing: 'antialiased',
   MozOsxFontSmoothing: 'grayscale',
 });
@@ -29,4 +30,3 @@ export const wave = keyframes({
     opacity: 0.8,
   },
 });
-
