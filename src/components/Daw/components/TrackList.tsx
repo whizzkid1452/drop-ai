@@ -6,7 +6,6 @@ import { useShallow } from 'zustand/react/shallow';
 import { TrackComponent } from './Track/TrackComponent';
 import * as styles from './TrackList.css';
 import { Cursor } from './Cursor/Cursor';
-import { AudioCommandType } from '@/types/audioCommand.schema';
 
 export function TrackList() {
   const tracks = useTrackStore(useShallow(state => state.tracks));
@@ -19,19 +18,9 @@ export function TrackList() {
   const { handleAudioCommand } = useAudioEngineHandleWithUi();
   // Note: Manual AudioEngine initialization is now handled by useAudioSync
 
-  const handlePlayAll = () => {
-    handleAudioCommand({ type: AudioCommandType.PLAY });
-  };
-
-  const handlePauseAll = () => {
-    handleAudioCommand({ type: AudioCommandType.PAUSE });
-  };
-
   return (
     <div className={styles.trackList}>
       {/* @todo: 추후 디자인 수정 예정 */}
-      <button onClick={handlePlayAll}>Play All</button>
-      <button onClick={handlePauseAll}>Pause All</button>
       <div className={styles.tracksContainer}>
         <Cursor />
         {trackArray.map(track => {

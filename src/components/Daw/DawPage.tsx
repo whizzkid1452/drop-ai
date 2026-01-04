@@ -5,6 +5,7 @@ import { TrackList } from './components/TrackList';
 import { AgentInterface } from './components/AgentInterface/AgentInterface';
 import { TrackInfoSidebar } from './components/TrackInfoSidebar';
 import { TimeRuler } from './components/TimeRuler/TimeRuler';
+import { PlaybackControls } from './components/PlaybackControls/PlaybackControls';
 import * as styles from './DawPage.css';
 import { useTrackStore } from '@/stores/useTrackStore';
 
@@ -54,6 +55,7 @@ export function DawPage() {
             <DawHeader trackCount={tracks.size} />
             <TimeRuler />
             <TrackList />
+            <PlaybackControls />
             <AudioFileDrop
               onAudioFileDrop={() => {
                 // @todo: 추가시 트랙에 자동 추가 기능 추가 예정
