@@ -20,16 +20,10 @@ export function TrackList() {
 
   const handlePlayAll = () => {
     handleAudioCommand({ type: AudioCommandType.PLAY });
-
-    // Visualize Sync (Optional: Start wavesurfer cursors)
-    wavesurferInstances.forEach(ws => ws.play());
   };
 
   const handlePauseAll = () => {
     handleAudioCommand({ type: AudioCommandType.PAUSE });
-
-    // Visualize Sync
-    wavesurferInstances.forEach(ws => ws.pause());
   };
 
   return (

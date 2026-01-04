@@ -27,10 +27,8 @@ export const TrackComponent = ({
           // Mute the visualization audio element because AudioEngine handles the sound
           ws.setVolume(0);
         }}
-        onClick={_wavesurfer => {
-          // Seek Logic needed later
-        }}
-        dragToSeek={true}
+        interact={false}
+        cursorWidth={0} /** @note wavesurfer의 cursor를 가리기 위함 */
         minPxPerSec={PIXELS_PER_SECOND}
         width={(track.regions[0].audioFile.duration ?? 1) * PIXELS_PER_SECOND}
       />
