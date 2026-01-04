@@ -71,6 +71,7 @@ export function TrackList() {
               key={track.id}
               track={track}
               mediaElement={thisMedia ?? null}
+              pixelsPerSecond={pixelsPerSecond}
               onReady={ws => {
                 // trackStore에 wavesurfer 인스턴스 저장
                 setWavesurferInstances(prev => {

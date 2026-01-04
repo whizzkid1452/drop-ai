@@ -7,12 +7,14 @@ import { TrackVolumeController } from './components/TrackVolumeController';
 export const TrackComponent = ({
   mediaElement,
   track,
+  pixelsPerSecond,
   onReady,
   onVolumeChange,
   onPanChange,
 }: {
   mediaElement: HTMLMediaElement | null;
   track: Track;
+  pixelsPerSecond: number;
   onReady: (ws: WaveSurfer) => void;
   onVolumeChange: (volume: number) => void;
   onPanChange: (pan: number) => void;
@@ -25,6 +27,7 @@ export const TrackComponent = ({
           onReady(ws);
           // Mute the visualization audio element because AudioEngine handles the sound
           ws.setVolume(0);
+          ws.zoom(pixelsPerSecond);
 
           const shadowRoot = ws.getWrapper()?.getRootNode();
           injectShadowRootOverflowHidden({ shadowRoot });
