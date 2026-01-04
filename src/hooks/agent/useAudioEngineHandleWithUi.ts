@@ -41,6 +41,9 @@ export function useAudioEngineHandleWithUi() {
             break;
           case AudioCommandType.GET_TRACK_INFO:
             break;
+          case AudioCommandType.SET_CURRENT_TIME:
+            setCurrentTime(command.time);
+            break;
         }
       },
     });

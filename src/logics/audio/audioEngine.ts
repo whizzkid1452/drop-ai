@@ -82,6 +82,10 @@ export class AudioEngine {
       case AudioCommandType.GET_TRACK_INFO:
         result = this.getTrackInfo();
         break;
+      case AudioCommandType.SET_CURRENT_TIME:
+        Tone.getTransport().seconds = command.time;
+        result = command.time;
+        break;
     }
     callback?.({ command, result });
     return result;
