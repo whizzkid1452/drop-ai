@@ -171,4 +171,8 @@ export class AudioEngine {
       pan: track.channel.pan.value,
     };
   }
+
+  public getSeconds(): number {
+    return Tone.getTransport().seconds;
+  }
 }
