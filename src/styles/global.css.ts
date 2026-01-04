@@ -11,6 +11,8 @@ globalStyle('html, body, #root', {
   height: '100%',
   margin: 0,
   padding: 0,
+  /** @note mac 뒤로가기 기능 방어 */
+  overscrollBehaviorX: 'none',
 });
 
 globalStyle('body', {
