@@ -5,6 +5,7 @@ import type WaveSurfer from 'wavesurfer.js';
 import { useShallow } from 'zustand/react/shallow';
 import { TrackComponent } from './Track/TrackComponent';
 import * as styles from './TrackList.css';
+import { Cursor } from './Cursor/Cursor';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 
 export function TrackList() {
@@ -32,6 +33,7 @@ export function TrackList() {
       <button onClick={handlePlayAll}>Play All</button>
       <button onClick={handlePauseAll}>Pause All</button>
       <div className={styles.tracksContainer}>
+        <Cursor />
         {trackArray.map(track => {
           const thisWs = wavesurferInstances.get(track.id);
           const thisMedia = thisWs?.getMediaElement();

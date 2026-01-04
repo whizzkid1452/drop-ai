@@ -1,8 +1,9 @@
-import { style } from "@vanilla-extract/css";
+import { style } from '@vanilla-extract/css';
 
 export const tracksContainer = style({
   display: 'flex',
   flexDirection: 'column',
+  position: 'relative',
 });
 
 export const trackList = style({
