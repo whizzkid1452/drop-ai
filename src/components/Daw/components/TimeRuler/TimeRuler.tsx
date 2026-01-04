@@ -1,12 +1,13 @@
 import { memo, useMemo } from 'react';
 import { useTrackStore } from '@/stores/useTrackStore';
-import { PIXELS_PER_SECOND } from '@/constants/dawConstants';
+import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import * as styles from './TimeRuler.css';
 import type { Track } from '@/types/track';
 import { useAudioEngineHandleWithUi } from '@/hooks/agent/useAudioEngineHandleWithUi';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 export const TimeRuler = memo(() => {
   const tracks = useTrackStore(state => state.tracks);
+  const pixelsPerSecond = usePlaybackStore(state => state.pixelsPerSecond);
 
   const maxDuration = useMemo(() => getMaxDuration(tracks), [tracks]);
 
@@ -15,20 +16,20 @@ export const TimeRuler = memo(() => {
     const step = 1; // 1 second steps
 
     for (let i = 0; i <= maxDuration; i += step) {
-      const isMajor = i % (60 / PIXELS_PER_SECOND) === 0;
+      const isMajor = i % Math.max(1, Math.floor(60 / pixelsPerSecond)) === 0;
 
       tickElements.push(
         <div
           key={i}
           className={`${styles.tick} ${isMajor ? styles.majorTick : ''}`}
-          style={{ left: `${i * PIXELS_PER_SECOND}px` }}
+          style={{ left: `${i * pixelsPerSecond}px` }}
         >
           {isMajor && <span className={styles.label}>{formatTime(i)}</span>}
         </div>
       );
     }
     return tickElements;
-  }, [maxDuration]);
+  }, [maxDuration, pixelsPerSecond]);
 
   const { handleAudioCommand } = useAudioEngineHandleWithUi();
 
@@ -36,7 +37,7 @@ export const TimeRuler = memo(() => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     /** @warning it depends on PIXELS_PER_SECOND */
-    const time = Math.max(0, x / PIXELS_PER_SECOND);
+    const time = Math.max(0, x / pixelsPerSecond);
 
     handleAudioCommand({
       type: AudioCommandType.SET_CURRENT_TIME,

@@ -1,6 +1,5 @@
 import { useRef, useEffect } from 'react';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { PIXELS_PER_SECOND } from '@/constants/dawConstants';
 import { AudioEngine } from '@/logics/audio/audioEngine';
 import * as styles from './Cursor.css';
 
@@ -11,7 +10,8 @@ export const Cursor = () => {
   useEffect(() => {
     const updatePosition = (time: number) => {
       if (cursorRef.current) {
-        const x = time * PIXELS_PER_SECOND;
+        const pps = usePlaybackStore.getState().pixelsPerSecond;
+        const x = time * pps;
         cursorRef.current.style.transform = `translateX(${x}px)`;
       }
     };
@@ -23,7 +23,7 @@ export const Cursor = () => {
     };
 
     const unsubscribe = usePlaybackStore.subscribe(
-      ({ isPlaying, currentTime }, previous) => {
+      ({ isPlaying, currentTime, pixelsPerSecond }, previous) => {
         // Handle Play/Pause State
         if (isPlaying !== previous?.isPlaying) {
           if (isPlaying) {
@@ -38,8 +38,11 @@ export const Cursor = () => {
           }
         }
 
-        /** 수동 제어 시점(정지 시) */
-        if (!isPlaying && currentTime !== previous?.currentTime) {
+        /** 수동 제어 시점(정지 시 또는 줌 변경 시) */
+        if (
+          (!isPlaying && currentTime !== previous?.currentTime) ||
+          pixelsPerSecond !== previous?.pixelsPerSecond
+        ) {
           updatePosition(currentTime);
         }
       }

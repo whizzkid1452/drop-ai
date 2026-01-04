@@ -1,6 +1,7 @@
 import { useAudioEngineHandleWithUi } from '@/hooks/agent/useAudioEngineHandleWithUi';
+import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import { useTrackStore } from '@/stores/useTrackStore';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
 import { useShallow } from 'zustand/react/shallow';
 import { TrackComponent } from './Track/TrackComponent';
@@ -17,11 +18,49 @@ export function TrackList() {
 
   const { handleAudioCommand } = useAudioEngineHandleWithUi();
   // Note: Manual AudioEngine initialization is now handled by useAudioSync
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { pixelsPerSecond, setPixelsPerSecond } = usePlaybackStore(
+    useShallow(state => ({
+      pixelsPerSecond: state.pixelsPerSecond,
+      setPixelsPerSecond: state.setPixelsPerSecond,
+    }))
+  );
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+
+        const zoomFactor = 1.1;
+        const newPixelsPerSecond =
+          e.deltaY > 0
+            ? pixelsPerSecond / zoomFactor
+            : pixelsPerSecond * zoomFactor;
+
+        // Clamp
+        const clamped = Math.max(1, Math.min(1000, newPixelsPerSecond));
+
+        setPixelsPerSecond(clamped);
+
+        wavesurferInstances.forEach(ws => {
+          ws.zoom(clamped);
+        });
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+    };
+  }, [pixelsPerSecond, setPixelsPerSecond, wavesurferInstances]);
 
   return (
     <div className={styles.trackList}>
       {/* @todo: 추후 디자인 수정 예정 */}
-      <div className={styles.tracksContainer}>
+      <div ref={containerRef} className={styles.tracksContainer}>
         <Cursor />
         {trackArray.map(track => {
           const thisWs = wavesurferInstances.get(track.id);
