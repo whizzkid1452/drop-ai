@@ -7,6 +7,7 @@ export const AudioCommandType = {
   SET_TRACK_VOLUME: 'SET_TRACK_VOLUME',
   SET_TRACK_PAN: 'SET_TRACK_PAN',
   LOAD_REGION: 'LOAD_REGION',
+  UNLOAD_REGION: 'UNLOAD_REGION',
   GET_TRACK_INFO: 'GET_TRACK_INFO',
   SET_CURRENT_TIME: 'SET_CURRENT_TIME',
 } as const;
@@ -51,6 +52,12 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
     regionId: z.uuid('Invalid region ID format'),
     url: z.url('Invalid URL format'),
     startTime: z.number().min(0, 'Start time must be >= 0'),
+    startOffset: z.number().min(0, 'Start offset must be >= 0').optional(),
+  }),
+  z.object({
+    type: z.literal(AudioCommandType.UNLOAD_REGION),
+    trackId: z.uuid('Invalid track ID format'),
+    regionId: z.uuid('Invalid region ID format'),
   }),
   z.object({
     type: z.literal(AudioCommandType.GET_TRACK_INFO),
@@ -109,9 +116,8 @@ export function parseAudioCommandString({
   } catch (err) {
     return {
       command: null,
-      error: `JSON parse error: ${
-        err instanceof Error ? err.message : 'Unknown error'
-      }`,
+      error: `JSON parse error: ${err instanceof Error ? err.message : 'Unknown error'
+        }`,
     };
   }
 }

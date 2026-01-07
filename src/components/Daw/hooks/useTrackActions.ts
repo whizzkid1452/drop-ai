@@ -1,6 +1,7 @@
 import { useTrackStore } from '@/stores/useTrackStore';
 import { calculateSplitRegion } from '../logic/regionLogic';
 import { useCallback } from 'react';
+import { AudioEngine } from '@/logics/audio/audioEngine';
 
 export const useTrackActions = () => {
     const updateTrack = useTrackStore(state => state.updateTrack);
@@ -57,11 +58,31 @@ export const useTrackActions = () => {
                 },
             });
 
-            // 3. TODO: Sync with AudioEngine
-            // We need to:
-            // a) Unload/Stop the original region player
-            // b) Load/Start the new region players
-            // Because AudioEngine currently lacks 'UNLOAD_REGION', we skip this for now.
+            // 3. Sync with AudioEngine
+            const engine = AudioEngine.getInstance();
+
+            // a) Unload the original region
+            engine.execute({
+                command: {
+                    type: 'UNLOAD_REGION',
+                    trackId,
+                    regionId: region.id,
+                },
+            });
+
+            // b) Load the new regions
+            [result.left, result.right].forEach(newRegion => {
+                engine.execute({
+                    command: {
+                        type: 'LOAD_REGION',
+                        trackId,
+                        regionId: newRegion.id,
+                        url: newRegion.audioFile.url,
+                        startTime: newRegion.startTime,
+                        startOffset: newRegion.sourceStart,
+                    },
+                });
+            });
         },
         [getTrack, updateTrack]
     );
