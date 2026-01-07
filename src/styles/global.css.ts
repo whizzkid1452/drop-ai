@@ -11,10 +11,13 @@ globalStyle('html, body, #root', {
   height: '100%',
   margin: 0,
   padding: 0,
+  /** @note mac 뒤로가기 기능 방어 */
+  overscrollBehaviorX: 'none',
 });
 
 globalStyle('body', {
-  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  fontFamily:
+    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   WebkitFontSmoothing: 'antialiased',
   MozOsxFontSmoothing: 'grayscale',
 });
@@ -29,4 +32,3 @@ export const wave = keyframes({
     opacity: 0.8,
   },
 });
-

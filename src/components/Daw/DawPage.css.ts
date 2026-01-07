@@ -3,23 +3,20 @@ import { wave } from '@/styles/global.css';
 
 export const container = style({
   width: '100%',
-  height: '100vh',
-  margin: 0,
-  backgroundColor: '#0a0a0a',
   minHeight: '100vh',
+  margin: 0,
   position: 'relative',
   display: 'flex',
   fontFamily:
     '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-  overflow: 'hidden',
 });
 
 export const mainContent = style({
   flex: 1,
-  height: '100%',
   position: 'relative',
   padding: '24px',
-  overflow: 'auto',
+  minWidth: '5000px',
+  backgroundColor: '#0a0a0a',
 });
 
 export const cliPanel = style({

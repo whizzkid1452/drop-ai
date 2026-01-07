@@ -8,6 +8,7 @@ export const AudioCommandType = {
   SET_TRACK_PAN: 'SET_TRACK_PAN',
   LOAD_REGION: 'LOAD_REGION',
   GET_TRACK_INFO: 'GET_TRACK_INFO',
+  SET_CURRENT_TIME: 'SET_CURRENT_TIME',
 } as const;
 export type AudioCommandType =
   (typeof AudioCommandType)[keyof typeof AudioCommandType];
@@ -53,6 +54,10 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal(AudioCommandType.GET_TRACK_INFO),
+  }),
+  z.object({
+    type: z.literal(AudioCommandType.SET_CURRENT_TIME),
+    time: z.number().min(0, 'Time must be >= 0'),
   }),
 ]);
 
