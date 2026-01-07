@@ -1,11 +1,12 @@
+import { useAudioEngine } from '@/hooks/useAudioEngine';
 import { useTrackStore } from '@/stores/useTrackStore';
 import { calculateSplitRegion } from '../logic/regionLogic';
 import { useCallback } from 'react';
-import { AudioEngine } from '@/logics/audio/audioEngine';
 
 export const useTrackActions = () => {
     const updateTrack = useTrackStore(state => state.updateTrack);
     const getTrack = useTrackStore(state => state.getTrack);
+    const engine = useAudioEngine();
 
     /**
      * Split a region at the specified time
@@ -59,7 +60,6 @@ export const useTrackActions = () => {
             });
 
             // 3. Sync with AudioEngine
-            const engine = AudioEngine.getInstance();
 
             // a) Unload the original region
             engine.execute({
