@@ -76,8 +76,13 @@ export class AudioEngine {
           command.trackId,
           command.regionId,
           command.url,
-          command.startTime
+          command.startTime,
+          command.startOffset
         );
+        break;
+      case AudioCommandType.UNLOAD_REGION:
+        this.unloadRegion(command.trackId, command.regionId);
+        result = true;
         break;
       case AudioCommandType.GET_TRACK_INFO:
         result = this.getTrackInfo();
@@ -114,7 +119,8 @@ export class AudioEngine {
     trackId: string,
     regionId: string,
     url: string,
-    startTime: number = 0
+    startTime: number = 0,
+    startOffset: number = 0
   ) {
     this.initTrack(trackId);
     const trackData = this.tracks.get(trackId);
@@ -126,11 +132,28 @@ export class AudioEngine {
       url,
       loop: false,
       onload: () => {
-        player.sync().start(startTime);
+        /**
+         * sync().start(startTime, offset)
+         * startTime: When to start playing on the timeline
+         * offset: Where to start playing in the source file
+         */
+        player.sync().start(startTime, startOffset);
       },
     }).connect(trackData.channel);
 
     trackData.players.set(regionId, player);
+  }
+
+  private unloadRegion(trackId: string, regionId: string) {
+    const trackData = this.tracks.get(trackId);
+    if (!trackData) return;
+
+    const player = trackData.players.get(regionId);
+    if (player) {
+      player.stop();
+      player.dispose();
+      trackData.players.delete(regionId);
+    }
   }
 
   /**
