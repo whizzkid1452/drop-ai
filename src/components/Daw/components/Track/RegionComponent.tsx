@@ -24,14 +24,14 @@ export const RegionComponent = ({
         <div
             className={styles.regionContainer}
             style={{
-                left: `${left}px`,
+                transform: `translateX(${left}px)`,
                 width: `${width}px`,
             }}
         >
             <div
                 className={styles.waveformContainer}
                 style={{
-                    marginLeft: `${visualOffset}px`,
+                    transform: `translateX(${visualOffset}px)`,
                 }}
             >
                 <WavesurferPlayer
@@ -54,6 +54,7 @@ export const RegionComponent = ({
     );
 };
 
+/** @description wavesurfer의 scrollbar를 가리기 위함. shadowRoot 내부라 억지로 style 주입 */
 function injectShadowRootOverflowHidden({ shadowRoot }: { shadowRoot: Node }) {
     if (shadowRoot instanceof ShadowRoot) {
         const styleId = 'drop-ai-wavesurfer-style';
