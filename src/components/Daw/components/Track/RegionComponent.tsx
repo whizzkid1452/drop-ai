@@ -16,9 +16,9 @@ export const RegionComponent = ({
 }: RegionComponentProps) => {
     const width = (region.endTime - region.startTime) * pixelsPerSecond;
     const left = region.startTime * pixelsPerSecond;
-    // Calculate visual offset for sourceStart
+    // Calculate visual offset for sourceStartTime
     // If the region starts at 5s in the file, we pull the waveform left by 5s worth of pixels
-    const visualOffset = -(region.sourceStart * pixelsPerSecond);
+    const visualOffset = -(region.sourceStartTime * pixelsPerSecond);
 
     return (
         <div

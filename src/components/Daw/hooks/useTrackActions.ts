@@ -1,12 +1,12 @@
-import { useAudioEngine } from '@/hooks/useAudioEngine';
+import { AudioEngine } from '@/logics/audio/audioEngine';
 import { useTrackStore } from '@/stores/useTrackStore';
 import { calculateSplitRegion } from '../logic/regionLogic';
+import { AudioCommandType } from '@/types/audioCommand.schema';
 import { useCallback } from 'react';
 
 export const useTrackActions = () => {
     const updateTrack = useTrackStore(state => state.updateTrack);
     const getTrack = useTrackStore(state => state.getTrack);
-    const engine = useAudioEngine();
 
     /**
      * Split a region at the specified time
@@ -41,13 +41,16 @@ export const useTrackActions = () => {
                 return;
             }
 
+            // Destructure for better readability per review
+            const { left: leftRegion, right: rightRegion } = result;
+
             // 2. Update the Store (State Mutation)
             updateTrack({
                 trackId,
                 updater: t => {
                     // Remove the original region and add the two new ones
                     const otherRegions = t.regions.filter(r => r.id !== region.id);
-                    const newRegions = [...otherRegions, result.left, result.right];
+                    const newRegions = [...otherRegions, leftRegion, rightRegion];
 
                     // Sort by start time for safety (though not strictly required if other logic handles it)
                     newRegions.sort((a, b) => a.startTime - b.startTime);
@@ -62,24 +65,24 @@ export const useTrackActions = () => {
             // 3. Sync with AudioEngine
 
             // a) Unload the original region
-            engine.execute({
+            AudioEngine.getInstance().execute({
                 command: {
-                    type: 'UNLOAD_REGION',
+                    type: AudioCommandType.UNLOAD_REGION,
                     trackId,
                     regionId: region.id,
                 },
             });
 
             // b) Load the new regions
-            [result.left, result.right].forEach(newRegion => {
-                engine.execute({
+            [leftRegion, rightRegion].forEach(newRegion => {
+                AudioEngine.getInstance().execute({
                     command: {
-                        type: 'LOAD_REGION',
+                        type: AudioCommandType.LOAD_REGION,
                         trackId,
                         regionId: newRegion.id,
                         url: newRegion.audioFile.url,
                         startTime: newRegion.startTime,
-                        startOffset: newRegion.sourceStart,
+                        startOffset: newRegion.sourceStartTime,
                     },
                 });
             });
