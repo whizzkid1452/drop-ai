@@ -46,21 +46,25 @@ export function CliTerminal() {
     addLog(`> ${trimmedInput}`, 'info');
 
     try {
-      const command = JSON.parse(trimmedInput);
+      const parsed = JSON.parse(trimmedInput);
+      const commands = Array.isArray(parsed) ? parsed : [parsed];
 
-      // Basic type validation check
-      if (!command.type) {
-        throw new Error('Command must have a "type" property.');
+      for (const command of commands) {
+        // Basic type validation check
+        if (!command.type) {
+          throw new Error('Command must have a "type" property.');
+        }
+
+        // Execute command
+        const result = await handleAudioCommand(command);
+
+        if (result !== undefined) {
+          addLog(JSON.stringify(result, null, 2), 'success');
+        } else {
+          addLog(`Executed: ${command.type}`, 'success');
+        }
       }
-
-      // Execute command
-      const result = await handleAudioCommand(command);
-
-      if (result !== undefined) {
-        addLog(JSON.stringify(result, null, 2), 'success');
-      } else {
-        addLog(`Executed: ${command.type}`, 'success');
-      }
+      
       setInput(''); // Clear input on success
     } catch (err) {
       if (err instanceof Error) {
