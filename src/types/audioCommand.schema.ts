@@ -98,6 +98,21 @@ export function parseAudioCommandString({
   commands: AudioCommand[] | null;
   error?: string;
 } {
+  // 🔧 DEFENSIVE PARSING: Auto-fix malformed JSON from AI
+  // Pattern: {"type":"SET_EXPORT_RANGE",...,"type":"EXPORT_AUDIO"}
+  const malformedExportPattern = /"type"\s*:\s*"SET_EXPORT_RANGE"[^}]*"startTime"\s*:\s*(\d+(?:\.\d+)?)[^}]*"endTime"\s*:\s*(\d+(?:\.\d+)?)[^}]*"type"\s*:\s*"EXPORT_AUDIO"/;
+  
+  const match = commandString.match(malformedExportPattern);
+  if (match) {
+    const startTime = match[1];
+    const endTime = match[2];
+    const fixedCommand = `[{"type":"SET_EXPORT_RANGE","startTime":${startTime},"endTime":${endTime}},{"type":"EXPORT_AUDIO"}]`;
+    console.warn('[parseAudioCommandString] Auto-fixed malformed export JSON');
+    console.warn('Original:', commandString);
+    console.warn('Fixed:', fixedCommand);
+    commandString = fixedCommand;
+  }
+
   // Try to extract JSON array first
   const arrayMatch = commandString.match(/\[[\s\S]*\]/);
   
