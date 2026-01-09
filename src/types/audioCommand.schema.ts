@@ -88,22 +88,56 @@ export type AudioCommand = z.infer<typeof AudioCommandSchema>;
  * Parse and validate AI response JSON
  *
  * @param commandString - Full AI response text (may contain JSON)
- * @returns Parsed command or null if no valid command found
+ * @returns Parsed commands (array) or null if no valid command found
  */
 export function parseAudioCommandString({
   commandString,
 }: {
   commandString: string;
 }): {
-  command: AudioCommand | null;
+  commands: AudioCommand[] | null;
   error?: string;
 } {
-  // Extract JSON from response (supports both inline and last-line formats)
+  // Try to extract JSON array first
+  const arrayMatch = commandString.match(/\[[\s\S]*\]/);
+  
+  if (arrayMatch) {
+    try {
+      const parsed = JSON.parse(arrayMatch[0]);
+      if (!Array.isArray(parsed)) {
+        return { commands: null, error: 'Expected array of commands' };
+      }
+      
+      const validatedCommands: AudioCommand[] = [];
+      for (const item of parsed) {
+        const validated = AudioCommandSchema.safeParse(item);
+        if (!validated.success) {
+          const errorMsg = validated.error.issues
+            .map((e: any) => e.message)
+            .join(', ');
+          return {
+            commands: null,
+            error: `Invalid command in array: ${errorMsg}`,
+          };
+        }
+        validatedCommands.push(validated.data);
+      }
+      
+      return { commands: validatedCommands };
+    } catch (err) {
+      return {
+        commands: null,
+        error: `JSON array parse error: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      };
+    }
+  }
+
+  // Fallback: try single command object
   const jsonMatch = commandString.match(/\{[^}]+\}/);
 
   if (!jsonMatch) {
     return {
-      command: null,
+      commands: null,
     };
   }
 
@@ -113,23 +147,21 @@ export function parseAudioCommandString({
     const validated = AudioCommandSchema.safeParse(parsed);
 
     if (!validated.success) {
-      // Validation failed - return error for self-correction
-      // Zod v4 uses 'issues' instead of 'errors'
       const errorMsg = validated.error.issues
         .map((e: any) => e.message)
         .join(', ');
       return {
-        command: null,
+        commands: null,
         error: `Invalid command format: ${errorMsg}`,
       };
     }
 
     return {
-      command: validated.data,
+      commands: [validated.data],
     };
   } catch (err) {
     return {
-      command: null,
+      commands: null,
       error: `JSON parse error: ${err instanceof Error ? err.message : 'Unknown error'
         }`,
     };

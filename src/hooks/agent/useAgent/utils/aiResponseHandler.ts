@@ -33,14 +33,17 @@ export async function handleAIResponse(deps: AIResponseHandlerDependencies) {
     };
   }
 
-  const { command, error } = parseAudioCommandString({
+  const { commands, error } = parseAudioCommandString({
     commandString: fullResponse,
   });
 
-  if (command) {
-    await handleAudioCommand(command);
+  if (commands && commands.length > 0) {
+    // Execute all commands sequentially
+    for (const command of commands) {
+      await handleAudioCommand(command);
+    }
     return {
-      message: fullResponse || '✅ Command executed',
+      message: fullResponse || '✅ Commands executed',
       status: 'idle' as const,
     };
   }
