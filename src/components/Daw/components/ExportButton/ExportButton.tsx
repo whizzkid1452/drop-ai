@@ -75,7 +75,7 @@ export function ExportButton({
       onExportError?.(error);
       console.error('Export error:', error);
     }
-  }, [tracks, settings, onExportComplete, onExportError]);
+  }, [tracks, settings, onExportComplete, onExportError, exportStartTime, exportEndTime]);
 
   // 트랙이 없으면 버튼 비활성화
   const isDisabled = tracks.length === 0 || isExporting;
