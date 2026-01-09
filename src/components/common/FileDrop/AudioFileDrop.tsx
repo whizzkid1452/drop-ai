@@ -38,7 +38,7 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
             {
               startTime: 0,
               endTime: uploadedAudioFile.duration ?? 0,
-              sourceStart: 0,
+              sourceStartTime: 0,
               audioFile: uploadedAudioFile,
               status: [RegionStatus.active],
             },

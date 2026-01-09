@@ -24,7 +24,7 @@ export const calculateSplitRegion = (
     // 2. 왼쪽 Region 생성
     // startTime: 유지
     // endTime: splitTime
-    // sourceStart: 유지
+    // sourceStartTime: 유지
     const left: Region = {
         ...region,
         id: crypto.randomUUID(), // 새로운 ID 발급
@@ -34,14 +34,18 @@ export const calculateSplitRegion = (
     // 3. 오른쪽 Region 생성
     // startTime: splitTime
     // endTime: 유지
-    // sourceStart: 기존 sourceStart + (splitTime - 기존 startTime)  <- 핵심 로직
+    // sourceStartTime: 기존 sourceStartTime + (splitTime - 기존 startTime)  <- 핵심 로직
     // (재생되는 오프셋이 잘린 시간만큼 뒤로 밀려야 함)
-    const offset = splitTime - region.startTime;
+
+    // Extract variables per code review for better readability
+    const prevRegionSourceStartTime = region.sourceStartTime ?? 0;
+    const thisSourceStartTime = splitTime - region.startTime;
+
     const right: Region = {
         ...region,
         id: crypto.randomUUID(), // 새로운 ID 발급
         startTime: splitTime,
-        sourceStart: (region.sourceStart ?? 0) + offset,
+        sourceStartTime: prevRegionSourceStartTime + thisSourceStartTime,
     };
 
     return { left, right };
