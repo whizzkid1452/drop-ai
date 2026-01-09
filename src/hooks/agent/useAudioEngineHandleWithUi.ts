@@ -6,6 +6,7 @@ import {
   type AudioCommand,
 } from '@/types/audioCommand.schema';
 import { useShallow } from 'zustand/react/shallow';
+import { downloadBlob } from '@/components/Daw/components/ExportButton/utils/audioExport';
 
 export function useAudioEngineHandleWithUi() {
   const { setIsPlaying, setCurrentTime } = usePlaybackStore();
@@ -14,7 +15,7 @@ export function useAudioEngineHandleWithUi() {
   const handleAudioCommand = (command: AudioCommand) =>
     AudioEngine.getInstance().execute({
       command,
-      callback: ({ command }) => {
+      callback: ({ command, result }) => {
         // Update Store based on command type
         switch (command.type) {
           case AudioCommandType.PLAY:
@@ -43,6 +44,11 @@ export function useAudioEngineHandleWithUi() {
             break;
           case AudioCommandType.SET_CURRENT_TIME:
             setCurrentTime(command.time);
+            break;
+          case AudioCommandType.EXPORT_AUDIO:
+            if (result instanceof Blob) {
+              downloadBlob(result, 'export.wav');
+            }
             break;
         }
       },

@@ -10,6 +10,7 @@ export const AudioCommandType = {
   UNLOAD_REGION: 'UNLOAD_REGION',
   GET_TRACK_INFO: 'GET_TRACK_INFO',
   SET_CURRENT_TIME: 'SET_CURRENT_TIME',
+  EXPORT_AUDIO: 'EXPORT_AUDIO',
 } as const;
 export type AudioCommandType =
   (typeof AudioCommandType)[keyof typeof AudioCommandType];
@@ -65,6 +66,11 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal(AudioCommandType.SET_CURRENT_TIME),
     time: z.number().min(0, 'Time must be >= 0'),
+  }),
+  z.object({
+    type: z.literal(AudioCommandType.EXPORT_AUDIO),
+    startTime: z.number().min(0, 'Start time must be >= 0').optional(),
+    endTime: z.number().min(0, 'End time must be >= 0').optional(),
   }),
 ]);
 

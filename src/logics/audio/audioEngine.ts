@@ -4,6 +4,7 @@ import {
   AudioCommandType,
   type AudioCommand,
 } from '@/types/audioCommand.schema';
+import { exportProject } from './exportProject';
 
 /**
  * AudioEngine (Tone.js Version)
@@ -90,6 +91,14 @@ export class AudioEngine {
       case AudioCommandType.SET_CURRENT_TIME:
         Tone.getTransport().seconds = command.time;
         result = command.time;
+        break;
+      case AudioCommandType.EXPORT_AUDIO:
+        const tracks = Array.from(useTrackStore.getState().tracks.values());
+        const range =
+          command.startTime !== undefined && command.endTime !== undefined
+            ? { startTime: command.startTime, endTime: command.endTime }
+            : undefined;
+        result = await exportProject(tracks, range);
         break;
     }
     callback?.({ command, result });
