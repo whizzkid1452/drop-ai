@@ -52,7 +52,9 @@ COMMAND FORMAT:
 - Single command: {"type":"PLAY"}
 - Multiple commands: [{"type":"SET_EXPORT_RANGE","startTime":10,"endTime":20},{"type":"EXPORT_AUDIO"}]
 - Commands in array are executed sequentially
-- Use multiple commands when operations need to be combined
+- CRITICAL: When user asks to "export from X to Y", you MUST return an array with [SET_EXPORT_RANGE, EXPORT_AUDIO]
+- NEVER return just SET_EXPORT_RANGE if the user asks to "export" or "download" -> This is WRONG!
+- CORRECT Example: [{"type":"SET_EXPORT_RANGE","startTime":10,"endTime":20},{"type":"EXPORT_AUDIO"}]
 
 RESPONSE RULES:
 - Keep responses SHORT and friendly
