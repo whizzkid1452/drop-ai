@@ -1,5 +1,6 @@
 import * as Tone from 'tone';
 import { useTrackStore } from '@/stores/useTrackStore';
+import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import {
   AudioCommandType,
   type AudioCommand,
@@ -92,11 +93,20 @@ export class AudioEngine {
         Tone.getTransport().seconds = command.time;
         result = command.time;
         break;
+      case AudioCommandType.SET_EXPORT_RANGE:
+        // Store update handled in useAudioEngineHandleWithUi
+        result = { startTime: command.startTime, endTime: command.endTime };
+        break;
+      case AudioCommandType.CLEAR_EXPORT_RANGE:
+        // Store update handled in useAudioEngineHandleWithUi
+        result = true;
+        break;
       case AudioCommandType.EXPORT_AUDIO:
         const tracks = Array.from(useTrackStore.getState().tracks.values());
+        const { exportStartTime, exportEndTime } = usePlaybackStore.getState();
         const range =
-          command.startTime !== undefined && command.endTime !== undefined
-            ? { startTime: command.startTime, endTime: command.endTime }
+          exportStartTime !== null && exportEndTime !== null
+            ? { startTime: exportStartTime, endTime: exportEndTime }
             : undefined;
         result = await exportProject(tracks, range);
         break;

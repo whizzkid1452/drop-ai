@@ -9,7 +9,15 @@ import { useShallow } from 'zustand/react/shallow';
 import { downloadBlob } from '@/components/Daw/components/ExportButton/utils/audioExport';
 
 export function useAudioEngineHandleWithUi() {
-  const { setIsPlaying, setCurrentTime } = usePlaybackStore();
+  const { setIsPlaying, setCurrentTime, setExportRange, exportStartTime, exportEndTime } = usePlaybackStore(
+    useShallow(state => ({
+      setIsPlaying: state.setIsPlaying,
+      setCurrentTime: state.setCurrentTime,
+      setExportRange: state.setExportRange,
+      exportStartTime: state.exportStartTime,
+      exportEndTime: state.exportEndTime,
+    }))
+  );
   const updateTrack = useTrackStore(useShallow(state => state.updateTrack));
 
   const handleAudioCommand = (command: AudioCommand) =>
@@ -45,9 +53,20 @@ export function useAudioEngineHandleWithUi() {
           case AudioCommandType.SET_CURRENT_TIME:
             setCurrentTime(command.time);
             break;
+          case AudioCommandType.SET_EXPORT_RANGE:
+            setExportRange(command.startTime, command.endTime);
+            break;
+          case AudioCommandType.CLEAR_EXPORT_RANGE:
+            setExportRange(null, null);
+            break;
           case AudioCommandType.EXPORT_AUDIO:
             if (result instanceof Blob) {
-              downloadBlob(result, 'export.wav');
+              // Generate filename based on current Store range
+              let filename = 'export';
+              if (exportStartTime !== null && exportEndTime !== null) {
+                filename = `export_${exportStartTime}-${exportEndTime}s`;
+              }
+              downloadBlob(result, `${filename}.wav`);
             }
             break;
         }
