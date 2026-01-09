@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { AudioFileDrop } from '../common/FileDrop/AudioFileDrop';
 import { DawHeader } from './components/DawHeader';
 import { TrackList } from './components/TrackList';
-import { AgentInterface } from './components/AgentInterface/AgentInterface';
+import { AgentInterface } from './components/Terminals/AgentInterface';
 import { TrackInfoSidebar } from './components/TrackInfoSidebar';
 import { TimeRuler } from './components/TimeRuler/TimeRuler';
 import { PlaybackControls } from './components/PlaybackControls/PlaybackControls';
