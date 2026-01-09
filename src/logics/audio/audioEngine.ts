@@ -180,10 +180,17 @@ export class AudioEngine {
    * @param volume Linear volume (0.0 to 1.0)
    */
   private setTrackVolume(trackId: string, volume: number) {
-    const track = this.tracks.get(trackId);
+    let track = this.tracks.get(trackId);
+    if (!track) {
+      this.initTrack(trackId);
+      track = this.tracks.get(trackId);
+    }
+    
     if (track) {
       const db = Tone.gainToDb(volume);
       track.channel.volume.rampTo(db, 0.1);
+    } else {
+        console.warn(`Track ${trackId} initialization failed.`);
     }
   }
 
@@ -192,9 +199,16 @@ export class AudioEngine {
    * @param pan -1.0 (Left) to 1.0 (Right)
    */
   private setTrackPan(trackId: string, pan: number) {
-    const track = this.tracks.get(trackId);
+    let track = this.tracks.get(trackId);
+    if (!track) {
+        this.initTrack(trackId);
+        track = this.tracks.get(trackId);
+    }
+
     if (track) {
       track.channel.pan.rampTo(pan, 0.1);
+    } else {
+        console.warn(`Track ${trackId} initialization failed.`);
     }
   }
   /** @todo: 추후 불필요한 캡슐화면 public으로 channel에 접근할 수도 있음 */
