@@ -35,13 +35,9 @@ export function InputArea({
             ? "예: '재생해줘', '볼륨 50으로', 'pause', '왼쪽으로'"
             : 'Waiting for model...'
         }
-        rows={1}
+        rows={4}
         disabled={!isModelReady || isGenerating}
       />
-      <div className={styles.inputHint}>
-        <span>Shift + Enter for new line</span>
-        <span>Press Enter to send</span>
-      </div>
     </div>
   );
 }

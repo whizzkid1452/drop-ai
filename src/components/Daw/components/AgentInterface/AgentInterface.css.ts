@@ -69,8 +69,14 @@ export const messageArea = style({
         width: '6px',
     },
     '::-webkit-scrollbar-thumb': {
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: '#333333',
         borderRadius: '3px',
+        border: '1px solid rgba(255, 255, 255, 0.05)',
+    },
+    selectors: {
+        '&::-webkit-scrollbar-thumb:hover': {
+            backgroundColor: '#444444',
+        },
     },
 });
 
@@ -173,10 +179,3 @@ export const messageContent = style({
     whiteSpace: 'pre-wrap',
 });
 
-export const inputHint = style({
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '10px',
-    opacity: 0.5,
-    marginTop: '4px',
-});
