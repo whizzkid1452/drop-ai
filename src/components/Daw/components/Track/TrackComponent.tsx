@@ -68,5 +68,5 @@ export const TrackComponent = ({
   );
 };
 
-/** @description wavesurfer의 scrollbar를 가리기 위함. shadowRoot 내부라 억지로 style 주입 */
+
 
