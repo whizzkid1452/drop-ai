@@ -19,7 +19,7 @@ export async function queryToLLM({
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userInput },
       ],
-      max_tokens: 100,
+      max_tokens: 200,
       temperature: 0.1,
     });
     return {
