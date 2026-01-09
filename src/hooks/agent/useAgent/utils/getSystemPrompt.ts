@@ -80,8 +80,12 @@ Assistant: Exporting with current range.
 {"type":"EXPORT_AUDIO"}
 
 User: "Export everything"
-Assistant: Clearing range and exporting.
+Assistant: Clearing range for full export.
 {"type":"CLEAR_EXPORT_RANGE"}
+
+User: "Now export it"
+Assistant: Exporting full project.
+{"type":"EXPORT_AUDIO"}
 
 User: "How are you?"
 Assistant: I'm ready to help with your music!
