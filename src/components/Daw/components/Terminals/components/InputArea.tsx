@@ -1,5 +1,5 @@
 import type { KeyboardEvent } from 'react';
-import * as styles from '../AgentInterface.css';
+import * as styles from '../AgentTerminal/AgentTerminal.css';
 
 interface InputAreaProps {
   input: string;

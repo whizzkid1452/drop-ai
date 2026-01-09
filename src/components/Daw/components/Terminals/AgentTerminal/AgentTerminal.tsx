@@ -2,13 +2,13 @@ import { useAgent } from '@/hooks/agent/useAgent/useAgent';
 import { useWebLLM } from '@/hooks/agent/useWebLLM';
 import { useAgentStore } from '@/stores/useAgentStore';
 import { useState } from 'react';
-import * as styles from './AgentInterface.css';
-import { ActionButtons } from './components/ActionButtons';
-import { InputArea } from './components/InputArea';
-import { LoadingOverlay } from './components/LoadingOverlay';
-import { MessageList } from './components/MessageList';
+import * as styles from './AgentTerminal.css';
+import { ActionButtons } from '../components/ActionButtons';
+import { InputArea } from '../components/InputArea';
+import { LoadingOverlay } from '../components/LoadingOverlay';
+import { MessageList } from '../components/MessageList';
 
-export function AgentInterface() {
+export function AgentTerminal() {
   const [input, setInput] = useState('');
   const isModelReady = useAgentStore(state => state.isModelReady);
   const modelLoadingProgress = useAgentStore(

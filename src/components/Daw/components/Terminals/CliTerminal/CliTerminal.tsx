@@ -1,5 +1,5 @@
 import { useState, useRef, type KeyboardEvent, useEffect } from 'react';
-import * as styles from './CliInterface.css';
+import * as styles from './CliTerminal.css';
 import { useAudioEngineHandleWithUi } from '@/hooks/agent/useAudioEngineHandleWithUi';
 // import type { AudioCommand } from '@/types/audioEngine';
 
@@ -10,7 +10,7 @@ interface LogItem {
   timestamp: number;
 }
 
-export function CliInterface() {
+export function CliTerminal() {
   const [input, setInput] = useState('');
   const [logs, setLogs] = useState<LogItem[]>([]);
   const { handleAudioCommand } = useAudioEngineHandleWithUi();
