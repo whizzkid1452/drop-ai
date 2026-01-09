@@ -1,4 +1,4 @@
-import * as styles from '../AgentTerminal/AgentTerminal.css';
+import * as styles from '../AgentTerminal/AgentTerminal.css.ts';
 
 interface ActionButtonsProps {
     isGenerating: boolean;

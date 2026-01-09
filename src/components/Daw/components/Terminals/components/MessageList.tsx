@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import * as styles from '../AgentTerminal/AgentTerminal.css';
+import * as styles from '../AgentTerminal/AgentTerminal.css.ts';
 import type { Message } from '@/types/agent';
 
 interface MessageListProps {

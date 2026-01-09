@@ -1,5 +1,6 @@
 import { exportProject } from '@/logics/audio/exportProject';
 import { useTrackStore } from '@/stores/useTrackStore';
+import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import { useCallback, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import * as styles from './ExportButton.css';
@@ -30,6 +31,13 @@ export function ExportButton({
   const tracks = useTrackStore(
     useShallow(state => Array.from(state.tracks.values()))
   );
+  
+  const { exportStartTime, exportEndTime } = usePlaybackStore(
+    useShallow(state => ({
+        exportStartTime: state.exportStartTime,
+        exportEndTime: state.exportEndTime,
+    }))
+  );
 
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,8 +55,12 @@ export function ExportButton({
     setError(null);
 
     try {
+      // Range 확인
+      const hasRange = exportStartTime !== null && exportEndTime !== null && exportStartTime < exportEndTime;
+      const range = hasRange ? { startTime: exportStartTime!, endTime: exportEndTime! } : undefined;
+
       // exportProject (Tone.Offline) 사용
-      const blob = await exportProject(tracks);
+      const blob = await exportProject(tracks, range);
 
       // 파일 다운로드
       const filename = settings?.filename || 'drop-ai-export';
