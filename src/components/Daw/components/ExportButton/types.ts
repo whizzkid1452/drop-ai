@@ -11,6 +11,10 @@ export interface ExportSettings {
   normalize?: boolean;
   /** 출력 파일명 (확장자 제외), 기본값: 'export' */
   filename?: string;
+  /** 내보내기 시작 시간 (초) */
+  startTime?: number;
+  /** 내보내기 종료 시간 (초) */
+  endTime?: number;
 }
 
 /**

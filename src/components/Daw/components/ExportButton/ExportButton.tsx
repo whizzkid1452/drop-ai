@@ -2,6 +2,7 @@ import { exportProject } from '@/logics/audio/exportProject';
 import { useTrackStore } from '@/stores/useTrackStore';
 import { useCallback, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import * as styles from './ExportButton.css';
 import { downloadBlob, type ExportSettings } from './utils/audioExport';
 
@@ -30,6 +31,13 @@ export function ExportButton({
   const tracks = useTrackStore(
     useShallow(state => Array.from(state.tracks.values()))
   );
+  
+  const { exportStartTime, exportEndTime } = usePlaybackStore(
+    useShallow(state => ({
+      exportStartTime: state.exportStartTime,
+      exportEndTime: state.exportEndTime,
+    }))
+  );
 
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,8 +55,25 @@ export function ExportButton({
     setError(null);
 
     try {
+      // Range 확인
+      // 1. settings에 명시된 값이 있으면 최우선 사용
+      // 2. 없으면 store의 exportStartTime/EndTime 사용
+      const startTime = settings?.startTime ?? exportStartTime;
+      const endTime = settings?.endTime ?? exportEndTime;
+
+      const hasRange =
+        startTime !== null &&
+        endTime !== null &&
+        startTime !== undefined &&
+        endTime !== undefined &&
+        startTime < endTime;
+
+      const range = hasRange
+        ? { startTime: startTime!, endTime: endTime! } // hasRange 체크로 안전함
+        : undefined;
+
       // exportProject (Tone.Offline) 사용
-      const blob = await exportProject(tracks);
+      const blob = await exportProject(tracks, range);
 
       // 파일 다운로드
       const filename = settings?.filename || 'drop-ai-export';

@@ -31,3 +31,14 @@ export const label = style({
   color: '#888',
   transform: 'translateX(4px)',
 });
+
+export const exportRange = style({
+  position: 'absolute',
+  top: 0,
+  bottom: 0,
+  backgroundColor: 'rgba(255, 255, 0, 0.2)',
+  borderLeft: '1px solid rgba(255, 255, 0, 0.5)',
+  borderRight: '1px solid rgba(255, 255, 0, 0.5)',
+  pointerEvents: 'none',
+  zIndex: 1,
+});
