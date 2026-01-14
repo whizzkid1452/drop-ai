@@ -1,4 +1,4 @@
-import { AudioEngine } from '@/logics/audio/audioEngine';
+import { useAudioEngine } from '@/hooks/audio/useAudioEngine';
 import { useTrackStore } from '@/stores/useTrackStore';
 import { calculateSplitRegion } from '../logic/regionLogic';
 import { AudioCommandType } from '@/types/audioCommand.schema';
@@ -7,6 +7,7 @@ import { useCallback } from 'react';
 export const useTrackActions = () => {
     const updateTrack = useTrackStore(state => state.updateTrack);
     const getTrack = useTrackStore(state => state.getTrack);
+    const audioEngine = useAudioEngine();
 
     /**
      * Split a region at the specified time
@@ -71,12 +72,10 @@ export const useTrackActions = () => {
                 console.log(`[Split] Starting AudioEngine sync for track ${trackId}`);
                 
                 // a) Unload the original region FIRST
-                await AudioEngine.getInstance().execute({
-                    command: {
-                        type: AudioCommandType.UNLOAD_REGION,
-                        trackId,
-                        regionId: region.id,
-                    },
+                await audioEngine.execute({
+                    type: AudioCommandType.UNLOAD_REGION,
+                    trackId,
+                    regionId: region.id,
                 });
 
                 // b) Load the new regions AFTER unload completes
@@ -85,28 +84,24 @@ export const useTrackActions = () => {
                 const rightDuration = rightRegion.endTime - rightRegion.startTime;
                 
                 // Load sequentially to avoid race conditions with same audio file
-                await AudioEngine.getInstance().execute({
-                    command: {
-                        type: AudioCommandType.LOAD_REGION,
-                        trackId,
-                        regionId: leftRegion.id,
-                        url: leftRegion.audioFile.url,
-                        startTime: leftRegion.startTime,
-                        startOffset: leftRegion.sourceStartTime,
-                        duration: leftDuration,
-                    },
+                await audioEngine.execute({
+                    type: AudioCommandType.LOAD_REGION,
+                    trackId,
+                    regionId: leftRegion.id,
+                    url: leftRegion.audioFile.url,
+                    startTime: leftRegion.startTime,
+                    startOffset: leftRegion.sourceStartTime,
+                    duration: leftDuration,
                 });
                 
-                await AudioEngine.getInstance().execute({
-                    command: {
-                        type: AudioCommandType.LOAD_REGION,
-                        trackId,
-                        regionId: rightRegion.id,
-                        url: rightRegion.audioFile.url,
-                        startTime: rightRegion.startTime,
-                        startOffset: rightRegion.sourceStartTime,
-                        duration: rightDuration,
-                    },
+                await audioEngine.execute({
+                    type: AudioCommandType.LOAD_REGION,
+                    trackId,
+                    regionId: rightRegion.id,
+                    url: rightRegion.audioFile.url,
+                    startTime: rightRegion.startTime,
+                    startOffset: rightRegion.sourceStartTime,
+                    duration: rightDuration,
                 });
                 
                 console.log(`[Split] AudioEngine sync completed for track ${trackId}`);
@@ -116,7 +111,7 @@ export const useTrackActions = () => {
             }
         })();
         },
-        [getTrack, updateTrack]
+        [getTrack, updateTrack, audioEngine]
     );
 
     return {

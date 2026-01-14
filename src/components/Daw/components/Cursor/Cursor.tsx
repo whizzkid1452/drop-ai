@@ -1,11 +1,12 @@
 import { useRef, useEffect } from 'react';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { AudioEngine } from '@/logics/audio/audioEngine';
+import { useAudioEngine } from '@/hooks/audio/useAudioEngine';
 import * as styles from './Cursor.css';
 
 export const Cursor = () => {
   const cursorRef = useRef<HTMLDivElement>(null);
   const rAF = useRef<number>(0);
+  const audioEngine = useAudioEngine();
 
   useEffect(() => {
     const updatePosition = (time: number) => {
@@ -17,7 +18,7 @@ export const Cursor = () => {
     };
 
     const animate = () => {
-      const time = AudioEngine.getInstance().getSeconds();
+      const time = audioEngine.getSeconds();
       updatePosition(time);
       rAF.current = requestAnimationFrame(animate);
     };
@@ -34,7 +35,7 @@ export const Cursor = () => {
             /** 종료 직후 시점 */
             cancelAnimationFrame(rAF.current);
             // Sync one last time when pausing to ensure accuracy
-            updatePosition(AudioEngine.getInstance().getSeconds());
+            updatePosition(audioEngine.getSeconds());
           }
         }
 
@@ -52,7 +53,7 @@ export const Cursor = () => {
       unsubscribe();
       cancelAnimationFrame(rAF.current);
     };
-  }, []);
+  }, [audioEngine]);
 
   return <div ref={cursorRef} className={styles.cursor} />;
 };

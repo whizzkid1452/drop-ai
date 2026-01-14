@@ -1,19 +1,27 @@
 import * as Tone from 'tone';
-import { AudioEngine } from './audioEngine';
 import { audioBufferToWav } from '@/components/Daw/components/ExportButton/utils/wavConverter';
 import type { Track } from '@/types/track';
 import { loadAndDecodeAudioBuffer } from './loadAndDecodeAudioBuffer';
+import { AudioEngineError, AudioEngineErrorCode } from './audioEngine.errors';
 
 /**
  * 프로젝트 전체를 오디오 파일로 내보냅니다.
  * Tone.Offline을 사용하여 정확한 타이밍과 이펙트(Volume, Pan 등)를 반영합니다.
+ * 
+ * @param tracks - 내보낼 트랙 목록
+ * @param range - 내보내기 범위 (선택사항)
+ * @returns WAV 형식의 Blob
+ * @throws {AudioEngineError} 내보내기 실패 시
  */
 export async function exportProject(
   tracks: Track[],
   range?: { startTime: number; endTime: number }
 ): Promise<Blob> {
   if (tracks.length === 0) {
-    throw new Error('No tracks to export');
+    throw new AudioEngineError(
+      AudioEngineErrorCode.EXPORT_NO_TRACKS,
+      'No tracks to export'
+    );
   }
 
   // 1. 오디오 파일 미리 로드 및 decode (Offline 렌더링 중에는 비동기 로딩 불가)
@@ -25,7 +33,11 @@ export async function exportProject(
     : getTotalDuration({ tracks });
 
   if (totalDuration <= 0) {
-    throw new Error('Invalid export duration');
+    throw new AudioEngineError(
+      AudioEngineErrorCode.EXPORT_ZERO_DURATION,
+      'Export duration must be greater than 0',
+      { totalDuration, range }
+    );
   }
 
   // 3. Offline Rendering
@@ -39,8 +51,12 @@ export async function exportProject(
   // 4. WAV 변환
   const audioBuffer = renderedBuffer.get();
   if (!audioBuffer) {
-    throw new Error('Failed to render audio');
+    throw new AudioEngineError(
+      AudioEngineErrorCode.RENDER_FAILED,
+      'Failed to render audio buffer'
+    );
   }
+  
   const wavBlob = audioBufferToWav(audioBuffer);
   return wavBlob;
 }
@@ -65,8 +81,16 @@ async function preloadAudioBuffers(tracks: Track[]) {
   return audioBuffers;
 }
 
-function getTotalDuration({ tracks }: { tracks: Track[] }) {
+/**
+ * 전체 프로젝트 길이 계산
+ * 
+ * @param tracks - 트랙 목록
+ * @returns 전체 길이 (초)
+ * @throws {AudioEngineError} 길이가 0인 경우
+ */
+function getTotalDuration({ tracks }: { tracks: Track[] }): number {
   let totalDuration = 0;
+  
   tracks.forEach(track => {
     track.regions.forEach(region => {
       const duration = region.audioFile.duration ?? 0;
@@ -78,9 +102,12 @@ function getTotalDuration({ tracks }: { tracks: Track[] }) {
   });
 
   if (totalDuration === 0) {
-    alert('Project duration is 0');
-    throw new Error('Project duration is 0');
+    throw new AudioEngineError(
+      AudioEngineErrorCode.EXPORT_ZERO_DURATION,
+      'Project duration is 0. Please add audio regions to tracks.'
+    );
   }
+  
   return totalDuration;
 }
 
@@ -95,17 +122,13 @@ async function renderBuffer({
   audioBuffers: Map<string, AudioBuffer>;
   range?: { startTime: number; endTime: number };
 }) {
-  return await Tone.Offline(({ transport }) => {
+  return await Tone.Offline(({ transport }: { transport: any }) => {
     tracks.forEach(track => {
-      const engineParams = AudioEngine.getInstance().getTrackParams(track.id);
-
-      if (!engineParams) {
-        alert(`Track ${track.id} not found in AudioEngine. Using defaults.`);
-      }
-
+      // Note: renderBuffer는 별도의 AudioEngine 인스턴스가 필요 없음
+      // Export 시에는 Store에서 가져온 Track의 volume/pan 값을 사용
       const channel = new Tone.Channel({
-        volume: engineParams?.volume ?? 0,
-        pan: engineParams?.pan ?? 0,
+        volume: track.volume ? Tone.gainToDb(track.volume) : 0,
+        pan: track.pan ?? 0,
       }).toDestination();
 
       track.regions.forEach(region => {

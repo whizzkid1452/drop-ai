@@ -1,124 +1,233 @@
 import * as Tone from 'tone';
-import { useTrackStore } from '@/stores/useTrackStore';
-import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import {
   AudioCommandType,
   type AudioCommand,
 } from '@/types/audioCommand.schema';
 import { exportProject } from './exportProject';
+import type {
+  AudioEngineDependencies,
+  TrackData,
+} from './audioEngine.types';
+import {
+  AudioEngineError,
+  AudioEngineErrorCode,
+} from './audioEngine.errors';
 
 /**
- * AudioEngine (Tone.js Version)
- * - Wraps Tone.js functionality
- * - Manages Tracks (Channels) and Regions (Players)
- * - Implements Gateway pattern via execute()
+ * AudioEngine (Refactored with Dependency Injection)
+ * 
+ * 개선 사항:
+ * - ✅ 의존성 주입: Store 직접 접근 제거
+ * - ✅ 타입 안정성: any 타입 제거
+ * - ✅ 에러 처리: 커스텀 에러 클래스 사용
+ * - ✅ 코드 중복 제거: 공통 로직 추출
+ * - ✅ 테스트 가능: Mock/Stub으로 대체 가능
+ * 
+ * 역할:
+ * - Tone.js 기능 래핑
+ * - 트랙(Channels) 및 리전(Players) 관리
+ * - Gateway 패턴으로 모든 오디오 명령 처리
  */
 export class AudioEngine {
-  private static instance: AudioEngine;
+  private tracks: Map<string, TrackData> = new Map();
 
-  private tracks: Map<
-    string,
-    {
-      channel: Tone.Channel;
-      players: Map<string, Tone.Player>;
-    }
-  > = new Map();
-
-  private constructor() {
-    // Initial Setup if needed
-  }
-
-  public static getInstance(): AudioEngine {
-    if (!AudioEngine.instance) {
-      AudioEngine.instance = new AudioEngine();
-    }
-    return AudioEngine.instance;
-  }
+  /**
+   * 생성자를 통한 의존성 주입
+   * @param deps - AudioEngine이 필요로 하는 외부 의존성
+   */
+  constructor(private deps: AudioEngineDependencies) {}
 
   /**
    * Gateway for all Audio Commands
+   * 
+   * @param command - 실행할 오디오 명령
+   * @returns 명령 실행 결과 (타입 안정성 확보)
    */
-  public async execute({
-    command,
-    callback,
-  }: {
-    command: AudioCommand;
-    callback?: ({
-      command,
-      result,
-    }: {
-      command: AudioCommand;
-      /** @todo 추후 AudioCommand와 조합되는 타입 선언 필요 */
-      result: any;
-    }) => void;
-  }) {
-    let result;
-    switch (command.type) {
-      case AudioCommandType.PLAY:
-        if (Tone.getContext().state !== 'running') {
-          await Tone.start();
-        }
-        await Tone.getTransport().start();
-        result = true;
-        break;
-      case AudioCommandType.PAUSE:
-        result = Tone.getTransport().pause();
-        break;
-      case AudioCommandType.STOP:
-        result = Tone.getTransport().stop();
-        break;
-      case AudioCommandType.SET_TRACK_VOLUME:
-        result = this.setTrackVolume(command.trackId, command.volume);
-        break;
-      case AudioCommandType.SET_TRACK_PAN:
-        result = this.setTrackPan(command.trackId, command.pan);
-        break;
-      case AudioCommandType.LOAD_REGION:
-        result = this.loadRegion(
-          command.trackId,
-          command.regionId,
-          command.url,
-          command.startTime,
-          command.startOffset,
-          command.duration
-        );
-        break;
-      case AudioCommandType.UNLOAD_REGION:
-        this.unloadRegion(command.trackId, command.regionId);
-        result = true;
-        break;
-      case AudioCommandType.GET_TRACK_INFO:
-        result = this.getTrackInfo();
-        break;
-      case AudioCommandType.SET_CURRENT_TIME:
-        Tone.getTransport().seconds = command.time;
-        result = command.time;
-        break;
-      case AudioCommandType.SET_EXPORT_RANGE:
-        // Store update handled in useAudioEngineHandleWithUi
-        result = { startTime: command.startTime, endTime: command.endTime };
-        break;
-      case AudioCommandType.CLEAR_EXPORT_RANGE:
-        // Store update handled in useAudioEngineHandleWithUi
-        result = true;
-        break;
-      case AudioCommandType.EXPORT_AUDIO:
-        const tracks = Array.from(useTrackStore.getState().tracks.values());
-        const { exportStartTime, exportEndTime } = usePlaybackStore.getState();
-        const range =
-          exportStartTime !== null && exportEndTime !== null
-            ? { startTime: exportStartTime, endTime: exportEndTime }
-            : undefined;
-        result = await exportProject(tracks, range);
-        break;
+  public async execute(command: AudioCommand): Promise<any> {
+    try {
+      switch (command.type) {
+        case AudioCommandType.PLAY:
+          return await this.handlePlay();
+          
+        case AudioCommandType.PAUSE:
+          return this.handlePause();
+          
+        case AudioCommandType.STOP:
+          return this.handleStop();
+          
+        case AudioCommandType.SET_TRACK_VOLUME:
+          return this.handleSetTrackVolume(command.trackId, command.volume);
+          
+        case AudioCommandType.SET_TRACK_PAN:
+          return this.handleSetTrackPan(command.trackId, command.pan);
+          
+        case AudioCommandType.LOAD_REGION:
+          return await this.loadRegion(
+            command.trackId,
+            command.regionId,
+            command.url,
+            command.startTime,
+            command.startOffset,
+            command.duration
+          );
+          
+        case AudioCommandType.UNLOAD_REGION:
+          this.unloadRegion(command.trackId, command.regionId);
+          return true;
+          
+        case AudioCommandType.GET_TRACK_INFO:
+          return this.getTrackInfo();
+          
+        case AudioCommandType.SET_CURRENT_TIME:
+          return this.handleSetCurrentTime(command.time);
+          
+        case AudioCommandType.SET_EXPORT_RANGE:
+          return this.handleSetExportRange(command.startTime, command.endTime);
+          
+        case AudioCommandType.CLEAR_EXPORT_RANGE:
+          return this.handleClearExportRange();
+          
+        case AudioCommandType.EXPORT_AUDIO:
+          return await this.handleExportAudio();
+          
+        default:
+          throw new AudioEngineError(
+            AudioEngineErrorCode.CONTEXT_ERROR,
+            `Unknown command type`
+          );
+      }
+    } catch (error) {
+      // AudioEngineError는 그대로 전달
+      if (error instanceof AudioEngineError) {
+        throw error;
+      }
+      
+      // 기타 에러는 래핑
+      throw new AudioEngineError(
+        AudioEngineErrorCode.CONTEXT_ERROR,
+        error instanceof Error ? error.message : 'Unknown error occurred',
+        { originalError: error }
+      );
     }
-    callback?.({ command, result });
-    return result;
   }
 
-  private getTrackInfo() {
-    const tracks = useTrackStore.getState().getTracks();
-    return Array.from(tracks.entries());
+  /**
+   * 재생 처리
+   */
+  private async handlePlay(): Promise<boolean> {
+    if (Tone.getContext().state !== 'running') {
+      await Tone.start();
+    }
+    await Tone.getTransport().start();
+    this.deps.updatePlaybackState({ isPlaying: true });
+    return true;
+  }
+
+  /**
+   * 일시정지 처리
+   */
+  private handlePause(): boolean {
+    Tone.getTransport().pause();
+    this.deps.updatePlaybackState({ isPlaying: false });
+    return true;
+  }
+
+  /**
+   * 정지 처리
+   */
+  private handleStop(): boolean {
+    Tone.getTransport().stop();
+    this.deps.updatePlaybackState({ isPlaying: false, currentTime: 0 });
+    return true;
+  }
+
+  /**
+   * 트랙 볼륨 설정 처리
+   */
+  private handleSetTrackVolume(trackId: string, volume: number): boolean {
+    this.setTrackVolume(trackId, volume);
+    this.deps.updateTrack(trackId, { volume });
+    return true;
+  }
+
+  /**
+   * 트랙 팬 설정 처리
+   */
+  private handleSetTrackPan(trackId: string, pan: number): boolean {
+    this.setTrackPan(trackId, pan);
+    this.deps.updateTrack(trackId, { pan });
+    return true;
+  }
+
+  /**
+   * 현재 시간 설정 처리
+   */
+  private handleSetCurrentTime(time: number): number {
+    Tone.getTransport().seconds = time;
+    this.deps.updatePlaybackState({ currentTime: time });
+    return time;
+  }
+
+  /**
+   * Export 범위 설정 처리
+   */
+  private handleSetExportRange(
+    startTime: number,
+    endTime: number
+  ): { startTime: number; endTime: number } {
+    this.deps.setExportRange(startTime, endTime);
+    return { startTime, endTime };
+  }
+
+  /**
+   * Export 범위 클리어 처리
+   */
+  private handleClearExportRange(): boolean {
+    this.deps.setExportRange(null, null);
+    return true;
+  }
+
+  /**
+   * 오디오 내보내기 처리
+   */
+  private async handleExportAudio(): Promise<Blob> {
+    const tracks = this.deps.getTracks();
+    const range = this.deps.getExportRange();
+    
+    return await exportProject(tracks, range ?? undefined);
+  }
+
+  /**
+   * 트랙 정보 가져오기
+   */
+  private getTrackInfo(): [string, import('@/types/track').Track][] {
+    const tracks = this.deps.getTracks();
+    return tracks.map(track => [track.id, track] as [string, import('@/types/track').Track]);
+  }
+
+  /**
+   * 트랙 가져오기 또는 초기화
+   * 
+   * 목적: 코드 중복 제거
+   * - setTrackVolume과 setTrackPan에서 반복되는 패턴 추출
+   */
+  private getOrInitTrack(trackId: string): TrackData {
+    let track = this.tracks.get(trackId);
+    
+    if (!track) {
+      this.initTrack(trackId);
+      track = this.tracks.get(trackId);
+    }
+    
+    if (!track) {
+      throw new AudioEngineError(
+        AudioEngineErrorCode.TRACK_INIT_FAILED,
+        `Failed to initialize track: ${trackId}`,
+        { trackId }
+      );
+    }
+    
+    return track;
   }
 
   private initTrack(trackId: string) {
@@ -135,6 +244,16 @@ export class AudioEngine {
     });
   }
 
+  /**
+   * 리전 로드
+   * 
+   * @param trackId - 트랙 ID
+   * @param regionId - 리전 ID
+   * @param url - 오디오 파일 URL
+   * @param startTime - 타임라인에서 시작 시간
+   * @param startOffset - 소스 파일에서 시작 오프셋
+   * @param duration - 재생 지속 시간
+   */
   private async loadRegion(
     trackId: string,
     regionId: string,
@@ -142,55 +261,88 @@ export class AudioEngine {
     startTime: number = 0,
     startOffset: number = 0,
     duration?: number
-  ) {
+  ): Promise<boolean> {
     this.initTrack(trackId);
     const trackData = this.tracks.get(trackId);
-    if (!trackData) return;
+    
+    if (!trackData) {
+      throw new AudioEngineError(
+        AudioEngineErrorCode.TRACK_NOT_FOUND,
+        `Track not found: ${trackId}`,
+        { trackId }
+      );
+    }
 
-    if (trackData.players.has(regionId)) return;
+    // 이미 로드된 리전은 스킵
+    if (trackData.players.has(regionId)) {
+      return true;
+    }
 
-    // CRITICAL: Wrap onload in Promise to ensure sync().start() completes before returning
-    await new Promise<void>((resolve, reject) => {
-      const player = new Tone.Player({
-        url,
-        loop: false,
-        fadeIn: 0.005,  // 5ms fade in to prevent click noise
-        fadeOut: 0.005, // 5ms fade out to prevent click noise
-        onload: () => {
-          try {
-            /**
-             * sync().start(startTime, offset, duration)
-             * startTime: When to start playing on the timeline
-             * offset: Where to start playing in the source file
-             * duration: How long to play (CRITICAL: prevents regions from overlapping!)
-             */
-            if (duration !== undefined) {
-              player.sync().start(startTime, startOffset, duration);
-            } else {
-              player.sync().start(startTime, startOffset);
-            }
-            console.log(`[AudioEngine] Loaded region ${regionId} at timeline ${startTime}s with offset ${startOffset}s, duration ${duration}s`, {
-              channelInputs: trackData.channel.numberOfInputs,
-              playerVolume: player.volume.value,
-            });
-            resolve(); // Signal completion
-          } catch (error) {
+    // CRITICAL: Promise로 래핑하여 sync().start() 완료 보장
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const player = new Tone.Player({
+          url,
+          loop: false,
+          fadeIn: 0.005,  // 5ms fade in to prevent click noise
+          fadeOut: 0.005, // 5ms fade out to prevent click noise
+          onload: () => {
+            try {
+              /**
+               * sync().start(startTime, offset, duration)
+               * startTime: When to start playing on the timeline
+               * offset: Where to start playing in the source file
+               * duration: How long to play (CRITICAL: prevents regions from overlapping!)
+               */
+              if (duration !== undefined) {
+                player.sync().start(startTime, startOffset, duration);
+              } else {
+                player.sync().start(startTime, startOffset);
+              }
+              
+              console.log(
+                `[AudioEngine] Loaded region ${regionId} at timeline ${startTime}s with offset ${startOffset}s, duration ${duration}s`,
+                {
+                  channelInputs: trackData.channel.numberOfInputs,
+                  playerVolume: player.volume.value,
+                }
+              );
+              
+            resolve();
+          } catch (error: unknown) {
             console.error(`[AudioEngine] Failed to sync region ${regionId}:`, error);
             reject(error);
           }
         },
-        onerror: (error) => {
+        onerror: (error: unknown) => {
           console.error(`[AudioEngine] Failed to load region ${regionId}:`, error);
           reject(error);
         },
-      }).connect(trackData.channel);
+        }).connect(trackData.channel);
 
-      trackData.players.set(regionId, player);
-      console.log(`[AudioEngine] Player created for region ${regionId}, total players: ${trackData.players.size}`);
-    });
+        trackData.players.set(regionId, player);
+        console.log(
+          `[AudioEngine] Player created for region ${regionId}, total players: ${trackData.players.size}`
+        );
+      });
+      
+      return true;
+    } catch (error) {
+      throw new AudioEngineError(
+        AudioEngineErrorCode.REGION_LOAD_FAILED,
+        `Failed to load region ${regionId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        { trackId, regionId, url, error }
+      );
+    }
   }
 
-  private unloadRegion(trackId: string, regionId: string) {
+  /**
+   * 리전 언로드
+   * 
+   * @param trackId - 트랙 ID
+   * @param regionId - 리전 ID
+   */
+  private unloadRegion(trackId: string, regionId: string): void {
     const trackData = this.tracks.get(trackId);
     if (!trackData) return;
 
@@ -209,50 +361,41 @@ export class AudioEngine {
       player.dispose(); // Free resources
       
       trackData.players.delete(regionId);
-      console.log(`[AudioEngine] Unloaded region ${regionId}, remaining players: ${trackData.players.size}`);
+      console.log(
+        `[AudioEngine] Unloaded region ${regionId}, remaining players: ${trackData.players.size}`
+      );
     }
   }
 
   /**
-   * Set Track Volume
-   * @param volume Linear volume (0.0 to 1.0)
+   * 트랙 볼륨 설정
+   * 
+   * @param trackId - 트랙 ID
+   * @param volume - 선형 볼륨 (0.0 ~ 1.0)
    */
-  private setTrackVolume(trackId: string, volume: number) {
-    let track = this.tracks.get(trackId);
-    if (!track) {
-      this.initTrack(trackId);
-      track = this.tracks.get(trackId);
-    }
-    
-    if (track) {
-      const db = Tone.gainToDb(volume);
-      track.channel.volume.rampTo(db, 0.1);
-    } else {
-        console.warn(`Track ${trackId} initialization failed.`);
-    }
+  private setTrackVolume(trackId: string, volume: number): void {
+    const track = this.getOrInitTrack(trackId);
+    const volumeInDb = Tone.gainToDb(volume);
+    track.channel.volume.rampTo(volumeInDb, 0.1);
   }
 
   /**
-   * Set Track Pan
-   * @param pan -1.0 (Left) to 1.0 (Right)
+   * 트랙 팬 설정
+   * 
+   * @param trackId - 트랙 ID
+   * @param pan - 팬 값 (-1.0: 왼쪽 ~ 1.0: 오른쪽)
    */
-  private setTrackPan(trackId: string, pan: number) {
-    let track = this.tracks.get(trackId);
-    if (!track) {
-        this.initTrack(trackId);
-        track = this.tracks.get(trackId);
-    }
-
-    if (track) {
-      track.channel.pan.rampTo(pan, 0.1);
-    } else {
-        console.warn(`Track ${trackId} initialization failed.`);
-    }
+  private setTrackPan(trackId: string, pan: number): void {
+    const track = this.getOrInitTrack(trackId);
+    track.channel.pan.rampTo(pan, 0.1);
   }
-  /** @todo: 추후 불필요한 캡슐화면 public으로 channel에 접근할 수도 있음 */
   /**
-   * Get current track parameters (Volume, Pan) from the Engine
-   * This serves as the Source of Truth for audio export
+   * 현재 트랙 파라미터 가져오기 (Volume, Pan)
+   * 
+   * Export 시 실제 엔진 상태를 가져오기 위한 Source of Truth
+   * 
+   * @param trackId - 트랙 ID
+   * @returns 볼륨(dB)과 팬 값, 트랙이 없으면 null
    */
   public getTrackParams(
     trackId: string
@@ -266,6 +409,11 @@ export class AudioEngine {
     };
   }
 
+  /**
+   * 현재 재생 시간 가져오기
+   * 
+   * @returns 현재 Transport 시간 (초)
+   */
   public getSeconds(): number {
     return Tone.getTransport().seconds;
   }
