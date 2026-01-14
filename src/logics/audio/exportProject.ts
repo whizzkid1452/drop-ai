@@ -96,6 +96,11 @@ async function renderBuffer({
   range?: { startTime: number; endTime: number };
 }) {
   return await Tone.Offline(({ transport }) => {
+    if (range == null) {
+      alert('Range is not defined');
+      return;
+    }
+
     tracks.forEach(track => {
       const engineParams = AudioEngine.getInstance().getTrackParams(track.id);
 
@@ -113,18 +118,16 @@ async function renderBuffer({
         if (!buffer) return;
 
         // Export 범위 시프트 (exportStartTime 만큼 앞으로 당김)
-        const exportStartTime = range?.startTime ?? 0;
+        const exportStartTime = range.startTime;
         const regionDuration = buffer.duration;
         const regionEndTime = region.startTime + regionDuration;
 
         // 1. 리전이 Export 범위 밖인 경우 스킵
-        if (range) {
-          if (
-            regionEndTime <= range.startTime || // 리전이 범위보다 먼저 끝남
-            region.startTime >= range.endTime // 리전이 범위보다 늦게 시작함
-          ) {
-            return;
-          }
+        if (
+          regionEndTime <= range.startTime || // 리전이 범위보다 먼저 끝남
+          region.startTime >= range.endTime // 리전이 범위보다 늦게 시작함
+        ) {
+          return;
         }
 
         // 2. 재생 시작 시간 및 오프셋 계산
