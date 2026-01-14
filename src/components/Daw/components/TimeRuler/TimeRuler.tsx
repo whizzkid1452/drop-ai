@@ -29,6 +29,8 @@ export const TimeRuler = memo(() => {
 
   const maxDuration = useMemo(() => getMaxDuration(tracks), [tracks]);
 
+  const showExportRange = exportStartTime !== null && exportEndTime !== null && exportStartTime !== exportEndTime;
+
   // Handle global mouse events for dragging
   useEffect(() => {
     if (!isDraggingRange) return;
@@ -125,12 +127,12 @@ export const TimeRuler = memo(() => {
       {ticks}
       
       {/* Export Range Overlay */}
-      {exportStartTime !== null && exportEndTime !== null && exportStartTime !== exportEndTime && (
+      {showExportRange && (
           <div 
             className={styles.exportRangeOverlay}
             style={{
-                left: `${exportStartTime * pixelsPerSecond}px`,
-                width: `${(exportEndTime - exportStartTime) * pixelsPerSecond}px`
+                left: `${(exportStartTime ?? 0) * pixelsPerSecond}px`,
+                width: `${((exportEndTime ?? 0) - (exportStartTime ?? 0)) * pixelsPerSecond}px`
             }}
           >
               <span className={styles.exportRangeLabel}>Export Range</span>
