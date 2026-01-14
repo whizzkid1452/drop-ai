@@ -14,28 +14,85 @@ import {
 } from './audioEngine.errors';
 
 /**
- * AudioEngine (Refactored with Dependency Injection)
+ * AudioEngine (Singleton + Dependency Injection)
  * 
  * 개선 사항:
+ * - ✅ 싱글톤 패턴: 단일 인스턴스 보장
  * - ✅ 의존성 주입: Store 직접 접근 제거
  * - ✅ 타입 안정성: any 타입 제거
  * - ✅ 에러 처리: 커스텀 에러 클래스 사용
  * - ✅ 코드 중복 제거: 공통 로직 추출
- * - ✅ 테스트 가능: Mock/Stub으로 대체 가능
+ * - ✅ 테스트 가능: resetInstance()로 격리
  * 
  * 역할:
  * - Tone.js 기능 래핑
  * - 트랙(Channels) 및 리전(Players) 관리
  * - Gateway 패턴으로 모든 오디오 명령 처리
+ * 
+ * 사용법:
+ * ```typescript
+ * // 앱 시작 시 한 번만 초기화
+ * AudioEngine.initialize(dependencies);
+ * 
+ * // 이후 어디서든 사용
+ * const engine = AudioEngine.getInstance();
+ * await engine.execute({ type: 'PLAY' });
+ * ```
  */
 export class AudioEngine {
+  private static instance: AudioEngine | null = null;
   private tracks: Map<string, TrackData> = new Map();
 
   /**
-   * 생성자를 통한 의존성 주입
+   * private 생성자 - 외부에서 직접 인스턴스 생성 불가
    * @param deps - AudioEngine이 필요로 하는 외부 의존성
    */
-  constructor(private deps: AudioEngineDependencies) {}
+  private constructor(private deps: AudioEngineDependencies) {}
+
+  /**
+   * 싱글톤 인스턴스 초기화
+   * 
+   * 앱 시작 시 한 번만 호출해야 합니다.
+   * 이미 초기화된 경우 기존 인스턴스를 반환합니다.
+   * 
+   * @param deps - AudioEngine 의존성
+   * @returns AudioEngine 인스턴스
+   */
+  public static initialize(deps: AudioEngineDependencies): AudioEngine {
+    if (!AudioEngine.instance) {
+      AudioEngine.instance = new AudioEngine(deps);
+      console.log('[AudioEngine] Initialized with dependencies');
+    }
+    return AudioEngine.instance;
+  }
+
+  /**
+   * 초기화된 싱글톤 인스턴스 가져오기
+   * 
+   * initialize()가 먼저 호출되어야 합니다.
+   * 
+   * @returns AudioEngine 인스턴스
+   * @throws {Error} 초기화되지 않은 경우
+   */
+  public static getInstance(): AudioEngine {
+    if (!AudioEngine.instance) {
+      throw new Error(
+        'AudioEngine not initialized. Call AudioEngine.initialize() first.'
+      );
+    }
+    return AudioEngine.instance;
+  }
+
+  /**
+   * 인스턴스 리셋 (테스트용)
+   * 
+   * 프로덕션 코드에서는 사용하지 마세요.
+   * 주로 단위 테스트에서 테스트 간 격리를 위해 사용합니다.
+   */
+  public static resetInstance(): void {
+    AudioEngine.instance = null;
+    console.log('[AudioEngine] Instance reset');
+  }
 
   /**
    * Gateway for all Audio Commands

@@ -4,7 +4,7 @@ import { useAudioFileStore } from '@/stores/useAudioFileStore';
 import { useTrackStore } from '@/stores/useTrackStore';
 import { useCallback } from 'react';
 import { BasicFileDrop } from './BaiscFileDrop';
-import { useAudioEngine } from '@/hooks/audio/useAudioEngine';
+import { AudioEngine } from '@/logics/audio/audioEngine';
 import { RegionStatus, TrackStatus } from '@/types/track';
 
 interface AudioFileDropProps {
@@ -14,7 +14,6 @@ interface AudioFileDropProps {
 export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
   const { addAudioFile, getAudioFile } = useAudioFileStore();
   const { addTrack } = useTrackStore();
-  const audioEngine = useAudioEngine();
   const onFileDrop = useCallback(
     async (file: File) => {
       const audioFileData = await convertFileToAudioFile(file);
@@ -57,7 +56,7 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
       const region = newTrack.regions[0];
       const regionDuration = region.endTime - region.startTime;
       
-      await audioEngine.execute({
+      await AudioEngine.getInstance().execute({
         type: 'LOAD_REGION',
         trackId,
         regionId,

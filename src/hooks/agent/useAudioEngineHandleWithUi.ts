@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { useAudioEngine } from '@/hooks/audio/useAudioEngine';
+import { AudioEngine } from '@/logics/audio/audioEngine';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import {
   AudioCommandType,
@@ -16,12 +16,8 @@ import { AudioEngineError, getUserFriendlyMessage } from '@/logics/audio/audioEn
  * - AudioEngine 명령 실행
  * - 에러 처리 및 사용자 알림
  * - Export 파일 다운로드 처리
- * 
- * @deprecated 이 Hook은 레거시입니다. 직접 useAudioEngine()을 사용하는 것을 권장합니다.
  */
 export function useAudioEngineHandleWithUi() {
-  const audioEngine = useAudioEngine();
-  
   const { exportStartTime, exportEndTime } = usePlaybackStore(
     useShallow(state => ({
       exportStartTime: state.exportStartTime,
@@ -37,6 +33,8 @@ export function useAudioEngineHandleWithUi() {
   const handleAudioCommand = useCallback(
     async (command: AudioCommand) => {
       try {
+        // 실행 시점에 getInstance 호출 (lazy)
+        const audioEngine = AudioEngine.getInstance();
         const result = await audioEngine.execute(command);
 
         // Export 명령의 경우 파일 다운로드 처리
@@ -68,7 +66,7 @@ export function useAudioEngineHandleWithUi() {
         throw error;
       }
     },
-    [audioEngine, exportStartTime, exportEndTime]
+    [exportStartTime, exportEndTime]
   );
 
   return { handleAudioCommand };

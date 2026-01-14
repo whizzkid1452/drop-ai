@@ -1,4 +1,4 @@
-import { useAudioEngine } from '@/hooks/audio/useAudioEngine';
+import { AudioEngine } from '@/logics/audio/audioEngine';
 import { useTrackStore } from '@/stores/useTrackStore';
 import { calculateSplitRegion } from '../logic/regionLogic';
 import { AudioCommandType } from '@/types/audioCommand.schema';
@@ -7,7 +7,6 @@ import { useCallback } from 'react';
 export const useTrackActions = () => {
     const updateTrack = useTrackStore(state => state.updateTrack);
     const getTrack = useTrackStore(state => state.getTrack);
-    const audioEngine = useAudioEngine();
 
     /**
      * Split a region at the specified time
@@ -71,8 +70,10 @@ export const useTrackActions = () => {
             try {
                 console.log(`[Split] Starting AudioEngine sync for track ${trackId}`);
                 
+                const engine = AudioEngine.getInstance();
+                
                 // a) Unload the original region FIRST
-                await audioEngine.execute({
+                await engine.execute({
                     type: AudioCommandType.UNLOAD_REGION,
                     trackId,
                     regionId: region.id,
@@ -84,7 +85,7 @@ export const useTrackActions = () => {
                 const rightDuration = rightRegion.endTime - rightRegion.startTime;
                 
                 // Load sequentially to avoid race conditions with same audio file
-                await audioEngine.execute({
+                await engine.execute({
                     type: AudioCommandType.LOAD_REGION,
                     trackId,
                     regionId: leftRegion.id,
@@ -94,7 +95,7 @@ export const useTrackActions = () => {
                     duration: leftDuration,
                 });
                 
-                await audioEngine.execute({
+                await engine.execute({
                     type: AudioCommandType.LOAD_REGION,
                     trackId,
                     regionId: rightRegion.id,
@@ -111,7 +112,7 @@ export const useTrackActions = () => {
             }
         })();
         },
-        [getTrack, updateTrack, audioEngine]
+        [getTrack, updateTrack]
     );
 
     return {
