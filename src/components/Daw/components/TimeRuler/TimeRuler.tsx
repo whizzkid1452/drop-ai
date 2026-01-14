@@ -24,31 +24,44 @@ export const TimeRuler = memo(() => {
   );
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const dragStartPosRef = useRef<number | null>(null);
+  const currentDragRangeRef = useRef<{ start: number; end: number } | null>(null);
   const [isDraggingRange, setIsDraggingRange] = useState(false);
-  const [dragStartIndex, setDragStartIndex] = useState<number | null>(null);
 
   const maxDuration = useMemo(() => getMaxDuration(tracks), [tracks]);
+
+  const showExportRange = exportStartTime !== null && exportEndTime !== null && exportStartTime !== exportEndTime;
 
   // Handle global mouse events for dragging
   useEffect(() => {
     if (!isDraggingRange) return;
 
     const handleWindowMouseMove = (e: MouseEvent) => {
-      if (!containerRef.current || dragStartIndex === null) return;
+      if (!containerRef.current || dragStartPosRef.current === null || !overlayRef.current) return;
       
       const rect = containerRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const time = Math.max(0, x / pixelsPerSecond);
       
-      const start = Math.min(dragStartIndex, time);
-      const end = Math.max(dragStartIndex, time);
+      const start = Math.min(dragStartPosRef.current, time);
+      const end = Math.max(dragStartPosRef.current, time);
       
-      setExportRange(start, end);
+      currentDragRangeRef.current = { start, end };
+
+      // Direct DOM manipulation for performance
+      overlayRef.current.style.left = `${start * pixelsPerSecond}px`;
+      overlayRef.current.style.width = `${(end - start) * pixelsPerSecond}px`;
     };
 
     const handleWindowMouseUp = () => {
       setIsDraggingRange(false);
-      setDragStartIndex(null);
+      dragStartPosRef.current = null;
+      
+      if (currentDragRangeRef.current) {
+        setExportRange(currentDragRangeRef.current.start, currentDragRangeRef.current.end);
+        currentDragRangeRef.current = null;
+      }
     };
 
     window.addEventListener('mousemove', handleWindowMouseMove);
@@ -58,7 +71,7 @@ export const TimeRuler = memo(() => {
       window.removeEventListener('mousemove', handleWindowMouseMove);
       window.removeEventListener('mouseup', handleWindowMouseUp);
     };
-  }, [isDraggingRange, dragStartIndex, pixelsPerSecond, setExportRange]);
+  }, [isDraggingRange, pixelsPerSecond, setExportRange]);
 
 
   const ticks = useMemo(() => {
@@ -93,7 +106,8 @@ export const TimeRuler = memo(() => {
     const x = e.clientX - rect.left;
     const time = Math.max(0, x / pixelsPerSecond);
     
-    setDragStartIndex(time);
+    dragStartPosRef.current = time;
+    currentDragRangeRef.current = { start: time, end: time };
     setExportRange(time, time); // Init with 0 duration
     setIsDraggingRange(true);
   };
@@ -125,17 +139,17 @@ export const TimeRuler = memo(() => {
       {ticks}
       
       {/* Export Range Overlay */}
-      {exportStartTime !== null && exportEndTime !== null && exportStartTime !== exportEndTime && (
-          <div 
-            className={styles.exportRangeOverlay}
-            style={{
-                left: `${exportStartTime * pixelsPerSecond}px`,
-                width: `${(exportEndTime - exportStartTime) * pixelsPerSecond}px`
-            }}
-          >
-              <span className={styles.exportRangeLabel}>Export Range</span>
-          </div>
-      )}
+      <div 
+        ref={overlayRef}
+        className={styles.exportRangeOverlay}
+        style={{
+            display: showExportRange || isDraggingRange ? 'block' : 'none',
+            left: `${(exportStartTime ?? 0) * pixelsPerSecond}px`,
+            width: `${((exportEndTime ?? 0) - (exportStartTime ?? 0)) * pixelsPerSecond}px`
+        }}
+      >
+          <span className={styles.exportRangeLabel}>Export Range</span>
+      </div>
 
       {/* Interactive Zones */}
       <div 

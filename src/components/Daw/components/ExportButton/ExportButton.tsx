@@ -56,8 +56,9 @@ export function ExportButton({
 
     try {
       // Range 확인
-      const hasRange = exportStartTime !== null && exportEndTime !== null && exportStartTime < exportEndTime;
-      const range = hasRange ? { startTime: exportStartTime!, endTime: exportEndTime! } : undefined;
+      const range = (exportStartTime !== null && exportEndTime !== null && exportStartTime < exportEndTime)
+        ? { startTime: exportStartTime, endTime: exportEndTime }
+        : undefined;
 
       // exportProject (Tone.Offline) 사용
       const blob = await exportProject(tracks, range);
