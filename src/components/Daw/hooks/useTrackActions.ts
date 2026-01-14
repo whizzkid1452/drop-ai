@@ -37,9 +37,11 @@ export const useTrackActions = () => {
             const result = calculateSplitRegion(region, splitTime);
 
             if (!result) {
-                console.warn('Split calculation failed (invalid time?)');
+                console.warn(`[Split] Failed: splitTime ${splitTime} is outside region range [${region.startTime}, ${region.endTime}]`);
                 return;
             }
+            
+            console.log(`[Split] Splitting region ${region.id} at ${splitTime}s (range: ${region.startTime}~${region.endTime})`);
 
             // Destructure for better readability per review
             const { left: leftRegion, right: rightRegion } = result;
@@ -62,30 +64,57 @@ export const useTrackActions = () => {
                 },
             });
 
-            // 3. Sync with AudioEngine
+        // 3. Sync with AudioEngine
+        // IMPORTANT: Must await to prevent race conditions and audio overlap
+        (async () => {
+            try {
+                console.log(`[Split] Starting AudioEngine sync for track ${trackId}`);
+                
+                // a) Unload the original region FIRST
+                await AudioEngine.getInstance().execute({
+                    command: {
+                        type: AudioCommandType.UNLOAD_REGION,
+                        trackId,
+                        regionId: region.id,
+                    },
+                });
 
-            // a) Unload the original region
-            AudioEngine.getInstance().execute({
-                command: {
-                    type: AudioCommandType.UNLOAD_REGION,
-                    trackId,
-                    regionId: region.id,
-                },
-            });
-
-            // b) Load the new regions
-            [leftRegion, rightRegion].forEach(newRegion => {
-                AudioEngine.getInstance().execute({
+                // b) Load the new regions AFTER unload completes
+                // CRITICAL: Calculate duration to prevent overlapping playback
+                const leftDuration = leftRegion.endTime - leftRegion.startTime;
+                const rightDuration = rightRegion.endTime - rightRegion.startTime;
+                
+                // Load sequentially to avoid race conditions with same audio file
+                await AudioEngine.getInstance().execute({
                     command: {
                         type: AudioCommandType.LOAD_REGION,
                         trackId,
-                        regionId: newRegion.id,
-                        url: newRegion.audioFile.url,
-                        startTime: newRegion.startTime,
-                        startOffset: newRegion.sourceStartTime,
+                        regionId: leftRegion.id,
+                        url: leftRegion.audioFile.url,
+                        startTime: leftRegion.startTime,
+                        startOffset: leftRegion.sourceStartTime,
+                        duration: leftDuration,
                     },
                 });
-            });
+                
+                await AudioEngine.getInstance().execute({
+                    command: {
+                        type: AudioCommandType.LOAD_REGION,
+                        trackId,
+                        regionId: rightRegion.id,
+                        url: rightRegion.audioFile.url,
+                        startTime: rightRegion.startTime,
+                        startOffset: rightRegion.sourceStartTime,
+                        duration: rightDuration,
+                    },
+                });
+                
+                console.log(`[Split] AudioEngine sync completed for track ${trackId}`);
+            } catch (error) {
+                console.error(`[Split] AudioEngine sync failed:`, error);
+                // TODO: Rollback store update if AudioEngine sync fails
+            }
+        })();
         },
         [getTrack, updateTrack]
     );

@@ -79,7 +79,8 @@ export class AudioEngine {
           command.regionId,
           command.url,
           command.startTime,
-          command.startOffset
+          command.startOffset,
+          command.duration
         );
         break;
       case AudioCommandType.UNLOAD_REGION:
@@ -139,7 +140,8 @@ export class AudioEngine {
     regionId: string,
     url: string,
     startTime: number = 0,
-    startOffset: number = 0
+    startOffset: number = 0,
+    duration?: number
   ) {
     this.initTrack(trackId);
     const trackData = this.tracks.get(trackId);
@@ -147,20 +149,45 @@ export class AudioEngine {
 
     if (trackData.players.has(regionId)) return;
 
-    const player = new Tone.Player({
-      url,
-      loop: false,
-      onload: () => {
-        /**
-         * sync().start(startTime, offset)
-         * startTime: When to start playing on the timeline
-         * offset: Where to start playing in the source file
-         */
-        player.sync().start(startTime, startOffset);
-      },
-    }).connect(trackData.channel);
+    // CRITICAL: Wrap onload in Promise to ensure sync().start() completes before returning
+    await new Promise<void>((resolve, reject) => {
+      const player = new Tone.Player({
+        url,
+        loop: false,
+        fadeIn: 0.005,  // 5ms fade in to prevent click noise
+        fadeOut: 0.005, // 5ms fade out to prevent click noise
+        onload: () => {
+          try {
+            /**
+             * sync().start(startTime, offset, duration)
+             * startTime: When to start playing on the timeline
+             * offset: Where to start playing in the source file
+             * duration: How long to play (CRITICAL: prevents regions from overlapping!)
+             */
+            if (duration !== undefined) {
+              player.sync().start(startTime, startOffset, duration);
+            } else {
+              player.sync().start(startTime, startOffset);
+            }
+            console.log(`[AudioEngine] Loaded region ${regionId} at timeline ${startTime}s with offset ${startOffset}s, duration ${duration}s`, {
+              channelInputs: trackData.channel.numberOfInputs,
+              playerVolume: player.volume.value,
+            });
+            resolve(); // Signal completion
+          } catch (error) {
+            console.error(`[AudioEngine] Failed to sync region ${regionId}:`, error);
+            reject(error);
+          }
+        },
+        onerror: (error) => {
+          console.error(`[AudioEngine] Failed to load region ${regionId}:`, error);
+          reject(error);
+        },
+      }).connect(trackData.channel);
 
-    trackData.players.set(regionId, player);
+      trackData.players.set(regionId, player);
+      console.log(`[AudioEngine] Player created for region ${regionId}, total players: ${trackData.players.size}`);
+    });
   }
 
   private unloadRegion(trackId: string, regionId: string) {
@@ -169,9 +196,20 @@ export class AudioEngine {
 
     const player = trackData.players.get(regionId);
     if (player) {
-      player.stop();
-      player.dispose();
+      console.log(`[AudioEngine] Unloading region ${regionId}:`, {
+        state: player.state,
+        loaded: player.loaded,
+        volume: player.volume.value,
+      });
+      
+      // CRITICAL: Proper cleanup order
+      player.unsync(); // Remove from Transport
+      player.stop(); // Stop playback
+      player.disconnect(); // Disconnect from Channel
+      player.dispose(); // Free resources
+      
       trackData.players.delete(regionId);
+      console.log(`[AudioEngine] Unloaded region ${regionId}, remaining players: ${trackData.players.size}`);
     }
   }
 

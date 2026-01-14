@@ -53,13 +53,19 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
       const regionId = newTrack.regions[0].id;
 
       // Direct Dependency: Load into AudioEngine immediately
+      // CRITICAL: Set duration to prevent playing beyond region boundary
+      const region = newTrack.regions[0];
+      const regionDuration = region.endTime - region.startTime;
+      
       AudioEngine.getInstance().execute({
         command: {
           type: 'LOAD_REGION',
           trackId,
           regionId,
           url: uploadedAudioFile.url,
-          startTime: 0,
+          startTime: region.startTime,
+          startOffset: region.sourceStartTime,
+          duration: regionDuration,
         },
       });
 

@@ -25,7 +25,7 @@ Drop AI DAW의 AI Agent Terminal과 CLI Terminal에서 사용 가능한 모든 �
 | `SET_EXPORT_RANGE`   | Export 구간 설정     | `startTime`, `endTime` (초)                               |
 | `CLEAR_EXPORT_RANGE` | Export 구간 초기화   | 없음                                                      |
 | `EXPORT_AUDIO`       | 오디오 Export 실행   | 없음                                                      |
-| `LOAD_REGION`        | 리전 로드 (내부용)   | `trackId`, `regionId`, `url`, `startTime`, `startOffset?` |
+| `LOAD_REGION`        | 리전 로드 (내부용)   | `trackId`, `regionId`, `url`, `startTime`, `startOffset?`, `duration?` |
 | `UNLOAD_REGION`      | 리전 언로드 (내부용) | `trackId`, `regionId`                                     |
 
 ---
@@ -164,12 +164,14 @@ Drop AI DAW의 AI Agent Terminal과 CLI Terminal에서 사용 가능한 모든 �
   "regionId": "uuid",
   "url": "blob:...",
   "startTime": 0,
-  "startOffset": 0
+  "startOffset": 0,
+  "duration": 10.5
 }
 ```
 
 - 오디오 리전 로드 (일반적으로 UI에서 자동 처리)
 - Tone.js Player 생성 및 동기화
+- **중요:** `duration`을 지정하지 않으면 offset부터 파일 끝까지 재생되어 Region이 겹칠 수 있습니다
 
 #### UNLOAD_REGION
 

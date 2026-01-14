@@ -56,6 +56,7 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
     url: z.url('Invalid URL format'),
     startTime: z.number().min(0, 'Start time must be >= 0'),
     startOffset: z.number().min(0, 'Start offset must be >= 0').optional(),
+    duration: z.number().min(0, 'Duration must be >= 0').optional(),
   }),
   z.object({
     type: z.literal(AudioCommandType.UNLOAD_REGION),
