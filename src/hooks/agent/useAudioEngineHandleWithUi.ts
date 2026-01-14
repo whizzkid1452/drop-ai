@@ -1,77 +1,75 @@
-import { AudioEngine } from '@/logics/audio/audioEngine';
+import { useCallback } from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import { useAudioEngine } from '@/hooks/audio/useAudioEngine';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { useTrackStore } from '@/stores/useTrackStore';
 import {
   AudioCommandType,
   type AudioCommand,
 } from '@/types/audioCommand.schema';
-import { useShallow } from 'zustand/react/shallow';
 import { downloadBlob } from '@/components/Daw/components/ExportButton/utils/audioExport';
+import { AudioEngineError, getUserFriendlyMessage } from '@/logics/audio/audioEngine.errors';
 
+/**
+ * AudioEngine을 UI와 연결하는 Hook
+ * 
+ * 역할:
+ * - AudioEngine 명령 실행
+ * - 에러 처리 및 사용자 알림
+ * - Export 파일 다운로드 처리
+ * 
+ * @deprecated 이 Hook은 레거시입니다. 직접 useAudioEngine()을 사용하는 것을 권장합니다.
+ */
 export function useAudioEngineHandleWithUi() {
-  const { setIsPlaying, setCurrentTime, setExportRange, exportStartTime, exportEndTime } = usePlaybackStore(
+  const audioEngine = useAudioEngine();
+  
+  const { exportStartTime, exportEndTime } = usePlaybackStore(
     useShallow(state => ({
-      setIsPlaying: state.setIsPlaying,
-      setCurrentTime: state.setCurrentTime,
-      setExportRange: state.setExportRange,
       exportStartTime: state.exportStartTime,
       exportEndTime: state.exportEndTime,
     }))
   );
-  const updateTrack = useTrackStore(useShallow(state => state.updateTrack));
 
-  const handleAudioCommand = (command: AudioCommand) =>
-    AudioEngine.getInstance().execute({
-      command,
-      callback: ({ command, result }) => {
-        // Update Store based on command type
-        switch (command.type) {
-          case AudioCommandType.PLAY:
-            setIsPlaying(true);
-            break;
-          case AudioCommandType.PAUSE:
-            setIsPlaying(false);
-            break;
-          case AudioCommandType.STOP:
-            setIsPlaying(false);
-            setCurrentTime(0);
-            break;
-          case AudioCommandType.SET_TRACK_VOLUME:
-            updateTrack({
-              trackId: command.trackId,
-              updater: t => ({ ...t, volume: command.volume }),
-            });
-            break;
-          case AudioCommandType.SET_TRACK_PAN:
-            updateTrack({
-              trackId: command.trackId,
-              updater: t => ({ ...t, pan: command.pan }),
-            });
-            break;
-          case AudioCommandType.GET_TRACK_INFO:
-            break;
-          case AudioCommandType.SET_CURRENT_TIME:
-            setCurrentTime(command.time);
-            break;
-          case AudioCommandType.SET_EXPORT_RANGE:
-            setExportRange(command.startTime, command.endTime);
-            break;
-          case AudioCommandType.CLEAR_EXPORT_RANGE:
-            setExportRange(null, null);
-            break;
-          case AudioCommandType.EXPORT_AUDIO:
-            if (result instanceof Blob) {
-              // Generate filename based on current Store range
-              let filename = 'export';
-              if (exportStartTime !== null && exportEndTime !== null) {
-                filename = `export_${exportStartTime}-${exportEndTime}s`;
-              }
-              downloadBlob(result, `${filename}.wav`);
-            }
-            break;
+  /**
+   * 오디오 명령 처리
+   * 
+   * @param command - 실행할 오디오 명령
+   */
+  const handleAudioCommand = useCallback(
+    async (command: AudioCommand) => {
+      try {
+        const result = await audioEngine.execute(command);
+
+        // Export 명령의 경우 파일 다운로드 처리
+        if (command.type === AudioCommandType.EXPORT_AUDIO && result instanceof Blob) {
+          let filename = 'export';
+          if (exportStartTime !== null && exportEndTime !== null) {
+            filename = `export_${exportStartTime}-${exportEndTime}s`;
+          }
+          downloadBlob(result, `${filename}.wav`);
         }
-      },
-    });
+
+        return result;
+      } catch (error) {
+        // AudioEngineError는 사용자 친화적 메시지 표시
+        if (error instanceof AudioEngineError) {
+          const friendlyMessage = getUserFriendlyMessage(error);
+          alert(friendlyMessage);
+          console.error('[AudioEngine Error]', {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+          });
+        } else {
+          // 기타 에러
+          alert('알 수 없는 오류가 발생했습니다.');
+          console.error('[Unknown Error]', error);
+        }
+        
+        throw error;
+      }
+    },
+    [audioEngine, exportStartTime, exportEndTime]
+  );
 
   return { handleAudioCommand };
 }
