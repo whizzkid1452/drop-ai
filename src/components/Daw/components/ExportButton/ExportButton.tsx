@@ -1,10 +1,8 @@
-import { exportProject } from '@/logics/audio/exportProject';
-import { useTrackStore } from '@/stores/useTrackStore';
-import { usePlaybackStore } from '@/stores/usePlaybackStore';
+import { useAudioEngineHandleWithUi } from '@/hooks/agent/useAudioEngineHandleWithUi';
+import { AudioCommandType } from '@/types/audioCommand.schema';
 import { useCallback, useState } from 'react';
-import { useShallow } from 'zustand/react/shallow';
 import * as styles from './ExportButton.css';
-import { downloadBlob, type ExportSettings } from './utils/audioExport';
+import type { ExportSettings } from './utils/audioExport';
 
 /**
  * ExportButton 컴포넌트의 Props 타입 정의
@@ -21,51 +19,37 @@ interface ExportButtonProps {
 /**
  * ExportButton 컴포넌트
  *
- * 프로젝트의 모든 트랙을 Tone.Offline을 사용하여 정확하게 내보냅니다.
+ * AudioEngine을 통해 프로젝트의 모든 트랙을 내보냅니다.
+ * - 일관된 명령 인터페이스 사용
+ * - 통합된 에러 처리
+ * - 의존성 주입으로 Store 추상화
  */
 export function ExportButton({
   settings,
   onExportComplete,
   onExportError,
 }: ExportButtonProps) {
-  const tracks = useTrackStore(
-    useShallow(state => Array.from(state.tracks.values()))
-  );
+  const { handleAudioCommand } = useAudioEngineHandleWithUi();
   
-  const { exportStartTime, exportEndTime } = usePlaybackStore(
-    useShallow(state => ({
-        exportStartTime: state.exportStartTime,
-        exportEndTime: state.exportEndTime,
-    }))
-  );
-
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /**
    * Export 실행 함수
+   * AudioEngine.execute()를 통해 일관된 방식으로 처리
    */
   const handleExport = useCallback(async () => {
-    if (tracks.length === 0) {
-      setError('내보낼 트랙이 없습니다.');
-      return;
-    }
-
     setIsExporting(true);
     setError(null);
 
     try {
-      // Range 확인
-      const range = (exportStartTime !== null && exportEndTime !== null && exportStartTime < exportEndTime)
-        ? { startTime: exportStartTime, endTime: exportEndTime }
-        : undefined;
-
-      // exportProject (Tone.Offline) 사용
-      const blob = await exportProject(tracks, range);
-
-      // 파일 다운로드
-      const filename = settings?.filename || 'drop-ai-export';
-      downloadBlob(blob, `${filename}.wav`);
+      // AudioEngine.execute(EXPORT_AUDIO) 호출
+      // - Store 접근은 AudioEngine 의존성이 처리
+      // - 파일 다운로드는 useAudioEngineHandleWithUi가 처리
+      await handleAudioCommand(
+        { type: AudioCommandType.EXPORT_AUDIO },
+        { exportFilename: settings?.filename || 'drop-ai-export' }
+      );
 
       setIsExporting(false);
       onExportComplete?.();
@@ -74,12 +58,12 @@ export function ExportButton({
       setError(error.message);
       setIsExporting(false);
       onExportError?.(error);
-      console.error('Export error:', error);
+      // 에러는 이미 useAudioEngineHandleWithUi에서 alert 처리됨
     }
-  }, [tracks, settings, onExportComplete, onExportError, exportStartTime, exportEndTime]);
+  }, [handleAudioCommand, settings, onExportComplete, onExportError]);
 
-  // 트랙이 없으면 버튼 비활성화
-  const isDisabled = tracks.length === 0 || isExporting;
+  // 버튼 비활성화: export 중일 때만
+  const isDisabled = isExporting;
 
   return (
     <div className={styles.container}>

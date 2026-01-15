@@ -10,6 +10,14 @@ import { downloadBlob } from '@/components/Daw/components/ExportButton/utils/aud
 import { AudioEngineError, getUserFriendlyMessage } from '@/logics/audio/audioEngine.errors';
 
 /**
+ * 명령 실행 옵션
+ */
+export interface AudioCommandOptions {
+  /** Export 시 사용할 커스텀 파일명 (확장자 제외) */
+  exportFilename?: string;
+}
+
+/**
  * AudioEngine을 UI와 연결하는 Hook
  * 
  * 역할:
@@ -29,9 +37,10 @@ export function useAudioEngineHandleWithUi() {
    * 오디오 명령 처리
    * 
    * @param command - 실행할 오디오 명령
+   * @param options - 명령 실행 옵션
    */
   const handleAudioCommand = useCallback(
-    async (command: AudioCommand) => {
+    async (command: AudioCommand, options?: AudioCommandOptions) => {
       try {
         // 실행 시점에 getInstance 호출 (lazy)
         const audioEngine = AudioEngine.getInstance();
@@ -39,10 +48,21 @@ export function useAudioEngineHandleWithUi() {
 
         // Export 명령의 경우 파일 다운로드 처리
         if (command.type === AudioCommandType.EXPORT_AUDIO && result instanceof Blob) {
-          let filename = 'export';
-          if (exportStartTime !== null && exportEndTime !== null) {
+          let filename: string;
+          
+          // 1. 커스텀 파일명이 제공된 경우
+          if (options?.exportFilename) {
+            filename = options.exportFilename;
+          }
+          // 2. Export range가 있는 경우 자동 생성
+          else if (exportStartTime !== null && exportEndTime !== null) {
             filename = `export_${exportStartTime}-${exportEndTime}s`;
           }
+          // 3. 기본 파일명
+          else {
+            filename = 'export';
+          }
+          
           downloadBlob(result, `${filename}.wav`);
         }
 
