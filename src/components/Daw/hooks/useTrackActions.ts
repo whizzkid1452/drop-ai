@@ -1,6 +1,6 @@
 import { AudioEngine } from '@/logics/audio/audioEngine';
 import { useTrackStore } from '@/stores/useTrackStore';
-import { calculateSplitRegion } from '../logic/regionLogic';
+import { RegionRenderer } from '@/logics/audio/regionRenderer';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import { useCallback } from 'react';
 
@@ -33,8 +33,8 @@ export const useTrackActions = () => {
                 return;
             }
 
-            // 1. Calculate the new regions (Pure Logic)
-            const result = calculateSplitRegion(region, splitTime);
+            // 1. Calculate the new regions (RegionRenderer 사용)
+            const result = RegionRenderer.calculateSplitRegion(region, splitTime);
 
             if (!result) {
                 console.warn(`[Split] Failed: splitTime ${splitTime} is outside region range [${region.startTime}, ${region.endTime}]`);
@@ -80,29 +80,29 @@ export const useTrackActions = () => {
                 });
 
                 // b) Load the new regions AFTER unload completes
-                // CRITICAL: Calculate duration to prevent overlapping playback
-                const leftDuration = leftRegion.endTime - leftRegion.startTime;
-                const rightDuration = rightRegion.endTime - rightRegion.startTime;
+                // ✅ RegionRenderer로 파라미터 계산 (공통 로직)
+                const leftParams = RegionRenderer.calculateRenderParams(leftRegion);
+                const rightParams = RegionRenderer.calculateRenderParams(rightRegion);
                 
                 // Load sequentially to avoid race conditions with same audio file
                 await engine.execute({
                     type: AudioCommandType.LOAD_REGION,
                     trackId,
                     regionId: leftRegion.id,
-                    url: leftRegion.audioFile.url,
-                    startTime: leftRegion.startTime,
-                    startOffset: leftRegion.sourceStartTime,
-                    duration: leftDuration,
+                    url: leftParams.url,
+                    startTime: leftParams.startTime,
+                    startOffset: leftParams.startOffset,
+                    duration: leftParams.duration,
                 });
                 
                 await engine.execute({
                     type: AudioCommandType.LOAD_REGION,
                     trackId,
                     regionId: rightRegion.id,
-                    url: rightRegion.audioFile.url,
-                    startTime: rightRegion.startTime,
-                    startOffset: rightRegion.sourceStartTime,
-                    duration: rightDuration,
+                    url: rightParams.url,
+                    startTime: rightParams.startTime,
+                    startOffset: rightParams.startOffset,
+                    duration: rightParams.duration,
                 });
                 
                 console.log(`[Split] AudioEngine sync completed for track ${trackId}`);

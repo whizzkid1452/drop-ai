@@ -3,6 +3,7 @@ import { audioBufferToWav } from '@/components/Daw/components/ExportButton/utils
 import type { Track } from '@/types/track';
 import { loadAndDecodeAudioBuffer } from './loadAndDecodeAudioBuffer';
 import { AudioEngineError, AudioEngineErrorCode } from './audioEngine.errors';
+import { RegionRenderer } from './regionRenderer';
 
 /**
  * 프로젝트 전체를 오디오 파일로 내보냅니다.
@@ -56,7 +57,7 @@ export async function exportProject(
       'Failed to render audio buffer'
     );
   }
-  
+
   const wavBlob = audioBufferToWav(audioBuffer);
   return wavBlob;
 }
@@ -90,7 +91,7 @@ async function preloadAudioBuffers(tracks: Track[]) {
  */
 function getTotalDuration({ tracks }: { tracks: Track[] }): number {
   let totalDuration = 0;
-  
+
   tracks.forEach(track => {
     track.regions.forEach(region => {
       const duration = region.audioFile.duration ?? 0;
@@ -107,7 +108,7 @@ function getTotalDuration({ tracks }: { tracks: Track[] }): number {
       'Project duration is 0. Please add audio regions to tracks.'
     );
   }
-  
+
   return totalDuration;
 }
 
@@ -135,45 +136,44 @@ async function renderBuffer({
         const buffer = audioBuffers.get(region.audioFile.url);
         if (!buffer) return;
 
-        // Export 범위 시프트 (exportStartTime 만큼 앞으로 당김)
-        const exportStartTime = range?.startTime ?? 0;
-        const regionDuration = buffer.duration;
-        const regionEndTime = region.startTime + regionDuration;
+        // ✅ RegionRenderer로 파라미터 계산 (공통 로직)
+        const baseParams = RegionRenderer.calculateRenderParams(region);
+        const adjustedParams = RegionRenderer.adjustForExportRange(baseParams, range);
 
-        // 1. 리전이 Export 범위 밖인 경우 스킵
-        if (range) {
-          if (
-            regionEndTime <= range.startTime || // 리전이 범위보다 먼저 끝남
-            region.startTime >= range.endTime // 리전이 범위보다 늦게 시작함
-          ) {
-            return;
-          }
-        }
-
-        // 2. 재생 시작 시간 및 오프셋 계산
-        let playStartTime = region.startTime - exportStartTime;
-        let offset = 0;
-
-        /**
-         * Case A: 리전이 Export 시작점보다 앞에서 시작 (잘림)
-         * [   Region   ]
-         *       | Export Start
-         *       ^ playStartTime < 0
-         *
-         * -> playStartTime = 0
-         * -> offset = (Export Start - Region Start)
-         */
-        if (playStartTime < 0) {
-          offset = -playStartTime; // exportStartTime - region.startTime
-          playStartTime = 0;
+        // duration이 0이면 스킵 (Export 범위 밖)
+        if (adjustedParams.duration <= 0) {
+          return;
         }
 
         const player = new Tone.Player({
           url: buffer,
           loop: false,
+          fadeIn: 0.005,   // ✅ 5ms fade in (audioEngine과 동일)
+          fadeOut: 0.005,  // ✅ 5ms fade out (audioEngine과 동일)
         }).connect(channel);
 
-        player.start(playStartTime, offset);
+        /**
+         * ✅ CRITICAL: loopEnd를 설정하여 정확한 구간만 렌더링
+         * 
+         * AudioEngine과 exportProject 공통 로직:
+         * - loopStart/loopEnd로 명시적 구간 제한
+         * - Tone.Player는 loop가 false여도 loopEnd를 존중
+         * - 이를 통해 Split된 Region이 정확한 길이만큼만 재생됩니다.
+         * 
+         * RegionRenderer가 계산한 파라미터 사용:
+         * - startTime: 타임라인에서 시작 시간
+         * - startOffset: 소스 파일에서 시작 위치 (sourceStartTime 반영)
+         * - duration: 재생할 길이 (Export range에 의해 조정됨)
+         * 
+         * 참고: audioEngine.ts의 동일한 설정과 일치해야 합니다.
+         */
+        player.loopStart = adjustedParams.startOffset;
+        player.loopEnd = adjustedParams.startOffset + adjustedParams.duration;
+
+        player.start(
+          adjustedParams.startTime,
+          adjustedParams.startOffset
+        );
       });
     });
 

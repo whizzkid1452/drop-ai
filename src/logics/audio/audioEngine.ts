@@ -47,7 +47,7 @@ export class AudioEngine {
    * private 생성자 - 외부에서 직접 인스턴스 생성 불가
    * @param deps - AudioEngine이 필요로 하는 외부 의존성
    */
-  private constructor(private deps: AudioEngineDependencies) {}
+  private constructor(private deps: AudioEngineDependencies) { }
 
   /**
    * 싱글톤 인스턴스 초기화
@@ -105,19 +105,19 @@ export class AudioEngine {
       switch (command.type) {
         case AudioCommandType.PLAY:
           return await this.handlePlay();
-          
+
         case AudioCommandType.PAUSE:
           return this.handlePause();
-          
+
         case AudioCommandType.STOP:
           return this.handleStop();
-          
+
         case AudioCommandType.SET_TRACK_VOLUME:
           return this.handleSetTrackVolume(command.trackId, command.volume);
-          
+
         case AudioCommandType.SET_TRACK_PAN:
           return this.handleSetTrackPan(command.trackId, command.pan);
-          
+
         case AudioCommandType.LOAD_REGION:
           return await this.loadRegion(
             command.trackId,
@@ -127,26 +127,26 @@ export class AudioEngine {
             command.startOffset,
             command.duration
           );
-          
+
         case AudioCommandType.UNLOAD_REGION:
           this.unloadRegion(command.trackId, command.regionId);
           return true;
-          
+
         case AudioCommandType.GET_TRACK_INFO:
           return this.getTrackInfo();
-          
+
         case AudioCommandType.SET_CURRENT_TIME:
           return this.handleSetCurrentTime(command.time);
-          
+
         case AudioCommandType.SET_EXPORT_RANGE:
           return this.handleSetExportRange(command.startTime, command.endTime);
-          
+
         case AudioCommandType.CLEAR_EXPORT_RANGE:
           return this.handleClearExportRange();
-          
+
         case AudioCommandType.EXPORT_AUDIO:
           return await this.handleExportAudio();
-          
+
         default:
           throw new AudioEngineError(
             AudioEngineErrorCode.CONTEXT_ERROR,
@@ -158,7 +158,7 @@ export class AudioEngine {
       if (error instanceof AudioEngineError) {
         throw error;
       }
-      
+
       // 기타 에러는 래핑
       throw new AudioEngineError(
         AudioEngineErrorCode.CONTEXT_ERROR,
@@ -250,7 +250,7 @@ export class AudioEngine {
   private async handleExportAudio(): Promise<Blob> {
     const tracks = this.deps.getTracks();
     const range = this.deps.getExportRange();
-    
+
     return await exportProject(tracks, range ?? undefined);
   }
 
@@ -270,12 +270,12 @@ export class AudioEngine {
    */
   private getOrInitTrack(trackId: string): TrackData {
     let track = this.tracks.get(trackId);
-    
+
     if (!track) {
       this.initTrack(trackId);
       track = this.tracks.get(trackId);
     }
-    
+
     if (!track) {
       throw new AudioEngineError(
         AudioEngineErrorCode.TRACK_INIT_FAILED,
@@ -283,7 +283,7 @@ export class AudioEngine {
         { trackId }
       );
     }
-    
+
     return track;
   }
 
@@ -321,7 +321,7 @@ export class AudioEngine {
   ): Promise<boolean> {
     this.initTrack(trackId);
     const trackData = this.tracks.get(trackId);
-    
+
     if (!trackData) {
       throw new AudioEngineError(
         AudioEngineErrorCode.TRACK_NOT_FOUND,
@@ -341,40 +341,58 @@ export class AudioEngine {
         const player = new Tone.Player({
           url,
           loop: false,
-          fadeIn: 0.005,  // 5ms fade in to prevent click noise
-          fadeOut: 0.005, // 5ms fade out to prevent click noise
+          fadeIn: 0.005,  // ✅ 5ms fade in (exportProject와 동일)
+          fadeOut: 0.005, // ✅ 5ms fade out (exportProject와 동일)
           onload: () => {
             try {
               /**
-               * sync().start(startTime, offset, duration)
-               * startTime: When to start playing on the timeline
-               * offset: Where to start playing in the source file
-               * duration: How long to play (CRITICAL: prevents regions from overlapping!)
-               */
+                * ✅ CRITICAL: loopEnd를 설정하여 정확한 구간만 재생
+                * 
+                * AudioEngine과 exportProject 공통 로직:
+                * - Tone.Player는 loop가 false여도 loopEnd를 존중합니다.
+                * - 이를 통해 Split된 Region이 정확한 길이만큼만 재생됩니다.
+                * - loopStart/loopEnd로 재생 구간을 명시적으로 제한합니다.
+                * 
+                * 참고: exportProject.ts의 동일한 설정과 일치해야 합니다.
+                */
               if (duration !== undefined) {
-                player.sync().start(startTime, startOffset, duration);
-              } else {
-                player.sync().start(startTime, startOffset);
+                // loopStart: 소스 파일에서 시작 위치
+                // loopEnd: 소스 파일에서 끝 위치
+                player.loopStart = startOffset;
+                player.loopEnd = startOffset + duration;
+
+                console.log(
+                  `[AudioEngine] Region ${regionId}: loopStart=${player.loopStart}s, loopEnd=${player.loopEnd}s (duration=${duration}s)`,
+                  {
+                    audioFileLength: player.buffer.duration,
+                    willPlay: `${startOffset}s ~ ${startOffset + duration}s`,
+                  }
+                );
               }
-              
+
+              // Transport에 동기화하고 시작
+              player.sync().start(startTime, startOffset);
+
               console.log(
                 `[AudioEngine] Loaded region ${regionId} at timeline ${startTime}s with offset ${startOffset}s, duration ${duration}s`,
                 {
                   channelInputs: trackData.channel.numberOfInputs,
                   playerVolume: player.volume.value,
+                  loopStart: player.loopStart,
+                  loopEnd: player.loopEnd,
                 }
               );
-              
-            resolve();
-          } catch (error: unknown) {
-            console.error(`[AudioEngine] Failed to sync region ${regionId}:`, error);
+
+              resolve();
+            } catch (error: unknown) {
+              console.error(`[AudioEngine] Failed to sync region ${regionId}:`, error);
+              reject(error);
+            }
+          },
+          onerror: (error: unknown) => {
+            console.error(`[AudioEngine] Failed to load region ${regionId}:`, error);
             reject(error);
-          }
-        },
-        onerror: (error: unknown) => {
-          console.error(`[AudioEngine] Failed to load region ${regionId}:`, error);
-          reject(error);
-        },
+          },
         }).connect(trackData.channel);
 
         trackData.players.set(regionId, player);
@@ -382,7 +400,7 @@ export class AudioEngine {
           `[AudioEngine] Player created for region ${regionId}, total players: ${trackData.players.size}`
         );
       });
-      
+
       return true;
     } catch (error) {
       throw new AudioEngineError(
@@ -410,13 +428,13 @@ export class AudioEngine {
         loaded: player.loaded,
         volume: player.volume.value,
       });
-      
+
       // CRITICAL: Proper cleanup order
       player.unsync(); // Remove from Transport
       player.stop(); // Stop playback
       player.disconnect(); // Disconnect from Channel
       player.dispose(); // Free resources
-      
+
       trackData.players.delete(regionId);
       console.log(
         `[AudioEngine] Unloaded region ${regionId}, remaining players: ${trackData.players.size}`
