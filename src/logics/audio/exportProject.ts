@@ -4,6 +4,11 @@ import type { Track } from '@/types/track';
 import { loadAndDecodeAudioBuffer } from './loadAndDecodeAudioBuffer';
 import { AudioEngineError, AudioEngineErrorCode } from './audioEngine.errors';
 import { RegionRenderer } from './regionRenderer';
+import {
+  PLAYER_CONFIG,
+  configurePlayerLoop,
+  startPlayer,
+} from './playerConfig';
 
 /**
  * 프로젝트 전체를 오디오 파일로 내보냅니다.
@@ -148,8 +153,7 @@ async function renderBuffer({
         const player = new Tone.Player({
           url: buffer,
           loop: false,
-          fadeIn: 0.005,   // ✅ 5ms fade in (audioEngine과 동일)
-          fadeOut: 0.005,  // ✅ 5ms fade out (audioEngine과 동일)
+          ...PLAYER_CONFIG,  // ✅ 공통 설정 (fadeIn, fadeOut)
         }).connect(channel);
 
         /**
@@ -165,18 +169,23 @@ async function renderBuffer({
          * - startOffset: 소스 파일에서 시작 위치 (sourceStartTime 반영)
          * - duration: 재생할 길이 (Export range에 의해 조정됨)
          * 
-         * 참고: audioEngine.ts의 동일한 설정과 일치해야 합니다.
+         * 참고: playerConfig.ts의 공통 함수로 관리됩니다.
          */
-        player.loopStart = adjustedParams.startOffset;
-        player.loopEnd = adjustedParams.startOffset + adjustedParams.duration;
-
-        // ✅ duration을 지정하여 Region이 정확한 길이만큼만 렌더링되도록 설정
-        // AudioEngine과 동일한 로직: duration이 없으면 offset부터 끝까지 재생되어 Region들이 겹침
-        player.start(
-          adjustedParams.startTime,
+        // ✅ 공통 함수로 loopStart/loopEnd 설정
+        configurePlayerLoop(
+          player,
           adjustedParams.startOffset,
           adjustedParams.duration
         );
+
+        // ✅ 공통 함수로 Player 시작 (즉시 재생 모드)
+        startPlayer({
+          player,
+          syncMode: false,
+          startTime: adjustedParams.startTime,
+          startOffset: adjustedParams.startOffset,
+          duration: adjustedParams.duration,
+        });
       });
     });
 

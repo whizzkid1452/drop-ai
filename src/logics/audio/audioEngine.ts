@@ -12,6 +12,11 @@ import {
   AudioEngineError,
   AudioEngineErrorCode,
 } from './audioEngine.errors';
+import {
+  PLAYER_CONFIG,
+  configurePlayerLoop,
+  startPlayer,
+} from './playerConfig';
 
 /**
  * AudioEngine (Singleton + Dependency Injection)
@@ -341,8 +346,7 @@ export class AudioEngine {
         const player = new Tone.Player({
           url,
           loop: false,
-          fadeIn: 0.005,  // ✅ 5ms fade in (exportProject와 동일)
-          fadeOut: 0.005, // ✅ 5ms fade out (exportProject와 동일)
+          ...PLAYER_CONFIG,  // ✅ 공통 설정 (fadeIn, fadeOut)
           onload: () => {
             try {
               /**
@@ -353,13 +357,11 @@ export class AudioEngine {
                 * - 이를 통해 Split된 Region이 정확한 길이만큼만 재생됩니다.
                 * - loopStart/loopEnd로 재생 구간을 명시적으로 제한합니다.
                 * 
-                * 참고: exportProject.ts의 동일한 설정과 일치해야 합니다.
+                * 참고: playerConfig.ts의 공통 함수로 관리됩니다.
                 */
               if (duration !== undefined) {
-                // loopStart: 소스 파일에서 시작 위치
-                // loopEnd: 소스 파일에서 끝 위치
-                player.loopStart = startOffset;
-                player.loopEnd = startOffset + duration;
+                // ✅ 공통 함수로 loopStart/loopEnd 설정
+                configurePlayerLoop(player, startOffset, duration);
 
                 console.log(
                   `[AudioEngine] Region ${regionId}: loopStart=${player.loopStart}s, loopEnd=${player.loopEnd}s (duration=${duration}s)`,
@@ -370,11 +372,15 @@ export class AudioEngine {
                 );
               }
 
-              // Transport에 동기화하고 시작
-              // ✅ duration을 지정하여 Region이 정확한 길이만큼만 재생되도록 설정
-              // duration이 없으면 offset부터 끝까지 재생되어 Region들이 겹칠 수 있음
+              // ✅ 공통 함수로 Player 시작 (Transport 동기화 모드)
               const playDuration = duration !== undefined ? duration : undefined;
-              player.sync().start(startTime, startOffset, playDuration);
+              startPlayer({
+                player,
+                syncMode: true,
+                startTime,
+                startOffset,
+                duration: playDuration,
+              });
 
               console.log(
                 `[AudioEngine] Loaded region ${regionId} at timeline ${startTime}s with offset ${startOffset}s, duration ${duration}s`,
