@@ -1,11 +1,14 @@
 import {
   parseAudioCommandString,
   type AudioCommand,
+  AudioCommandType,
 } from '@/types/audioCommand.schema';
 import { queryToLLM as queryToLLM } from './queryToLLM';
+import type { UseProjectExportOptions } from '@/logics/audio/useProjectExport';
 
 export interface AIResponseHandlerDependencies {
   execute: (command: AudioCommand) => Promise<any>;
+  exportProject: (options?: UseProjectExportOptions) => Promise<void>;
   /** @todo engine 타입 추가 필요 */
   engine: any;
   trackCount: number;
@@ -18,7 +21,7 @@ export interface AIResponseHandlerDependencies {
  * @returns 처리 결과 (메시지 및 상태)
  */
 export async function handleAIResponse(deps: AIResponseHandlerDependencies) {
-  const { engine, trackCount, userInput, execute } = deps;
+  const { engine, trackCount, userInput, execute, exportProject } = deps;
 
   const { fullResponse, error: llmResponseError } = await queryToLLM({
     engine,
@@ -40,7 +43,13 @@ export async function handleAIResponse(deps: AIResponseHandlerDependencies) {
   if (commands && commands.length > 0) {
     // Execute all commands sequentially
     for (const command of commands) {
-      await execute(command);
+      if (command.type === AudioCommandType.EXPORT_AUDIO) {
+        // Export는 전용 Hook 함수를 사용하여 로직 통일 (파일명 생성 등)
+        const filename = (command as any).filename || 'agent-export';
+        await exportProject({ filename });
+      } else {
+        await execute(command);
+      }
     }
     return {
       message: fullResponse || '✅ Commands executed',

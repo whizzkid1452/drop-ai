@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import type { Message, AgentStatus } from '@/types/agent';
 import { useWebLLM } from '@/hooks/agent/useWebLLM';
 import { useTrackStore } from '@/stores/useTrackStore';
-import { useAudioCommand } from '@/logics/audio';
+import { useAudioCommand, useProjectExport } from '@/logics/audio';
 import { handleAIResponse } from '@/hooks/agent/useAgent/utils/aiResponseHandler';
 import {
   createUserMessage,
@@ -18,6 +18,7 @@ export function useAgent() {
     state => Array.from(state.tracks.values()).length
   );
   const { execute } = useAudioCommand();
+  const { exportProject } = useProjectExport();
 
   const addMessage = useCallback((message: Message) => {
     setMessages(prev => [...prev, message]);
@@ -53,6 +54,7 @@ export function useAgent() {
       trackCount,
       userInput: trimmedContent,
       execute,
+      exportProject,
     });
 
     updateMessage(assistantMsg.id, message);
