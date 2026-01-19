@@ -33,7 +33,6 @@ export const useTrackActions = () => {
                 return;
             }
 
-            // 1. Calculate the new regions (RegionRenderer 사용)
             const result = RegionRenderer.calculateSplitRegion(region, splitTime);
 
             if (!result) {
@@ -43,18 +42,13 @@ export const useTrackActions = () => {
             
             console.log(`[Split] Splitting region ${region.id} at ${splitTime}s (range: ${region.startTime}~${region.endTime})`);
 
-            // Destructure for better readability per review
             const { left: leftRegion, right: rightRegion } = result;
 
-            // 2. Update the Store (State Mutation)
             updateTrack({
                 trackId,
                 updater: t => {
-                    // Remove the original region and add the two new ones
                     const otherRegions = t.regions.filter(r => r.id !== region.id);
                     const newRegions = [...otherRegions, leftRegion, rightRegion];
-
-                    // Sort by start time for safety (though not strictly required if other logic handles it)
                     newRegions.sort((a, b) => a.startTime - b.startTime);
 
                     return {
@@ -72,19 +66,15 @@ export const useTrackActions = () => {
                 
                 const engine = AudioEngine.getInstance();
                 
-                // a) Unload the original region FIRST
                 await engine.execute({
                     type: AudioCommandType.UNLOAD_REGION,
                     trackId,
                     regionId: region.id,
                 });
 
-                // b) Load the new regions AFTER unload completes
-                // ✅ RegionRenderer로 파라미터 계산 (공통 로직)
                 const leftParams = RegionRenderer.calculateRenderParams(leftRegion);
                 const rightParams = RegionRenderer.calculateRenderParams(rightRegion);
                 
-                // Load sequentially to avoid race conditions with same audio file
                 await engine.execute({
                     type: AudioCommandType.LOAD_REGION,
                     trackId,
