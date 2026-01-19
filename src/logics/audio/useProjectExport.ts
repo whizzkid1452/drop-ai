@@ -1,13 +1,14 @@
 import { useState, useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { useAudioCommand } from './useAudioCommand';
+import { useTrackStore } from '@/stores/useTrackStore';
 import { handleAudioEngineError } from './audioErrorHandler';
-import { AudioCommandType } from '@/types/audioCommand.schema';
 import { downloadBlob } from '@/components/Daw/components/ExportButton/utils/audioExport';
+import { exportProject as renderProject } from './exportProject';
 
 export interface UseProjectExportOptions {
   filename?: string;
+  range?: { startTime: number; endTime: number };
   onSuccess?: () => void;
   onError?: (error: Error) => void;
 }
@@ -16,18 +17,21 @@ export interface UseProjectExportOptions {
  * 프로젝트 Export를 담당하는 Hook
  * 
  * 역할:
- * - AudioEngine을 통해 프로젝트 렌더링
+ * - 스토어데이터(Tracks, Range) 기반 프로젝트 렌더링 실행
  * - 파일명 자동 생성
  * - Blob 다운로드 처리
  * - 진행 상태 및 에러 관리
  */
 export function useProjectExport() {
-  const { execute } = useAudioCommand();
   const { exportStartTime, exportEndTime } = usePlaybackStore(
     useShallow(state => ({
       exportStartTime: state.exportStartTime,
       exportEndTime: state.exportEndTime,
     }))
+  );
+
+  const tracks = useTrackStore(
+    useShallow(state => Array.from(state.tracks.values()))
   );
 
   const [isExporting, setIsExporting] = useState(false);
@@ -39,25 +43,25 @@ export function useProjectExport() {
       setError(null);
 
       try {
-        const result = await execute({ type: AudioCommandType.EXPORT_AUDIO });
+        // 엔진을 거치지 않고 직접 렌더링 로직 호출
+        // 옵션으로 전달된 range가 있으면 우선 사용 (Agent 명령 처리용)
+        const range = options?.range ?? ((exportStartTime !== null && exportEndTime !== null)
+          ? { startTime: exportStartTime, endTime: exportEndTime }
+          : undefined);
+
+        const result = await renderProject(tracks, range);
 
         if (result instanceof Blob) {
           let filename: string;
 
-          // 1. 커스텀 파일명
           if (options?.filename) {
             filename = options.filename;
-          }
-          // 2. Export range 기반 자동 생성
-          else if (exportStartTime !== null && exportEndTime !== null) {
-            filename = `export_${exportStartTime}-${exportEndTime}s`;
-          }
-          // 3. 기본 파일명
-          else {
+          } else if (range) {
+            filename = `export_${range.startTime}-${range.endTime}s`;
+          } else {
             filename = 'export';
           }
 
-          // 다운로드 처리 (이 Hook이 "Export 행위" 전반을 담당하므로 여기서 수행)
           downloadBlob(result, `${filename}.wav`);
         }
 
@@ -68,12 +72,10 @@ export function useProjectExport() {
         setError(errorObj);
         setIsExporting(false);
         options?.onError?.(errorObj);
-        
-        // 공통 에러 핸들의 호출 (선택 사항 - 호출자가 처리할 수도 있음)
         handleAudioEngineError(errorObj);
       }
     },
-    [execute, exportStartTime, exportEndTime]
+    [tracks, exportStartTime, exportEndTime]
   );
 
   return {
@@ -82,3 +84,4 @@ export function useProjectExport() {
     error,
   };
 }
+

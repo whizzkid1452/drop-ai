@@ -13,54 +13,36 @@ function App() {
   useEffect(() => {
     try {
       AudioEngine.initialize({
-      /**
-       * 현재 프로젝트의 모든 트랙 가져오기
-       */
-      getTracks: () => {
-        return Array.from(useTrackStore.getState().tracks.values());
-      },
+        /**
+         * 트랙 업데이트 (UI 동기화)
+         */
+        updateTrack: (trackId, update) => {
+          useTrackStore.getState().updateTrack({
+            trackId,
+            updater: track => ({ ...track, ...update }),
+          });
+        },
 
-      /**
-       * Export 범위 가져오기
-       */
-      getExportRange: () => {
-        const { exportStartTime, exportEndTime } = usePlaybackStore.getState();
-        if (exportStartTime === null || exportEndTime === null) {
-          return null;
-        }
-        return { startTime: exportStartTime, endTime: exportEndTime };
-      },
+        /**
+         * 재생 상태 업데이트 (UI 동기화)
+         */
+        updatePlaybackState: (state) => {
+          const playbackStore = usePlaybackStore.getState();
+          if (state.isPlaying !== undefined) {
+            playbackStore.setIsPlaying(state.isPlaying);
+          }
+          if (state.currentTime !== undefined) {
+            playbackStore.setCurrentTime(state.currentTime);
+          }
+        },
 
-      /**
-       * 트랙 업데이트 (UI 동기화)
-       */
-      updateTrack: (trackId, update) => {
-        useTrackStore.getState().updateTrack({
-          trackId,
-          updater: track => ({ ...track, ...update }),
-        });
-      },
-
-      /**
-       * 재생 상태 업데이트 (UI 동기화)
-       */
-      updatePlaybackState: (state) => {
-        const playbackStore = usePlaybackStore.getState();
-        if (state.isPlaying !== undefined) {
-          playbackStore.setIsPlaying(state.isPlaying);
-        }
-        if (state.currentTime !== undefined) {
-          playbackStore.setCurrentTime(state.currentTime);
-        }
-      },
-
-      /**
-       * Export 범위 설정
-       */
-      setExportRange: (startTime, endTime) => {
-        usePlaybackStore.getState().setExportRange(startTime, endTime);
-      },
-    });
+        /**
+         * Export 범위 설정
+         */
+        setExportRange: (startTime, endTime) => {
+          usePlaybackStore.getState().setExportRange(startTime, endTime);
+        },
+      });
 
       console.log('[App] AudioEngine initialized');
       setIsAudioEngineReady(true);

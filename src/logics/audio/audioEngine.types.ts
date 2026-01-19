@@ -10,12 +10,6 @@ import type { AudioCommand, AudioCommandType } from '@/types/audioCommand.schema
  * - 명확한 의존성 표현
  */
 export interface AudioEngineDependencies {
-  /** 현재 프로젝트의 모든 트랙 가져오기 */
-  getTracks: () => Track[];
-  
-  /** 내보내기 범위 가져오기 (없으면 null) */
-  getExportRange: () => { startTime: number; endTime: number } | null;
-  
   /** 트랙 상태 업데이트 (UI 동기화용) */
   updateTrack: (trackId: string, update: Partial<Track>) => void;
   
@@ -42,11 +36,9 @@ export type CommandResult = {
   [AudioCommandType.SET_TRACK_PAN]: boolean;
   [AudioCommandType.LOAD_REGION]: boolean;
   [AudioCommandType.UNLOAD_REGION]: boolean;
-  [AudioCommandType.GET_TRACK_INFO]: [string, Track][];
   [AudioCommandType.SET_CURRENT_TIME]: number;
   [AudioCommandType.SET_EXPORT_RANGE]: { startTime: number; endTime: number };
   [AudioCommandType.CLEAR_EXPORT_RANGE]: boolean;
-  [AudioCommandType.EXPORT_AUDIO]: Blob;
 };
 
 /**

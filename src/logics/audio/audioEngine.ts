@@ -3,7 +3,6 @@ import {
   AudioCommandType,
   type AudioCommand,
 } from '@/types/audioCommand.schema';
-import { exportProject } from './exportProject';
 import type {
   AudioEngineDependencies,
   TrackData,
@@ -137,8 +136,7 @@ export class AudioEngine {
           this.unloadRegion(command.trackId, command.regionId);
           return true;
 
-        case AudioCommandType.GET_TRACK_INFO:
-          return this.getTrackInfo();
+
 
         case AudioCommandType.SET_CURRENT_TIME:
           return this.handleSetCurrentTime(command.time);
@@ -149,8 +147,7 @@ export class AudioEngine {
         case AudioCommandType.CLEAR_EXPORT_RANGE:
           return this.handleClearExportRange();
 
-        case AudioCommandType.EXPORT_AUDIO:
-          return await this.handleExportAudio();
+
 
         default:
           throw new AudioEngineError(
@@ -249,23 +246,9 @@ export class AudioEngine {
     return true;
   }
 
-  /**
-   * 오디오 내보내기 처리
-   */
-  private async handleExportAudio(): Promise<Blob> {
-    const tracks = this.deps.getTracks();
-    const range = this.deps.getExportRange();
 
-    return await exportProject(tracks, range ?? undefined);
-  }
 
-  /**
-   * 트랙 정보 가져오기
-   */
-  private getTrackInfo(): [string, import('@/types/track').Track][] {
-    const tracks = this.deps.getTracks();
-    return tracks.map(track => [track.id, track] as [string, import('@/types/track').Track]);
-  }
+
 
   /**
    * 트랙 가져오기 또는 초기화
