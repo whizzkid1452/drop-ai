@@ -371,7 +371,10 @@ export class AudioEngine {
               }
 
               // Transport에 동기화하고 시작
-              player.sync().start(startTime, startOffset);
+              // ✅ duration을 지정하여 Region이 정확한 길이만큼만 재생되도록 설정
+              // duration이 없으면 offset부터 끝까지 재생되어 Region들이 겹칠 수 있음
+              const playDuration = duration !== undefined ? duration : undefined;
+              player.sync().start(startTime, startOffset, playDuration);
 
               console.log(
                 `[AudioEngine] Loaded region ${regionId} at timeline ${startTime}s with offset ${startOffset}s, duration ${duration}s`,

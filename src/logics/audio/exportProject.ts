@@ -170,9 +170,12 @@ async function renderBuffer({
         player.loopStart = adjustedParams.startOffset;
         player.loopEnd = adjustedParams.startOffset + adjustedParams.duration;
 
+        // ✅ duration을 지정하여 Region이 정확한 길이만큼만 렌더링되도록 설정
+        // AudioEngine과 동일한 로직: duration이 없으면 offset부터 끝까지 재생되어 Region들이 겹침
         player.start(
           adjustedParams.startTime,
-          adjustedParams.startOffset
+          adjustedParams.startOffset,
+          adjustedParams.duration
         );
       });
     });
