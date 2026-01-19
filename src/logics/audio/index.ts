@@ -4,6 +4,7 @@
 
 export { AudioEngine } from './audioEngine';
 export { useAudioCommand } from './useAudioCommand';
+export { useProjectExport } from './useProjectExport';
 export { handleAudioEngineError } from './audioErrorHandler';
 export { RegionRenderer } from './regionRenderer';
 export { AudioEngineError, AudioEngineErrorCode } from './audioEngine.errors';
