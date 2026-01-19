@@ -3,7 +3,7 @@ import { useTrackStore } from '@/stores/useTrackStore';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import * as styles from './TimeRuler.css';
 import type { Track } from '@/types/track';
-import { useAudioEngineHandleWithUi } from '@/hooks/agent/useAudioEngineHandleWithUi';
+import { useAudioCommand, handleAudioEngineError } from '@/logics/audio';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -96,7 +96,7 @@ export const TimeRuler = memo(() => {
     return tickElements;
   }, [maxDuration, pixelsPerSecond]);
 
-  const { handleAudioCommand } = useAudioEngineHandleWithUi();
+  const { execute } = useAudioCommand();
 
   // Zone specific handlers
   const handleTopMouseDown = (e: React.MouseEvent) => {
@@ -112,7 +112,7 @@ export const TimeRuler = memo(() => {
     setIsDraggingRange(true);
   };
 
-  const handleBottomMouseDown = (e: React.MouseEvent) => {
+  const handleBottomMouseDown = async (e: React.MouseEvent) => {
     e.stopPropagation();
     // Logic for setting playhead (handled by click on container originally, but better isolated here)
      if (!containerRef.current) return;
@@ -120,10 +120,14 @@ export const TimeRuler = memo(() => {
     const x = e.clientX - rect.left;
     const time = Math.max(0, x / pixelsPerSecond);
 
-    handleAudioCommand({
-      type: AudioCommandType.SET_CURRENT_TIME,
-      time,
-    });
+    try {
+      await execute({
+        type: AudioCommandType.SET_CURRENT_TIME,
+        time,
+      });
+    } catch (error) {
+      handleAudioEngineError(error);
+    }
   };
 
   const handleDoubleClick = () => {

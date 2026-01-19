@@ -1,4 +1,4 @@
-import { useAudioEngineHandleWithUi } from '@/hooks/agent/useAudioEngineHandleWithUi';
+import { useAudioCommand, handleAudioEngineError } from '@/logics/audio';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import { useTrackStore } from '@/stores/useTrackStore';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -16,7 +16,7 @@ export function TrackList() {
     Map<string, WaveSurfer>
   >(new Map());
 
-  const { handleAudioCommand } = useAudioEngineHandleWithUi();
+  const { execute } = useAudioCommand();
   // Note: Manual AudioEngine initialization is now handled by useAudioSync
   const containerRef = useRef<HTMLDivElement>(null);
   const { pixelsPerSecond, setPixelsPerSecond } = usePlaybackStore(
@@ -80,20 +80,28 @@ export function TrackList() {
                   return newMap;
                 });
               }}
-              onVolumeChange={vol =>
-                handleAudioCommand({
-                  type: 'SET_TRACK_VOLUME',
-                  trackId: track.id,
-                  volume: vol,
-                })
-              }
-              onPanChange={pan =>
-                handleAudioCommand({
-                  type: 'SET_TRACK_PAN',
-                  trackId: track.id,
-                  pan: pan,
-                })
-              }
+              onVolumeChange={async vol => {
+                try {
+                  await execute({
+                    type: 'SET_TRACK_VOLUME',
+                    trackId: track.id,
+                    volume: vol,
+                  });
+                } catch (error) {
+                  handleAudioEngineError(error);
+                }
+              }}
+              onPanChange={async pan => {
+                try {
+                  await execute({
+                    type: 'SET_TRACK_PAN',
+                    trackId: track.id,
+                    pan: pan,
+                  });
+                } catch (error) {
+                  handleAudioEngineError(error);
+                }
+              }}
             />
           );
         })}

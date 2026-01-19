@@ -1,16 +1,35 @@
-import { useAudioEngineHandleWithUi } from '@/hooks/agent/useAudioEngineHandleWithUi';
+import { useAudioCommand, handleAudioEngineError } from '@/logics/audio';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import * as styles from './PlaybackControls.css';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
 
 export function PlaybackControls() {
-  const { handleAudioCommand } = useAudioEngineHandleWithUi();
+  const { execute } = useAudioCommand();
   const isPlaying = usePlaybackStore(state => state.isPlaying);
 
-  const handlePlay = () => handleAudioCommand({ type: AudioCommandType.PLAY });
-  const handlePause = () =>
-    handleAudioCommand({ type: AudioCommandType.PAUSE });
-  const handleStop = () => handleAudioCommand({ type: AudioCommandType.STOP });
+  const handlePlay = async () => {
+    try {
+      await execute({ type: AudioCommandType.PLAY });
+    } catch (error) {
+      handleAudioEngineError(error);
+    }
+  };
+
+  const handlePause = async () => {
+    try {
+      await execute({ type: AudioCommandType.PAUSE });
+    } catch (error) {
+      handleAudioEngineError(error);
+    }
+  };
+
+  const handleStop = async () => {
+    try {
+      await execute({ type: AudioCommandType.STOP });
+    } catch (error) {
+      handleAudioEngineError(error);
+    }
+  };
 
   return (
     <div className={styles.container}>

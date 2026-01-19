@@ -1,8 +1,10 @@
-import { useAudioEngineHandleWithUi } from '@/hooks/agent/useAudioEngineHandleWithUi';
+import { useAudioCommand, handleAudioEngineError } from '@/logics/audio';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import { useCallback, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import * as styles from './ExportButton.css';
-import type { ExportSettings } from './utils/audioExport';
+import { downloadBlob, type ExportSettings } from './utils/audioExport';
 
 /**
  * ExportButton 컴포넌트의 Props 타입 정의
@@ -20,36 +22,52 @@ interface ExportButtonProps {
  * ExportButton 컴포넌트
  *
  * AudioEngine을 통해 프로젝트의 모든 트랙을 내보냅니다.
- * - 일관된 명령 인터페이스 사용
- * - 통합된 에러 처리
- * - 의존성 주입으로 Store 추상화
+ * - 명령 실행과 UI 행위(다운로드, 알림) 분리
  */
 export function ExportButton({
   settings,
   onExportComplete,
   onExportError,
 }: ExportButtonProps) {
-  const { handleAudioCommand } = useAudioEngineHandleWithUi();
+  const { execute } = useAudioCommand();
+  const { exportStartTime, exportEndTime } = usePlaybackStore(
+    useShallow(state => ({
+      exportStartTime: state.exportStartTime,
+      exportEndTime: state.exportEndTime,
+    }))
+  );
   
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /**
    * Export 실행 함수
-   * AudioEngine.execute()를 통해 일관된 방식으로 처리
    */
   const handleExport = useCallback(async () => {
     setIsExporting(true);
     setError(null);
 
     try {
-      // AudioEngine.execute(EXPORT_AUDIO) 호출
-      // - Store 접근은 AudioEngine 의존성이 처리
-      // - 파일 다운로드는 useAudioEngineHandleWithUi가 처리
-      await handleAudioCommand(
-        { type: AudioCommandType.EXPORT_AUDIO },
-        { exportFilename: settings?.filename || 'drop-ai-export' }
-      );
+      const result = await execute({ type: AudioCommandType.EXPORT_AUDIO });
+
+      if (result instanceof Blob) {
+        let filename: string;
+        
+        // 1. 커스텀 파일명이 제공된 경우
+        if (settings?.filename) {
+          filename = settings.filename;
+        }
+        // 2. Export range가 있는 경우 자동 생성
+        else if (exportStartTime !== null && exportEndTime !== null) {
+          filename = `export_${exportStartTime}-${exportEndTime}s`;
+        }
+        // 3. 기본 파일명
+        else {
+          filename = 'export';
+        }
+        
+        downloadBlob(result, `${filename}.wav`);
+      }
 
       setIsExporting(false);
       onExportComplete?.();
@@ -58,9 +76,11 @@ export function ExportButton({
       setError(error.message);
       setIsExporting(false);
       onExportError?.(error);
-      // 에러는 이미 useAudioEngineHandleWithUi에서 alert 처리됨
+      
+      // 공통 에러 핸들러 (alert 및 logging)
+      handleAudioEngineError(err);
     }
-  }, [handleAudioCommand, settings, onExportComplete, onExportError]);
+  }, [execute, settings, exportStartTime, exportEndTime, onExportComplete, onExportError]);
 
   // 버튼 비활성화: export 중일 때만
   const isDisabled = isExporting;

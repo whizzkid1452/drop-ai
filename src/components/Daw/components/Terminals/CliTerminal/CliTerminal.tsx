@@ -1,7 +1,6 @@
 import { useState, useRef, type KeyboardEvent, useEffect } from 'react';
 import * as styles from './CliTerminal.css';
-import { useAudioEngineHandleWithUi } from '@/hooks/agent/useAudioEngineHandleWithUi';
-// import type { AudioCommand } from '@/types/audioEngine';
+import { useAudioCommand } from '@/logics/audio';
 
 interface LogItem {
   id: string;
@@ -13,7 +12,7 @@ interface LogItem {
 export function CliTerminal() {
   const [input, setInput] = useState('');
   const [logs, setLogs] = useState<LogItem[]>([]);
-  const { handleAudioCommand } = useAudioEngineHandleWithUi();
+  const { execute } = useAudioCommand();
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const addLog = (message: string, type: LogItem['type'] = 'info') => {
@@ -56,7 +55,7 @@ export function CliTerminal() {
         }
 
         // Execute command
-        const result = await handleAudioCommand(command);
+        const result = await execute(command);
 
         if (result !== undefined) {
           addLog(JSON.stringify(result, null, 2), 'success');
