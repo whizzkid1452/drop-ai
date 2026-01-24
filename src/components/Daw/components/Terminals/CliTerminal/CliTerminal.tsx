@@ -1,7 +1,6 @@
 import { useState, useRef, type KeyboardEvent, useEffect } from 'react';
 import * as styles from './CliTerminal.css';
-import { useAudioCommand, useProjectExport } from '@/logics/audio';
-import { AudioCommandType } from '@/types/audioCommand.schema';
+import { useAudioCommand } from '@/logics/audio';
 
 interface LogItem {
   id: string;
@@ -14,7 +13,6 @@ export function CliTerminal() {
   const [input, setInput] = useState('');
   const [logs, setLogs] = useState<LogItem[]>([]);
   const { execute } = useAudioCommand();
-  const { exportProject } = useProjectExport();
   const logEndRef = useRef<HTMLDivElement>(null);
 
   const addLog = (message: string, type: LogItem['type'] = 'info') => {
@@ -56,23 +54,16 @@ export function CliTerminal() {
           throw new Error('Command must have a "type" property.');
         }
 
-        // Execute command
-        if (command.type === AudioCommandType.EXPORT_AUDIO) {
-          await exportProject({
-            filename: command.filename,
-          });
-          addLog('Export initiated', 'success');
-        } else {
-          const result = await execute(command);
+        // Execute command (unified via execute hook)
+        const result = await execute(command);
 
-          if (result !== undefined) {
-            addLog(JSON.stringify(result, null, 2), 'success');
-          } else {
-            addLog(`Executed: ${command.type}`, 'success');
-          }
+        if (result !== undefined) {
+          addLog(JSON.stringify(result, null, 2), 'success');
+        } else {
+          addLog(`Executed: ${command.type}`, 'success');
         }
       }
-      
+
       setInput(''); // Clear input on success
     } catch (err) {
       if (err instanceof Error) {
@@ -91,10 +82,10 @@ export function CliTerminal() {
           <div
             key={log.id}
             className={`${styles.logItem} ${log.type === 'error'
-                ? styles.logItemError
-                : log.type === 'success'
-                  ? styles.logItemSuccess
-                  : ''
+              ? styles.logItemError
+              : log.type === 'success'
+                ? styles.logItemSuccess
+                : ''
               }`}
           >
             {log.message}

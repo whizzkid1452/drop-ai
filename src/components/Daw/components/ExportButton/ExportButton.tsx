@@ -1,7 +1,8 @@
-import { useProjectExport } from '@/logics/audio/useProjectExport';
-import { useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import * as styles from './ExportButton.css';
 import type { ExportSettings } from './utils/audioExport';
+import { useAudioCommand } from '@/logics/audio';
+import { AudioCommandType } from '@/types/audioCommand.schema';
 
 /**
  * ExportButton 컴포넌트의 Props 타입 정의
@@ -26,15 +27,28 @@ export function ExportButton({
   onExportComplete,
   onExportError,
 }: ExportButtonProps) {
-  const { exportProject, isExporting, error } = useProjectExport();
+  const { execute } = useAudioCommand();
+  const [isExporting, setIsExporting] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
-  const handleExport = useCallback(() => {
-    exportProject({
-      filename: settings?.filename,
-      onSuccess: onExportComplete,
-      onError: onExportError,
-    });
-  }, [exportProject, settings, onExportComplete, onExportError]);
+  const handleExport = useCallback(async () => {
+    setIsExporting(true);
+    setError(null);
+
+    try {
+      await execute({
+        type: AudioCommandType.EXPORT_AUDIO,
+        filename: settings?.filename,
+      });
+      onExportComplete?.();
+    } catch (err) {
+      const errorObj = err instanceof Error ? err : new Error('Export failed');
+      setError(errorObj);
+      onExportError?.(errorObj);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [execute, settings, onExportComplete, onExportError]);
 
   // 버튼 비활성화: export 중일 때만
   const isDisabled = isExporting;
