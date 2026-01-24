@@ -80,6 +80,7 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal(AudioCommandType.EXPORT_AUDIO),
+    filename: z.string().optional(),
   }),
 ]);
 
@@ -102,7 +103,7 @@ export function parseAudioCommandString({
   // 🔧 DEFENSIVE PARSING: Auto-fix malformed JSON from AI
   // Pattern: {"type":"SET_EXPORT_RANGE",...,"type":"EXPORT_AUDIO"}
   const malformedExportPattern = /"type"\s*:\s*"SET_EXPORT_RANGE"[^}]*"startTime"\s*:\s*(\d+(?:\.\d+)?)[^}]*"endTime"\s*:\s*(\d+(?:\.\d+)?)[^}]*"type"\s*:\s*"EXPORT_AUDIO"/;
-  
+
   const match = commandString.match(malformedExportPattern);
   if (match) {
     const startTime = match[1];
@@ -116,14 +117,14 @@ export function parseAudioCommandString({
 
   // Try to extract JSON array first
   const arrayMatch = commandString.match(/\[[\s\S]*\]/);
-  
+
   if (arrayMatch) {
     try {
       const parsed = JSON.parse(arrayMatch[0]);
       if (!Array.isArray(parsed)) {
         return { commands: null, error: 'Expected array of commands' };
       }
-      
+
       const validatedCommands: AudioCommand[] = [];
       for (const item of parsed) {
         const validated = AudioCommandSchema.safeParse(item);
@@ -138,7 +139,7 @@ export function parseAudioCommandString({
         }
         validatedCommands.push(validated.data);
       }
-      
+
       return { commands: validatedCommands };
     } catch (err) {
       return {

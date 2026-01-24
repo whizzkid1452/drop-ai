@@ -3,6 +3,8 @@ import { AudioService } from '@/core/audio/AudioService';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import type { AudioCommand } from '@/types/audioCommand.schema';
 import type { ExecuteResult } from './audioEngine.types';
+import { usePlaybackStore } from '@/stores/usePlaybackStore';
+import { useProjectExport } from '@/logics/audio/useProjectExport';
 
 /**
  * AudioEngine 명령을 실행하는 React Hook
@@ -14,6 +16,9 @@ import type { ExecuteResult } from './audioEngine.types';
  * @returns { execute } - 명령 실행 함수
  */
 export function useAudioCommand() {
+  const setExportRange = usePlaybackStore(state => state.setExportRange);
+  const { exportProject } = useProjectExport();
+
   /**
    * 오디오 명령 실행
    * 
@@ -53,12 +58,22 @@ export function useAudioCommand() {
             // AudioFile not provided in command, service handles undefined
           });
           return undefined as any;
+        case AudioCommandType.SET_EXPORT_RANGE:
+          setExportRange(command.startTime, command.endTime);
+          return undefined as any;
+        case AudioCommandType.CLEAR_EXPORT_RANGE:
+          setExportRange(null, null);
+          return undefined as any;
+        case AudioCommandType.EXPORT_AUDIO:
+          // Note: exportProject uses range from store if not provided
+          await exportProject({ filename: command.filename });
+          return undefined as any;
         default:
           console.warn('Unknown or unimplemented command:', command.type);
           return undefined as any;
       }
     },
-    []
+    [setExportRange, exportProject]
   );
 
   return { execute };
