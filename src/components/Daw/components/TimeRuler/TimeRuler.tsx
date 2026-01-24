@@ -16,13 +16,11 @@ export const TimeRuler = memo(() => {
     pixelsPerSecond,
     exportStartTime,
     exportEndTime,
-    setExportRange,
   } = usePlaybackStore(
     useShallow(state => ({
       pixelsPerSecond: state.pixelsPerSecond,
       exportStartTime: state.exportStartTime,
       exportEndTime: state.exportEndTime,
-      setExportRange: state.setExportRange,
     }))
   );
 
@@ -31,6 +29,8 @@ export const TimeRuler = memo(() => {
   const dragStartPosRef = useRef<number | null>(null);
   const currentDragRangeRef = useRef<{ start: number; end: number } | null>(null);
   const [isDraggingRange, setIsDraggingRange] = useState(false);
+
+  const { execute } = useAudioCommand();
 
   const maxDuration = useMemo(() => getMaxDuration(trackArray), [trackArray]);
 
@@ -57,12 +57,16 @@ export const TimeRuler = memo(() => {
       overlayRef.current.style.width = `${(end - start) * pixelsPerSecond}px`;
     };
 
-    const handleWindowMouseUp = () => {
+    const handleWindowMouseUp = async () => {
       setIsDraggingRange(false);
       dragStartPosRef.current = null;
 
       if (currentDragRangeRef.current) {
-        setExportRange(currentDragRangeRef.current.start, currentDragRangeRef.current.end);
+        await execute({
+          type: AudioCommandType.SET_EXPORT_RANGE,
+          startTime: currentDragRangeRef.current.start,
+          endTime: currentDragRangeRef.current.end,
+        });
         currentDragRangeRef.current = null;
       }
     };
@@ -74,7 +78,7 @@ export const TimeRuler = memo(() => {
       window.removeEventListener('mousemove', handleWindowMouseMove);
       window.removeEventListener('mouseup', handleWindowMouseUp);
     };
-  }, [isDraggingRange, pixelsPerSecond, setExportRange]);
+  }, [isDraggingRange, pixelsPerSecond, execute]);
 
 
   const ticks = useMemo(() => {
@@ -99,10 +103,8 @@ export const TimeRuler = memo(() => {
     return tickElements;
   }, [maxDuration, pixelsPerSecond]);
 
-  const { execute } = useAudioCommand();
-
   // Zone specific handlers
-  const handleTopMouseDown = (e: React.MouseEvent) => {
+  const handleTopMouseDown = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
@@ -111,7 +113,14 @@ export const TimeRuler = memo(() => {
 
     dragStartPosRef.current = time;
     currentDragRangeRef.current = { start: time, end: time };
-    setExportRange(time, time); // Init with 0 duration
+
+    // Init range via execute (optional, could be skipped if we trust visual feedback only until mouseup)
+    await execute({
+      type: AudioCommandType.SET_EXPORT_RANGE,
+      startTime: time,
+      endTime: time,
+    });
+
     setIsDraggingRange(true);
   };
 
@@ -133,8 +142,10 @@ export const TimeRuler = memo(() => {
     }
   };
 
-  const handleDoubleClick = () => {
-    setExportRange(null, null);
+  const handleDoubleClick = async () => {
+    await execute({
+      type: AudioCommandType.CLEAR_EXPORT_RANGE,
+    });
   };
 
   return (
