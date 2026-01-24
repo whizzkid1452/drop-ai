@@ -7,11 +7,11 @@ import { TrackInfoSidebar } from './components/TrackInfoSidebar';
 import { TimeRuler } from './components/TimeRuler/TimeRuler';
 import { PlaybackControls } from './components/PlaybackControls/PlaybackControls';
 import * as styles from './DawPage.css';
-import { useTrackStore } from '@/stores/useTrackStore';
+import { useAudio } from '@/presentation/hooks/useAudio';
 
 export function DawPage() {
-  const tracks = useTrackStore(state => state.tracks);
-  const hasTracks = useMemo(() => tracks.size > 0, [tracks.size]);
+  const { tracks } = useAudio();
+  const hasTracks = useMemo(() => tracks && tracks.length > 0, [tracks]);
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
   const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
 
@@ -19,9 +19,8 @@ export function DawPage() {
     <div className={styles.container}>
       {/* Left (Track Info) Toggle Button */}
       <button
-        className={`${styles.leftToggleButton} ${
-          isTrackInfoOpen ? styles.leftToggleButtonOpen : ''
-        }`}
+        className={`${styles.leftToggleButton} ${isTrackInfoOpen ? styles.leftToggleButtonOpen : ''
+          }`}
         onClick={() => setIsTrackInfoOpen(!isTrackInfoOpen)}
         title={isTrackInfoOpen ? 'Close Track Info' : 'Open Track Info'}
       >
@@ -38,9 +37,8 @@ export function DawPage() {
       </button>
 
       <div
-        className={`${styles.leftPanel} ${
-          !isTrackInfoOpen ? styles.leftPanelCollapsed : ''
-        }`}
+        className={`${styles.leftPanel} ${!isTrackInfoOpen ? styles.leftPanelCollapsed : ''
+          }`}
       >
         <TrackInfoSidebar />
       </div>

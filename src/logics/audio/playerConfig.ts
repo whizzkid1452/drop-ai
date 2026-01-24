@@ -35,7 +35,11 @@ export function configurePlayerLoop(
   duration: number
 ): void {
   player.loopStart = startOffset;
-  player.loopEnd = startOffset + duration;
+  // Safety: Clamp loopEnd to prevent floating-point precision errors
+  // Tone.js will throw if loopEnd exceeds actual buffer duration
+  const calculatedEnd = startOffset + duration;
+  const bufferDuration = player.buffer.duration;
+  player.loopEnd = Math.min(calculatedEnd, bufferDuration);
 }
 
 /**

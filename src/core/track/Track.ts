@@ -1,4 +1,4 @@
-import { Region, RegionId } from '../region/Region';
+import { Region, type RegionId } from '../region/Region';
 
 export type TrackId = string;
 

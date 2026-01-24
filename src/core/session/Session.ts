@@ -1,4 +1,4 @@
-import { Track, TrackId } from '../track/Track';
+import { Track, type TrackId } from '../track/Track';
 
 /**
  * Domain Model: Session (Project)

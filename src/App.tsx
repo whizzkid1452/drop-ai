@@ -2,53 +2,27 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { DefaultLayout } from '@/components/Layouts/DefaultLayout';
 import { AppRouter } from './router/AppRouter';
-import { AudioEngine } from '@/logics/audio/audioEngine';
-import { useTrackStore } from '@/stores/useTrackStore';
-import { usePlaybackStore } from '@/stores/usePlaybackStore';
+import { AudioService } from '@/core/audio/AudioService';
+import { Session } from '@/core/session/Session';
+
 
 function App() {
   const [isAudioEngineReady, setIsAudioEngineReady] = useState(false);
 
   // AudioEngine 초기화 (앱 시작 시 한 번만)
+  // AudioService 초기화 (앱 시작 시 한 번만)
   useEffect(() => {
     try {
-      AudioEngine.initialize({
-        /**
-         * 트랙 업데이트 (UI 동기화)
-         */
-        updateTrack: (trackId, update) => {
-          useTrackStore.getState().updateTrack({
-            trackId,
-            updater: track => ({ ...track, ...update }),
-          });
-        },
+      // 1. Session (Project) 생성
+      const session = new Session();
 
-        /**
-         * 재생 상태 업데이트 (UI 동기화)
-         */
-        updatePlaybackState: (state) => {
-          const playbackStore = usePlaybackStore.getState();
-          if (state.isPlaying !== undefined) {
-            playbackStore.setIsPlaying(state.isPlaying);
-          }
-          if (state.currentTime !== undefined) {
-            playbackStore.setCurrentTime(state.currentTime);
-          }
-        },
+      // 2. AudioService (Engine) 초기화
+      AudioService.initialize(session);
 
-        /**
-         * Export 범위 설정
-         */
-        setExportRange: (startTime, endTime) => {
-          usePlaybackStore.getState().setExportRange(startTime, endTime);
-        },
-      });
-
-      console.log('[App] AudioEngine initialized');
+      console.log('[App] AudioService initialized');
       setIsAudioEngineReady(true);
     } catch (error) {
-      console.error('[App] Failed to initialize AudioEngine:', error);
-      // 초기화 실패 시에도 앱은 렌더링 (에러 바운더리에서 처리)
+      console.error('[App] Failed to initialize AudioService:', error);
       setIsAudioEngineReady(true);
     }
   }, []); // 빈 배열: 마운트 시 한 번만 실행
@@ -56,10 +30,10 @@ function App() {
   // AudioEngine이 초기화될 때까지 대기
   if (!isAudioEngineReady) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
         height: '100vh',
         fontSize: '18px',
         color: '#666'

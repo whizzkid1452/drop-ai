@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { AudioEngine } from '@/logics/audio/audioEngine';
+import { AudioService } from '@/core/audio/AudioService';
 import * as styles from './Cursor.css';
 
 export const Cursor = () => {
@@ -17,7 +17,7 @@ export const Cursor = () => {
     };
 
     const animate = () => {
-      const time = AudioEngine.getInstance().getSeconds();
+      const time = AudioService.getInstance().getCurrentTime();
       updatePosition(time);
       rAF.current = requestAnimationFrame(animate);
     };
@@ -34,7 +34,7 @@ export const Cursor = () => {
             /** 종료 직후 시점 */
             cancelAnimationFrame(rAF.current);
             // Sync one last time when pausing to ensure accuracy
-            updatePosition(AudioEngine.getInstance().getSeconds());
+            updatePosition(AudioService.getInstance().getCurrentTime());
           }
         }
 

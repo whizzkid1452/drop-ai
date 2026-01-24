@@ -1,6 +1,7 @@
 import { memo, useMemo, useRef, useState, useEffect } from 'react';
-import { useTrackStore } from '@/stores/useTrackStore';
+// import { useTrackStore } from '@/stores/useTrackStore';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
+import { useAudio } from '@/presentation/hooks/useAudio';
 import * as styles from './TimeRuler.css';
 import type { Track } from '@/types/track';
 import { useAudioCommand, handleAudioEngineError } from '@/logics/audio';
@@ -8,7 +9,9 @@ import { AudioCommandType } from '@/types/audioCommand.schema';
 import { useShallow } from 'zustand/react/shallow';
 
 export const TimeRuler = memo(() => {
-  const tracks = useTrackStore(state => state.tracks);
+  const { tracks } = useAudio();
+  const trackArray = (tracks || []) as unknown as Track[];
+
   const {
     pixelsPerSecond,
     exportStartTime,
@@ -29,7 +32,7 @@ export const TimeRuler = memo(() => {
   const currentDragRangeRef = useRef<{ start: number; end: number } | null>(null);
   const [isDraggingRange, setIsDraggingRange] = useState(false);
 
-  const maxDuration = useMemo(() => getMaxDuration(tracks), [tracks]);
+  const maxDuration = useMemo(() => getMaxDuration(trackArray), [trackArray]);
 
   const showExportRange = exportStartTime !== null && exportEndTime !== null && exportStartTime !== exportEndTime;
 
@@ -39,14 +42,14 @@ export const TimeRuler = memo(() => {
 
     const handleWindowMouseMove = (e: MouseEvent) => {
       if (!containerRef.current || dragStartPosRef.current === null || !overlayRef.current) return;
-      
+
       const rect = containerRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const time = Math.max(0, x / pixelsPerSecond);
-      
+
       const start = Math.min(dragStartPosRef.current, time);
       const end = Math.max(dragStartPosRef.current, time);
-      
+
       currentDragRangeRef.current = { start, end };
 
       // Direct DOM manipulation for performance
@@ -57,7 +60,7 @@ export const TimeRuler = memo(() => {
     const handleWindowMouseUp = () => {
       setIsDraggingRange(false);
       dragStartPosRef.current = null;
-      
+
       if (currentDragRangeRef.current) {
         setExportRange(currentDragRangeRef.current.start, currentDragRangeRef.current.end);
         currentDragRangeRef.current = null;
@@ -78,7 +81,7 @@ export const TimeRuler = memo(() => {
     const tickElements = [];
     const step = 1; // 1 second steps
     // Ensure we render enough ticks for the max duration or at least visible area
-    const renderDuration = Math.max(maxDuration, 300); 
+    const renderDuration = Math.max(maxDuration, 300);
 
     for (let i = 0; i <= renderDuration; i += step) {
       const isMajor = i % Math.max(1, Math.floor(60 / pixelsPerSecond)) === 0;
@@ -105,7 +108,7 @@ export const TimeRuler = memo(() => {
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const time = Math.max(0, x / pixelsPerSecond);
-    
+
     dragStartPosRef.current = time;
     currentDragRangeRef.current = { start: time, end: time };
     setExportRange(time, time); // Init with 0 duration
@@ -115,7 +118,7 @@ export const TimeRuler = memo(() => {
   const handleBottomMouseDown = async (e: React.MouseEvent) => {
     e.stopPropagation();
     // Logic for setting playhead (handled by click on container originally, but better isolated here)
-     if (!containerRef.current) return;
+    if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const time = Math.max(0, x / pixelsPerSecond);
@@ -131,38 +134,38 @@ export const TimeRuler = memo(() => {
   };
 
   const handleDoubleClick = () => {
-      setExportRange(null, null);
+    setExportRange(null, null);
   };
 
   return (
-    <div 
-        className={styles.container} 
-        ref={containerRef}
-        onDoubleClick={handleDoubleClick}
+    <div
+      className={styles.container}
+      ref={containerRef}
+      onDoubleClick={handleDoubleClick}
     >
       {ticks}
-      
+
       {/* Export Range Overlay */}
-      <div 
+      <div
         ref={overlayRef}
         className={styles.exportRangeOverlay}
         style={{
-            display: showExportRange || isDraggingRange ? 'block' : 'none',
-            left: `${(exportStartTime ?? 0) * pixelsPerSecond}px`,
-            width: `${((exportEndTime ?? 0) - (exportStartTime ?? 0)) * pixelsPerSecond}px`
+          display: showExportRange || isDraggingRange ? 'block' : 'none',
+          left: `${(exportStartTime ?? 0) * pixelsPerSecond}px`,
+          width: `${((exportEndTime ?? 0) - (exportStartTime ?? 0)) * pixelsPerSecond}px`
         }}
       >
-          <span className={styles.exportRangeLabel}>Export Range</span>
+        <span className={styles.exportRangeLabel}>Export Range</span>
       </div>
 
       {/* Interactive Zones */}
-      <div 
-        className={styles.topZone} 
+      <div
+        className={styles.topZone}
         onMouseDown={handleTopMouseDown}
         title="Drag to Select Export Range. Double click to clear."
       />
-      <div 
-        className={styles.bottomZone} 
+      <div
+        className={styles.bottomZone}
         onMouseDown={handleBottomMouseDown}
         title="Click to Set Playhead"
       />
@@ -176,11 +179,13 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-function getMaxDuration(tracks: Map<string, Track>) {
+function getMaxDuration(tracks: Track[]) {
   let max = 0;
   tracks.forEach(track => {
     track.regions.forEach(region => {
-      const duration = region.audioFile.duration ?? 0;
+      // AudioFile property mismatch handling if needed
+      // Snapshot region has audioFile which has duration
+      const duration = region.audioFile?.duration ?? region.duration ?? 0;
       const endTime = region.startTime + duration;
       if (endTime > max) max = endTime;
     });

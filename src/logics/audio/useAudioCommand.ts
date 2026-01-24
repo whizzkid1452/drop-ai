@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { AudioEngine } from './audioEngine';
+import { AudioService } from '@/core/audio/AudioService';
+import { AudioCommandType } from '@/types/audioCommand.schema';
 import type { AudioCommand } from '@/types/audioCommand.schema';
 import type { ExecuteResult } from './audioEngine.types';
 
@@ -21,8 +22,41 @@ export function useAudioCommand() {
    */
   const execute = useCallback(
     async <T extends AudioCommand>(command: T): Promise<ExecuteResult<T>> => {
-      const audioEngine = AudioEngine.getInstance();
-      return await audioEngine.execute(command);
+      const service = AudioService.getInstance();
+
+      switch (command.type) {
+        case AudioCommandType.PLAY:
+          await service.play();
+          return undefined as any;
+        case AudioCommandType.PAUSE:
+          service.pause();
+          return undefined as any;
+        case AudioCommandType.STOP:
+          service.stop();
+          return undefined as any;
+        case AudioCommandType.SET_CURRENT_TIME:
+          service.setTime(command.time);
+          return undefined as any;
+        case AudioCommandType.SET_TRACK_VOLUME:
+          service.setTrackVolume(command.trackId, command.volume);
+          return undefined as any;
+        case AudioCommandType.SET_TRACK_PAN:
+          service.setTrackPan(command.trackId, command.pan);
+          return undefined as any;
+        case AudioCommandType.LOAD_REGION:
+          await service.addRegion(command.trackId, {
+            id: command.regionId,
+            url: command.url,
+            startTime: command.startTime,
+            sourceStartTime: command.startOffset ?? 0,
+            duration: command.duration,
+            // AudioFile not provided in command, service handles undefined
+          });
+          return undefined as any;
+        default:
+          console.warn('Unknown or unimplemented command:', command.type);
+          return undefined as any;
+      }
     },
     []
   );

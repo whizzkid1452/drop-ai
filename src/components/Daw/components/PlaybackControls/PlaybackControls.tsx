@@ -1,11 +1,11 @@
 import { useAudioCommand, handleAudioEngineError } from '@/logics/audio';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import * as styles from './PlaybackControls.css';
-import { usePlaybackStore } from '@/stores/usePlaybackStore';
+import { useAudio } from '@/presentation/hooks/useAudio';
 
 export function PlaybackControls() {
   const { execute } = useAudioCommand();
-  const isPlaying = usePlaybackStore(state => state.isPlaying);
+  const { isPlaying } = useAudio();
 
   const handlePlay = async () => {
     try {

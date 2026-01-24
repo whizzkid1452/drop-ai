@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { useTrackStore } from '@/stores/useTrackStore';
+import { useAudio } from '@/presentation/hooks/useAudio';
 import { handleAudioEngineError } from './audioErrorHandler';
 import { downloadBlob } from '@/components/Daw/components/ExportButton/utils/audioExport';
 import { exportProject as renderProject } from './exportProject';
@@ -30,9 +30,8 @@ export function useProjectExport() {
     }))
   );
 
-  const tracks = useTrackStore(
-    useShallow(state => Array.from(state.tracks.values()))
-  );
+  const { tracks } = useAudio();
+  // tracks is already an array from useAudio snapshot
 
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<Error | null>(null);

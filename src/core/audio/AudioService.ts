@@ -8,8 +8,6 @@ import {
     startPlayer
 } from '../../logics/audio/playerConfig';
 
-type AudioServiceEvent = 'playbackStateChanged' | 'trackUpdated';
-
 /**
  * AudioService (Core + Engine Integration)
  * 
@@ -19,7 +17,7 @@ type AudioServiceEvent = 'playbackStateChanged' | 'trackUpdated';
  */
 export class AudioService {
     private static instance: AudioService;
-    private listeners: Map<AudioServiceEvent, Set<Function>> = new Map();
+    private listeners: Set<() => void> = new Set();
 
     // Tone.js Objects
     // Key: TrackId
@@ -46,21 +44,48 @@ export class AudioService {
         return AudioService.instance;
     }
 
-    // --- Event System ---
+    // --- Event System (React Standard) ---
 
-    public on(event: AudioServiceEvent, callback: Function) {
-        if (!this.listeners.has(event)) {
-            this.listeners.set(event, new Set());
+    private currentSnapshot: any = null;
+
+    private emitChange() {
+        this.currentSnapshot = null; // Invalidate cache
+        this.listeners.forEach(listener => listener());
+    }
+
+    public subscribe = (listener: () => void) => {
+        this.listeners.add(listener);
+        return () => this.listeners.delete(listener);
+    }
+
+    public getSnapshot = () => {
+        if (!this.currentSnapshot) {
+            console.log('[AudioService] Creating new snapshot', {
+                trackCount: this.session.tracks.length
+            });
+            this.currentSnapshot = {
+                isPlaying: Tone.Transport.state === 'started',
+                currentTime: Tone.Transport.seconds,
+                tracks: this.session.tracks.map(t => ({
+                    id: t.id,
+                    name: t.name,
+                    volume: t.volume,
+                    pan: t.pan,
+                    isMuted: t.isMuted,
+                    isSoloed: t.isSoloed,
+                    regions: t.regions.map(r => ({
+                        id: r.id,
+                        startTime: r.startTime,
+                        endTime: r.endTime, // Derived from getter
+                        sourceStartTime: r.sourceStartTime,
+                        duration: r.duration,
+                        audioFile: r.audioFile,
+                        status: [] // Default status for now
+                    }))
+                }))
+            };
         }
-        this.listeners.get(event)?.add(callback);
-    }
-
-    public off(event: AudioServiceEvent, callback: Function) {
-        this.listeners.get(event)?.delete(callback);
-    }
-
-    private emit(event: AudioServiceEvent, data: any) {
-        this.listeners.get(event)?.forEach(cb => cb(data));
+        return this.currentSnapshot;
     }
 
     // --- Transport Control ---
@@ -70,22 +95,22 @@ export class AudioService {
             await Tone.start();
         }
         await Tone.getTransport().start();
-        this.emit('playbackStateChanged', { isPlaying: true });
+        this.emitChange();
     }
 
     pause(): void {
         Tone.getTransport().pause();
-        this.emit('playbackStateChanged', { isPlaying: false });
+        this.emitChange();
     }
 
     stop(): void {
         Tone.getTransport().stop();
-        this.emit('playbackStateChanged', { isPlaying: false, currentTime: 0 });
+        this.emitChange();
     }
 
     setTime(time: number): void {
         Tone.getTransport().seconds = time;
-        this.emit('playbackStateChanged', { currentTime: time });
+        this.emitChange();
     }
 
     getCurrentTime(): number {
@@ -120,7 +145,7 @@ export class AudioService {
         channel.volume.rampTo(volumeInDb, 0.1);
 
         // 3. Notify UI
-        this.emit('trackUpdated', { trackId, volume });
+        this.emitChange();
     }
 
     setTrackPan(trackId: string, pan: number): void {
@@ -135,7 +160,7 @@ export class AudioService {
         channel.pan.rampTo(pan, 0.1);
 
         // 3. Notify UI
-        this.emit('trackUpdated', { trackId, pan });
+        this.emitChange();
     }
 
     getTrackParams(trackId: string): { volume: number; pan: number } | null {
@@ -161,11 +186,14 @@ export class AudioService {
             audioFile?: any; // To be compatible with old code
         }
     ): Promise<void> {
+        console.log('[AudioService] addRegion called', { trackId, regionData });
+
         // 1. Ensure Track exists in Domain
         let track = this.session.getTrack(trackId);
         if (!track) {
             track = new Track({ id: trackId });
             this.session.addTrack(track);
+            console.log('[AudioService] Created new track', trackId);
         }
 
         // 2. Ensure Channel exists in Engine
@@ -174,6 +202,7 @@ export class AudioService {
 
         // 3. Check if player already exists
         if (trackPlayers.has(regionData.id)) {
+            console.log('[AudioService] Player already exists for region', regionData.id);
             return;
         }
 
@@ -188,6 +217,7 @@ export class AudioService {
             audioFile: regionData.audioFile
         });
         track.addRegion(region);
+        console.log('[AudioService] Region added to track', { trackId, regionId: regionData.id });
 
         // 5. Create & Load Tone.Player (Engine)
         return new Promise((resolve, reject) => {
@@ -196,6 +226,7 @@ export class AudioService {
                 loop: false,
                 ...PLAYER_CONFIG,
                 onload: () => {
+                    console.log('[AudioService] Player loaded for region', regionData.id);
                     if (regionData.duration !== undefined) {
                         configurePlayerLoop(player, regionData.sourceStartTime, regionData.duration);
                     }
@@ -208,9 +239,16 @@ export class AudioService {
                         duration: regionData.duration
                     });
 
+                    // Notify UI of new track/region
+                    console.log('[AudioService] Calling emitChange after region load');
+                    this.emitChange();
+
                     resolve();
                 },
-                onerror: (e) => reject(e)
+                onerror: (e) => {
+                    console.error('[AudioService] Player load error', e);
+                    reject(e);
+                }
             }).connect(channel);
 
             trackPlayers.set(regionData.id, player);
@@ -235,5 +273,59 @@ export class AudioService {
             player.dispose();
             trackPlayers?.delete(regionId);
         }
+    }
+
+    async splitRegion(trackId: string, splitTime: number): Promise<void> {
+        const track = this.session.getTrack(trackId);
+        if (!track) return;
+
+        // Find region at splitTime
+        // (Simple find, assuming no overlaps for now)
+        const region = track.regions.find(r =>
+            splitTime > r.startTime && splitTime < r.endTime
+        );
+
+        if (!region) {
+            console.warn(`[AudioService] No region found at ${splitTime} on track ${trackId}`);
+            return;
+        }
+
+        // Domain Logic: Split
+        const splitResult = region.split(splitTime);
+        if (!splitResult) return;
+
+        const { left, right } = splitResult;
+
+        // Update Domain
+        track.removeRegion(region.id);
+        track.addRegion(left);
+        track.addRegion(right);
+
+        // Update Engine
+        // Unload old
+        this.removeRegion(trackId, region.id);
+
+        // Load new
+        // Note: We assume audioFile exists and has url.
+        if (region.audioFile) {
+            await this.addRegion(trackId, {
+                id: left.id,
+                url: region.audioFile.url,
+                startTime: left.startTime,
+                sourceStartTime: left.sourceStartTime,
+                duration: left.duration,
+                audioFile: left.audioFile
+            });
+            await this.addRegion(trackId, {
+                id: right.id,
+                url: region.audioFile.url,
+                startTime: right.startTime,
+                sourceStartTime: right.sourceStartTime,
+                duration: right.duration,
+                audioFile: right.audioFile
+            });
+        }
+
+        this.emitChange();
     }
 }
