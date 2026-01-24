@@ -161,6 +161,32 @@ export function parseAudioCommandString({
   try {
     const jsonStr = jsonMatch[0];
     const parsed = JSON.parse(jsonStr);
+
+    // 🔧 AUTO-FIX: Convert "EXPORT_AUDIO with params" to [SET_RANGE, EXPORT]
+    // AI sometimes outputs: {"type":"EXPORT_AUDIO","startTime":10,"endTime":16}
+    if (parsed.type === 'EXPORT_AUDIO' && (parsed.startTime !== undefined || parsed.endTime !== undefined)) {
+      console.warn('[parseAudioCommandString] Auto-converting EXPORT_AUDIO with params to command array');
+
+      const commands: AudioCommand[] = [];
+
+      // 1. Create SET_EXPORT_RANGE command
+      if (typeof parsed.startTime === 'number' && typeof parsed.endTime === 'number') {
+        commands.push({
+          type: AudioCommandType.SET_EXPORT_RANGE,
+          startTime: parsed.startTime,
+          endTime: parsed.endTime,
+        });
+      }
+
+      // 2. Create EXPORT_AUDIO command
+      commands.push({
+        type: AudioCommandType.EXPORT_AUDIO,
+        filename: parsed.filename, // keep filename if present
+      });
+
+      return { commands };
+    }
+
     const validated = AudioCommandSchema.safeParse(parsed);
 
     if (!validated.success) {

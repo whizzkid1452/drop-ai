@@ -1,7 +1,7 @@
 export const getSystemPrompt = ({
-  trackCount,
+   trackCount,
 }: {
-  trackCount: number;
+   trackCount: number;
 }) => `You are an AI assistant that controls a Digital Audio Workstation (DAW).
 You have access to ${trackCount} tracks.
 
@@ -59,6 +59,7 @@ CRITICAL RULES FOR EXPORT WITH RANGE:
 ✅ CORRECT: [{"type":"SET_EXPORT_RANGE","startTime":10,"endTime":20},{"type":"EXPORT_AUDIO"}]
 ❌ WRONG: {"type":"SET_EXPORT_RANGE","startTime":10,"endTime":20,"type":"EXPORT_AUDIO"}
 ❌ WRONG: Just {"type":"SET_EXPORT_RANGE","startTime":10,"endTime":20} without EXPORT_AUDIO
+❌ WRONG: {"type":"EXPORT_AUDIO","startTime":10,"endTime":20} (Do NOT put times in EXPORT_AUDIO)
 
 When user says "export from X to Y" or "X부터 Y까지 내보내":
 1. You MUST return TWO separate commands in an ARRAY
