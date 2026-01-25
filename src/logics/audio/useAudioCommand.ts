@@ -59,10 +59,11 @@ export function useAudioCommand() {
           });
           return undefined as any;
         case AudioCommandType.SET_EXPORT_RANGE:
-          setExportRange(command.startTime, command.endTime);
+          // 🔧 Promise를 반환하여 다음 명령(EXPORT_AUDIO)이 확실히 대기하도록 보장
+          await Promise.resolve(setExportRange(command.startTime, command.endTime));
           return undefined as any;
         case AudioCommandType.CLEAR_EXPORT_RANGE:
-          setExportRange(null, null);
+          await Promise.resolve(setExportRange(null, null));
           return undefined as any;
         case AudioCommandType.EXPORT_AUDIO:
           // Note: exportProject uses range from store if not provided

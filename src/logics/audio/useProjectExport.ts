@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { useShallow } from 'zustand/react/shallow';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import { useAudio } from '@/presentation/hooks/useAudio';
 import { handleAudioEngineError } from './audioErrorHandler';
@@ -23,13 +22,6 @@ export interface UseProjectExportOptions {
  * - 진행 상태 및 에러 관리
  */
 export function useProjectExport() {
-  const { exportStartTime, exportEndTime } = usePlaybackStore(
-    useShallow(state => ({
-      exportStartTime: state.exportStartTime,
-      exportEndTime: state.exportEndTime,
-    }))
-  );
-
   const { tracks } = useAudio();
   // tracks is already an array from useAudio snapshot
 
@@ -42,10 +34,16 @@ export function useProjectExport() {
       setError(null);
 
       try {
+        // 🔧 항상 최신 export range를 읽기 위해 함수 내부에서 store를 직접 읽음
+        // 이렇게 하면 SET_EXPORT_RANGE 명령 이후 EXPORT_AUDIO가 실행될 때
+        // 업데이트된 range 값을 확실히 사용할 수 있습니다
+        const currentExportStartTime = usePlaybackStore.getState().exportStartTime;
+        const currentExportEndTime = usePlaybackStore.getState().exportEndTime;
+
         // 엔진을 거치지 않고 직접 렌더링 로직 호출
         // 옵션으로 전달된 range가 있으면 우선 사용 (Agent 명령 처리용)
-        const range = options?.range ?? ((exportStartTime !== null && exportEndTime !== null)
-          ? { startTime: exportStartTime, endTime: exportEndTime }
+        const range = options?.range ?? ((currentExportStartTime !== null && currentExportEndTime !== null)
+          ? { startTime: currentExportStartTime, endTime: currentExportEndTime }
           : undefined);
 
         const result = await renderProject(tracks, range);
@@ -74,7 +72,7 @@ export function useProjectExport() {
         handleAudioEngineError(errorObj);
       }
     },
-    [tracks, exportStartTime, exportEndTime]
+    [tracks]
   );
 
   return {

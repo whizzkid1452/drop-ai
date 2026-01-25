@@ -163,28 +163,39 @@ export function parseAudioCommandString({
     const parsed = JSON.parse(jsonStr);
 
     // 🔧 AUTO-FIX: Convert "EXPORT_AUDIO with params" to [SET_RANGE, EXPORT]
-    // AI sometimes outputs: {"type":"EXPORT_AUDIO","startTime":10,"endTime":16}
-    if (parsed.type === 'EXPORT_AUDIO' && (parsed.startTime !== undefined || parsed.endTime !== undefined)) {
-      console.warn('[parseAudioCommandString] Auto-converting EXPORT_AUDIO with params to command array');
+    // AI sometimes outputs wrong formats like:
+    // - {"type":"EXPORT_AUDIO","startTime":10,"endTime":16}
+    // - {"type":"EXPORT_AUDIO","from":1,"to":17}
+    // - {"type":"EXPORT_AUDIO","start":5,"end":10}
+    if (parsed.type === 'EXPORT_AUDIO') {
+      // 다양한 파라미터 패턴 감지
+      const startParam = parsed.startTime ?? parsed.from ?? parsed.start;
+      const endParam = parsed.endTime ?? parsed.to ?? parsed.end;
 
-      const commands: AudioCommand[] = [];
+      if (startParam !== undefined || endParam !== undefined) {
+        console.warn('[parseAudioCommandString] Auto-converting EXPORT_AUDIO with params to command array');
+        console.warn('Original:', parsed);
 
-      // 1. Create SET_EXPORT_RANGE command
-      if (typeof parsed.startTime === 'number' && typeof parsed.endTime === 'number') {
+        const commands: AudioCommand[] = [];
+
+        // 1. Create SET_EXPORT_RANGE command
+        if (typeof startParam === 'number' && typeof endParam === 'number') {
+          commands.push({
+            type: AudioCommandType.SET_EXPORT_RANGE,
+            startTime: startParam,
+            endTime: endParam,
+          });
+        }
+
+        // 2. Create EXPORT_AUDIO command
         commands.push({
-          type: AudioCommandType.SET_EXPORT_RANGE,
-          startTime: parsed.startTime,
-          endTime: parsed.endTime,
+          type: AudioCommandType.EXPORT_AUDIO,
+          filename: parsed.filename, // keep filename if present
         });
+
+        console.warn('Fixed to:', commands);
+        return { commands };
       }
-
-      // 2. Create EXPORT_AUDIO command
-      commands.push({
-        type: AudioCommandType.EXPORT_AUDIO,
-        filename: parsed.filename, // keep filename if present
-      });
-
-      return { commands };
     }
 
     const validated = AudioCommandSchema.safeParse(parsed);

@@ -23,6 +23,7 @@ export function AgentTerminal() {
 
   const handleSend = () => {
     if (!input.trim() || isGenerating || !isModelReady) return;
+
     sendMessage(input.trim());
     setInput('');
   };
