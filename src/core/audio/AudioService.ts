@@ -1,4 +1,6 @@
 import * as Tone from 'tone';
+import { createStore } from 'zustand/vanilla';
+import type { AudioSnapshot } from '@/types/audioTypes';
 import { Session } from '../session/Session';
 import { Track } from '../track/Track';
 import { Region } from '../region/Region';
@@ -17,7 +19,17 @@ import {
  */
 export class AudioService {
     private static instance: AudioService;
-    private listeners: Set<() => void> = new Set();
+    
+    // ✅ Zustand Vanilla Store for Logic-State Binding
+    public readonly store = createStore<AudioSnapshot>(() => ({
+        isPlaying: false,
+        currentTime: 0,
+        tempo: 120,
+        pixelsPerSecond: 20,
+        exportStartTime: null,
+        exportEndTime: null,
+        tracks: []
+    }));
 
     // Tone.js Objects
     // Key: TrackId
@@ -44,28 +56,17 @@ export class AudioService {
         return AudioService.instance;
     }
 
-    // --- Event System (React Standard) ---
-
-    private currentSnapshot: any = null;
-
-    private emitChange() {
-        this.currentSnapshot = null; // Invalidate cache
-        this.listeners.forEach(listener => listener());
-    }
-
-    public subscribe = (listener: () => void) => {
-        this.listeners.add(listener);
-        return () => this.listeners.delete(listener);
-    }
-
-    public getSnapshot = () => {
-        if (!this.currentSnapshot) {
-            console.log('[AudioService] Creating new snapshot', {
-                trackCount: this.session.tracks.length
-            });
-            this.currentSnapshot = {
-                isPlaying: Tone.Transport.state === 'started',
-                currentTime: Tone.Transport.seconds,
+    /**
+     * Sync Domain State (Session/Tracks) to Zustand Store
+     */
+    private syncStore(partialState?: Partial<AudioSnapshot>) {
+        if (partialState) {
+            this.store.setState(partialState);
+        } else {
+            // Full sync of tracks
+            this.store.setState({
+                isPlaying: Tone.getTransport().state === 'started',
+                currentTime: Tone.getTransport().seconds,
                 tracks: this.session.tracks.map(t => ({
                     id: t.id,
                     name: t.name,
@@ -73,19 +74,40 @@ export class AudioService {
                     pan: t.pan,
                     isMuted: t.isMuted,
                     isSoloed: t.isSoloed,
+                    status: [] as any[],
                     regions: t.regions.map(r => ({
                         id: r.id,
                         startTime: r.startTime,
-                        endTime: r.endTime, // Derived from getter
+                        endTime: r.endTime, 
                         sourceStartTime: r.sourceStartTime,
                         duration: r.duration,
                         audioFile: r.audioFile,
-                        status: [] // Default status for now
+                        status: [] as any[]
                     }))
                 }))
-            };
+            });
         }
-        return this.currentSnapshot;
+    }
+
+    // --- State Properties (Directly mapped to Store) ---
+    get exportStartTime() { return this.store.getState().exportStartTime; }
+    get exportEndTime() { return this.store.getState().exportEndTime; }
+    get tempo() { return this.store.getState().tempo; }
+    get pixelsPerSecond() { return this.store.getState().pixelsPerSecond; }
+
+    // --- State Setters ---
+
+    setExportRange(startTime: number | null, endTime: number | null) {
+        this.store.setState({ exportStartTime: startTime, exportEndTime: endTime });
+    }
+
+    setTempo(tempo: number) {
+        Tone.Transport.bpm.value = tempo;
+        this.store.setState({ tempo });
+    }
+
+    setPixelsPerSecond(pixels: number) {
+        this.store.setState({ pixelsPerSecond: pixels });
     }
 
     // --- Transport Control ---
@@ -95,22 +117,22 @@ export class AudioService {
             await Tone.start();
         }
         await Tone.getTransport().start();
-        this.emitChange();
+        this.store.setState({ isPlaying: true });
     }
 
     pause(): void {
         Tone.getTransport().pause();
-        this.emitChange();
+        this.store.setState({ isPlaying: false });
     }
 
     stop(): void {
         Tone.getTransport().stop();
-        this.emitChange();
+        this.store.setState({ isPlaying: false, currentTime: 0 });
     }
 
     setTime(time: number): void {
         Tone.getTransport().seconds = time;
-        this.emitChange();
+        this.store.setState({ currentTime: time });
     }
 
     getCurrentTime(): number {
@@ -144,8 +166,8 @@ export class AudioService {
         const volumeInDb = Tone.gainToDb(volume);
         channel.volume.rampTo(volumeInDb, 0.1);
 
-        // 3. Notify UI
-        this.emitChange();
+        // 3. Notify UI (Full Sync needed for track volume change)
+        this.syncStore();
     }
 
     setTrackPan(trackId: string, pan: number): void {
@@ -160,7 +182,7 @@ export class AudioService {
         channel.pan.rampTo(pan, 0.1);
 
         // 3. Notify UI
-        this.emitChange();
+        this.syncStore();
     }
 
     getTrackParams(trackId: string): { volume: number; pan: number } | null {
@@ -240,8 +262,8 @@ export class AudioService {
                     });
 
                     // Notify UI of new track/region
-                    console.log('[AudioService] Calling emitChange after region load');
-                    this.emitChange();
+                    console.log('[AudioService] Calling syncStore after region load');
+                    this.syncStore();
 
                     resolve();
                 },
@@ -273,6 +295,9 @@ export class AudioService {
             player.dispose();
             trackPlayers?.delete(regionId);
         }
+
+        // 3. Notify UI
+        this.syncStore();
     }
 
     async splitRegion(trackId: string, splitTime: number): Promise<void> {
@@ -326,6 +351,6 @@ export class AudioService {
             });
         }
 
-        this.emitChange();
+        this.syncStore();
     }
 }

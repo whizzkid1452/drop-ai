@@ -1,6 +1,5 @@
 import { useState, useCallback } from 'react';
-import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { useAudio } from '@/presentation/hooks/useAudio';
+import { AudioService } from '@/core/audio/AudioService';
 import { downloadBlob } from '@/components/Daw/components/ExportButton/utils/audioExport';
 import { exportProject as renderProject } from './exportProject';
 
@@ -21,9 +20,6 @@ export interface UseProjectExportOptions {
  * - 진행 상태 및 에러 관리
  */
 export function useProjectExport() {
-  const { tracks } = useAudio();
-  // tracks is already an array from useAudio snapshot
-
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -33,16 +29,15 @@ export function useProjectExport() {
       setError(null);
 
       try {
-        // 🔧 항상 최신 export range를 읽기 위해 함수 내부에서 store를 직접 읽음
-        // 이렇게 하면 SET_EXPORT_RANGE 명령 이후 EXPORT_AUDIO가 실행될 때
-        // 업데이트된 range 값을 확실히 사용할 수 있습니다
-        const currentExportStartTime = usePlaybackStore.getState().exportStartTime;
-        const currentExportEndTime = usePlaybackStore.getState().exportEndTime;
+        // 🔧 AudioService에서 직접 최신 상태 조회 
+        const snapshot = AudioService.getInstance().store.getState();
+        const {tracks,exportStartTime,exportEndTime} = snapshot;
 
+        /** @todo: 엔진 거치도록 해야함 */
         // 엔진을 거치지 않고 직접 렌더링 로직 호출
         // 옵션으로 전달된 range가 있으면 우선 사용 (Agent 명령 처리용)
-        const range = options?.range ?? ((currentExportStartTime !== null && currentExportEndTime !== null)
-          ? { startTime: currentExportStartTime, endTime: currentExportEndTime }
+        const range = options?.range ?? ((exportStartTime !== null && exportEndTime !== null)
+          ? { startTime: exportStartTime, endTime: exportEndTime }
           : undefined);
 
         const result = await renderProject(tracks, range);
@@ -71,7 +66,7 @@ export function useProjectExport() {
         throw errorObj;
       }
     },
-    [tracks]
+    []
   );
 
   return {

@@ -1,13 +1,13 @@
 import { useRef, useEffect } from 'react';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import { AudioService } from '@/core/audio/AudioService';
-import { useAudio } from '@/presentation/hooks/useAudio';
+import { useAudioService } from '@/presentation/hooks/useAudioService';
 import * as styles from './Cursor.css';
 
 export const Cursor = () => {
   const cursorRef = useRef<HTMLDivElement>(null);
   const rAF = useRef<number>(0);
-  const { isPlaying, currentTime } = useAudio();
+  const { isPlaying, currentTime } = useAudioService();
   const pixelsPerSecond = usePlaybackStore(state => state.pixelsPerSecond);
 
   useEffect(() => {

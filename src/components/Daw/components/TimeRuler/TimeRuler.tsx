@@ -1,29 +1,28 @@
 import { memo, useMemo, useRef, useState, useEffect } from 'react';
-// import { useTrackStore } from '@/stores/useTrackStore';
-import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { useAudio } from '@/presentation/hooks/useAudio';
+import { useShallow } from 'zustand/react/shallow';
+import { useAudioService } from '@/presentation/hooks/useAudioService';
 import * as styles from './TimeRuler.css';
 import type { Track } from '@/types/track';
 import { useAudioCommand } from '@/logics/audio';
 import { AudioCommandType } from '@/types/audioCommand.schema';
-import { useShallow } from 'zustand/react/shallow';
 import { useErrorBoundary } from 'react-error-boundary';
 
-export const TimeRuler = memo(() => {
-  const { tracks } = useAudio();
-  const trackArray = (tracks || []) as unknown as Track[];
+// ...
 
-  const {
+export const TimeRuler = memo(() => {
+  const { 
+    tracks,
     pixelsPerSecond,
     exportStartTime,
-    exportEndTime,
-  } = usePlaybackStore(
-    useShallow(state => ({
-      pixelsPerSecond: state.pixelsPerSecond,
-      exportStartTime: state.exportStartTime,
-      exportEndTime: state.exportEndTime,
-    }))
-  );
+    exportEndTime
+  } = useAudioService(useShallow(state => ({
+    tracks: state.tracks,
+    pixelsPerSecond: state.pixelsPerSecond,
+    exportStartTime: state.exportStartTime,
+    exportEndTime: state.exportEndTime,
+  })));
+  
+  const trackArray = (tracks || []) as unknown as Track[];
 
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);

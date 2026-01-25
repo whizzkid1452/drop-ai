@@ -7,10 +7,10 @@ import { TrackInfoSidebar } from './components/TrackInfoSidebar';
 import { TimeRuler } from './components/TimeRuler/TimeRuler';
 import { PlaybackControls } from './components/PlaybackControls/PlaybackControls';
 import * as styles from './DawPage.css';
-import { useAudio } from '@/presentation/hooks/useAudio';
+import { useAudioService } from '@/presentation/hooks/useAudioService';
 
 export function DawPage() {
-  const { tracks } = useAudio();
+  const { tracks } = useAudioService();
   const hasTracks = useMemo(() => tracks && tracks.length > 0, [tracks]);
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
   const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
