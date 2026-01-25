@@ -108,3 +108,226 @@ const execute = useCallback(async (command: AudioCommand) => {
 
 4.  **일관된 사용자 경험 (Consistent UX)**
     *   버튼을 누르든, 채팅으로 시키든, 명령어로 치든 똑같은 코드가 실행되어 동일한 결과를 보장합니다.
+
+---
+
+## 🧠 Detail: Agent Command Execution Flow
+
+다음은 사용자가 **AgentTerminal**을 통해 자연어로 명령을 내렸을 때, 내부적으로 어떤 과정을 거쳐 실행되는지 보여주는 **시퀀스 다이어그램**입니다.
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Terminal as AgentComponents<br/>(AgentTerminal)
+    participant Hook as useAgent
+    participant Handler as handleAIResponse
+    participant LLM as WebLLM Engine
+    participant Parser as parseAudioCommandString
+    participant Executor as useAudioCommand
+    participant System as AudioService / Stores
+
+    Note over User, Terminal: 1. 자연어 명령 입력 (예: "템포 120으로 설정해줘")
+    User->>Terminal: 입력 및 전송
+    Terminal->>Hook: sendMessage(input)
+    
+    activate Hook
+    Hook->>Hook: 메시지 UI 업데이트 (User Message)
+    Hook->>Hook: Status = 'generating'
+    
+    Hook->>Handler: handleAIResponse(deps)
+    activate Handler
+    
+    Note over Handler, LLM: 2. LLM 질의 (Prompt + Context)
+    Handler->>LLM: queryToLLM(userInput, trackCount...)
+    LLM-->>Handler: 응답 텍스트 반환 (JSON 포함)
+    
+    Note over Handler, Parser: 3. 응답 파싱 및 검증
+    Handler->>Parser: parseAudioCommandString(response)
+    Parser-->>Handler: AudioCommand[] (JSON 객체 배열)
+    
+    loop 각 명령어에 대해 (for command of commands)
+        alt GET_TRACK_INFO
+            Handler->>Handler: 트랙 정보 처리 (Console Log)
+        else 기타 명령어 (PLAY, EXPORT 등)
+            Handler->>Executor: execute(command)
+            activate Executor
+            
+            Note over Executor, System: 4. 실제 기능 수행
+            Executor->>System: AudioService 메서드 호출<br/>(play, pause, setIdentifier 등)
+            Executor->>System: Store 업데이트<br/>(setExportRange 등)
+            Executor->>System: Export 로직 실행<br/>(exportProject)
+            
+            deactivate Executor
+        end
+    end
+    
+    Handler-->>Hook: 실행 결과 메시지 반환
+    deactivate Handler
+    
+    Hook->>Hook: 메시지 UI 업데이트 (Assistant Message)
+    Hook->>Hook: Status = 'idle'
+    deactivate Hook
+```
+
+### 단계별 상세 설명
+
+1.  **입력 및 전송 (`AgentTerminal` -> `useAgent`)**
+    *   사용자가 터미널에 텍스트를 입력하면 `sendMessage`가 호출되어 UI에 즉시 반영되고 로딩 상태가 됩니다.
+
+2.  **LLM 질의 (`handleAIResponse` -> `WebLLM`)**
+    *   `queryToLLM`을 통해 현재 프로젝트 상태(트랙 수 등)와 사용자 입력을 LLM에 전달합니다.
+    *   LLM은 실행 가능한 JSON 포맷의 명령어를 문자열로 반환합니다.
+
+3.  **파싱 및 검증 (`parseAudioCommandString`)**
+    *   응답 문자열에서 JSON을 추출하고 `zod` 스키마로 유효성을 검사합니다.
+    *   잘못된 포맷은 자동으로 수정(Auto-fix)하여 안정성을 확보합니다.
+
+4.  **명령어 실행 (`useAudioCommand` -> `AudioService`)**
+    *   추출된 명령어를 순차적으로 `execute` 함수에 전달하여 실제 오디오 엔진이나 스토어를 제어합니다.
+
+---
+
+### 🔀 Logic Flowchart (Decision Process)
+
+위 시퀀스 다이어그램이 **객체 간의 상호작용**을 보여준다면, 아래 플로우차트는 **에러 처리 및 분기 로직**을 중점으로 보여줍니다.
+
+```mermaid
+flowchart TD
+    Start([User Input]) --> SendMsg[sendMessage]
+    SendMsg --> UI_Load[UI: Status='generating']
+    UI_Load --> Handler[handleAIResponse]
+    Handler --> LLM[queryToLLM]
+    LLM -- Request --> Engine((WebLLM))
+    Engine -- Response --> LLM
+    LLM --> CheckLLM{LLM Error?}
+    
+    CheckLLM -- Yes --> ErrorEnd[Return Error Message]
+    CheckLLM -- No --> Parser[parseAudioCommandString]
+    
+    Parser --> FixCheck{Malformed JSON?}
+    FixCheck -- Yes --> AutoFix[Auto-Fix JSON] --> ParseJSON
+    FixCheck -- No --> ParseJSON[Parse JSON & Validate Zod]
+    
+    ParseJSON --> ValidCmds{Valid Commands?}
+    ValidCmds -- No/Empty --> TextOnly[Return Text Response]
+    ValidCmds -- Yes --> Loop[Loop: Each Command]
+    
+    Loop --> TypeCheck{Command Type}
+    
+    TypeCheck -- GET_TRACK_INFO --> LogInfo[Log Info] --> NextCmd
+    TypeCheck -- Others --> Execute[useAudioCommand.execute]
+    
+    Execute --> AudioSvc[AudioService / Stores]
+    AudioSvc --> NextCmd{More Commands?}
+    
+    NextCmd -- Yes --> Loop
+    NextCmd -- No --> Success[Return Success Message]
+    
+    Success --> UI_Idle[UI: Status='idle']
+    TextOnly --> UI_Idle
+    ErrorEnd --> UI_Idle
+    
+    UI_Idle --> End([End])
+```
+
+---
+
+## 🔍 Code Execution Path
+
+다음은 실제 코드가 호출되는 순서대로 파일과 핵심 함수를 나열한 목록입니다. 각 단계는 데이터가 어떻게 변환되어 다음 단계로 넘어가는지 보여줍니다.
+
+### Phase 1: User Interaction
+**File:** `src/components/Daw/components/Terminals/AgentTerminal/AgentTerminal.tsx`
+*   **Trigger:** 사용자가 입력창에서 Enter 키 입력.
+*   **Function:** `handleSend()`
+*   **Action:** `sendMessage(input)` 호출.
+
+### Phase 2: State Management & Orchestration
+**File:** `src/hooks/agent/useAgent/useAgent.ts`
+*   **Function:** `sendMessage(content)`
+*   **Action:**
+    1.  UI 목록에 사용자 메시지 추가 (`addMessage`).
+    2.  `status`를 `'generating'`으로 변경.
+    3.  `handleAIResponse()` 호출하여 비동기 처리 시작.
+
+### Phase 3: AI Logic Handling
+**File:** `src/hooks/agent/useAgent/utils/aiResponseHandler.ts`
+*   **Function:** `handleAIResponse(deps)`
+*   **Action:**
+    1.  `queryToLLM()`을 호출하여 LLM 응답 획득.
+    2.  에러 발생 시 즉시 에러 상태 반환.
+    3.  성공 시 `parseAudioCommandString()` 호출.
+    4.  파싱된 `commands` 배열을 순회하며 `execute()` 호출.
+
+**File:** `src/hooks/agent/useAgent/utils/queryToLLM.ts`
+*   **Function:** `queryToLLM({ engine, trackCount, userInput })`
+*   **Action:** System Prompt와 User Input을 결합하여 `engine.chat.completions.create` 호출.
+
+### Phase 4: Parsing & Validation
+**File:** `src/types/audioCommand.schema.ts`
+*   **Function:** `parseAudioCommandString({ commandString })`
+*   **Action:**
+    1.  문자열 내 JSON 패턴(`[]` or `{}`) 검색.
+    2.  `JSON.parse()` 수행.
+    3.  잘못된 형태(Malformed) 감지 시 정규식으로 Auto-fix.
+    4.  `AudioCommandSchema.safeParse()` (Zod)를 통해 타입 검증.
+    5.  유효한 `AudioCommand` 배열 반환.
+
+### Phase 5: Command Execution
+**File:** `src/logics/audio/useAudioCommand.ts`
+*   **Function:** `execute(command)`
+*   **Action:** `command.type`에 따라 분기 처리.
+    *   `PLAY`, `PAUSE` 등: `AudioService` 호출.
+    *   `SET_EXPORT_RANGE` 등: `usePlaybackStore` 호출.
+    *   `EXPORT_AUDIO`: `exportProject` 로직 호출.
+
+### Phase 6: System Action (Example: Playback)
+**File:** `src/core/audio/AudioService.ts`
+*   **Function:** `play()`, `pause()`, etc.
+*   **Action:** Tone.js의 Transport나 Player 객체를 직접 제어하여 소리 출력.
+
+---
+
+## 🗺️ Visual Flow (ASCII Style)
+
+```text
+[ USER INPUT ]
+│
+│ "내보내기 해줘" (Message)
+▼
+[ AgentTerminal Component ]
+│
+│ sendMessage()
+▼
+[ useAgent Hook ]
+│
+│ 1. LLM에게 질의 (WebLLM)
+│ 2. 응답 수신: {"type": "EXPORT_AUDIO"}
+│ 3. handleAIResponse() 호출
+│
+▼
+[ aiResponseHandler.ts ]
+│
+│ Command List 파싱
+│ execute() 호출
+│
+▼
+[ useAudioCommand.ts ] 🚦 (The Controller)
+│
+│ execute() 내부 switch 분기
+│
+◇── Command Type 확인 ──◇
+│                        │
+│ [EXPORT_AUDIO]         │ [PLAY / PAUSE / ETC]
+│                        │
+▼                        ▼
+[ exportProject() ]      [ AudioService ]
+(in useProjectExport)    (Singleton Class)
+│                        │
+│ 1. 렌더링 결과(Blob)    │ 1. Tone.js 제어
+│    반환                │    (소리 재생/중지)
+│                        │
+▼                        ▼
+[ downloadBlob() ]       [ Audio Output ]
+(Browser Download)       (Speakers)
+```
