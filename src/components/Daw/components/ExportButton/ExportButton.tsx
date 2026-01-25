@@ -59,7 +59,7 @@ export function ExportButton({
         className={styles.exportButton}
         onClick={handleExport}
         disabled={isDisabled}
-        aria-label="오디오 내보내기"
+        aria-label="Export audio"
       >
         {isExporting ? (
           <span className={styles.progressText}>Exporting...</span>

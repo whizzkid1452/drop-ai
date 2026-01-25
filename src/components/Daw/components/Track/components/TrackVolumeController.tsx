@@ -14,7 +14,7 @@ export function TrackVolumeController({
     <div className={styles.controls}>
       <div className={styles.controlGroup}>
         <label className={styles.sliderLabel} htmlFor={`volume-${id}`}>
-          볼륨
+          Volume
         </label>
         <input
           id={`volume-${id}`}
