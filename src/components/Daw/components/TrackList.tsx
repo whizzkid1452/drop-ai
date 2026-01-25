@@ -1,10 +1,11 @@
-import { useAudioCommand, handleAudioEngineError } from '@/logics/audio';
+import { useAudioCommand } from '@/logics/audio';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
 // import { useTrackStore } from '@/stores/useTrackStore'; // Deprecated
 import { useAudio } from '@/presentation/hooks/useAudio';
 import { useEffect, useRef, useState } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
 import { useShallow } from 'zustand/react/shallow';
+import { useErrorBoundary } from 'react-error-boundary';
 import { TrackComponent } from './Track/TrackComponent';
 import * as styles from './TrackList.css';
 import { Cursor } from './Cursor/Cursor';
@@ -19,6 +20,7 @@ export function TrackList() {
   >(new Map());
 
   const { execute } = useAudioCommand();
+  const { showBoundary } = useErrorBoundary();
   // Note: Manual AudioEngine initialization is now handled by useAudioSync
   const containerRef = useRef<HTMLDivElement>(null);
   const { pixelsPerSecond, setPixelsPerSecond } = usePlaybackStore(
@@ -90,7 +92,7 @@ export function TrackList() {
                     volume: vol,
                   });
                 } catch (error) {
-                  handleAudioEngineError(error);
+                  showBoundary(error);
                 }
               }}
               onPanChange={async pan => {
@@ -101,7 +103,7 @@ export function TrackList() {
                     pan: pan,
                   });
                 } catch (error) {
-                  handleAudioEngineError(error);
+                  showBoundary(error);
                 }
               }}
             />
