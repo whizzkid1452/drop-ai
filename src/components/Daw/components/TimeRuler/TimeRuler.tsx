@@ -4,9 +4,10 @@ import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import { useAudio } from '@/presentation/hooks/useAudio';
 import * as styles from './TimeRuler.css';
 import type { Track } from '@/types/track';
-import { useAudioCommand, handleAudioEngineError } from '@/logics/audio';
+import { useAudioCommand } from '@/logics/audio';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import { useShallow } from 'zustand/react/shallow';
+import { useErrorBoundary } from 'react-error-boundary';
 
 export const TimeRuler = memo(() => {
   const { tracks } = useAudio();
@@ -31,6 +32,7 @@ export const TimeRuler = memo(() => {
   const [isDraggingRange, setIsDraggingRange] = useState(false);
 
   const { execute } = useAudioCommand();
+  const { showBoundary } = useErrorBoundary();
 
   const maxDuration = useMemo(() => getMaxDuration(trackArray), [trackArray]);
 
@@ -62,11 +64,15 @@ export const TimeRuler = memo(() => {
       dragStartPosRef.current = null;
 
       if (currentDragRangeRef.current) {
-        await execute({
-          type: AudioCommandType.SET_EXPORT_RANGE,
-          startTime: currentDragRangeRef.current.start,
-          endTime: currentDragRangeRef.current.end,
-        });
+        try {
+          await execute({
+            type: AudioCommandType.SET_EXPORT_RANGE,
+            startTime: currentDragRangeRef.current.start,
+            endTime: currentDragRangeRef.current.end,
+          });
+        } catch (error) {
+          showBoundary(error);
+        }
         currentDragRangeRef.current = null;
       }
     };
@@ -78,7 +84,7 @@ export const TimeRuler = memo(() => {
       window.removeEventListener('mousemove', handleWindowMouseMove);
       window.removeEventListener('mouseup', handleWindowMouseUp);
     };
-  }, [isDraggingRange, pixelsPerSecond, execute]);
+  }, [isDraggingRange, pixelsPerSecond, execute, showBoundary]);
 
 
   const ticks = useMemo(() => {
@@ -115,11 +121,15 @@ export const TimeRuler = memo(() => {
     currentDragRangeRef.current = { start: time, end: time };
 
     // Init range via execute (optional, could be skipped if we trust visual feedback only until mouseup)
-    await execute({
-      type: AudioCommandType.SET_EXPORT_RANGE,
-      startTime: time,
-      endTime: time,
-    });
+    try {
+      await execute({
+        type: AudioCommandType.SET_EXPORT_RANGE,
+        startTime: time,
+        endTime: time,
+      });
+    } catch (error) {
+      showBoundary(error);
+    }
 
     setIsDraggingRange(true);
   };
@@ -138,14 +148,18 @@ export const TimeRuler = memo(() => {
         time,
       });
     } catch (error) {
-      handleAudioEngineError(error);
+      showBoundary(error);
     }
   };
 
   const handleDoubleClick = async () => {
-    await execute({
-      type: AudioCommandType.CLEAR_EXPORT_RANGE,
-    });
+    try {
+      await execute({
+        type: AudioCommandType.CLEAR_EXPORT_RANGE,
+      });
+    } catch (error) {
+      showBoundary(error);
+    }
   };
 
   return (

@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { ErrorBoundary, useErrorBoundary, type FallbackProps } from 'react-error-boundary';
 import * as styles from './ExportButton.css';
 import type { ExportSettings } from './utils/audioExport';
 import { useAudioCommand } from '@/logics/audio';
@@ -16,24 +17,38 @@ interface ExportButtonProps {
   onExportError?: (error: Error) => void;
 }
 
+function ExportErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
+  const errorMessage = error instanceof Error ? error.message : 'Export failed';
+  return (
+    <div className={styles.container}>
+      <div className={styles.errorMessage} role="alert">
+        {errorMessage}
+      </div>
+      <button 
+        className={styles.exportButton} 
+        onClick={resetErrorBoundary}
+        style={{ marginTop: '4px' }}
+      >
+        <span className={styles.buttonText}>Retry</span>
+      </button>
+    </div>
+  );
+}
+
 /**
- * ExportButton 컴포넌트
- *
- * AudioEngine을 통해 프로젝트의 모든 트랙을 내보냅니다.
- * - 명령 실행과 UI 행위(다운로드, 알림) 분리
+ * ExportButton 로직 및 UI (내부 컴포넌트)
  */
-export function ExportButton({
+function ExportButtonContent({
   settings,
   onExportComplete,
   onExportError,
 }: ExportButtonProps) {
   const { execute } = useAudioCommand();
+  const { showBoundary } = useErrorBoundary();
   const [isExporting, setIsExporting] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
 
   const handleExport = useCallback(async () => {
     setIsExporting(true);
-    setError(null);
 
     try {
       await execute({
@@ -43,12 +58,12 @@ export function ExportButton({
       onExportComplete?.();
     } catch (err) {
       const errorObj = err instanceof Error ? err : new Error('Export failed');
-      setError(errorObj);
       onExportError?.(errorObj);
+      showBoundary(errorObj);
     } finally {
       setIsExporting(false);
     }
-  }, [execute, settings, onExportComplete, onExportError]);
+  }, [execute, settings, onExportComplete, onExportError, showBoundary]);
 
   // 버튼 비활성화: export 중일 때만
   const isDisabled = isExporting;
@@ -67,11 +82,19 @@ export function ExportButton({
           <span className={styles.buttonText}>Export</span>
         )}
       </button>
-      {error && (
-        <div className={styles.errorMessage} role="alert">
-          {error.message}
-        </div>
-      )}
     </div>
+  );
+}
+
+/**
+ * ExportButton 컴포넌트
+ * 
+ * ErrorBoundary로 감싸져 있어 에러 발생 시 Fallback UI를 보여줍니다.
+ */
+export function ExportButton(props: ExportButtonProps) {
+  return (
+    <ErrorBoundary FallbackComponent={ExportErrorFallback}>
+      <ExportButtonContent {...props} />
+    </ErrorBoundary>
   );
 }

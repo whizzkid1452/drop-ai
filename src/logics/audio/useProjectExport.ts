@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import { useAudio } from '@/presentation/hooks/useAudio';
-import { handleAudioEngineError } from './audioErrorHandler';
 import { downloadBlob } from '@/components/Daw/components/ExportButton/utils/audioExport';
 import { exportProject as renderProject } from './exportProject';
 
@@ -69,7 +68,7 @@ export function useProjectExport() {
         setError(errorObj);
         setIsExporting(false);
         options?.onError?.(errorObj);
-        handleAudioEngineError(errorObj);
+        throw errorObj;
       }
     },
     [tracks]
