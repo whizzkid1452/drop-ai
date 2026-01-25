@@ -1,5 +1,5 @@
 import type { KeyboardEvent } from 'react';
-import * as styles from '../AgentInterface.css';
+import * as styles from '../AgentTerminal/AgentTerminal.css.ts';
 
 interface InputAreaProps {
   input: string;
@@ -23,25 +23,28 @@ export function InputArea({
     }
   };
 
+  const handleInputChange = (value: string) => {
+    // 🔧 영어, 숫자, 공백, 기본 기호만 허용 (한글 및 기타 언어 차단)
+    // 허용: a-z, A-Z, 0-9, space, -, _, ., ,, !, ?, ', ", :, ;, (, ), [, ], etc.
+    const filteredValue = value.replace(/[^a-zA-Z0-9\s\-_.,!?'":;()\[\]{}@#$%^&*+=<>\/\\|`~]/g, '');
+    onInputChange(filteredValue);
+  };
+
   return (
     <div className={styles.inputArea}>
       <textarea
         className={styles.textarea}
         value={input}
-        onChange={e => onInputChange(e.target.value)}
+        onChange={e => handleInputChange(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={
           isModelReady
-            ? "예: '재생해줘', '볼륨 50으로', 'pause', '왼쪽으로'"
+            ? "e.g., 'play', 'export 10-20', 'pause', 'stop'"
             : 'Waiting for model...'
         }
-        rows={1}
+        rows={4}
         disabled={!isModelReady || isGenerating}
       />
-      <div className={styles.inputHint}>
-        <span>Shift + Enter for new line</span>
-        <span>Press Enter to send</span>
-      </div>
     </div>
   );
 }

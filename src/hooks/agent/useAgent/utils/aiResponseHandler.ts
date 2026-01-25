@@ -5,10 +5,14 @@ import {
 import { queryToLLM as queryToLLM } from './queryToLLM';
 
 export interface AIResponseHandlerDependencies {
-  handleAudioCommand: (command: AudioCommand) => Promise<any>;
+  execute: (command: AudioCommand) => Promise<any>;
   /** @todo engine 타입 추가 필요 */
   engine: any;
-  trackCount: number;
+  tracks: {
+    id: string;
+    index: number;
+    regions: { id: string; startTime: number; endTime: number }[];
+  }[];
   userInput: string;
 }
 
@@ -18,11 +22,11 @@ export interface AIResponseHandlerDependencies {
  * @returns 처리 결과 (메시지 및 상태)
  */
 export async function handleAIResponse(deps: AIResponseHandlerDependencies) {
-  const { engine, trackCount, userInput, handleAudioCommand } = deps;
+  const { engine, tracks, userInput, execute } = deps;
 
   const { fullResponse, error: llmResponseError } = await queryToLLM({
     engine,
-    trackCount,
+    tracks,
     userInput,
   });
 
@@ -33,14 +37,21 @@ export async function handleAIResponse(deps: AIResponseHandlerDependencies) {
     };
   }
 
-  const { command, error } = parseAudioCommandString({
+  const { commands, error } = parseAudioCommandString({
     commandString: fullResponse,
   });
 
-  if (command) {
-    await handleAudioCommand(command);
+  if (commands && commands.length > 0) {
+    // 🔧 Execute all commands sequentially
+    // The previous logic reordered commands and removed duplicates, which caused issues with
+    // sequential operations (e.g., multiple exports with different ranges).
+    // Now we respect the order provided by the AI.
+    for (const command of commands) {
+      await execute(command);
+    }
+
     return {
-      message: fullResponse || '✅ Command executed',
+      message: fullResponse || '✅ Commands executed',
       status: 'idle' as const,
     };
   }

@@ -1,9 +1,8 @@
-import { exportProject } from '@/logics/audio/exportProject';
-import { useTrackStore } from '@/stores/useTrackStore';
-import { useCallback, useState } from 'react';
-import { useShallow } from 'zustand/react/shallow';
+import { useState, useCallback } from 'react';
 import * as styles from './ExportButton.css';
-import { downloadBlob, type ExportSettings } from './utils/audioExport';
+import type { ExportSettings } from './utils/audioExport';
+import { useAudioCommand } from '@/logics/audio';
+import { AudioCommandType } from '@/types/audioCommand.schema';
 
 /**
  * ExportButton 컴포넌트의 Props 타입 정의
@@ -20,53 +19,39 @@ interface ExportButtonProps {
 /**
  * ExportButton 컴포넌트
  *
- * 프로젝트의 모든 트랙을 Tone.Offline을 사용하여 정확하게 내보냅니다.
+ * AudioEngine을 통해 프로젝트의 모든 트랙을 내보냅니다.
+ * - 명령 실행과 UI 행위(다운로드, 알림) 분리
  */
 export function ExportButton({
   settings,
   onExportComplete,
   onExportError,
 }: ExportButtonProps) {
-  const tracks = useTrackStore(
-    useShallow(state => Array.from(state.tracks.values()))
-  );
-
+  const { execute } = useAudioCommand();
   const [isExporting, setIsExporting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
 
-  /**
-   * Export 실행 함수
-   */
   const handleExport = useCallback(async () => {
-    if (tracks.length === 0) {
-      setError('내보낼 트랙이 없습니다.');
-      return;
-    }
-
     setIsExporting(true);
     setError(null);
 
     try {
-      // exportProject (Tone.Offline) 사용
-      const blob = await exportProject(tracks);
-
-      // 파일 다운로드
-      const filename = settings?.filename || 'drop-ai-export';
-      downloadBlob(blob, `${filename}.wav`);
-
-      setIsExporting(false);
+      await execute({
+        type: AudioCommandType.EXPORT_AUDIO,
+        filename: settings?.filename,
+      });
       onExportComplete?.();
     } catch (err) {
-      const error = err instanceof Error ? err : new Error('Export failed');
-      setError(error.message);
+      const errorObj = err instanceof Error ? err : new Error('Export failed');
+      setError(errorObj);
+      onExportError?.(errorObj);
+    } finally {
       setIsExporting(false);
-      onExportError?.(error);
-      console.error('Export error:', error);
     }
-  }, [tracks, settings, onExportComplete, onExportError]);
+  }, [execute, settings, onExportComplete, onExportError]);
 
-  // 트랙이 없으면 버튼 비활성화
-  const isDisabled = tracks.length === 0 || isExporting;
+  // 버튼 비활성화: export 중일 때만
+  const isDisabled = isExporting;
 
   return (
     <div className={styles.container}>
@@ -74,7 +59,7 @@ export function ExportButton({
         className={styles.exportButton}
         onClick={handleExport}
         disabled={isDisabled}
-        aria-label="오디오 내보내기"
+        aria-label="Export audio"
       >
         {isExporting ? (
           <span className={styles.progressText}>Exporting...</span>
@@ -84,7 +69,7 @@ export function ExportButton({
       </button>
       {error && (
         <div className={styles.errorMessage} role="alert">
-          {error}
+          {error.message}
         </div>
       )}
     </div>

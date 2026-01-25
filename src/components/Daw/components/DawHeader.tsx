@@ -8,9 +8,9 @@ interface DawHeaderProps {
 export function DawHeader({ trackCount }: DawHeaderProps) {
   return (
     <div className={styles.header}>
-      <h1 className={styles.title}>트랙 목록</h1>
+      <h1 className={styles.title}>Tracks</h1>
       <div className={styles.headerRight}>
-        <span className={styles.trackCount}>{trackCount}개 트랙</span>
+        <span className={styles.trackCount}>{trackCount} tracks</span>
         <ExportButton />
       </div>
     </div>

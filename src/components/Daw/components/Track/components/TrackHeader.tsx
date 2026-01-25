@@ -25,7 +25,7 @@ export function TrackHeader({ track, index, onRemove }: TrackHeaderProps) {
         <button
           className={styles.removeButton}
           onClick={() => onRemove(index)}
-          aria-label="트랙 제거"
+          aria-label="Remove track"
         >
           ×
         </button>

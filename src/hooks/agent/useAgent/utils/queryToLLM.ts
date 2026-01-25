@@ -3,15 +3,19 @@ import { getSystemPrompt } from './getSystemPrompt';
 
 export async function queryToLLM({
   engine,
-  trackCount,
+  tracks,
   userInput,
 }: {
   /** @todo engine 타입 추가 필요 */
   engine: any;
-  trackCount: number;
+  tracks: {
+    id: string;
+    index: number;
+    regions: { id: string; startTime: number; endTime: number }[];
+  }[];
   userInput: string;
 }) {
-  const systemPrompt = getSystemPrompt({ trackCount });
+  const systemPrompt = getSystemPrompt({ tracks });
 
   try {
     const completion = await engine.chat.completions.create({
@@ -19,7 +23,7 @@ export async function queryToLLM({
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userInput },
       ],
-      max_tokens: 100,
+      max_tokens: 200,
       temperature: 0.1,
     });
     return {

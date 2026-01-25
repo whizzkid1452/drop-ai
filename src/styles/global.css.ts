@@ -20,6 +20,27 @@ globalStyle('body', {
     '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   WebkitFontSmoothing: 'antialiased',
   MozOsxFontSmoothing: 'grayscale',
+  backgroundColor: '#000000',
+});
+
+// 전역 스크롤바 스타일
+globalStyle('::-webkit-scrollbar', {
+  width: '8px',
+  height: '8px',
+});
+
+globalStyle('::-webkit-scrollbar-track', {
+  backgroundColor: 'transparent',
+});
+
+globalStyle('::-webkit-scrollbar-thumb', {
+  backgroundColor: '#333333',
+  borderRadius: '4px',
+  border: '1px solid rgba(255, 255, 255, 0.05)',
+});
+
+globalStyle('::-webkit-scrollbar-thumb:hover', {
+  backgroundColor: '#444444',
 });
 
 export const wave = keyframes({

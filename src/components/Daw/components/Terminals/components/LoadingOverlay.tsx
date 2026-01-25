@@ -1,4 +1,4 @@
-import * as styles from '../AgentInterface.css';
+import * as styles from '../AgentTerminal/AgentTerminal.css.ts';
 
 interface LoadingOverlayProps {
     text: string;

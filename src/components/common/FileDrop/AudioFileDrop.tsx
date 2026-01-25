@@ -1,20 +1,17 @@
 import type { AudioFile } from '@/types/audioFile';
 import { convertFileToAudioFile } from '@/logics/audio/convertFileToAudioFile';
 import { useAudioFileStore } from '@/stores/useAudioFileStore';
-import { useTrackStore } from '@/stores/useTrackStore';
+import { AudioService } from '@/core/audio/AudioService';
 import { useCallback } from 'react';
 import { BasicFileDrop } from './BaiscFileDrop';
-import { AudioEngine } from '@/logics/audio/audioEngine';
 
 interface AudioFileDropProps {
   onAudioFileDrop?: (audioFile: AudioFile | null) => Promise<void> | void;
 }
 
-import { RegionStatus, TrackStatus } from '@/types/track';
-
 export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
   const { addAudioFile, getAudioFile } = useAudioFileStore();
-  const { addTrack } = useTrackStore();
+  // const { addTrack } = useTrackStore(); // Removed
   const onFileDrop = useCallback(
     async (file: File) => {
       const audioFileData = await convertFileToAudioFile(file);
@@ -32,35 +29,21 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
         return null;
       }
 
-      const newTrack = addTrack({
-        track: {
-          regions: [
-            {
-              startTime: 0,
-              endTime: uploadedAudioFile.duration ?? 0,
-              sourceStartTime: 0,
-              audioFile: uploadedAudioFile,
-              status: [RegionStatus.active],
-            },
-          ],
-          status: [TrackStatus.normal],
-          volume: 1,
-          pan: 0,
-        },
-      });
+      const trackId = crypto.randomUUID();
+      const regionId = crypto.randomUUID();
+      const duration = uploadedAudioFile.duration ?? 0;
 
-      const trackId = newTrack.id;
-      const regionId = newTrack.regions[0].id;
+      // Use AudioService directly
+      const service = AudioService.getInstance();
 
-      // Direct Dependency: Load into AudioEngine immediately
-      AudioEngine.getInstance().execute({
-        command: {
-          type: 'LOAD_REGION',
-          trackId,
-          regionId,
-          url: uploadedAudioFile.url,
-          startTime: 0,
-        },
+      // Note: addRegion in Service will internally create Track and Region in Domain
+      await service.addRegion(trackId, {
+        id: regionId,
+        url: uploadedAudioFile.url,
+        startTime: 0,
+        sourceStartTime: 0,
+        duration: duration,
+        audioFile: uploadedAudioFile
       });
 
       // Simple callback
@@ -68,7 +51,7 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
 
       return uploadedAudioFile;
     },
-    [addAudioFile, getAudioFile, addTrack, onAudioFileDrop]
+    [addAudioFile, getAudioFile, onAudioFileDrop]
   );
 
   return (

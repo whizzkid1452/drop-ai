@@ -2,45 +2,43 @@ import { useMemo, useState } from 'react';
 import { AudioFileDrop } from '../common/FileDrop/AudioFileDrop';
 import { DawHeader } from './components/DawHeader';
 import { TrackList } from './components/TrackList';
-import { AgentInterface } from './components/AgentInterface/AgentInterface';
+import { Terminal } from './components/Terminals/Terminal';
 import { TrackInfoSidebar } from './components/TrackInfoSidebar';
 import { TimeRuler } from './components/TimeRuler/TimeRuler';
 import { PlaybackControls } from './components/PlaybackControls/PlaybackControls';
 import * as styles from './DawPage.css';
-import { useTrackStore } from '@/stores/useTrackStore';
+import { useAudio } from '@/presentation/hooks/useAudio';
 
 export function DawPage() {
-  const tracks = useTrackStore(state => state.tracks);
-  const hasTracks = useMemo(() => tracks.size > 0, [tracks.size]);
-  const [isAgentOpen, setIsAgentOpen] = useState(false);
+  const { tracks } = useAudio();
+  const hasTracks = useMemo(() => tracks && tracks.length > 0, [tracks]);
+  const [isTerminalOpen, setIsTerminalOpen] = useState(false);
   const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
 
   return (
     <div className={styles.container}>
       {/* Left (Track Info) Toggle Button */}
       <button
-        className={`${styles.leftToggleButton} ${
-          isTrackInfoOpen ? styles.leftToggleButtonOpen : ''
-        }`}
+        className={`${styles.leftToggleButton} ${isTrackInfoOpen ? styles.leftToggleButtonOpen : ''
+          }`}
         onClick={() => setIsTrackInfoOpen(!isTrackInfoOpen)}
         title={isTrackInfoOpen ? 'Close Track Info' : 'Open Track Info'}
       >
         {isTrackInfoOpen ? '←' : '→'}
       </button>
 
-      {/* Right (Agent) Toggle Button */}
+      {/* Right (Terminal) Toggle Button */}
       <button
-        className={`${styles.cliToggleButton} ${isAgentOpen ? styles.cliToggleButtonOpen : ''}`}
-        onClick={() => setIsAgentOpen(!isAgentOpen)}
-        title={isAgentOpen ? 'Close Agent' : 'Open Agent'}
+        className={`${styles.cliToggleButton} ${isTerminalOpen ? styles.cliToggleButtonOpen : ''}`}
+        onClick={() => setIsTerminalOpen(!isTerminalOpen)}
+        title={isTerminalOpen ? 'Close Terminal' : 'Open Terminal'}
       >
-        {isAgentOpen ? '→' : '←'}
+        {isTerminalOpen ? '→' : '←'}
       </button>
 
       <div
-        className={`${styles.leftPanel} ${
-          !isTrackInfoOpen ? styles.leftPanelCollapsed : ''
-        }`}
+        className={`${styles.leftPanel} ${!isTrackInfoOpen ? styles.leftPanelCollapsed : ''
+          }`}
       >
         <TrackInfoSidebar />
       </div>
@@ -75,9 +73,9 @@ export function DawPage() {
         )}
       </div>
       <div
-        className={`${styles.cliPanel} ${!isAgentOpen ? styles.cliPanelCollapsed : ''}`}
+        className={`${styles.cliPanel} ${!isTerminalOpen ? styles.cliPanelCollapsed : ''}`}
       >
-        <AgentInterface />
+        <Terminal />
       </div>
     </div>
   );

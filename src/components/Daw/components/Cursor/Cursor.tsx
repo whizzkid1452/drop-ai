@@ -1,58 +1,42 @@
 import { useRef, useEffect } from 'react';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { AudioEngine } from '@/logics/audio/audioEngine';
+import { AudioService } from '@/core/audio/AudioService';
+import { useAudio } from '@/presentation/hooks/useAudio';
 import * as styles from './Cursor.css';
 
 export const Cursor = () => {
   const cursorRef = useRef<HTMLDivElement>(null);
   const rAF = useRef<number>(0);
+  const { isPlaying, currentTime } = useAudio();
+  const pixelsPerSecond = usePlaybackStore(state => state.pixelsPerSecond);
 
   useEffect(() => {
     const updatePosition = (time: number) => {
       if (cursorRef.current) {
-        const pps = usePlaybackStore.getState().pixelsPerSecond;
-        const x = time * pps;
+        const x = time * pixelsPerSecond;
         cursorRef.current.style.transform = `translateX(${x}px)`;
       }
     };
 
     const animate = () => {
-      const time = AudioEngine.getInstance().getSeconds();
+      const time = AudioService.getInstance().getCurrentTime();
       updatePosition(time);
       rAF.current = requestAnimationFrame(animate);
     };
 
-    const unsubscribe = usePlaybackStore.subscribe(
-      ({ isPlaying, currentTime, pixelsPerSecond }, previous) => {
-        // Handle Play/Pause State
-        if (isPlaying !== previous?.isPlaying) {
-          if (isPlaying) {
-            /** 재생 직후 시점 */
-            rAF.current = requestAnimationFrame(animate);
-            return;
-          } else {
-            /** 종료 직후 시점 */
-            cancelAnimationFrame(rAF.current);
-            // Sync one last time when pausing to ensure accuracy
-            updatePosition(AudioEngine.getInstance().getSeconds());
-          }
-        }
-
-        /** 수동 제어 시점(정지 시 또는 줌 변경 시) */
-        if (
-          (!isPlaying && currentTime !== previous?.currentTime) ||
-          pixelsPerSecond !== previous?.pixelsPerSecond
-        ) {
-          updatePosition(currentTime);
-        }
-      }
-    );
+    // Start/stop animation based on isPlaying state
+    if (isPlaying) {
+      rAF.current = requestAnimationFrame(animate);
+    } else {
+      cancelAnimationFrame(rAF.current);
+      // Update to current position when not playing
+      updatePosition(currentTime);
+    }
 
     return () => {
-      unsubscribe();
       cancelAnimationFrame(rAF.current);
     };
-  }, []);
+  }, [isPlaying, currentTime, pixelsPerSecond]);
 
   return <div ref={cursorRef} className={styles.cursor} />;
 };

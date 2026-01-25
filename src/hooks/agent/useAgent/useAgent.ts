@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import type { Message, AgentStatus } from '@/types/agent';
 import { useWebLLM } from '@/hooks/agent/useWebLLM';
 import { useTrackStore } from '@/stores/useTrackStore';
-import { useAudioEngineHandleWithUi } from '@/hooks/agent/useAudioEngineHandleWithUi';
+import { useAudioCommand } from '@/logics/audio';
 import { handleAIResponse } from '@/hooks/agent/useAgent/utils/aiResponseHandler';
 import {
   createUserMessage,
@@ -14,10 +14,22 @@ export function useAgent() {
   const [status, setStatus] = useState<AgentStatus>('idle');
 
   const { engine } = useWebLLM();
-  const trackCount = useTrackStore(
-    state => Array.from(state.tracks.values()).length
+  const trackMap = useTrackStore(state => state.tracks);
+
+  const tracks = useMemo(
+    () =>
+      Array.from(trackMap.values()).map((track, index) => ({
+        id: track.id,
+        index,
+        regions: track.regions.map(r => ({
+          id: r.id,
+          startTime: r.startTime,
+          endTime: r.endTime,
+        })),
+      })),
+    [trackMap]
   );
-  const { handleAudioCommand } = useAudioEngineHandleWithUi();
+  const { execute } = useAudioCommand();
 
   const addMessage = useCallback((message: Message) => {
     setMessages(prev => [...prev, message]);
@@ -50,9 +62,9 @@ export function useAgent() {
     // AI 응답 처리
     const { message, status: newStatus } = await handleAIResponse({
       engine,
-      trackCount,
+      tracks,
       userInput: trimmedContent,
-      handleAudioCommand,
+      execute,
     });
 
     updateMessage(assistantMsg.id, message);

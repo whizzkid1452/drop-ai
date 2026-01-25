@@ -12,6 +12,7 @@ export interface Region {
   endTime: number;
   /** @description 오디오 파일 내에서의 시작 위치 (초) */
   sourceStartTime: number;
+  duration?: number;
   audioFile: AudioFile;
   /** @note 추후 중첩 상태가 발생할 수 있기 때문에 배열로 관리 */
   status: Array<RegionStatus>;
