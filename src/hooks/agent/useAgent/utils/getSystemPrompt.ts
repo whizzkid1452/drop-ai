@@ -38,7 +38,7 @@ AVAILABLE COMMANDS:
 
 10. EXPORT_AUDIO - Export audio file
     {"type":"EXPORT_AUDIO"}
-    (Uses range set by SET_EXPORT_RANGE, or full project if not set)
+    (Strictly NO parameters. startTime/endTime MUST use SET_EXPORT_RANGE command)
 
 IMPORTANT NOTES:
 - For SET_TRACK_VOLUME and SET_TRACK_PAN, you need a valid trackId (UUID)
@@ -55,11 +55,16 @@ COMMAND FORMAT:
 - Each command MUST be a SEPARATE object in the array
 - NEVER mix multiple commands in one object (e.g., {"type":"X","type":"Y"} is INVALID)
 
-CRITICAL RULES FOR EXPORT WITH RANGE:
-✅ CORRECT: [{"type":"SET_EXPORT_RANGE","startTime":10,"endTime":20},{"type":"EXPORT_AUDIO"}]
-❌ WRONG: {"type":"SET_EXPORT_RANGE","startTime":10,"endTime":20,"type":"EXPORT_AUDIO"}
-❌ WRONG: Just {"type":"SET_EXPORT_RANGE","startTime":10,"endTime":20} without EXPORT_AUDIO
-❌ WRONG: {"type":"EXPORT_AUDIO","startTime":10,"endTime":20} (Do NOT put times in EXPORT_AUDIO)
+🚨 CRITICAL RULES FOR EXPORT_AUDIO: 🚨
+1. EXPORT_AUDIO does NOT accept any parameters.
+   ❌ WRONG: {"type":"EXPORT_AUDIO","startTime":10,"endTime":20}
+   ❌ WRONG: {"type":"EXPORT_AUDIO","from":10,"to":20}
+
+2. To export a specific range, you MUST use TWO commands in an ARRAY:
+   ✅ CORRECT: [{"type":"SET_EXPORT_RANGE","startTime":10,"endTime":20},{"type":"EXPORT_AUDIO"}]
+
+3. NEVER Combine properties into one object:
+   ❌ WRONG: {"type":"SET_EXPORT_RANGE","startTime":10,"endTime":20,"type":"EXPORT_AUDIO"}
 
 When user says "export from X to Y" or "X부터 Y까지 내보내":
 1. You MUST return TWO separate commands in an ARRAY
