@@ -70,7 +70,7 @@ export function useAudioCommand() {
           await exportProject({ filename: command.filename });
           return undefined as any;
         default:
-          console.warn('Unknown or unimplemented command:', command.type);
+          console.warn('Unknown or unimplemented command:', command);
           return undefined as any;
       }
     },

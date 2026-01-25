@@ -3,15 +3,15 @@ import { getSystemPrompt } from './getSystemPrompt';
 
 export async function queryToLLM({
   engine,
-  trackCount,
+  tracks,
   userInput,
 }: {
   /** @todo engine 타입 추가 필요 */
   engine: any;
-  trackCount: number;
+  tracks: { id: string; index: number }[];
   userInput: string;
 }) {
-  const systemPrompt = getSystemPrompt({ trackCount });
+  const systemPrompt = getSystemPrompt({ tracks });
 
   try {
     const completion = await engine.chat.completions.create({

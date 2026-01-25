@@ -7,8 +7,6 @@ export const AudioCommandType = {
   SET_TRACK_VOLUME: 'SET_TRACK_VOLUME',
   SET_TRACK_PAN: 'SET_TRACK_PAN',
   LOAD_REGION: 'LOAD_REGION',
-  UNLOAD_REGION: 'UNLOAD_REGION',
-  GET_TRACK_INFO: 'GET_TRACK_INFO',
   SET_CURRENT_TIME: 'SET_CURRENT_TIME',
   SET_EXPORT_RANGE: 'SET_EXPORT_RANGE',
   CLEAR_EXPORT_RANGE: 'CLEAR_EXPORT_RANGE',
@@ -57,14 +55,6 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
     startTime: z.number().min(0, 'Start time must be >= 0'),
     startOffset: z.number().min(0, 'Start offset must be >= 0').optional(),
     duration: z.number().min(0, 'Duration must be >= 0').optional(),
-  }),
-  z.object({
-    type: z.literal(AudioCommandType.UNLOAD_REGION),
-    trackId: z.uuid('Invalid track ID format'),
-    regionId: z.uuid('Invalid region ID format'),
-  }),
-  z.object({
-    type: z.literal(AudioCommandType.GET_TRACK_INFO),
   }),
   z.object({
     type: z.literal(AudioCommandType.SET_CURRENT_TIME),
@@ -126,21 +116,33 @@ export function parseAudioCommandString({
       }
 
       const validatedCommands: AudioCommand[] = [];
+      const validTypes = Object.values(AudioCommandType);
+
       for (const item of parsed) {
+        // 1. Filter out unknown command types (Hallucinations)
+        if (!validTypes.includes(item.type)) {
+          console.warn(`[parseAudioCommandString] Filtered out unknown command type: ${item.type}`);
+          continue;
+        }
+
+        // 2. Validate parameters for known types
         const validated = AudioCommandSchema.safeParse(item);
         if (!validated.success) {
           const errorMsg = validated.error.issues
             .map((e: any) => e.message)
             .join(', ');
-          return {
-            commands: null,
-            error: `Invalid command in array: ${errorMsg}`,
-          };
+          console.warn(`[parseAudioCommandString] Skipped invalid command (${item.type}): ${errorMsg}`);
+          continue;
         }
         validatedCommands.push(validated.data);
       }
 
-      return { commands: validatedCommands };
+      // If we found at least one valid command, return it even if others failed
+      if (validatedCommands.length > 0) {
+        return { commands: validatedCommands };
+      }
+
+      return { commands: null, error: 'No valid commands found in array' };
     } catch (err) {
       return {
         commands: null,
