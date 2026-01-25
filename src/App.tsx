@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter } from 'react-router-dom';
+import { useErrorBoundary } from 'react-error-boundary';
 import { DefaultLayout } from '@/components/Layouts/DefaultLayout';
 import { AppRouter } from './router/AppRouter';
 import { AudioService } from '@/core/audio/AudioService';
@@ -8,6 +9,7 @@ import { Session } from '@/core/session/Session';
 
 function App() {
   const [isAudioEngineReady, setIsAudioEngineReady] = useState(false);
+  const { showBoundary } = useErrorBoundary();
 
   // AudioEngine 초기화 (앱 시작 시 한 번만)
   // AudioService 초기화 (앱 시작 시 한 번만)
@@ -23,9 +25,9 @@ function App() {
       setIsAudioEngineReady(true);
     } catch (error) {
       console.error('[App] Failed to initialize AudioService:', error);
-      setIsAudioEngineReady(true);
+      showBoundary(error);
     }
-  }, []); // 빈 배열: 마운트 시 한 번만 실행
+  }, [showBoundary]); // 빈 배열: 마운트 시 한 번만 실행
 
   // AudioEngine이 초기화될 때까지 대기
   if (!isAudioEngineReady) {
