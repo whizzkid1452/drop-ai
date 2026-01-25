@@ -4,6 +4,7 @@ import { AudioCommandType } from '@/types/audioCommand.schema';
 import type { AudioCommand } from '@/types/audioCommand.schema';
 import type { ExecuteResult } from './audioEngine.types';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
+import { useTrackStore } from '@/stores/useTrackStore';
 import { useProjectExport } from '@/logics/audio/useProjectExport';
 
 /**
@@ -17,6 +18,10 @@ import { useProjectExport } from '@/logics/audio/useProjectExport';
  */
 export function useAudioCommand() {
   const setExportRange = usePlaybackStore(state => state.setExportRange);
+  const setIsPlaying = usePlaybackStore(state => state.setIsPlaying);
+  const setCurrentTime = usePlaybackStore(state => state.setCurrentTime);
+  const updateTrack = useTrackStore(state => state.updateTrack);
+
   const { exportProject } = useProjectExport();
 
   /**
@@ -32,21 +37,33 @@ export function useAudioCommand() {
       switch (command.type) {
         case AudioCommandType.PLAY:
           await service.play();
+          setIsPlaying(true);
           return undefined as any;
         case AudioCommandType.PAUSE:
           service.pause();
+          setIsPlaying(false);
           return undefined as any;
         case AudioCommandType.STOP:
           service.stop();
+          setIsPlaying(false);
           return undefined as any;
         case AudioCommandType.SET_CURRENT_TIME:
           service.setTime(command.time);
+          setCurrentTime(command.time);
           return undefined as any;
         case AudioCommandType.SET_TRACK_VOLUME:
           service.setTrackVolume(command.trackId, command.volume);
+          updateTrack({
+            trackId: command.trackId,
+            updater: track => ({ ...track, volume: command.volume }),
+          });
           return undefined as any;
         case AudioCommandType.SET_TRACK_PAN:
           service.setTrackPan(command.trackId, command.pan);
+          updateTrack({
+            trackId: command.trackId,
+            updater: track => ({ ...track, pan: command.pan }),
+          });
           return undefined as any;
         case AudioCommandType.LOAD_REGION:
           await service.addRegion(command.trackId, {
@@ -74,7 +91,7 @@ export function useAudioCommand() {
           return undefined as any;
       }
     },
-    [setExportRange, exportProject]
+    [setExportRange, exportProject, setIsPlaying, setCurrentTime, updateTrack]
   );
 
   return { execute };
