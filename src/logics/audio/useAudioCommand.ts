@@ -1,20 +1,15 @@
 import { useCallback } from 'react';
 import { AudioService } from '@/core/audio/AudioService';
-import { AudioCommandType } from '@/types/audioCommand.schema';
-import type { AudioCommand } from '@/types/audioCommand.schema';
-import type { ExecuteResult } from './audioEngine.types';
+import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import { useTrackStore } from '@/stores/useTrackStore';
 import { useProjectExport } from '@/logics/audio/useProjectExport';
 
 /**
- * AudioEngine 명령을 실행하는 React Hook
+ * Audio Command Executor Hook
  * 
- * 역할:
- * - AudioEngine 인스턴스에 접근하여 명령 실행
- * - UI 행위(다운로드, alert 등)를 포함하지 않는 순수 래퍼
- * 
- * @returns { execute } - 명령 실행 함수
+ * - Bridges the gap between AI commands (AudioCommand) and the core AudioService.
+ * - Manages UI updates (Stores) alongside AudioService actions.
  */
 export function useAudioCommand() {
   const setExportRange = usePlaybackStore(state => state.setExportRange);
@@ -25,83 +20,96 @@ export function useAudioCommand() {
   const { exportProject } = useProjectExport();
 
   /**
-   * 오디오 명령 실행
+   * Execute an AudioCommand
    * 
-   * @param command - 실행할 오디오 명령
-   * @returns 명령 실행 결과
+   * @param command - The command to execute
    */
   const execute = useCallback(
-    async <T extends AudioCommand>(command: T): Promise<ExecuteResult<T>> => {
+    async (command: AudioCommand): Promise<void> => {
       const service = AudioService.getInstance();
 
-      switch (command.type) {
-        case AudioCommandType.PLAY:
-          await service.play();
-          setIsPlaying(true);
-          return undefined as any;
-        case AudioCommandType.PAUSE:
-          service.pause();
-          setIsPlaying(false);
-          return undefined as any;
-        case AudioCommandType.STOP:
-          service.stop();
-          setIsPlaying(false);
-          return undefined as any;
-        case AudioCommandType.SET_CURRENT_TIME:
-          service.setTime(command.time);
-          setCurrentTime(command.time);
-          return undefined as any;
-        case AudioCommandType.SET_TRACK_VOLUME:
-          service.setTrackVolume(command.trackId, command.volume);
-          updateTrack({
-            trackId: command.trackId,
-            updater: track => ({ ...track, volume: command.volume }),
-          });
-          return undefined as any;
-        case AudioCommandType.SET_TRACK_PAN:
-          service.setTrackPan(command.trackId, command.pan);
-          updateTrack({
-            trackId: command.trackId,
-            updater: track => ({ ...track, pan: command.pan }),
-          });
-          return undefined as any;
-        case AudioCommandType.LOAD_REGION:
-          await service.addRegion(command.trackId, {
-            id: command.regionId,
-            url: command.url,
-            startTime: command.startTime,
-            sourceStartTime: command.startOffset ?? 0,
-            duration: command.duration,
-            // AudioFile not provided in command, service handles undefined
-          });
-          return undefined as any;
-        case AudioCommandType.UNLOAD_REGION:
-          // Backend execution (delegating to AudioEngine's execute logic)
-          await (service as any).execute(command);
+      try {
+        switch (command.type) {
+          case AudioCommandType.PLAY:
+            await service.play();
+            setIsPlaying(true);
+            break;
 
-          // Frontend Store Update (Remove region from UI)
-          updateTrack({
-            trackId: command.trackId,
-            updater: track => ({
-              ...track,
-              regions: track.regions.filter(r => r.id !== command.regionId),
-            }),
-          });
-          return undefined as any;
-        case AudioCommandType.SET_EXPORT_RANGE:
-          // 🔧 Promise를 반환하여 다음 명령(EXPORT_AUDIO)이 확실히 대기하도록 보장
-          await Promise.resolve(setExportRange(command.startTime, command.endTime));
-          return undefined as any;
-        case AudioCommandType.CLEAR_EXPORT_RANGE:
-          await Promise.resolve(setExportRange(null, null));
-          return undefined as any;
-        case AudioCommandType.EXPORT_AUDIO:
-          // Note: exportProject uses range from store if not provided
-          await exportProject({ filename: command.filename });
-          return undefined as any;
-        default:
-          console.warn('Unknown or unimplemented command:', command);
-          return undefined as any;
+          case AudioCommandType.PAUSE:
+            service.pause();
+            setIsPlaying(false);
+            break;
+
+          case AudioCommandType.STOP:
+            service.stop();
+            setIsPlaying(false);
+            break;
+
+          case AudioCommandType.SET_CURRENT_TIME:
+            service.setTime(command.time);
+            setCurrentTime(command.time);
+            break;
+
+          case AudioCommandType.SET_TRACK_VOLUME:
+            service.setTrackVolume(command.trackId, command.volume);
+            updateTrack({
+              trackId: command.trackId,
+              updater: track => ({ ...track, volume: command.volume }),
+            });
+            break;
+
+          case AudioCommandType.SET_TRACK_PAN:
+            service.setTrackPan(command.trackId, command.pan);
+            updateTrack({
+              trackId: command.trackId,
+              updater: track => ({ ...track, pan: command.pan }),
+            });
+            break;
+
+          case AudioCommandType.LOAD_REGION:
+            await service.addRegion(command.trackId, {
+              id: command.regionId,
+              url: command.url,
+              startTime: command.startTime,
+              sourceStartTime: command.startOffset ?? 0,
+              duration: command.duration,
+            });
+            break;
+
+          case AudioCommandType.UNLOAD_REGION:
+            // Correctly calling AudioService method
+            service.removeRegion(command.trackId, command.regionId);
+
+            // Update Frontend Store
+            updateTrack({
+              trackId: command.trackId,
+              updater: track => ({
+                ...track,
+                regions: track.regions.filter(r => r.id !== command.regionId),
+              }),
+            });
+            break;
+
+          case AudioCommandType.SET_EXPORT_RANGE:
+            // Handled via Store only (AudioService doesn't manage export range state intentionally)
+            setExportRange(command.startTime, command.endTime);
+            break;
+
+          case AudioCommandType.CLEAR_EXPORT_RANGE:
+            setExportRange(null, null);
+            break;
+
+          case AudioCommandType.EXPORT_AUDIO:
+            // Note: exportProject uses range from store if not provided
+            await exportProject({ filename: command.filename });
+            break;
+
+          default:
+            console.warn('[useAudioCommand] Unknown command:', command);
+        }
+      } catch (error) {
+        console.error('[useAudioCommand] Execution failed:', error);
+        throw error;
       }
     },
     [setExportRange, exportProject, setIsPlaying, setCurrentTime, updateTrack]
