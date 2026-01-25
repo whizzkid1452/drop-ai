@@ -75,6 +75,19 @@ export function useAudioCommand() {
             // AudioFile not provided in command, service handles undefined
           });
           return undefined as any;
+        case AudioCommandType.UNLOAD_REGION:
+          // Backend execution (delegating to AudioEngine's execute logic)
+          await (service as any).execute(command);
+
+          // Frontend Store Update (Remove region from UI)
+          updateTrack({
+            trackId: command.trackId,
+            updater: track => ({
+              ...track,
+              regions: track.regions.filter(r => r.id !== command.regionId),
+            }),
+          });
+          return undefined as any;
         case AudioCommandType.SET_EXPORT_RANGE:
           // 🔧 Promise를 반환하여 다음 명령(EXPORT_AUDIO)이 확실히 대기하도록 보장
           await Promise.resolve(setExportRange(command.startTime, command.endTime));

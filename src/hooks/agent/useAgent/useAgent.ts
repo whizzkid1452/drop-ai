@@ -21,6 +21,11 @@ export function useAgent() {
       Array.from(trackMap.values()).map((track, index) => ({
         id: track.id,
         index,
+        regions: track.regions.map(r => ({
+          id: r.id,
+          startTime: r.startTime,
+          endTime: r.endTime,
+        })),
       })),
     [trackMap]
   );

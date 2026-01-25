@@ -8,7 +8,11 @@ export async function queryToLLM({
 }: {
   /** @todo engine 타입 추가 필요 */
   engine: any;
-  tracks: { id: string; index: number }[];
+  tracks: {
+    id: string;
+    index: number;
+    regions: { id: string; startTime: number; endTime: number }[];
+  }[];
   userInput: string;
 }) {
   const systemPrompt = getSystemPrompt({ tracks });

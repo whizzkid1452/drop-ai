@@ -8,7 +8,11 @@ export interface AIResponseHandlerDependencies {
   execute: (command: AudioCommand) => Promise<any>;
   /** @todo engine 타입 추가 필요 */
   engine: any;
-  tracks: { id: string; index: number }[];
+  tracks: {
+    id: string;
+    index: number;
+    regions: { id: string; startTime: number; endTime: number }[];
+  }[];
   userInput: string;
 }
 
