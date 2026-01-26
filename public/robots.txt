@@ -1,0 +1,22 @@
+User-agent: *
+Allow: /
+
+# AI training bots - 기본적으로 허용하되, 필요시 특정 경로 차단 가능
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+# 민감한 API 엔드포인트나 사용자 데이터 경로가 있다면 여기에 추가
+# Disallow: /api/
+# Disallow: /user/
