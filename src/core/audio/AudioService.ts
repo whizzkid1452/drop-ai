@@ -1,4 +1,6 @@
 import * as Tone from 'tone';
+import { createStore } from 'zustand/vanilla';
+import type { AudioSnapshot } from '@/types/audioTypes';
 import { Session } from '../session/Session';
 import { Track } from '../track/Track';
 import { Region } from '../region/Region';
@@ -7,6 +9,10 @@ import {
     configurePlayerLoop,
     startPlayer
 } from '../../logics/audio/playerConfig';
+import { RegionRenderer } from '@/logics/audio/regionRenderer';
+import { loadAndDecodeAudioBuffer } from '@/logics/audio/loadAndDecodeAudioBuffer';
+import { AudioEngineError, AudioEngineErrorCode } from '@/logics/audio/audioEngine.errors';
+import { audioBufferToWav } from '@/components/Daw/components/ExportButton/utils/wavConverter';
 
 /**
  * AudioService (Core + Engine Integration)
@@ -17,7 +23,17 @@ import {
  */
 export class AudioService {
     private static instance: AudioService;
-    private listeners: Set<() => void> = new Set();
+    
+    // ✅ Zustand Vanilla Store for Logic-State Binding
+    public readonly store = createStore<AudioSnapshot>(() => ({
+        isPlaying: false,
+        currentTime: 0,
+        tempo: 120,
+        pixelsPerSecond: 20,
+        exportStartTime: null,
+        exportEndTime: null,
+        tracks: []
+    }));
 
     // Tone.js Objects
     // Key: TrackId
@@ -44,28 +60,17 @@ export class AudioService {
         return AudioService.instance;
     }
 
-    // --- Event System (React Standard) ---
-
-    private currentSnapshot: any = null;
-
-    private emitChange() {
-        this.currentSnapshot = null; // Invalidate cache
-        this.listeners.forEach(listener => listener());
-    }
-
-    public subscribe = (listener: () => void) => {
-        this.listeners.add(listener);
-        return () => this.listeners.delete(listener);
-    }
-
-    public getSnapshot = () => {
-        if (!this.currentSnapshot) {
-            console.log('[AudioService] Creating new snapshot', {
-                trackCount: this.session.tracks.length
-            });
-            this.currentSnapshot = {
-                isPlaying: Tone.Transport.state === 'started',
-                currentTime: Tone.Transport.seconds,
+    /**
+     * Sync Domain State (Session/Tracks) to Zustand Store
+     */
+    private syncStore(partialState?: Partial<AudioSnapshot>) {
+        if (partialState) {
+            this.store.setState(partialState);
+        } else {
+            // Full sync of tracks
+            this.store.setState({
+                isPlaying: Tone.getTransport().state === 'started',
+                currentTime: Tone.getTransport().seconds,
                 tracks: this.session.tracks.map(t => ({
                     id: t.id,
                     name: t.name,
@@ -73,19 +78,40 @@ export class AudioService {
                     pan: t.pan,
                     isMuted: t.isMuted,
                     isSoloed: t.isSoloed,
+                    status: [] as any[],
                     regions: t.regions.map(r => ({
                         id: r.id,
                         startTime: r.startTime,
-                        endTime: r.endTime, // Derived from getter
+                        endTime: r.endTime, 
                         sourceStartTime: r.sourceStartTime,
                         duration: r.duration,
                         audioFile: r.audioFile,
-                        status: [] // Default status for now
+                        status: [] as any[]
                     }))
                 }))
-            };
+            });
         }
-        return this.currentSnapshot;
+    }
+
+    // --- State Properties (Directly mapped to Store) ---
+    get exportStartTime() { return this.store.getState().exportStartTime; }
+    get exportEndTime() { return this.store.getState().exportEndTime; }
+    get tempo() { return this.store.getState().tempo; }
+    get pixelsPerSecond() { return this.store.getState().pixelsPerSecond; }
+
+    // --- State Setters ---
+
+    setExportRange(startTime: number | null, endTime: number | null) {
+        this.store.setState({ exportStartTime: startTime, exportEndTime: endTime });
+    }
+
+    setTempo(tempo: number) {
+        Tone.Transport.bpm.value = tempo;
+        this.store.setState({ tempo });
+    }
+
+    setPixelsPerSecond(pixels: number) {
+        this.store.setState({ pixelsPerSecond: pixels });
     }
 
     // --- Transport Control ---
@@ -95,22 +121,22 @@ export class AudioService {
             await Tone.start();
         }
         await Tone.getTransport().start();
-        this.emitChange();
+        this.store.setState({ isPlaying: true });
     }
 
     pause(): void {
         Tone.getTransport().pause();
-        this.emitChange();
+        this.store.setState({ isPlaying: false });
     }
 
     stop(): void {
         Tone.getTransport().stop();
-        this.emitChange();
+        this.store.setState({ isPlaying: false, currentTime: 0 });
     }
 
     setTime(time: number): void {
         Tone.getTransport().seconds = time;
-        this.emitChange();
+        this.store.setState({ currentTime: time });
     }
 
     getCurrentTime(): number {
@@ -144,8 +170,8 @@ export class AudioService {
         const volumeInDb = Tone.gainToDb(volume);
         channel.volume.rampTo(volumeInDb, 0.1);
 
-        // 3. Notify UI
-        this.emitChange();
+        // 3. Notify UI (Full Sync needed for track volume change)
+        this.syncStore();
     }
 
     setTrackPan(trackId: string, pan: number): void {
@@ -160,7 +186,7 @@ export class AudioService {
         channel.pan.rampTo(pan, 0.1);
 
         // 3. Notify UI
-        this.emitChange();
+        this.syncStore();
     }
 
     getTrackParams(trackId: string): { volume: number; pan: number } | null {
@@ -240,8 +266,8 @@ export class AudioService {
                     });
 
                     // Notify UI of new track/region
-                    console.log('[AudioService] Calling emitChange after region load');
-                    this.emitChange();
+                    console.log('[AudioService] Calling syncStore after region load');
+                    this.syncStore();
 
                     resolve();
                 },
@@ -273,6 +299,9 @@ export class AudioService {
             player.dispose();
             trackPlayers?.delete(regionId);
         }
+
+        // 3. Notify UI
+        this.syncStore();
     }
 
     async splitRegion(trackId: string, splitTime: number): Promise<void> {
@@ -326,6 +355,143 @@ export class AudioService {
             });
         }
 
-        this.emitChange();
+        this.syncStore();
+    }
+
+    // --- Export ---
+
+    /**
+     * 프로젝트 전체를 오디오 파일로 내보냅니다.
+     * Tone.Offline을 사용하여 정확한 타이밍과 이펙트를 반영합니다.
+     */
+    async exportProject(options?: {
+        tracks?: any[]; // AudioSnapshot track shape
+        range?: { startTime: number; endTime: number };
+    }): Promise<Blob> {
+        const snapshot = this.store.getState();
+        const tracksToExport = options?.tracks ?? snapshot.tracks;
+        
+        // Resolve range: option -> store -> full
+        let exportRange = options?.range;
+        if (!exportRange && snapshot.exportStartTime !== null && snapshot.exportEndTime !== null) {
+            exportRange = {
+                startTime: snapshot.exportStartTime,
+                endTime: snapshot.exportEndTime
+            };
+        }
+
+        if (tracksToExport.length === 0) {
+            throw new AudioEngineError(
+                AudioEngineErrorCode.EXPORT_NO_TRACKS,
+                'No tracks to export'
+            );
+        }
+
+        // 1. Preload Audio Buffers
+        const audioBuffers = await this.preloadAudioBuffers(tracksToExport);
+
+        // 2. Calculate Duration
+        const totalDuration = exportRange
+            ? exportRange.endTime - exportRange.startTime
+            : this.getTotalDuration(tracksToExport);
+
+        if (totalDuration <= 0) {
+            throw new AudioEngineError(
+                AudioEngineErrorCode.EXPORT_ZERO_DURATION,
+                'Export duration must be greater than 0',
+                { totalDuration, range: exportRange }
+            );
+        }
+
+        // 3. Offline Rendering
+        const renderedBuffer = await Tone.Offline(({ transport }) => {
+            tracksToExport.forEach(track => {
+                const channel = new Tone.Channel({
+                    volume: track.volume ? Tone.gainToDb(track.volume) : 0,
+                    pan: track.pan ?? 0,
+                }).toDestination();
+
+                track.regions.forEach((region: any) => {
+                    const buffer = audioBuffers.get(region.audioFile.url);
+                    if (!buffer) return;
+
+                    const baseParams = RegionRenderer.calculateRenderParams(region);
+                    const adjustedParams = RegionRenderer.adjustForExportRange(baseParams, exportRange);
+
+                    if (adjustedParams.duration <= 0) return;
+
+                    const player = new Tone.Player({
+                        url: buffer,
+                        loop: false,
+                        ...PLAYER_CONFIG,
+                    }).connect(channel);
+
+                    configurePlayerLoop(
+                        player,
+                        adjustedParams.startOffset,
+                        adjustedParams.duration
+                    );
+
+                    startPlayer({
+                        player,
+                        syncMode: false,
+                        startTime: adjustedParams.startTime,
+                        startOffset: adjustedParams.startOffset,
+                        duration: adjustedParams.duration,
+                    });
+                });
+            });
+
+            transport.start();
+        }, totalDuration);
+
+        // 4. Convert to WAV
+        const audioBuffer = renderedBuffer.get();
+        if (!audioBuffer) {
+            throw new AudioEngineError(
+                AudioEngineErrorCode.RENDER_FAILED,
+                'Failed to render audio buffer'
+            );
+        }
+
+        return audioBufferToWav(audioBuffer);
+    }
+
+    private async preloadAudioBuffers(tracks: any[]) {
+        const audioBuffers = new Map<string, AudioBuffer>();
+        const context = Tone.getContext();
+      
+        await Promise.all(
+          tracks.flatMap(track =>
+            track.regions.map(async (region: any) => {
+              const audioUrl = region.audioFile.url;
+              if (audioBuffers.has(audioUrl)) return;
+              
+              const audioBuffer = await loadAndDecodeAudioBuffer({
+                audioContext: context,
+                audioUrl,
+              });
+              audioBuffers.set(audioUrl, audioBuffer);
+            })
+          )
+        );
+      
+        return audioBuffers;
+    }
+
+    private getTotalDuration(tracks: any[]): number {
+        let totalDuration = 0;
+      
+        tracks.forEach(track => {
+          track.regions.forEach((region: any) => {
+            const duration = region.audioFile.duration ?? 0;
+            const endPoint = region.startTime + duration;
+            if (endPoint > totalDuration) {
+              totalDuration = endPoint;
+            }
+          });
+        });
+        
+        return totalDuration;
     }
 }

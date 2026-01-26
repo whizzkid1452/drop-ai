@@ -1,18 +1,17 @@
 import { useAudioCommand } from '@/logics/audio';
-import { usePlaybackStore } from '@/stores/usePlaybackStore';
+import { AudioService } from '@/core/audio/AudioService';
+// import { usePlaybackStore } from '@/stores/usePlaybackStore'; // Removed
 // import { useTrackStore } from '@/stores/useTrackStore'; // Deprecated
-import { useAudio } from '@/presentation/hooks/useAudio';
+import { useAudioService } from '@/presentation/hooks/useAudioService';
 import { useEffect, useRef, useState } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
-import { useShallow } from 'zustand/react/shallow';
 import { useErrorBoundary } from 'react-error-boundary';
 import { TrackComponent } from './Track/TrackComponent';
 import * as styles from './TrackList.css';
 import { Cursor } from './Cursor/Cursor';
 
 export function TrackList() {
-  const { tracks } = useAudio();
-  // tracks is already an array from snapshot
+  const tracks = useAudioService(state => state.tracks);
   const trackArray = tracks || [];
 
   const [wavesurferInstances, setWavesurferInstances] = useState<
@@ -21,14 +20,10 @@ export function TrackList() {
 
   const { execute } = useAudioCommand();
   const { showBoundary } = useErrorBoundary();
-  // Note: Manual AudioEngine initialization is now handled by useAudioSync
   const containerRef = useRef<HTMLDivElement>(null);
-  const { pixelsPerSecond, setPixelsPerSecond } = usePlaybackStore(
-    useShallow(state => ({
-      pixelsPerSecond: state.pixelsPerSecond,
-      setPixelsPerSecond: state.setPixelsPerSecond,
-    }))
-  );
+  
+  // 🔧 Use Selector to prevent re-renders when other state changes
+  const pixelsPerSecond = useAudioService(state => state.pixelsPerSecond);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -47,7 +42,8 @@ export function TrackList() {
         // Clamp
         const clamped = Math.max(1, Math.min(1000, newPixelsPerSecond));
 
-        setPixelsPerSecond(clamped);
+        // 🔧 Direct update to AudioService
+        AudioService.getInstance().setPixelsPerSecond(clamped);
 
         wavesurferInstances.forEach(ws => {
           ws.zoom(clamped);
@@ -59,7 +55,7 @@ export function TrackList() {
     return () => {
       container.removeEventListener('wheel', handleWheel);
     };
-  }, [pixelsPerSecond, setPixelsPerSecond, wavesurferInstances]);
+  }, [pixelsPerSecond, wavesurferInstances]);
 
   return (
     <div className={styles.trackList}>

@@ -2,7 +2,7 @@ import { ErrorBoundary, useErrorBoundary, type FallbackProps } from 'react-error
 import { useAudioCommand } from '@/logics/audio';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import * as styles from './PlaybackControls.css';
-import { useAudio } from '@/presentation/hooks/useAudio';
+import { useAudioService } from '@/presentation/hooks/useAudioService';
 import { AudioEngineError, getUserFriendlyMessage } from '@/logics/audio/audioEngine.errors';
 
 function PlaybackErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
@@ -24,7 +24,7 @@ function PlaybackErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
 
 function PlaybackControlsContent() {
   const { execute } = useAudioCommand();
-  const { isPlaying } = useAudio();
+  const isPlaying = useAudioService(state => state.isPlaying);
   const { showBoundary } = useErrorBoundary();
 
   const handlePlay = async () => {
