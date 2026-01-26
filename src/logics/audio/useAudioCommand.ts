@@ -12,6 +12,21 @@ import { downloadBlob } from '@/components/Daw/components/ExportButton/utils/aud
 export function useAudioCommand() {
 
   /**
+   * Get the first track ID from AudioService
+   * If no tracks exist, throws an error
+   */
+  const getFirstTrackId = (): string => {
+    const service = AudioService.getInstance();
+    const tracks = service.store.getState().tracks;
+    
+    if (tracks.length === 0) {
+      throw new Error('No tracks available. Please add an audio file first.');
+    }
+    
+    return tracks[0].id;
+  };
+
+  /**
    * Execute an AudioCommand
    * 
    * @param command - The command to execute
@@ -38,16 +53,21 @@ export function useAudioCommand() {
             service.setTime(command.time);
             break;
 
-          case AudioCommandType.SET_TRACK_VOLUME:
-            service.setTrackVolume(command.trackId, command.volume);
+          case AudioCommandType.SET_TRACK_VOLUME: {
+            const trackId: string = command.trackId ?? getFirstTrackId();
+            service.setTrackVolume(trackId, command.volume);
             break;
+          }
 
-          case AudioCommandType.SET_TRACK_PAN:
-            service.setTrackPan(command.trackId, command.pan);
+          case AudioCommandType.SET_TRACK_PAN: {
+            const trackId: string = command.trackId ?? getFirstTrackId();
+            service.setTrackPan(trackId, command.pan);
             break;
+          }
 
-          case AudioCommandType.LOAD_REGION:
-            await service.addRegion(command.trackId, {
+          case AudioCommandType.LOAD_REGION: {
+            const trackId: string = command.trackId ?? getFirstTrackId();
+            await service.addRegion(trackId, {
               id: command.regionId,
               url: command.url,
               startTime: command.startTime,
@@ -55,10 +75,13 @@ export function useAudioCommand() {
               duration: command.duration,
             });
             break;
+          }
 
-          case AudioCommandType.UNLOAD_REGION:
-            service.removeRegion(command.trackId, command.regionId);
+          case AudioCommandType.UNLOAD_REGION: {
+            const trackId: string = command.trackId ?? getFirstTrackId();
+            service.removeRegion(trackId, command.regionId);
             break;
+          }
 
           case AudioCommandType.SET_EXPORT_RANGE:
             service.setExportRange(command.startTime, command.endTime);

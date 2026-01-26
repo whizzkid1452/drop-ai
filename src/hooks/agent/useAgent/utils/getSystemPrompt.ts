@@ -55,26 +55,30 @@ If a user request requires multiple actions, return MULTIPLE commands in an ARRA
    Format: {"type":"SET_CURRENT_TIME","time":10.5}
 
 5. SET_TRACK_VOLUME
-   Parameters: trackId (UUID string), volume (0.0-1.0)
-   Format: {"type":"SET_TRACK_VOLUME","trackId":"[UUID]","volume":0.8}
+   Parameters: volume (0.0-1.0), trackId (UUID string, optional - defaults to first track)
+   Format: {"type":"SET_TRACK_VOLUME","volume":0.8} or {"type":"SET_TRACK_VOLUME","trackId":"[UUID]","volume":0.8}
    
 6. SET_TRACK_PAN
-   Parameters: trackId (UUID string), pan (-1.0 to 1.0)
-   Format: {"type":"SET_TRACK_PAN","trackId":"[UUID]","pan":-0.5}
+   Parameters: pan (-1.0 to 1.0), trackId (UUID string, optional - defaults to first track)
+   Format: {"type":"SET_TRACK_PAN","pan":-0.5} or {"type":"SET_TRACK_PAN","trackId":"[UUID]","pan":-0.5}
 
-7. UNLOAD_REGION
-   Parameters: trackId (UUID string), regionId (UUID string)
-   Format: {"type":"UNLOAD_REGION","trackId":"[UUID]","regionId":"[UUID]"}
+7. LOAD_REGION
+   Parameters: regionId (UUID string), url (string), startTime (number), trackId (UUID string, optional - defaults to first track), startOffset (number, optional), duration (number, optional)
+   Format: {"type":"LOAD_REGION","regionId":"[UUID]","url":"[URL]","startTime":0} or {"type":"LOAD_REGION","trackId":"[UUID]","regionId":"[UUID]","url":"[URL]","startTime":0}
 
-8. SET_EXPORT_RANGE
+8. UNLOAD_REGION
+   Parameters: regionId (UUID string), trackId (UUID string, optional - defaults to first track)
+   Format: {"type":"UNLOAD_REGION","regionId":"[UUID]"} or {"type":"UNLOAD_REGION","trackId":"[UUID]","regionId":"[UUID]"}
+
+9. SET_EXPORT_RANGE
    Parameters: startTime (number), endTime (number)
    Format: {"type":"SET_EXPORT_RANGE","startTime":5,"endTime":15}
 
-9. CLEAR_EXPORT_RANGE
+10. CLEAR_EXPORT_RANGE
    Parameters: NONE
    Format: {"type":"CLEAR_EXPORT_RANGE"}
 
-10. EXPORT_AUDIO
+11. EXPORT_AUDIO
     Parameters: NONE (filename is optional but rarely used)
     Format: {"type":"EXPORT_AUDIO"}
     ⚠️ CRITICAL: NEVER add time parameters to EXPORT_AUDIO
@@ -128,9 +132,13 @@ User: "export 13-18"
 Assistant: Exporting 13-18 second range.
 [{"type":"SET_EXPORT_RANGE","startTime":13,"endTime":18},{"type":"EXPORT_AUDIO"}]
 
-User: "Set track 1 volume to center (0.5), pan to left (-1), and export 15-19"
-Assistant: Adjusting track 1 and exporting 15-19s.
-[{"type":"SET_TRACK_VOLUME","trackId":"[TRACK_1_ID]","volume":0.5},{"type":"SET_TRACK_PAN","trackId":"[TRACK_1_ID]","pan":-1.0},{"type":"SET_EXPORT_RANGE","startTime":15,"endTime":19},{"type":"EXPORT_AUDIO"}]
+User: "Set volume to center (0.5), pan to left (-1), and export 15-19"
+Assistant: Adjusting track and exporting 15-19s.
+[{"type":"SET_TRACK_VOLUME","volume":0.5},{"type":"SET_TRACK_PAN","pan":-1.0},{"type":"SET_EXPORT_RANGE","startTime":15,"endTime":19},{"type":"EXPORT_AUDIO"}]
+
+User: "Set volume to 0.8"
+Assistant: Setting track volume to 0.8.
+{"type":"SET_TRACK_VOLUME","volume":0.8}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ❌ WRONG PATTERNS (NEVER DO THIS)

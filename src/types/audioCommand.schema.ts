@@ -37,7 +37,7 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal(AudioCommandType.SET_TRACK_VOLUME),
-    trackId: z.string().uuid('Invalid track ID format'),
+    trackId: z.string().uuid('Invalid track ID format').optional(),
     volume: z
       .number()
       .min(0, 'Volume must be >= 0')
@@ -45,12 +45,12 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal(AudioCommandType.SET_TRACK_PAN),
-    trackId: z.uuid('Invalid track ID format'),
+    trackId: z.uuid('Invalid track ID format').optional(),
     pan: z.number().min(-1, 'Pan must be >= -1').max(1, 'Pan must be <= 1'),
   }),
   z.object({
     type: z.literal(AudioCommandType.LOAD_REGION),
-    trackId: z.uuid('Invalid track ID format'),
+    trackId: z.uuid('Invalid track ID format').optional(),
     regionId: z.uuid('Invalid region ID format'),
     url: z.url('Invalid URL format'),
     startTime: z.number().min(0, 'Start time must be >= 0'),
@@ -59,7 +59,7 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal(AudioCommandType.UNLOAD_REGION),
-    trackId: z.uuid('Invalid track ID format'),
+    trackId: z.uuid('Invalid track ID format').optional(),
     regionId: z.uuid('Invalid region ID format'),
   }),
   z.object({
