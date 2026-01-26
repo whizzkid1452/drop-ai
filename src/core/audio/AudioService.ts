@@ -366,7 +366,7 @@ export class AudioService {
     /**
      * 프로젝트 전체를 오디오 파일로 내보냅니다.
      * Tone.Offline을 사용하여 정확한 타이밍과 이펙트를 반영합니다.
-     * 
+     * @todo 추후에 별도 파일로 분리하기(너무 큼)
      */
     async exportProject(options?: {
         tracks?: any[]; // AudioSnapshot track shape
