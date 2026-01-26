@@ -204,7 +204,7 @@ export class AudioService {
             startTime: number;
             sourceStartTime: number;
             duration?: number;
-            audioFile?: any; // To be compatible with old code
+            audioFile?: unknown;
         }
     ): Promise<void> {
         console.log('[AudioService] addRegion called', { trackId, regionData });
@@ -247,7 +247,7 @@ export class AudioService {
                         startTime: regionData.startTime,
                         sourceStartTime: regionData.sourceStartTime,
                         duration: duration,
-                        audioFile: regionData.audioFile,
+                        audioFile: regionData.audioFile as any,
                         status: []
                     });
                     track.addRegion(region);
@@ -369,7 +369,7 @@ export class AudioService {
      * @todo 추후에 별도 파일로 분리하기(너무 큼)
      */
     async exportProject(options?: {
-        tracks?: any[]; // AudioSnapshot track shape
+        tracks?: TrackData[];
         range?: { startTime: number; endTime: number };
     }): Promise<Blob> {
         const snapshot = this.store.getState();
@@ -415,11 +415,14 @@ export class AudioService {
                     pan: track.pan ?? 0,
                 }).toDestination();
 
-                track.regions.forEach((region: any) => {
+                track.regions.forEach((region) => {
+                    if (!region.audioFile) return;
+                    
                     const buffer = audioBuffers.get(region.audioFile.url);
                     if (!buffer) return;
 
-                    const baseParams = RegionRenderer.calculateRenderParams(region);
+                    // region.audioFile이 확인됐으므로 Region으로 타입 단언 가능
+                    const baseParams = RegionRenderer.calculateRenderParams(region as any);
                     const adjustedParams = RegionRenderer.adjustForExportRange(baseParams, exportRange);
 
                     if (adjustedParams.duration <= 0) return;
@@ -461,13 +464,14 @@ export class AudioService {
         return audioBufferToWav(audioBuffer);
     }
 
-    private async preloadAudioBuffers(tracks: any[]) {
+    private async preloadAudioBuffers(tracks: TrackData[]) {
         const audioBuffers = new Map<string, AudioBuffer>();
         const context = Tone.getContext();
       
         await Promise.all(
           tracks.flatMap(track =>
-            track.regions.map(async (region: any) => {
+            track.regions.map(async (region) => {
+              if (!region.audioFile) return;
               const audioUrl = region.audioFile.url;
               if (audioBuffers.has(audioUrl)) return;
               
@@ -483,11 +487,12 @@ export class AudioService {
         return audioBuffers;
     }
 
-    private getTotalDuration(tracks: any[]): number {
+    private getTotalDuration(tracks: TrackData[]): number {
         let totalDuration = 0;
       
         tracks.forEach(track => {
-          track.regions.forEach((region: any) => {
+          track.regions.forEach((region) => {
+            if (!region.audioFile) return;
             const duration = region.audioFile.duration ?? 0;
             const endPoint = region.startTime + duration;
             if (endPoint > totalDuration) {

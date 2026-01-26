@@ -4,8 +4,9 @@ import {
   type InitProgressReport,
 } from '@mlc-ai/web-llm';
 import { useAgentStore } from '@/stores/useAgentStore';
+import type { MLCEngine } from '@/types/webllm.types';
 
-let globalEngine: any = null;
+let globalEngine: MLCEngine | null = null;
 let isInitializing = false;
 
 export function useWebLLM() {

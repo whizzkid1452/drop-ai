@@ -1,4 +1,4 @@
-import type { Track } from '@/types/track';
+import type { TrackData } from '@/core/track/Track';
 import type WaveSurfer from 'wavesurfer.js';
 import { memo } from 'react';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
@@ -16,7 +16,7 @@ export const TrackComponent = memo(({
   onPanChange,
 }: {
   mediaElement: HTMLMediaElement | null;
-  track: Track;
+  track: TrackData;
   pixelsPerSecond: number;
   onReady: (trackId: string, ws: WaveSurfer) => void;
   onVolumeChange: (trackId: string, volume: number) => void;

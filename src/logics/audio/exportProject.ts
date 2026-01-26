@@ -128,7 +128,7 @@ async function renderBuffer({
   audioBuffers: Map<string, AudioBuffer>;
   range?: { startTime: number; endTime: number };
 }) {
-  return await Tone.Offline(({ transport }: { transport: any }) => {
+  return await Tone.Offline(({ transport }: { transport: ReturnType<typeof Tone.getTransport> }) => {
     tracks.forEach(track => {
       // Note: renderBuffer는 별도의 AudioEngine 인스턴스가 필요 없음
       // Export 시에는 Store에서 가져온 Track의 volume/pan 값을 사용

@@ -1,10 +1,10 @@
-import type { Region } from '@/types/track';
+import type { RegionData } from '@/core/region/Region';
 import WavesurferPlayer from '@wavesurfer/react';
 import type WaveSurfer from 'wavesurfer.js';
 import * as styles from './RegionComponent.css';
 
 interface RegionComponentProps {
-    region: Region;
+    region: RegionData;
     pixelsPerSecond: number;
     onReady: (ws: WaveSurfer) => void;
 }
@@ -19,6 +19,10 @@ export const RegionComponent = ({
     // Calculate visual offset for sourceStartTime
     // If the region starts at 5s in the file, we pull the waveform left by 5s worth of pixels
     const visualOffset = -(region.sourceStartTime * pixelsPerSecond);
+
+    if (!region.audioFile) {
+        return null;
+    }
 
     return (
         <div

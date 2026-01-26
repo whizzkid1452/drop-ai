@@ -135,7 +135,7 @@ export function parseAudioCommandString({
         const validated = AudioCommandSchema.safeParse(item);
         if (!validated.success) {
           const errorMsg = validated.error.issues
-            .map((e: any) => e.message)
+            .map((e) => e.message)
             .join(', ');
           console.warn(`[parseAudioCommandString] Skipped invalid command (${item.type}): ${errorMsg}`);
           continue;
@@ -210,7 +210,7 @@ export function parseAudioCommandString({
 
     if (!validated.success) {
       const errorMsg = validated.error.issues
-        .map((e: any) => e.message)
+        .map((e) => e.message)
         .join(', ');
       return {
         commands: null,
