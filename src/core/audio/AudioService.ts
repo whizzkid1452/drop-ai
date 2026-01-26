@@ -204,7 +204,7 @@ export class AudioService {
             startTime: number;
             sourceStartTime: number;
             duration?: number;
-            audioFile?: unknown;
+            audioFile?: { url: string; duration?: number };
         }
     ): Promise<void> {
         console.log('[AudioService] addRegion called', { trackId, regionData });
@@ -247,7 +247,7 @@ export class AudioService {
                         startTime: regionData.startTime,
                         sourceStartTime: regionData.sourceStartTime,
                         duration: duration,
-                        audioFile: regionData.audioFile as any,
+                        audioFile: regionData.audioFile,
                         status: []
                     });
                     track.addRegion(region);
@@ -421,8 +421,8 @@ export class AudioService {
                     const buffer = audioBuffers.get(region.audioFile.url);
                     if (!buffer) return;
 
-                    // region.audioFile이 확인됐으므로 Region으로 타입 단언 가능
-                    const baseParams = RegionRenderer.calculateRenderParams(region as any);
+                    // region.audioFile이 확인됐으므로 렌더링 파라미터 계산
+                    const baseParams = RegionRenderer.calculateRenderParams(region);
                     const adjustedParams = RegionRenderer.adjustForExportRange(baseParams, exportRange);
 
                     if (adjustedParams.duration <= 0) return;
