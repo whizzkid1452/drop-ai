@@ -51,8 +51,8 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal(AudioCommandType.LOAD_REGION),
     trackId: z.uuid('Invalid track ID format').optional(),
-    regionId: z.uuid('Invalid region ID format'),
-    url: z.url('Invalid URL format'),
+    regionId: z.uuid('Invalid region ID format').optional(),
+    url: z.url('Invalid URL format').optional(),
     startTime: z.number().min(0, 'Start time must be >= 0'),
     startOffset: z.number().min(0, 'Start offset must be >= 0').optional(),
     duration: z.number().min(0, 'Duration must be >= 0').optional(),
@@ -60,7 +60,7 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal(AudioCommandType.UNLOAD_REGION),
     trackId: z.uuid('Invalid track ID format').optional(),
-    regionId: z.uuid('Invalid region ID format'),
+    regionId: z.uuid('Invalid region ID format').optional(),
   }),
   z.object({
     type: z.literal(AudioCommandType.SET_CURRENT_TIME),

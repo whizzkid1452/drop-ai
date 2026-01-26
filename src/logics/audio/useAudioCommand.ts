@@ -27,6 +27,53 @@ export function useAudioCommand() {
   };
 
   /**
+   * Get the first region ID from the first track
+   * If no regions exist, throws an error
+   */
+  const getFirstRegionId = (trackId: string): string => {
+    const service = AudioService.getInstance();
+    const tracks = service.store.getState().tracks;
+    const track = tracks.find(t => t.id === trackId);
+    
+    if (!track) {
+      throw new Error(`Track not found: ${trackId}`);
+    }
+    
+    if (track.regions.length === 0) {
+      throw new Error(`No regions available in track ${trackId}. Please add a region first.`);
+    }
+    
+    return track.regions[0].id;
+  };
+
+  /**
+   * Get the URL from the first region of the first track
+   * If no regions exist or no URL is available, throws an error
+   */
+  const getFirstRegionUrl = (trackId: string): string => {
+    const service = AudioService.getInstance();
+    const tracks = service.store.getState().tracks;
+    const track = tracks.find(t => t.id === trackId);
+    
+    if (!track) {
+      throw new Error(`Track not found: ${trackId}`);
+    }
+    
+    if (track.regions.length === 0) {
+      throw new Error(`No regions available in track ${trackId}. Please add a region with URL first.`);
+    }
+    
+    const firstRegion = track.regions[0];
+    const url = firstRegion.audioFile?.url;
+    
+    if (!url) {
+      throw new Error(`No URL available in the first region. Please add a region with URL first.`);
+    }
+    
+    return url;
+  };
+
+  /**
    * Execute an AudioCommand
    * 
    * @param command - The command to execute
@@ -67,9 +114,11 @@ export function useAudioCommand() {
 
           case AudioCommandType.LOAD_REGION: {
             const trackId: string = command.trackId ?? getFirstTrackId();
+            const regionId: string = command.regionId ?? crypto.randomUUID();
+            const url: string = command.url ?? getFirstRegionUrl(trackId);
             await service.addRegion(trackId, {
-              id: command.regionId,
-              url: command.url,
+              id: regionId,
+              url: url,
               startTime: command.startTime,
               sourceStartTime: command.startOffset ?? 0,
               duration: command.duration,
@@ -79,7 +128,8 @@ export function useAudioCommand() {
 
           case AudioCommandType.UNLOAD_REGION: {
             const trackId: string = command.trackId ?? getFirstTrackId();
-            service.removeRegion(trackId, command.regionId);
+            const regionId: string = command.regionId ?? getFirstRegionId(trackId);
+            service.removeRegion(trackId, regionId);
             break;
           }
 

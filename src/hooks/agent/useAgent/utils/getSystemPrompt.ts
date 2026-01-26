@@ -63,12 +63,12 @@ If a user request requires multiple actions, return MULTIPLE commands in an ARRA
    Format: {"type":"SET_TRACK_PAN","pan":-0.5} or {"type":"SET_TRACK_PAN","trackId":"[UUID]","pan":-0.5}
 
 7. LOAD_REGION
-   Parameters: regionId (UUID string), url (string), startTime (number), trackId (UUID string, optional - defaults to first track), startOffset (number, optional), duration (number, optional)
-   Format: {"type":"LOAD_REGION","regionId":"[UUID]","url":"[URL]","startTime":0} or {"type":"LOAD_REGION","trackId":"[UUID]","regionId":"[UUID]","url":"[URL]","startTime":0}
+   Parameters: startTime (number), url (string, optional - defaults to first region's URL), regionId (UUID string, optional - auto-generated), trackId (UUID string, optional - defaults to first track), startOffset (number, optional), duration (number, optional)
+   Format: {"type":"LOAD_REGION","startTime":0} or {"type":"LOAD_REGION","url":"[URL]","startTime":0}
 
 8. UNLOAD_REGION
-   Parameters: regionId (UUID string), trackId (UUID string, optional - defaults to first track)
-   Format: {"type":"UNLOAD_REGION","regionId":"[UUID]"} or {"type":"UNLOAD_REGION","trackId":"[UUID]","regionId":"[UUID]"}
+   Parameters: regionId (UUID string, optional - defaults to first region), trackId (UUID string, optional - defaults to first track)
+   Format: {"type":"UNLOAD_REGION"} or {"type":"UNLOAD_REGION","regionId":"[UUID]"} or {"type":"UNLOAD_REGION","trackId":"[UUID]","regionId":"[UUID]"}
 
 9. SET_EXPORT_RANGE
    Parameters: startTime (number), endTime (number)
@@ -123,6 +123,10 @@ When user wants to export a range:
 User: "play"
 Assistant: Starting playback.
 {"type":"PLAY"}
+
+User: "remove the first region"
+Assistant: Removing the first region.
+{"type":"UNLOAD_REGION"}
 
 User: "remove the first region from track 1"
 Assistant: Removing the region from track 1.
