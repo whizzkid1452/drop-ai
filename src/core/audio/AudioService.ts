@@ -2,7 +2,7 @@ import * as Tone from 'tone';
 import { createStore } from 'zustand/vanilla';
 import type { AudioSnapshot } from '@/types/audioTypes';
 import { Session } from '../session/Session';
-import { Track } from '../track/Track';
+import { Track, type TrackData } from '../track/Track';
 import { Region } from '../region/Region';
 import {
     PLAYER_CONFIG,
@@ -154,20 +154,7 @@ export class AudioService {
         channel.volume.rampTo(volumeInDb, 0.1);
 
         // 3. Notify UI (Partial Update)
-        // We only update the specific track, and crucially, we PRESERVE the regions
-        // to avoid unnecessary re-renders of RegionComponents.
-        this.store.setState(state => ({
-            tracks: state.tracks.map(t => {
-                if (t.id !== trackId) return t;
-                // Merge new volume/pan from domain, but keep existing regions
-                return {
-                    ...t,
-                    volume, // Explicitly update volume
-                    // If we used track.toSnapshot(), it would recreate regions.
-                    // We want to keep reference equality for regions.
-                };
-            })
-        }));
+        this.updateTrackState(trackId, { volume });
     }
 
     setTrackPan(trackId: string, pan: number): void {
@@ -182,13 +169,17 @@ export class AudioService {
         channel.pan.rampTo(pan, 0.1);
 
         // 3. Notify UI (Partial Update)
+        this.updateTrackState(trackId, { pan });
+    }
+
+    /**
+     * Helper: Update specific track state without re-creating regions
+     */
+    private updateTrackState(trackId: string, updates: Partial<TrackData>) {
         this.store.setState(state => ({
             tracks: state.tracks.map(t => {
                 if (t.id !== trackId) return t;
-                return {
-                    ...t,
-                    pan, // Explicitly update pan
-                };
+                return { ...t, ...updates };
             })
         }));
     }
@@ -375,6 +366,7 @@ export class AudioService {
     /**
      * 프로젝트 전체를 오디오 파일로 내보냅니다.
      * Tone.Offline을 사용하여 정확한 타이밍과 이펙트를 반영합니다.
+     * 
      */
     async exportProject(options?: {
         tracks?: any[]; // AudioSnapshot track shape
