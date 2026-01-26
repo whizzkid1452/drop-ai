@@ -76,9 +76,7 @@ export class AudioService {
                     name: t.name,
                     volume: t.volume,
                     pan: t.pan,
-                    isMuted: t.isMuted,
-                    isSoloed: t.isSoloed,
-                    status: [] as any[],
+                    status: t.status,
                     regions: t.regions.map(r => ({
                         id: r.id,
                         startTime: r.startTime,
@@ -86,7 +84,7 @@ export class AudioService {
                         sourceStartTime: r.sourceStartTime,
                         duration: r.duration,
                         audioFile: r.audioFile,
-                        status: [] as any[]
+                        status: r.status
                     }))
                 }))
             });
@@ -217,7 +215,7 @@ export class AudioService {
         // 1. Ensure Track exists in Domain
         let track = this.session.getTrack(trackId);
         if (!track) {
-            track = new Track({ id: trackId });
+            track = new Track({ id: trackId, status: [] });
             this.session.addTrack(track);
             console.log('[AudioService] Created new track', trackId);
         }
@@ -232,18 +230,7 @@ export class AudioService {
             return;
         }
 
-        // 4. Create Domain Region
-        // Note: In a pure flow, we should create Region first, then call addRegion.
-        // But here we are adapting to the old flow where AudioEngine created everything.
-        const region = new Region({
-            id: regionData.id,
-            startTime: regionData.startTime,
-            sourceStartTime: regionData.sourceStartTime,
-            duration: regionData.duration,
-            audioFile: regionData.audioFile
-        });
-        track.addRegion(region);
-        console.log('[AudioService] Region added to track', { trackId, regionId: regionData.id });
+        // 4. Region creation moved to player.onload to ensure duration is available
 
         // 5. Create & Load Tone.Player (Engine)
         return new Promise((resolve, reject) => {
@@ -253,8 +240,27 @@ export class AudioService {
                 ...PLAYER_CONFIG,
                 onload: () => {
                     console.log('[AudioService] Player loaded for region', regionData.id);
+                    
+                    // Determine duration (provided or from buffer)
+                    const duration = regionData.duration ?? player.buffer.duration;
+                    
+                    // Create Domain Region (now that we have duration)
+                    const region = new Region({
+                        id: regionData.id,
+                        startTime: regionData.startTime,
+                        sourceStartTime: regionData.sourceStartTime,
+                        duration: duration,
+                        audioFile: regionData.audioFile,
+                        status: []
+                    });
+                    track.addRegion(region);
+                    console.log('[AudioService] Region added to track', { trackId, regionId: regionData.id });
+
                     if (regionData.duration !== undefined) {
                         configurePlayerLoop(player, regionData.sourceStartTime, regionData.duration);
+                    } else {
+                         // Ensure loop config if full duration
+                         configurePlayerLoop(player, regionData.sourceStartTime, duration);
                     }
 
                     startPlayer({
@@ -262,7 +268,7 @@ export class AudioService {
                         syncMode: true,
                         startTime: regionData.startTime,
                         startOffset: regionData.sourceStartTime,
-                        duration: regionData.duration
+                        duration: duration
                     });
 
                     // Notify UI of new track/region
