@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { AudioService } from '@/core/audio/AudioService';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
-import { useProjectExport } from '@/logics/audio/useProjectExport';
+import { downloadBlob } from '@/components/Daw/components/ExportButton/utils/audioExport';
 
 /**
  * Audio Command Executor Hook
@@ -10,7 +10,6 @@ import { useProjectExport } from '@/logics/audio/useProjectExport';
  * - Manages UI updates (Stores) alongside AudioService actions.
  */
 export function useAudioCommand() {
-  const { exportProject } = useProjectExport();
 
   /**
    * Execute an AudioCommand
@@ -70,11 +69,15 @@ export function useAudioCommand() {
             break;
 
           case AudioCommandType.EXPORT_AUDIO:
-            // Note: exportProject uses range from store if not provided
-            // We need to ensure useProjectExport reads from AudioService now.
-            // But useProjectExport might still be using usePlaybackStore?
-            // Let's assume exportProject will be refactored or service access is enough.
-            await exportProject({ filename: command.filename });
+            {
+              // Call AudioService directly
+              const blob = await service.exportProject();
+              
+              if (blob instanceof Blob) {
+                const filename = command.filename || 'export';
+                downloadBlob(blob, `${filename}.wav`);
+              }
+            }
             break;
 
           default:
@@ -85,7 +88,7 @@ export function useAudioCommand() {
         throw error;
       }
     },
-    [exportProject]
+    []
   );
 
   return { execute };
