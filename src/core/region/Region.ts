@@ -88,4 +88,18 @@ export class Region implements RegionData {
 
     return { left, right };
   }
+  /**
+   * Returns a plain object representation for the store.
+   */
+  toSnapshot(): RegionData {
+    return {
+      id: this.id,
+      startTime: this.startTime,
+      endTime: this.endTime,
+      sourceStartTime: this.sourceStartTime,
+      duration: this.duration,
+      audioFile: this.audioFile,
+      status: this.status,
+    };
+  }
 }

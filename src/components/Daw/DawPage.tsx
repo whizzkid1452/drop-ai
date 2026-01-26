@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { AudioFileDrop } from '../common/FileDrop/AudioFileDrop';
 import { DawHeader } from './components/DawHeader';
 import { TrackList } from './components/TrackList';
@@ -10,8 +10,8 @@ import * as styles from './DawPage.css';
 import { useAudioService } from '@/presentation/hooks/useAudioService';
 
 export function DawPage() {
-  const { tracks } = useAudioService();
-  const hasTracks = useMemo(() => tracks && tracks.length > 0, [tracks]);
+  const trackCount = useAudioService(state => state.tracks.length);
+  const hasTracks = trackCount > 0;
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
   const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
 
@@ -50,7 +50,7 @@ export function DawPage() {
 
         {hasTracks ? (
           <>
-            <DawHeader trackCount={tracks.length} />
+            <DawHeader trackCount={trackCount} />
             <TimeRuler />
             <TrackList />
             <PlaybackControls />

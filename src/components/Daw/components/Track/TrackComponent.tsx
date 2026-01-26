@@ -1,12 +1,13 @@
 import type { Track } from '@/types/track';
 import type WaveSurfer from 'wavesurfer.js';
+import { memo } from 'react';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import { useTrackActions } from '../../hooks/useTrackActions';
 import { TrackPanController } from './components/TrackPanController';
 import { TrackVolumeController } from './components/TrackVolumeController';
 import { RegionComponent } from './RegionComponent';
 
-export const TrackComponent = ({
+export const TrackComponent = memo(({
   mediaElement,
   track,
   pixelsPerSecond,
@@ -17,9 +18,9 @@ export const TrackComponent = ({
   mediaElement: HTMLMediaElement | null;
   track: Track;
   pixelsPerSecond: number;
-  onReady: (ws: WaveSurfer) => void;
-  onVolumeChange: (volume: number) => void;
-  onPanChange: (pan: number) => void;
+  onReady: (trackId: string, ws: WaveSurfer) => void;
+  onVolumeChange: (trackId: string, volume: number) => void;
+  onPanChange: (trackId: string, pan: number) => void;
 }) => {
   const { splitRegion } = useTrackActions();
 
@@ -31,7 +32,7 @@ export const TrackComponent = ({
             key={region.id}
             region={region}
             pixelsPerSecond={pixelsPerSecond}
-            onReady={onReady}
+            onReady={(ws) => onReady(track.id, ws)}
           />
         ))}
       </div>
@@ -41,9 +42,9 @@ export const TrackComponent = ({
           <>
             <TrackVolumeController
               volume={track.volume ?? 1}
-              onVolumeChange={onVolumeChange}
+              onVolumeChange={(val) => onVolumeChange(track.id, val)}
             />
-            <TrackPanController pan={track.pan ?? 0} onPanChange={onPanChange} />
+            <TrackPanController pan={track.pan ?? 0} onPanChange={(val) => onPanChange(track.id, val)} />
             <button
               onClick={() => {
                 const currentTime = usePlaybackStore.getState().currentTime;
@@ -66,7 +67,7 @@ export const TrackComponent = ({
       </div>
     </>
   );
-};
+});
 
 
 
