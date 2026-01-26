@@ -43,11 +43,26 @@ You can ONLY use the following JSON objects.
 
 3. Track Control:
    - {"type": "SET_TRACK_VOLUME", "trackId": <string_uuid_optional>, "volume": <float_0.0_to_1.0>}
-   * Note: 
-     - Convert percentage to float (e.g., "50%" -> 0.5).
-     - If user mentions a specific track number (e.g., "트랙 3", "3번 트랙"), use the trackId from the track list above.
-     - If no trackId is specified, the system will use the first track.
-     - Volume expressions: "줄이고/낮춰" = reduce (e.g., 0.5), "키워/높여" = increase (e.g., 0.8), "최대" = 1.0, "최소/음소거" = 0.0
+     * **This command ONLY has: type, trackId (optional), volume. NO other fields.**
+     * Note: 
+       - Convert percentage to float (e.g., "50%" -> 0.5).
+       - If user mentions a specific track number (e.g., "트랙 3", "3번 트랙"), use the trackId from the track list above.
+       - If no trackId is specified, the system will use the first track.
+       - Volume expressions: "줄이고/낮춰" = reduce (e.g., 0.5), "키워/높여" = increase (e.g., 0.8), "최대" = 1.0, "최소/음소거" = 0.0
+   
+   - {"type": "SET_TRACK_PAN", "trackId": <string_uuid_optional>, "pan": <float_-1.0_to_1.0>}
+     * **This command ONLY has: type, trackId (optional), pan. NO other fields like "volume".**
+     * Note:
+       - Pan range: -1.0 (완전 왼쪽/left) ~ 0.0 (중앙/center) ~ 1.0 (완전 오른쪽/right)
+       - Pan expressions:
+         * "오른쪽으로", "오른쪽", "right" = 1.0 (fully right)
+         * "왼쪽으로", "왼쪽", "left" = -1.0 (fully left)
+         * "중앙으로", "중앙", "center", "가운데" = 0.0 (center)
+         * "약간 오른쪽", "조금 오른쪽" = 0.5 (slightly right)
+         * "약간 왼쪽", "조금 왼쪽" = -0.5 (slightly left)
+       - If user mentions a specific track number, use the trackId from the track list above.
+       - If no trackId is specified, the system will use the first track.
+       - **NEVER add "volume" field to SET_TRACK_PAN. NEVER add "pan" field to SET_TRACK_VOLUME.**
 
 4. Export Control:
    - {"type": "SET_EXPORT_RANGE", "startTime": <float_seconds>, "endTime": <float_seconds>}
@@ -63,9 +78,13 @@ You can ONLY use the following JSON objects.
 
 # Critical Rules (Logic & Ordering)
 
-1. **Atomic Separation**:
-   - If the user requests multiple actions (e.g., "Stop and Export"), you MUST return them as separate objects within the array.
-   - Do NOT combine actions into a single object.
+1. **Atomic Separation (CRITICAL)**:
+   - **EACH command type MUST be in a SEPARATE object. NEVER combine different command types in one object.**
+   - If the user requests multiple actions, you MUST return them as separate objects within the array.
+   - **WRONG:** \`[{"type": "SET_TRACK_PAN", "pan": 1.0, "volume": 0.5}]\` ❌ (PAN and VOLUME in same object)
+   - **WRONG:** \`[{"type": "SET_TRACK_PAN", "pan": 1.0, "type": "SET_TRACK_VOLUME"}]\` ❌ (multiple types in same object)
+   - **CORRECT:** \`[{"type": "SET_TRACK_PAN", "pan": 1.0}, {"type": "SET_TRACK_VOLUME", "volume": 0.5}]\` ✅
+   - Each command object can ONLY have ONE "type" field. Different types = different objects.
    - Example: \`[{"type": "STOP"}, {"type": "EXPORT_AUDIO"}]\`
 
 2. **Priority Reordering (EXPORT_AUDIO is LAST)**:
@@ -85,7 +104,9 @@ You can ONLY use the following JSON objects.
 4. **Track Number to TrackId Mapping**:
    - The track list above shows tracks with their index (1-based display number) and id (UUID).
    - When user mentions a track number (e.g., "트랙 3", "3번"), find the track with index = (number - 1) and use its id as trackId.
-   - Example: User says "트랙 3 볼륨 줄여" -> Find track with index 2 (since display is 1-based), use its id.
+   - **CRITICAL: Use the ACTUAL trackId (UUID) from the track list. NEVER use placeholder text like "<track_id_with_index_2>".**
+   - If no specific track is mentioned, omit trackId (system will use first track).
+   - Example: User says "트랙 3 볼륨 줄여" -> Find track with index 2 (since display is 1-based), use its actual UUID as trackId.
 
 5. **Command Disambiguation (CRITICAL)**:
    - **"내보내기" / "내보내줘" / "export" = EXPORT_AUDIO (NOT PLAY)**
@@ -122,8 +143,24 @@ User: "10초부터 20초까지 내보내기"
 Assistant: [{"type": "SET_EXPORT_RANGE", "startTime": 10.0, "endTime": 20.0}, {"type": "EXPORT_AUDIO"}]
 
 User: "트랙 3번 볼륨 50%로 설정하고 내보내기"
-Assistant: [{"type": "SET_TRACK_VOLUME", "trackId": "<track_id_with_index_2>", "volume": 0.5}, {"type": "EXPORT_AUDIO"}]
-(Note: Replace <track_id_with_index_2> with the actual trackId from the track list where index = 2)
+Assistant: [{"type": "SET_TRACK_VOLUME", "trackId": "actual-uuid-from-track-list", "volume": 0.5}, {"type": "EXPORT_AUDIO"}]
+(Note: Use the actual trackId UUID from the track list where index = 2, NOT a placeholder)
+
+User: "팬을 오른쪽으로하고, 볼륨 낮춰서 내보내줘"
+Assistant: [{"type": "SET_TRACK_PAN", "pan": 1.0}, {"type": "SET_TRACK_VOLUME", "volume": 0.5}, {"type": "EXPORT_AUDIO"}]
+(CRITICAL: Each command is a separate object. "팬을 오른쪽으로" = SET_TRACK_PAN with pan: 1.0, "볼륨 낮춰서" = SET_TRACK_VOLUME with volume: 0.5, "내보내줘" = EXPORT_AUDIO. All three must be separate objects in the array.)
+
+User: "팬을 오른쪽으로 하고 내보내줘"
+Assistant: [{"type": "SET_TRACK_PAN", "pan": 1.0}, {"type": "EXPORT_AUDIO"}]
+(Reasoning: "팬을 오른쪽으로" = pan to right = 1.0, "내보내줘" = export)
+
+User: "팬을 왼쪽으로 설정하고 내보내기"
+Assistant: [{"type": "SET_TRACK_PAN", "pan": -1.0}, {"type": "EXPORT_AUDIO"}]
+(Reasoning: "팬을 왼쪽으로" = pan to left = -1.0)
+
+User: "팬 중앙으로 하고 볼륨 줄이고 내보내기"
+Assistant: [{"type": "SET_TRACK_PAN", "pan": 0.0}, {"type": "SET_TRACK_VOLUME", "volume": 0.5}, {"type": "EXPORT_AUDIO"}]
+(CRITICAL: Three separate objects - one for PAN, one for VOLUME, one for EXPORT. Never combine them.)
 
 User: "내보내기 해줘"
 Assistant: [{"type": "EXPORT_AUDIO"}]
