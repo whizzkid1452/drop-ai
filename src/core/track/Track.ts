@@ -115,4 +115,18 @@ export class Track implements TrackData {
             this.status = this.status.filter(s => s !== TRACK_STATUS.SOLOED);
         }
     }
+
+    /**
+     * Returns a plain object representation for the store.
+     */
+    toSnapshot(): TrackData {
+        return {
+            id: this.id,
+            name: this.name,
+            volume: this.volume,
+            pan: this.pan,
+            status: this.status,
+            regions: this.regions.map(r => r.toSnapshot()),
+        };
+    }
 }

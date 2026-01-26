@@ -2,7 +2,7 @@ import * as Tone from 'tone';
 import { createStore } from 'zustand/vanilla';
 import type { AudioSnapshot } from '@/types/audioTypes';
 import { Session } from '../session/Session';
-import { Track } from '../track/Track';
+import { Track, type TrackData } from '../track/Track';
 import { Region } from '../region/Region';
 import {
     PLAYER_CONFIG,
@@ -71,22 +71,7 @@ export class AudioService {
             this.store.setState({
                 isPlaying: Tone.getTransport().state === 'started',
                 currentTime: Tone.getTransport().seconds,
-                tracks: this.session.tracks.map(t => ({
-                    id: t.id,
-                    name: t.name,
-                    volume: t.volume,
-                    pan: t.pan,
-                    status: t.status,
-                    regions: t.regions.map(r => ({
-                        id: r.id,
-                        startTime: r.startTime,
-                        endTime: r.endTime, 
-                        sourceStartTime: r.sourceStartTime,
-                        duration: r.duration,
-                        audioFile: r.audioFile,
-                        status: r.status
-                    }))
-                }))
+                tracks: this.session.tracks.map(t => t.toSnapshot())
             });
         }
     }
@@ -168,8 +153,8 @@ export class AudioService {
         const volumeInDb = Tone.gainToDb(volume);
         channel.volume.rampTo(volumeInDb, 0.1);
 
-        // 3. Notify UI (Full Sync needed for track volume change)
-        this.syncStore();
+        // 3. Notify UI (Partial Update)
+        this.updateTrackState(trackId, { volume });
     }
 
     setTrackPan(trackId: string, pan: number): void {
@@ -183,8 +168,20 @@ export class AudioService {
         const channel = this.getOrInitChannel(trackId);
         channel.pan.rampTo(pan, 0.1);
 
-        // 3. Notify UI
-        this.syncStore();
+        // 3. Notify UI (Partial Update)
+        this.updateTrackState(trackId, { pan });
+    }
+
+    /**
+     * Helper: Update specific track state without re-creating regions
+     */
+    private updateTrackState(trackId: string, updates: Partial<TrackData>) {
+        this.store.setState(state => ({
+            tracks: state.tracks.map(t => {
+                if (t.id !== trackId) return t;
+                return { ...t, ...updates };
+            })
+        }));
     }
 
     getTrackParams(trackId: string): { volume: number; pan: number } | null {
@@ -369,6 +366,7 @@ export class AudioService {
     /**
      * 프로젝트 전체를 오디오 파일로 내보냅니다.
      * Tone.Offline을 사용하여 정확한 타이밍과 이펙트를 반영합니다.
+     * @todo 추후에 별도 파일로 분리하기(너무 큼)
      */
     async exportProject(options?: {
         tracks?: any[]; // AudioSnapshot track shape

@@ -3,7 +3,7 @@ import { AudioService } from '@/core/audio/AudioService';
 // import { usePlaybackStore } from '@/stores/usePlaybackStore'; // Removed
 // import { useTrackStore } from '@/stores/useTrackStore'; // Deprecated
 import { useAudioService } from '@/presentation/hooks/useAudioService';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
 import { useErrorBoundary } from 'react-error-boundary';
 import { TrackComponent } from './Track/TrackComponent';
@@ -57,12 +57,44 @@ export function TrackList() {
     };
   }, [pixelsPerSecond, wavesurferInstances]);
 
+  const handleVolumeChange = useCallback(async (trackId: string, vol: number) => {
+    try {
+      await execute({
+        type: 'SET_TRACK_VOLUME',
+        trackId: trackId,
+        volume: vol,
+      });
+    } catch (error) {
+      showBoundary(error);
+    }
+  }, [execute, showBoundary]);
+
+  const handlePanChange = useCallback(async (trackId: string, pan: number) => {
+    try {
+      await execute({
+        type: 'SET_TRACK_PAN',
+        trackId: trackId,
+        pan: pan,
+      });
+    } catch (error) {
+      showBoundary(error);
+    }
+  }, [execute, showBoundary]);
+
+  const handleReady = useCallback((trackId: string, ws: WaveSurfer) => {
+    setWavesurferInstances(prev => {
+      const newMap = new Map(prev);
+      newMap.set(trackId, ws);
+      return newMap;
+    });
+  }, []);
+
   return (
     <div className={styles.trackList}>
       {/* @todo: 추후 디자인 수정 예정 */}
       <div ref={containerRef} className={styles.tracksContainer}>
         <Cursor />
-        {(trackArray as any[]).map((track: any) => {
+        {trackArray.map((track: any) => {
           const thisWs = wavesurferInstances.get(track.id);
           const thisMedia = thisWs?.getMediaElement();
 
@@ -72,36 +104,9 @@ export function TrackList() {
               track={track}
               mediaElement={thisMedia ?? null}
               pixelsPerSecond={pixelsPerSecond}
-              onReady={ws => {
-                // trackStore에 wavesurfer 인스턴스 저장
-                setWavesurferInstances(prev => {
-                  const newMap = new Map(prev);
-                  newMap.set(track.id, ws);
-                  return newMap;
-                });
-              }}
-              onVolumeChange={async vol => {
-                try {
-                  await execute({
-                    type: 'SET_TRACK_VOLUME',
-                    trackId: track.id,
-                    volume: vol,
-                  });
-                } catch (error) {
-                  showBoundary(error);
-                }
-              }}
-              onPanChange={async pan => {
-                try {
-                  await execute({
-                    type: 'SET_TRACK_PAN',
-                    trackId: track.id,
-                    pan: pan,
-                  });
-                } catch (error) {
-                  showBoundary(error);
-                }
-              }}
+              onReady={handleReady}
+              onVolumeChange={handleVolumeChange}
+              onPanChange={handlePanChange}
             />
           );
         })}
