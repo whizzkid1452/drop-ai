@@ -1,13 +1,19 @@
 import type { AudioFile } from '@/types/audioFile';
+import { type RegionStatus } from '@/types/statusTypes';
 
 export type RegionId = string;
 
-export interface RegionProps {
+interface RegionProps {
   id: RegionId;
   startTime: number;
-  duration?: number;
+  duration: number;
   sourceStartTime: number;
   audioFile?: AudioFile;
+  status: RegionStatus[]; 
+}
+
+export interface RegionData extends RegionProps {
+    endTime: number;
 }
 
 /**
@@ -16,38 +22,21 @@ export interface RegionProps {
  * Represents a clip of audio on a timeline.
  * It encapsulates logic for timing, duration, and splitting.
  */
-export class Region {
+export class Region implements RegionData {
   public readonly id: RegionId;
   public startTime: number;
   public sourceStartTime: number;
   public readonly audioFile?: AudioFile;
-  private _duration?: number;
+  public status: RegionStatus[];
+  public duration: number;
 
   constructor(props: RegionProps) {
     this.id = props.id;
     this.startTime = props.startTime;
     this.sourceStartTime = props.sourceStartTime;
     this.audioFile = props.audioFile;
-    this._duration = props.duration;
-  }
-
-  /**
-   * Get effective duration.
-   * If duration is explicitly set, return it.
-   * Otherwise, calculate based on audio file length and offset.
-   */
-  get duration(): number {
-    if (this._duration !== undefined) {
-      return this._duration;
-    }
-    if (this.audioFile?.duration) {
-      return Math.max(0, this.audioFile.duration - this.sourceStartTime);
-    }
-    return 0;
-  }
-
-  set duration(value: number) {
-    this._duration = value;
+    this.duration = props.duration;
+    this.status = props.status;
   }
 
   /**
@@ -81,6 +70,7 @@ export class Region {
       sourceStartTime: this.sourceStartTime,
       duration: offsetFromStart,
       audioFile: this.audioFile,
+      status: [],
     });
 
     // 4. Create Right Region
@@ -93,6 +83,7 @@ export class Region {
       sourceStartTime: this.sourceStartTime + offsetFromStart,
       duration: this.duration - offsetFromStart,
       audioFile: this.audioFile,
+      status: [],
     });
 
     return { left, right };

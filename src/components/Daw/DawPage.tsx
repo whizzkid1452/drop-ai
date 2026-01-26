@@ -50,7 +50,7 @@ export function DawPage() {
 
         {hasTracks ? (
           <>
-            <DawHeader trackCount={tracks.size} />
+            <DawHeader trackCount={tracks.length} />
             <TimeRuler />
             <TrackList />
             <PlaybackControls />
