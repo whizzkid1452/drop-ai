@@ -1,3 +1,4 @@
 name = "drop-ai"
+account_id = "8751f03d2ce662cc1c293dc49a2d1e9c"
 pages_build_output_dir = "./dist"
 compatibility_date = "2026-01-26"
