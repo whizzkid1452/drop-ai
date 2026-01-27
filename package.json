@@ -16,7 +16,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "deploy:cloudflare": "pnpm build && wrangler pages deploy dist",
+    "deploy:cloudflare": "pnpm build && wrangler pages deploy dist --project-name drop-ai",
     "docker:build": "docker build -t daw-app .",
     "docker:build:dev": "docker build -f Dockerfile.dev -t daw-app:dev .",
     "docker:run": "docker run -p 80:80 daw-app",
