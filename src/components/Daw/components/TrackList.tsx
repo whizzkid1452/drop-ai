@@ -1,7 +1,5 @@
 import { useAudioCommand } from '@/logics/audio';
-import { AudioService } from '@/core/audio/AudioService';
-// import { usePlaybackStore } from '@/stores/usePlaybackStore'; // Removed
-// import { useTrackStore } from '@/stores/useTrackStore'; // Deprecated
+import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import { useAudioService } from '@/presentation/hooks/useAudioService';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
@@ -23,7 +21,8 @@ export function TrackList() {
   const containerRef = useRef<HTMLDivElement>(null);
   
   // 🔧 Use Selector to prevent re-renders when other state changes
-  const pixelsPerSecond = useAudioService(state => state.pixelsPerSecond);
+  const pixelsPerSecond = usePlaybackStore(state => state.pixelsPerSecond);
+  const setPixelsPerSecond = usePlaybackStore(state => state.setPixelsPerSecond);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -42,8 +41,8 @@ export function TrackList() {
         // Clamp
         const clamped = Math.max(1, Math.min(1000, newPixelsPerSecond));
 
-        // 🔧 Direct update to AudioService
-        AudioService.getInstance().setPixelsPerSecond(clamped);
+        // 🔧 Update to PlaybackStore
+        setPixelsPerSecond(clamped);
 
         wavesurferInstances.forEach(ws => {
           ws.zoom(clamped);
@@ -55,7 +54,7 @@ export function TrackList() {
     return () => {
       container.removeEventListener('wheel', handleWheel);
     };
-  }, [pixelsPerSecond, wavesurferInstances]);
+  }, [pixelsPerSecond, wavesurferInstances, setPixelsPerSecond]);
 
   const handleVolumeChange = useCallback(async (trackId: string, vol: number) => {
     try {
