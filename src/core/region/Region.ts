@@ -3,17 +3,29 @@ import { type RegionStatus } from '@/types/statusTypes';
 
 export type RegionId = string;
 
+/**
+ * Region의 오디오 파일 정보
+ * 
+ * AudioFile의 모든 속성이 필요하지 않으므로,
+ * Region이 실제로 사용하는 최소한의 정보만 정의합니다.
+ */
+export interface RegionAudioFile {
+  url: string;
+  duration?: number;
+}
+
 interface RegionProps {
   id: RegionId;
   startTime: number;
   duration: number;
   sourceStartTime: number;
-  audioFile?: AudioFile;
+  audioFile?: RegionAudioFile | AudioFile;
   status: RegionStatus[]; 
 }
 
 export interface RegionData extends RegionProps {
     endTime: number;
+    audioFile?: RegionAudioFile | AudioFile;
 }
 
 /**
@@ -26,7 +38,7 @@ export class Region implements RegionData {
   public readonly id: RegionId;
   public startTime: number;
   public sourceStartTime: number;
-  public readonly audioFile?: AudioFile;
+  public readonly audioFile?: RegionAudioFile | AudioFile;
   public status: RegionStatus[];
   public duration: number;
 

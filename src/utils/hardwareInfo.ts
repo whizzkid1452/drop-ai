@@ -1,11 +1,21 @@
 /**
+ * WebGPU Navigator 인터페이스 확장
+ */
+interface NavigatorWithGPU extends Navigator {
+    gpu?: {
+        requestAdapter(): Promise<any>;
+    };
+}
+
+/**
  * WebGPU 하드웨어 정보를 가져오는 함수
  * @returns 하드웨어 정보 문자열
  */
 export async function getHardwareInfo(): Promise<string> {
     try {
-        if ('gpu' in navigator) {
-            const adapter = await (navigator as any).gpu.requestAdapter();
+        const navigatorWithGPU = navigator as NavigatorWithGPU;
+        if ('gpu' in navigatorWithGPU && navigatorWithGPU.gpu) {
+            const adapter = await navigatorWithGPU.gpu.requestAdapter();
             if (adapter) {
                 const info = await adapter.requestAdapterInfo();
                 return `${info.vendor} - ${info.device}`;
@@ -15,8 +25,9 @@ export async function getHardwareInfo(): Promise<string> {
         } else {
             return "WebGPU not supported by browser.";
         }
-    } catch (e: any) {
-        return `GPU Query Error: ${e.message}`;
+    } catch (e: unknown) {
+        const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+        return `GPU Query Error: ${errorMessage}`;
     }
 }
 

@@ -94,7 +94,7 @@ export function TrackList() {
       {/* @todo: 추후 디자인 수정 예정 */}
       <div ref={containerRef} className={styles.tracksContainer}>
         <Cursor />
-        {trackArray.map((track: any) => {
+        {trackArray.map((track) => {
           const thisWs = wavesurferInstances.get(track.id);
           const thisMedia = thisWs?.getMediaElement();
 

@@ -3,11 +3,11 @@ import {
   type AudioCommand,
 } from '@/types/audioCommand.schema';
 import { queryToLLM as queryToLLM } from './queryToLLM';
+import type { MLCEngine } from '@/types/webllm.types';
 
 export interface AIResponseHandlerDependencies {
   execute: (command: AudioCommand) => Promise<any>;
-  /** @todo engine 타입 추가 필요 */
-  engine: any;
+  engine: MLCEngine;
   tracks: {
     id: string;
     index: number;
@@ -33,6 +33,13 @@ export async function handleAIResponse(deps: AIResponseHandlerDependencies) {
   if (llmResponseError) {
     return {
       message: llmResponseError,
+      status: 'error' as const,
+    };
+  }
+
+  if (!fullResponse) {
+    return {
+      message: 'No response from AI',
       status: 'error' as const,
     };
   }

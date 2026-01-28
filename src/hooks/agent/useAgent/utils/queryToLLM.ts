@@ -1,13 +1,13 @@
 import { generateErrorDiagnostic } from './errorHandler';
 import { getSystemPrompt } from './getSystemPrompt';
+import type { MLCEngine } from '@/types/webllm.types';
 
 export async function queryToLLM({
   engine,
   tracks,
   userInput,
 }: {
-  /** @todo engine 타입 추가 필요 */
-  engine: any;
+  engine: MLCEngine;
   tracks: {
     id: string;
     index: number;
@@ -30,10 +30,11 @@ export async function queryToLLM({
       fullResponse: completion.choices[0].message.content || '',
       error: null,
     } as const;
-  } catch (err: any) {
-    console.error('AI Error:', err.message);
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    console.error('AI Error:', errorMessage);
 
-    const diagReport = await generateErrorDiagnostic(err);
+    const diagReport = await generateErrorDiagnostic(err instanceof Error ? err : new Error(String(err)));
     return { fullResponse: null, error: diagReport } as const;
   }
 }

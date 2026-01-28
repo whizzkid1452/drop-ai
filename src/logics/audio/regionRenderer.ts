@@ -1,4 +1,5 @@
 import type { Region } from '@/types/track';
+import type { RegionData } from '@/core/region/Region';
 
 /**
  * Region 렌더링 파라미터
@@ -64,7 +65,7 @@ export class RegionRenderer {
    * 이 함수는 실시간 재생과 Export 모두에서 사용되어
    * 동일한 결과를 보장합니다.
    * 
-   * @param region - 렌더링할 Region
+   * @param region - 렌더링할 Region (Region 또는 RegionData)
    * @returns Tone.js Player에 전달할 파라미터
    * 
    * @example
@@ -80,7 +81,10 @@ export class RegionRenderer {
    * // { url: 'audio.wav', startTime: 5, startOffset: 2, duration: 5 }
    * ```
    */
-  static calculateRenderParams(region: Region): RegionRenderParams {
+  static calculateRenderParams(region: Region | RegionData): RegionRenderParams {
+    if (!region.audioFile) {
+      throw new Error('Region audioFile is required for rendering');
+    }
     return {
       url: region.audioFile.url,
       startTime: region.startTime,
