@@ -16,13 +16,11 @@ export function DropPage() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.hero}>
-        <h1 className={styles.heroTitle}>Drop.ai</h1>
-        <div className={styles.heroAccent} />
-        <p className={styles.heroSubtitle}>Browser-based audio editing tool</p>
+      <div className={styles.cardGroup}>
+        <AudioFileDrop onAudioFileDrop={onAudioFileDrop} />
       </div>
 
-      {uploadedFile ? (
+      {uploadedFile && (
         <>
           <audio
             src={uploadedFile.url}
@@ -33,8 +31,6 @@ export function DropPage() {
             Go to track
           </NavLink>
         </>
-      ) : (
-        <AudioFileDrop onAudioFileDrop={onAudioFileDrop} />
       )}
     </div>
   );

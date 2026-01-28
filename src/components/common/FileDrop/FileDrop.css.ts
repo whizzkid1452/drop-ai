@@ -1,19 +1,25 @@
 import { style, keyframes } from '@vanilla-extract/css';
 
 export const dropZone = style({
-  border: '1px solid #333333',
-  borderRadius: '4px',
-  padding: '4rem 2rem',
+  border: '1px dashed #6b7280', // border-gray-500
+  borderRadius: '2px', // rounded-sm
+  width: '24rem', // w-96
+  height: '14rem', // h-56
+  padding: '0',
   textAlign: 'center',
   cursor: 'pointer',
-  transition: 'all 0.2s ease',
-  backgroundColor: '#0a0a0a',
+  transition: 'all 0.3s ease-out',
+  backgroundColor: 'transparent',
   position: 'relative',
   overflow: 'hidden',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
 
   ':hover': {
-    borderColor: '#444444',
-    backgroundColor: '#0f0f0f',
+    borderStyle: 'solid',
+    borderColor: 'rgba(255, 79, 216, 0.5)', // pink accent/50
+    backgroundColor: 'rgba(255, 79, 216, 0.06)', // pink accent/10 느낌
   },
 });
 
@@ -27,53 +33,67 @@ export const dropZoneContent = style({
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  gap: '1rem',
+  justifyContent: 'center',
+  gap: '1rem', // gap-4
   pointerEvents: 'none',
 });
 
-export const title = style({
-  fontSize: '1.25rem',
-  fontWeight: 500,
-  color: '#ffffff',
-  margin: 0,
-  letterSpacing: '-0.01em',
+export const iconWrapper = style({
+  position: 'relative',
 });
 
-export const subtitle = style({
-  fontSize: '0.875rem',
-  color: '#666666',
-  margin: 0,
+export const iconMain = style({
+  fontFamily: '"Material Symbols Outlined", system-ui, sans-serif',
+  fontSize: '3rem', // text-5xl
+  opacity: 0.5,
+  color: '#d1d5db', // text-gray-300
+  transition: 'transform 0.3s ease, opacity 0.3s ease',
+
+  selectors: {
+    [`${dropZone}:hover &`]: {
+      opacity: 1,
+      transform: 'scale(1.1) translateY(-4px)',
+    },
+  },
+});
+
+export const iconGlow = style({
+  fontFamily: '"Material Symbols Outlined", system-ui, sans-serif',
+  fontSize: '3rem',
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  opacity: 0,
+  color: '#FF4FD8', // pink accent
+  transition: 'transform 0.5s ease, opacity 0.5s ease',
+
+  selectors: {
+    [`${dropZone}:hover &`]: {
+      opacity: 0.3,
+      transform: 'scale(1.25)',
+    },
+  },
+});
+
+export const label = style({
+  fontSize: '1.25rem', // text-xl
   textTransform: 'uppercase',
-  letterSpacing: '0.05em',
+  letterSpacing: '0.3em', // tracking-widest
+  opacity: 0.8,
+  fontWeight: 700,
+  fontFamily: '"Inter", system-ui, sans-serif',
+  color: '#e5e7eb', // text-gray-200
+  transition: 'opacity 0.3s ease',
+
+  selectors: {
+    [`${dropZone}:hover &`]: {
+      opacity: 1,
+    },
+  },
 });
 
 export const fileInput = style({
   display: 'none',
-});
-
-export const button = style({
-  marginTop: '1.5rem',
-  padding: '0.625rem 1.5rem',
-  backgroundColor: '#1a1a1a',
-  color: '#ffffff',
-  border: '1px solid #333333',
-  borderRadius: '2px',
-  fontSize: '0.875rem',
-  fontWeight: 400,
-  cursor: 'pointer',
-  transition: 'all 0.15s ease',
-  pointerEvents: 'auto',
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-
-  ':hover': {
-    backgroundColor: '#222222',
-    borderColor: '#444444',
-  },
-
-  ':active': {
-    backgroundColor: '#1a1a1a',
-  },
 });
 
 const pulse = keyframes({
