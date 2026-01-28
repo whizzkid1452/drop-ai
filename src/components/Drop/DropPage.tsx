@@ -1,17 +1,19 @@
 import { useCallback, useState } from 'react';
-import { NavLink } from 'react-router-dom';
 import type { AudioFile } from '../../types/audioFile';
 import { AudioFileDrop } from '../common/FileDrop/AudioFileDrop';
+import { DropPreviewModal } from './DropPreviewModal';
 import * as styles from './DropPage.css';
 
 export function DropPage() {
   const [uploadedFile, setUploadedFile] = useState<null | AudioFile>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const onAudioFileDrop = useCallback((audioFile: AudioFile | null) => {
     if (audioFile == null) {
       return;
     }
     setUploadedFile(audioFile);
+    setIsModalOpen(true);
   }, []);
 
   return (
@@ -20,17 +22,11 @@ export function DropPage() {
         <AudioFileDrop onAudioFileDrop={onAudioFileDrop} />
       </div>
 
-      {uploadedFile && (
-        <>
-          <audio
-            src={uploadedFile.url}
-            controls
-            className={styles.audioPreview}
-          />
-          <NavLink to="/daw" className={styles.editButton}>
-            Go to track
-          </NavLink>
-        </>
+      {uploadedFile != null && isModalOpen && (
+        <DropPreviewModal
+          audioFile={uploadedFile}
+          onClose={() => setIsModalOpen(false)}
+        />
       )}
     </div>
   );

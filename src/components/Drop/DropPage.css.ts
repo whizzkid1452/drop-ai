@@ -59,38 +59,3 @@ export const heroAccent = style({
   borderRadius: '1px',
   margin: '0.5rem 0',
 });
-
-export const audioPreview = style({
-  width: '100%',
-  marginTop: '1rem',
-  borderRadius: '8px',
-});
-
-export const editButton = style({
-  marginTop: '1.5rem',
-  padding: '0.75rem 2rem',
-  backgroundColor: '#1a1a1a',
-  color: '#ffffff',
-  border: '1px solid #333333',
-  borderRadius: '2px',
-  fontSize: '0.875rem',
-  fontWeight: 400,
-  cursor: 'pointer',
-  transition: 'all 0.15s ease',
-  width: '100%',
-  maxWidth: '300px',
-  marginLeft: 'auto',
-  marginRight: 'auto',
-  display: 'block',
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-
-  ':hover': {
-    backgroundColor: '#222222',
-    borderColor: '#444444',
-  },
-
-  ':active': {
-    backgroundColor: '#1a1a1a',
-  },
-});
