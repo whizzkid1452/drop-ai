@@ -1,6 +1,7 @@
 import { useState, useRef, type KeyboardEvent, useEffect } from 'react';
 import * as styles from './CliTerminal.css';
 import { useAudioCommand } from '@/logics/audio';
+import { parseAudioCommandString } from '@/types/audioCommand.schema';
 
 interface LogItem {
   id: string;
@@ -45,23 +46,25 @@ export function CliTerminal() {
     addLog(`> ${trimmedInput}`, 'info');
 
     try {
-      const parsed = JSON.parse(trimmedInput);
-      const commands = Array.isArray(parsed) ? parsed : [parsed];
+      // Use parseAudioCommandString for consistent validation and array support
+      const { commands, error } = parseAudioCommandString({
+        commandString: trimmedInput,
+      });
 
+      if (error) {
+        addLog(`Error: ${error}`, 'error');
+        return;
+      }
+
+      if (!commands || commands.length === 0) {
+        addLog('Error: No valid commands found', 'error');
+        return;
+      }
+
+      // Execute all commands sequentially
       for (const command of commands) {
-        // Basic type validation check
-        if (!command.type) {
-          throw new Error('Command must have a "type" property.');
-        }
-
-        // Execute command (unified via execute hook)
-        const result = await execute(command);
-
-        if (result !== undefined) {
-          addLog(JSON.stringify(result, null, 2), 'success');
-        } else {
-          addLog(`Executed: ${command.type}`, 'success');
-        }
+        await execute(command);
+        addLog(`Executed: ${command.type}`, 'success');
       }
 
       setInput(''); // Clear input on success
