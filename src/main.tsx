@@ -3,6 +3,7 @@ import { GlobalErrorFallback } from './components/common/ErrorBoundary/GlobalErr
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import ReactGA from 'react-ga4';
 import App from './App.tsx';
 import './styles/global.css';
 
@@ -16,6 +17,12 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Google Analytics 4 초기화 (프로덕션 환경에서만)
+const GA_ID = import.meta.env.VITE_GA_ID;
+if (import.meta.env.PROD && GA_ID) {
+  ReactGA.initialize(GA_ID);
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

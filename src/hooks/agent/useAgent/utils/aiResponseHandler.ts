@@ -4,6 +4,7 @@ import {
 } from '@/types/audioCommand.schema';
 import { queryToLLM as queryToLLM } from './queryToLLM';
 import type { MLCEngine } from '@/types/webllm.types';
+import { trackAudioCommandExecuted } from '@/utils/analytics';
 
 export interface AIResponseHandlerDependencies {
   execute: (command: AudioCommand) => Promise<any>;
@@ -48,23 +49,51 @@ export async function handleAIResponse(deps: AIResponseHandlerDependencies) {
     commandString: fullResponse,
   });
 
+  const executionResults: Array<{
+    commandType: string;
+    success: boolean;
+    errorMessage?: string;
+  }> = [];
+
   if (commands && commands.length > 0) {
     // 🔧 Execute all commands sequentially
     // The previous logic reordered commands and removed duplicates, which caused issues with
     // sequential operations (e.g., multiple exports with different ranges).
     // Now we respect the order provided by the AI.
     for (const command of commands) {
-      await execute(command);
+      try {
+        await execute(command);
+        // Google Analytics: 명령어 실행 성공 추적
+        trackAudioCommandExecuted(command.type, true);
+        executionResults.push({
+          commandType: command.type,
+          success: true,
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        // Google Analytics: 명령어 실행 실패 추적
+        trackAudioCommandExecuted(command.type, false, errorMessage);
+        executionResults.push({
+          commandType: command.type,
+          success: false,
+          errorMessage,
+        });
+        console.error('[aiResponseHandler] Command execution failed:', error);
+      }
     }
 
     return {
       message: fullResponse || '✅ Commands executed',
       status: 'idle' as const,
+      parsedCommands: commands,
+      executionResults,
     };
   }
 
   return {
     message: fullResponse || 'no response',
     status: error ? 'error' : 'idle',
+    parsedCommands: null,
+    executionResults: [],
   } as const;
 }

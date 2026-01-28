@@ -8,6 +8,7 @@ import {
   createUserMessage,
   createAssistantMessage,
 } from '@/hooks/agent/useAgent/utils/messageHelpers';
+import { trackChatMessageSent } from '@/utils/analytics';
 
 export function useAgent() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -50,6 +51,9 @@ export function useAgent() {
       return;
     }
 
+    // Google Analytics: 사용자 메시지 전송 추적 (프롬프트 개선을 위해 실제 내용 포함)
+    trackChatMessageSent(trimmedContent.length, trimmedContent);
+
     // 사용자 메시지 추가
     const userMsg = createUserMessage(trimmedContent);
     addMessage(userMsg);
@@ -60,12 +64,31 @@ export function useAgent() {
     addMessage(assistantMsg);
 
     // AI 응답 처리
-    const { message, status: newStatus } = await handleAIResponse({
+    const startTime = Date.now();
+    const { message, status: newStatus, parsedCommands, executionResults } = await handleAIResponse({
       engine,
       tracks,
       userInput: trimmedContent,
       execute,
     });
+    const responseTime = Date.now() - startTime;
+
+    // Google Analytics: AI 응답 수신 추적 (프롬프트 개선을 위해 실제 내용 포함)
+    if (message) {
+      const { trackAIResponseReceived, trackPromptImprovementSession } = await import('@/utils/analytics');
+      trackAIResponseReceived(message.length, responseTime, message, parsedCommands ?? []);
+      
+      // 프롬프트 개선을 위한 전체 세션 추적
+      if (parsedCommands && executionResults) {
+        trackPromptImprovementSession({
+          userInput: trimmedContent,
+          aiResponse: message,
+          parsedCommands,
+          executionResults,
+          responseTime,
+        });
+      }
+    }
 
     updateMessage(assistantMsg.id, message);
     setStatus(newStatus);

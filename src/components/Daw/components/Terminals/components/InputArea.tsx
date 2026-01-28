@@ -24,10 +24,8 @@ export function InputArea({
   };
 
   const handleInputChange = (value: string) => {
-    // 🔧 영어, 숫자, 공백, 기본 기호만 허용 (한글 및 기타 언어 차단)
-    // 허용: a-z, A-Z, 0-9, space, -, _, ., ,, !, ?, ', ", :, ;, (, ), [, ], etc.
-    const filteredValue = value.replace(/[^a-zA-Z0-9\s\-_.,!?'":;()\[\]{}@#$%^&*+=<>\/\\|`~]/g, '');
-    onInputChange(filteredValue);
+    // 모든 언어 입력 허용
+    onInputChange(value);
   };
 
   return (

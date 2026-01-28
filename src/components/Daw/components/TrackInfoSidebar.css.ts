@@ -35,3 +35,11 @@ export const pre = style({
   wordBreak: 'break-all',
   lineHeight: '1.4',
 });
+
+export const emptyMessage = style({
+  padding: '24px',
+  textAlign: 'center',
+  color: '#666',
+  fontSize: '12px',
+  fontStyle: 'italic',
+});
