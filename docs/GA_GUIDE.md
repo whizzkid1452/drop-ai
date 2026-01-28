@@ -1,5 +1,7 @@
 # Google Analytics 4 (GA4) 연동 및 사용 가이드
 
+https://analytics.google.com/analytics/web/#/a381940834p521521494/realtime/pages?params=_u..nav%3Dmaui
+
 이 프로젝트는 `react-ga4` 라이브러리를 사용하여 구글 애널리틱스 4와 연동되어 있습니다. 단순히 스크립트를 삽입하는 방식이 아니라, 리액트 환경 및 SPA(Single Page Application)의 특성에 최적화된 구조로 설계되었습니다.
 
 ## 1. 주요 연동 아키텍처
