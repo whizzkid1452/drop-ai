@@ -11,7 +11,6 @@ export interface AudioSnapshot {
     currentTime: number;
     
     // Configuration State
-    // Configuration State
     tempo: number;
     exportStartTime: number | null;
     exportEndTime: number | null;
