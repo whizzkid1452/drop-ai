@@ -120,7 +120,7 @@ export function parseAudioCommandString({
           for (let i = 0; i < typeMatches.length; i++) {
             const type = typeMatches[i][1];
             const typeStart = typeMatches[i].index!;
-            const typeEnd = typeMatches[i].index! + typeMatches[i][0].length;
+
             
             // Find the end of this command (next "type" or end of object)
             let commandEnd = malformedObj.length - 1; // Default to end of object

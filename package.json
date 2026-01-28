@@ -45,6 +45,7 @@
     "tone": "^15.1.22",
     "wavesurfer.js": "^7.10.1",
     "zod": "^4.2.1",
+    "react-ga4": "^2.1.0",
     "zustand": "^5.0.9"
   },
   "devDependencies": {

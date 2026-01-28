@@ -3,6 +3,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { useErrorBoundary } from 'react-error-boundary';
 import { DefaultLayout } from '@/components/Layouts/DefaultLayout';
 import { AppRouter } from './router/AppRouter';
+import { AnalyticsTracker } from '@/components/common/AnalyticsTracker';
 import { AudioService } from '@/core/audio/AudioService';
 import { Session } from '@/core/session/Session';
 
@@ -48,6 +49,7 @@ function App() {
   return (
     <DefaultLayout>
       <BrowserRouter>
+        <AnalyticsTracker />
         <AppRouter />
       </BrowserRouter>
     </DefaultLayout>
