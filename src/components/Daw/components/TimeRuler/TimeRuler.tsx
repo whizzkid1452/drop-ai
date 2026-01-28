@@ -1,6 +1,7 @@
 import { memo, useMemo, useRef, useState, useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useAudioService } from '@/presentation/hooks/useAudioService';
+import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import * as styles from './TimeRuler.css';
 import type { Track } from '@/types/track';
 import { useAudioCommand } from '@/logics/audio';
@@ -12,15 +13,15 @@ import { useErrorBoundary } from 'react-error-boundary';
 export const TimeRuler = memo(() => {
   const { 
     tracks,
-    pixelsPerSecond,
     exportStartTime,
     exportEndTime
   } = useAudioService(useShallow(state => ({
     tracks: state.tracks,
-    pixelsPerSecond: state.pixelsPerSecond,
     exportStartTime: state.exportStartTime,
     exportEndTime: state.exportEndTime,
   })));
+  
+  const pixelsPerSecond = usePlaybackStore(state => state.pixelsPerSecond);
   
   const trackArray = (tracks || []) as unknown as Track[];
 

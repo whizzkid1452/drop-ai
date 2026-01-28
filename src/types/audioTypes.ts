@@ -12,7 +12,6 @@ export interface AudioSnapshot {
     
     // Configuration State
     tempo: number;
-    pixelsPerSecond: number;
     exportStartTime: number | null;
     exportEndTime: number | null;
 

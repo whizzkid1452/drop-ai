@@ -29,7 +29,6 @@ export class AudioService {
         isPlaying: false,
         currentTime: 0,
         tempo: 120,
-        pixelsPerSecond: 20,
         exportStartTime: null,
         exportEndTime: null,
         tracks: []
@@ -80,7 +79,6 @@ export class AudioService {
     get exportStartTime() { return this.store.getState().exportStartTime; }
     get exportEndTime() { return this.store.getState().exportEndTime; }
     get tempo() { return this.store.getState().tempo; }
-    get pixelsPerSecond() { return this.store.getState().pixelsPerSecond; }
 
     // --- State Setters ---
 
@@ -91,10 +89,6 @@ export class AudioService {
     setTempo(tempo: number) {
         Tone.Transport.bpm.value = tempo;
         this.store.setState({ tempo });
-    }
-
-    setPixelsPerSecond(pixels: number) {
-        this.store.setState({ pixelsPerSecond: pixels });
     }
 
     // --- Transport Control ---
