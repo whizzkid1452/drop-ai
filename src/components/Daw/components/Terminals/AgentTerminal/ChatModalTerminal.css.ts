@@ -295,7 +295,8 @@ export const aiAvatar = style({
 export const messageContent = style({
   display: 'flex',
   flexDirection: 'column',
-  maxWidth: '80%',
+  flex: 1,
+  minWidth: 0,
 });
 
 export const messageHeader = style({
