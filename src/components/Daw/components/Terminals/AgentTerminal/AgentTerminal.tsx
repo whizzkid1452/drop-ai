@@ -42,6 +42,21 @@ export function AgentTerminal() {
     resetEngine(false);
   };
 
+  const loadingDisplayText = (() => {
+    const t = modelLoadingText.trim();
+    const map: Record<string, string> = {
+      '분석 중': 'ANALYZING',
+      '분석중': 'ANALYZING',
+      '로딩 중': 'LOADING',
+      '로딩중': 'LOADING',
+    };
+    for (const [ko, en] of Object.entries(map)) {
+      if (t === ko || t.includes(ko)) return `${en}...`;
+    }
+    const upper = modelLoadingText.toUpperCase();
+    return upper.endsWith('...') ? upper : `${upper}...`;
+  })();
+
   return (
     <div className={styles.container}>
       <header className={styles.header}>
@@ -95,9 +110,17 @@ export function AgentTerminal() {
           </div>
           <div className={styles.statusStrip}>
             <div className={styles.statusInfo}>
-              <span className={styles.statusText}>
-                {modelLoadingText.toUpperCase()}...
+              <span
+                className={`material-symbols-outlined ${styles.spinning}`}
+                style={{
+                  fontSize: '14px',
+                  color: styles.primaryColor,
+                }}
+                aria-hidden
+              >
+                sync
               </span>
+              <span className={styles.statusText}>{loadingDisplayText}</span>
               <span className={styles.statusLabel}>MODEL: LLAMA-3-OPTIMIZED</span>
             </div>
             <span className={styles.statusText}>{modelLoadingProgress}%</span>

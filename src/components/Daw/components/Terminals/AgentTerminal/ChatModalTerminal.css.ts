@@ -286,6 +286,7 @@ export const systemInfo = style({
 export const systemText = style({
   fontFamily: '"Noto Sans Mono", monospace',
   fontSize: '10px',
+  letterSpacing: '0.05em',
 });
 
 export const composer = style({
