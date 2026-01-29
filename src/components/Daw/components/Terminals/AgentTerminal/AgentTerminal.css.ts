@@ -179,3 +179,41 @@ export const messageContent = style({
     whiteSpace: 'pre-wrap',
 });
 
+export const modalOverlay = style({
+    position: 'fixed',
+    inset: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+    backdropFilter: 'blur(5px)',
+});
+
+export const modalContainer = style({
+    width: '90%',
+    maxWidth: '800px',
+    height: '80%',
+    maxHeight: '700px',
+    backgroundColor: '#0f0f14',
+    borderRadius: '12px',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+});
+
+export const closeButton = style({
+    padding: '4px 8px',
+    background: 'transparent',
+    border: 'none',
+    color: 'rgba(255, 255, 255, 0.5)',
+    cursor: 'pointer',
+    fontSize: '18px',
+    transition: 'color 0.2s',
+    ':hover': {
+        color: '#ffffff',
+    },
+});
+

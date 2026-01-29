@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { AudioFile } from '../../types/audioFile';
 import { AudioFileDrop } from '../common/FileDrop/AudioFileDrop';
-import { DropPreviewModal } from './DropPreviewModal';
+import { ChatModalTerminal } from '../Daw/components/Terminals/AgentTerminal/ChatModalTerminal';
 import * as styles from './DropPage.css';
 
 export function DropPage() {
@@ -23,8 +23,7 @@ export function DropPage() {
       </div>
 
       {uploadedFile != null && isModalOpen && (
-        <DropPreviewModal
-          audioFile={uploadedFile}
+        <ChatModalTerminal
           onClose={() => setIsModalOpen(false)}
         />
       )}
