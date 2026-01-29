@@ -25,7 +25,7 @@ export function BasicFileDrop({ onFileDrop, onError }: BasicFileDropProps) {
     []
   );
 
-  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept,
     maxSize: MAX_FILE_SIZE,
     multiple: false,

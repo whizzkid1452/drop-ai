@@ -4,6 +4,13 @@ import { useAgentStore } from '@/stores/useAgentStore';
 import { useState, useRef, useEffect } from 'react';
 import * as styles from './ChatModalTerminal.css';
 
+const QUICK_GUIDE_ITEMS: { label: string; value: string }[] = [
+  { label: 'Play', value: 'play' },
+  { label: 'Set Export Range', value: 'export 0:00 to 1:30' },
+  { label: 'Adjust Volume', value: 'set volume to 80%' },
+  { label: 'Adjust Panning', value: 'set pan to -50%' },
+];
+
 export function AgentTerminal() {
   const [input, setInput] = useState('');
   const isModelReady = useAgentStore(state => state.isModelReady);
@@ -36,6 +43,10 @@ export function AgentTerminal() {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const handleSuggestionClick = (command: string) => {
+    setInput(command);
   };
 
   const handleReset = () => {
@@ -131,9 +142,41 @@ export function AgentTerminal() {
       <div className={styles.terminalBody} ref={scrollRef}>
         <div className={styles.gridBackground} />
 
+        <div className={styles.quickGuideBox}>
+            <div className={styles.quickGuideHeader}>
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: '14px', color: '#888' }}
+                aria-hidden
+              >
+                info
+              </span>
+              <h3 className={styles.quickGuideTitle}>Quick Guide</h3>
+            </div>
+            <p className={styles.quickGuideDescription}>
+              Click a command below to fill the input, then press Enter to run.
+            </p>
+            <div className={styles.quickGuideChips}>
+              {QUICK_GUIDE_ITEMS.map(({ label, value }) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={styles.quickGuideChip}
+                  onClick={() => handleSuggestionClick(value)}
+                  disabled={!isModelReady}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
         <div className={styles.messageGroup}>
           {messages.map((msg, i) => (
-            <div key={msg.id ?? i} className={styles.messageRow}>
+            <div
+              key={msg.id ?? i}
+              className={`${styles.messageRow} ${msg.role === 'user' ? styles.messageRowUser : ''}`}
+            >
               <div
                 className={`${styles.avatar} ${msg.role === 'assistant' ? styles.aiAvatar : ''}`}
               >

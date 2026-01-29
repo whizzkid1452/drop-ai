@@ -197,6 +197,69 @@ export const gridBackground = style({
   backgroundSize: '40px 40px',
 });
 
+export const quickGuideBox = style({
+  position: 'relative',
+  zIndex: 1,
+  flexShrink: 0,
+  marginBottom: '24px',
+  padding: '12px',
+  backgroundColor: '#202020',
+  borderLeft: '2px solid #555',
+  width: '100%',
+  maxWidth: '42rem',
+});
+
+export const quickGuideHeader = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  marginBottom: '8px',
+});
+
+export const quickGuideTitle = style({
+  fontSize: '11px',
+  fontWeight: 'bold',
+  color: '#888',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  margin: 0,
+});
+
+export const quickGuideDescription = style({
+  fontSize: '12px',
+  color: '#999',
+  lineHeight: 1.5,
+  marginBottom: '12px',
+  fontFamily: '"Noto Sans Mono", monospace',
+});
+
+export const quickGuideChips = style({
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '8px',
+});
+
+export const quickGuideChip = style({
+  padding: '4px 8px',
+  fontSize: '10px',
+  fontFamily: '"Noto Sans Mono", monospace',
+  color: '#ccc',
+  backgroundColor: '#262626',
+  border: '1px solid #444',
+  cursor: 'pointer',
+  transition: 'color 0.15s, border-color 0.15s, background-color 0.15s',
+  selectors: {
+    '&:hover:not(:disabled)': {
+      borderColor: '#777',
+      backgroundColor: '#333',
+    },
+    '&:disabled': {
+      opacity: 0.5,
+      cursor: 'not-allowed',
+    },
+  },
+});
+
 export const messageGroup = style({
   display: 'flex',
   flexDirection: 'column',
@@ -206,6 +269,11 @@ export const messageGroup = style({
 export const messageRow = style({
   display: 'flex',
   gap: '12px',
+});
+
+export const messageRowUser = style({
+  flexDirection: 'row-reverse',
+  justifyContent: 'flex-end',
 });
 
 export const avatar = style({
@@ -262,6 +330,7 @@ export const bubble = style({
   color: '#ddd',
   fontWeight: 300,
   lineHeight: 1.5,
+  fontFamily: '"Noto Sans Mono", monospace',
 });
 
 export const aiBubble = style({
@@ -361,10 +430,9 @@ export const inputField = style({
   fontSize: '14px',
   color: 'white',
   width: '100%',
-  textAlign: 'right', // 텍스트 우측 정렬로 복구
   fontFamily: '"Noto Sans Mono", monospace',
-  caretShape: 'block', // 실제 커서를 블록 모양으로 설정
-  caretColor: primaryColor, // 커서 색상을 포인트 컬러로 지정
+  caretShape: 'block',
+  caretColor: primaryColor,
   selectors: {
     '&::placeholder': {
       color: '#555',
