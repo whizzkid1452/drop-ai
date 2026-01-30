@@ -39,6 +39,36 @@ export const cliPanelCollapsed = style({
   borderLeft: 'none',
 });
 
+export const cliPanelResizing = style({
+  transition: 'none',
+});
+
+export const resizeHandle = style({
+  position: 'absolute',
+  left: 0,
+  top: 0,
+  bottom: 0,
+  width: '6px',
+  cursor: 'col-resize',
+  zIndex: 5,
+  selectors: {
+    '&::before': {
+      content: '""',
+      position: 'absolute',
+      left: '2px',
+      top: '50%',
+      transform: 'translateY(-50%)',
+      width: '2px',
+      height: '40px',
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      borderRadius: '1px',
+    },
+    '&:hover::before': {
+      backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    },
+  },
+});
+
 export const leftPanel = style({
   width: '300px',
   height: '100%',
@@ -79,7 +109,6 @@ export const cliToggleButton = style({
 });
 
 export const cliToggleButtonOpen = style({
-  right: '360px',
   backgroundColor: '#333',
 });
 

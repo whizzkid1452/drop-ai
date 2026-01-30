@@ -19,7 +19,7 @@ export function createUserMessage(content: string): Message {
  * @param content 초기 메시지 내용
  * @returns Message 객체
  */
-export function createAssistantMessage(content: string = '분석 중'): Message {
+export function createAssistantMessage(content: string = 'Analyzing...'): Message {
   return {
     id: crypto.randomUUID(),
     role: 'assistant',

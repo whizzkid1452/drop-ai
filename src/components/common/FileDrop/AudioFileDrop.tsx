@@ -3,7 +3,7 @@ import { convertFileToAudioFile } from '@/logics/audio/convertFileToAudioFile';
 import { useAudioFileStore } from '@/stores/useAudioFileStore';
 import { AudioService } from '@/core/audio/AudioService';
 import { useCallback } from 'react';
-import { BasicFileDrop } from './BaiscFileDrop';
+import { BasicFileDrop } from './BasicFileDrop';
 
 interface AudioFileDropProps {
   onAudioFileDrop?: (audioFile: AudioFile | null) => Promise<void> | void;

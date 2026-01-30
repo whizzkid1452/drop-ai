@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { AudioFileDrop } from '../common/FileDrop/AudioFileDrop';
 import { DawHeader } from './components/DawHeader';
 import { TrackList } from './components/TrackList';
@@ -9,11 +9,53 @@ import { PlaybackControls } from './components/PlaybackControls/PlaybackControls
 import * as styles from './DawPage.css';
 import { useAudioService } from '@/presentation/hooks/useAudioService';
 
+const CHAT_PANEL_MIN_WIDTH = 280;
+const CHAT_PANEL_MAX_WIDTH = 600;
+const CHAT_PANEL_DEFAULT_WIDTH = 350;
+
 export function DawPage() {
   const trackCount = useAudioService(state => state.tracks.length);
   const hasTracks = trackCount > 0;
-  const [isTerminalOpen, setIsTerminalOpen] = useState(false);
+  const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
+  const [chatPanelWidth, setChatPanelWidth] = useState(CHAT_PANEL_DEFAULT_WIDTH);
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeStartXRef = useRef(0);
+  const resizeStartWidthRef = useRef(CHAT_PANEL_DEFAULT_WIDTH);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    resizeStartXRef.current = e.clientX;
+    resizeStartWidthRef.current = chatPanelWidth;
+  }, [chatPanelWidth]);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaX = resizeStartXRef.current - e.clientX;
+      const newWidth = Math.min(
+        CHAT_PANEL_MAX_WIDTH,
+        Math.max(CHAT_PANEL_MIN_WIDTH, resizeStartWidthRef.current + deltaX)
+      );
+      setChatPanelWidth(newWidth);
+    };
+
+    const handleMouseUp = () => setIsResizing(false);
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing]);
 
   return (
     <div className={styles.container}>
@@ -30,6 +72,7 @@ export function DawPage() {
       {/* Right (Terminal) Toggle Button */}
       <button
         className={`${styles.cliToggleButton} ${isTerminalOpen ? styles.cliToggleButtonOpen : ''}`}
+        style={isTerminalOpen ? { right: `${chatPanelWidth + 25}px` } : undefined}
         onClick={() => setIsTerminalOpen(!isTerminalOpen)}
         title={isTerminalOpen ? 'Close Terminal' : 'Open Terminal'}
       >
@@ -73,8 +116,20 @@ export function DawPage() {
         )}
       </div>
       <div
-        className={`${styles.cliPanel} ${!isTerminalOpen ? styles.cliPanelCollapsed : ''}`}
+        className={`${styles.cliPanel} ${!isTerminalOpen ? styles.cliPanelCollapsed : ''} ${isResizing ? styles.cliPanelResizing : ''}`}
+        style={
+          isTerminalOpen
+            ? { width: chatPanelWidth }
+            : undefined
+        }
       >
+        {isTerminalOpen && (
+          <div
+            className={styles.resizeHandle}
+            onMouseDown={handleResizeStart}
+            title="드래그하여 크기 조절"
+          />
+        )}
         <Terminal />
       </div>
     </div>

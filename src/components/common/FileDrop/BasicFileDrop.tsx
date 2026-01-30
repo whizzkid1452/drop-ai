@@ -25,7 +25,7 @@ export function BasicFileDrop({ onFileDrop, onError }: BasicFileDropProps) {
     []
   );
 
-  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept,
     maxSize: MAX_FILE_SIZE,
     multiple: false,
@@ -60,25 +60,12 @@ export function BasicFileDrop({ onFileDrop, onError }: BasicFileDropProps) {
     >
       <input {...getInputProps({ className: styles.fileInput })} />
       <div className={styles.dropZoneContent}>
-        <h2 className={styles.title}>
-          {isLoading ? 'Processing...' : 'Upload Audio File'}
-        </h2>
-        <p className={styles.subtitle}>
-          Drop an audio file here, or click to select one
-        </p>
+        <div className={styles.iconWrapper}>
+          <span className={styles.iconMain}>graphic_eq</span>
+          <span className={styles.iconGlow}>graphic_eq</span>
+        </div>
+        <span className={styles.label}>DROP!</span>
         {isLoading && <div className={styles.loadingIndicator} />}
-        {!isLoading && (
-          <button
-            type="button"
-            className={styles.button}
-            onClick={e => {
-              e.stopPropagation();
-              open();
-            }}
-          >
-            Select File
-          </button>
-        )}
       </div>
     </div>
   );

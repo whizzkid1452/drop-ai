@@ -1,12 +1,13 @@
 import { useAgent } from '@/hooks/agent/useAgent/useAgent';
 import { useWebLLM } from '@/hooks/agent/useWebLLM';
 import { useAgentStore } from '@/stores/useAgentStore';
-import { useState } from 'react';
-import * as styles from './AgentTerminal.css';
-import { ActionButtons } from '../components/ActionButtons';
-import { InputArea } from '../components/InputArea';
-import { LoadingOverlay } from '../components/LoadingOverlay';
-import { MessageList } from '../components/MessageList';
+import { useState, useRef, useEffect } from 'react';
+import * as styles from './ChatModalTerminal.css';
+import { AgentTerminalHeader } from './components/AgentTerminalHeader';
+import { ModelLoadingOverlay } from './components/ModelLoadingOverlay';
+import { QuickGuide } from './components/QuickGuide';
+import { MessageList } from './components/MessageList';
+import { CommandComposer } from './components/CommandComposer';
 
 export function AgentTerminal() {
   const [input, setInput] = useState('');
@@ -20,12 +21,29 @@ export function AgentTerminal() {
   const { resetEngine, purgeCache } = useWebLLM();
 
   const isGenerating = status === 'generating';
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, status]);
 
   const handleSend = () => {
     if (!input.trim() || isGenerating || !isModelReady) return;
-
     sendMessage(input.trim());
     setInput('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const handleSuggestionClick = (command: string) => {
+    setInput(command);
   };
 
   const handleReset = () => {
@@ -34,30 +52,31 @@ export function AgentTerminal() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.title}>Drop AI Agent </div>
-        <ActionButtons
-          isGenerating={isGenerating}
-          onReset={handleReset}
-          onPurgeCache={purgeCache}
-        />
-      </div>
+      <AgentTerminalHeader onReset={handleReset} onPurgeCache={purgeCache} />
 
       {!isModelReady && (
-        <LoadingOverlay
-          text={modelLoadingText}
+        <ModelLoadingOverlay
           progress={modelLoadingProgress}
+          loadingText={modelLoadingText}
         />
       )}
 
-      <MessageList messages={messages} isModelReady={isModelReady} />
+      <div className={styles.terminalBody} ref={scrollRef}>
+        <div className={styles.gridBackground} />
+        <QuickGuide
+          isModelReady={isModelReady}
+          onSuggestionClick={handleSuggestionClick}
+        />
+        <MessageList messages={messages} isGenerating={isGenerating} />
+      </div>
 
-      <InputArea
+      <CommandComposer
         input={input}
         isModelReady={isModelReady}
         isGenerating={isGenerating}
         onInputChange={setInput}
         onSend={handleSend}
+        onKeyDown={handleKeyDown}
       />
     </div>
   );
