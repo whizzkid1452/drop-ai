@@ -165,8 +165,8 @@ export function ChatModalTerminal({ onClose }: ChatModalTerminalProps) {
                   {msg.role === 'assistant' ? 'smart_toy' : 'person'}
                 </span>
               </div>
-              <div className={styles.messageContent}>
-                <div className={styles.messageHeader}>
+              <div className={`${styles.messageContent} ${msg.role === 'user' ? styles.messageContentUser : ''}`}>
+                <div className={`${styles.messageHeader} ${msg.role === 'user' ? styles.messageHeaderUser : ''}`}>
                   <span className={`${styles.senderName} ${msg.role === 'assistant' ? styles.aiSenderName : ''}`}>
                     {msg.role === 'assistant' ? 'AI AGENT' : 'USER'}
                   </span>
@@ -174,7 +174,7 @@ export function ChatModalTerminal({ onClose }: ChatModalTerminalProps) {
                     {new Date().toLocaleTimeString([], { hour12: false })}
                   </span>
                 </div>
-                <div className={`${styles.bubble} ${msg.role === 'assistant' ? styles.aiBubble : ''}`}>
+                <div className={`${styles.bubble} ${msg.role === 'assistant' ? styles.aiBubble : ''} ${msg.role === 'user' ? styles.bubbleUser : ''}`}>
                   {msg.content}
                 </div>
               </div>

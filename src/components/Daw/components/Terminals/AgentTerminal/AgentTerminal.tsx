@@ -191,8 +191,8 @@ export function AgentTerminal() {
                   {msg.role === 'assistant' ? 'smart_toy' : 'person'}
                 </span>
               </div>
-              <div className={styles.messageContent}>
-                <div className={styles.messageHeader}>
+              <div className={`${styles.messageContent} ${msg.role === 'user' ? styles.messageContentUser : ''}`}>
+                <div className={`${styles.messageHeader} ${msg.role === 'user' ? styles.messageHeaderUser : ''}`}>
                   <span
                     className={`${styles.senderName} ${msg.role === 'assistant' ? styles.aiSenderName : ''}`}
                   >
@@ -203,7 +203,7 @@ export function AgentTerminal() {
                   </span>
                 </div>
                 <div
-                  className={`${styles.bubble} ${msg.role === 'assistant' ? styles.aiBubble : ''}`}
+                  className={`${styles.bubble} ${msg.role === 'assistant' ? styles.aiBubble : ''} ${msg.role === 'user' ? styles.bubbleUser : ''}`}
                 >
                   {msg.content}
                 </div>

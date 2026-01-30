@@ -273,7 +273,8 @@ export const messageRow = style({
 
 export const messageRowUser = style({
   flexDirection: 'row-reverse',
-  justifyContent: 'flex-end',
+  justifyContent: 'flex-start',
+  width: '100%',
 });
 
 export const avatar = style({
@@ -295,8 +296,19 @@ export const aiAvatar = style({
 export const messageContent = style({
   display: 'flex',
   flexDirection: 'column',
-  flex: 1,
-  minWidth: 0,
+  maxWidth: '80%',
+});
+
+export const messageContentUser = style({
+  alignItems: 'flex-end',
+});
+
+export const messageHeaderUser = style({
+  justifyContent: 'flex-end',
+});
+
+export const bubbleUser = style({
+  textAlign: 'right',
 });
 
 export const messageHeader = style({
