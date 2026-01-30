@@ -87,11 +87,12 @@ export const TimeRuler = memo(() => {
   }, [isDraggingRange, pixelsPerSecond, execute, showBoundary]);
 
 
+  const EXTRA_DURATION = 300; // 5 minutes buffer
   const ticks = useMemo(() => {
     const tickElements = [];
     const step = 1; // 1 second steps
-    // Ensure we render enough ticks for the max duration or at least visible area
-    const renderDuration = Math.max(maxDuration, 300);
+    // Ardour-style: Content length + Buffer
+    const renderDuration = maxDuration + EXTRA_DURATION;
 
     for (let i = 0; i <= renderDuration; i += step) {
       const isMajor = i % Math.max(1, Math.floor(60 / pixelsPerSecond)) === 0;
@@ -162,11 +163,14 @@ export const TimeRuler = memo(() => {
     }
   };
 
+  const totalWidth = (maxDuration + EXTRA_DURATION) * pixelsPerSecond;
+
   return (
     <div
       className={styles.container}
       ref={containerRef}
       onDoubleClick={handleDoubleClick}
+      style={{ minWidth: `${totalWidth}px` }}
     >
       {ticks}
 
