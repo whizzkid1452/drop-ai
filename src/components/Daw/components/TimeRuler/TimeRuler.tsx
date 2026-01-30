@@ -86,13 +86,38 @@ export const TimeRuler = memo(() => {
     };
   }, [isDraggingRange, pixelsPerSecond, execute, showBoundary]);
 
+  const [extraDuration, setExtraDuration] = useState(300); // Initial buffer
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const EXTRA_DURATION = 300; // 5 minutes buffer
+  // Auto-expand on scroll end
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setExtraDuration((prev) => prev + 300); // Add another 5 minutes
+        }
+      },
+      {
+        root: null, // viewport
+        rootMargin: '0px',
+        threshold: 0.1,
+      }
+    );
+
+    if (sentinelRef.current) {
+      observer.observe(sentinelRef.current);
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
   const ticks = useMemo(() => {
     const tickElements = [];
     const step = 1; // 1 second steps
-    // Ardour-style: Content length + Buffer
-    const renderDuration = maxDuration + EXTRA_DURATION;
+    // Ardour-style: Content length + Dynamic Buffer
+    const renderDuration = maxDuration + extraDuration;
 
     for (let i = 0; i <= renderDuration; i += step) {
       const isMajor = i % Math.max(1, Math.floor(60 / pixelsPerSecond)) === 0;
@@ -108,7 +133,7 @@ export const TimeRuler = memo(() => {
       );
     }
     return tickElements;
-  }, [maxDuration, pixelsPerSecond]);
+  }, [maxDuration, pixelsPerSecond, extraDuration]);
 
   // Zone specific handlers
   const handleTopMouseDown = async (e: React.MouseEvent) => {
@@ -163,7 +188,7 @@ export const TimeRuler = memo(() => {
     }
   };
 
-  const totalWidth = (maxDuration + EXTRA_DURATION) * pixelsPerSecond;
+  const totalWidth = (maxDuration + extraDuration) * pixelsPerSecond;
 
   return (
     <div
@@ -173,6 +198,19 @@ export const TimeRuler = memo(() => {
       style={{ minWidth: `${totalWidth}px` }}
     >
       {ticks}
+      
+      {/* Sentinel for infinite scroll */}
+      <div
+        ref={sentinelRef}
+        style={{
+          position: 'absolute',
+          left: `${totalWidth - 50}px`,
+          width: '1px',
+          height: '100%',
+          visibility: 'hidden',
+          pointerEvents: 'none'
+        }}
+      />
 
       {/* Export Range Overlay */}
       <div
