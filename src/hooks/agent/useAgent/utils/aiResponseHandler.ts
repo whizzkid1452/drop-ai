@@ -1,5 +1,6 @@
 import {
   parseAudioCommandString,
+  AudioCommandType,
   type AudioCommand,
 } from '@/types/audioCommand.schema';
 import { queryToLLM as queryToLLM } from './queryToLLM';
@@ -45,9 +46,18 @@ export async function handleAIResponse(deps: AIResponseHandlerDependencies) {
     };
   }
 
-  const { commands, error } = parseAudioCommandString({
+  let { commands, error } = parseAudioCommandString({
     commandString: fullResponse,
   });
+
+  // SET_EXPORT_RANGE만 있으면 실제 내보내기가 안 됨. EXPORT_AUDIO 자동 추가
+  if (
+    commands &&
+    commands.length === 1 &&
+    commands[0].type === AudioCommandType.SET_EXPORT_RANGE
+  ) {
+    commands = [...commands, { type: AudioCommandType.EXPORT_AUDIO }];
+  }
 
   const executionResults: Array<{
     commandType: string;
