@@ -29,6 +29,16 @@ export function TrackList() {
     }))
   );
 
+  // Calculate Max Duration from tracks (same logic as TimeRuler mostly)
+  const maxDuration = trackArray.reduce((acc, track) => {
+    let trackMax = 0;
+    track.regions.forEach(r => {
+      const end = r.startTime + (r.audioFile?.duration ?? r.duration ?? 0);
+      if (end > trackMax) trackMax = end;
+    });
+    return Math.max(acc, trackMax);
+  }, 0);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -43,8 +53,10 @@ export function TrackList() {
             ? pixelsPerSecond / zoomFactor
             : pixelsPerSecond * zoomFactor;
 
-        // Clamp
-        const clamped = Math.max(1, Math.min(1000, newPixelsPerSecond));
+        const effectiveDuration = Math.max(maxDuration, 30);
+        const viewportWidth = container.clientWidth;
+        const minPps = viewportWidth / effectiveDuration;
+        const clamped = Math.max(minPps, Math.min(1000, newPixelsPerSecond));
 
         // 🔧 Update to PlaybackStore
         setPixelsPerSecond(clamped);
@@ -59,7 +71,7 @@ export function TrackList() {
     return () => {
       container.removeEventListener('wheel', handleWheel);
     };
-  }, [pixelsPerSecond, wavesurferInstances, setPixelsPerSecond]);
+  }, [pixelsPerSecond, wavesurferInstances, setPixelsPerSecond, maxDuration]);
 
   const handleVolumeChange = useCallback(
     async (trackId: string, vol: number) => {
