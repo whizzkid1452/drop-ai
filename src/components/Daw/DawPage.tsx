@@ -18,17 +18,22 @@ export function DawPage() {
   const hasTracks = trackCount > 0;
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
-  const [chatPanelWidth, setChatPanelWidth] = useState(CHAT_PANEL_DEFAULT_WIDTH);
+  const [chatPanelWidth, setChatPanelWidth] = useState(
+    CHAT_PANEL_DEFAULT_WIDTH
+  );
   const [isResizing, setIsResizing] = useState(false);
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(CHAT_PANEL_DEFAULT_WIDTH);
 
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-    resizeStartXRef.current = e.clientX;
-    resizeStartWidthRef.current = chatPanelWidth;
-  }, [chatPanelWidth]);
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      setIsResizing(true);
+      resizeStartXRef.current = e.clientX;
+      resizeStartWidthRef.current = chatPanelWidth;
+    },
+    [chatPanelWidth]
+  );
 
   useEffect(() => {
     if (!isResizing) return;
@@ -61,8 +66,9 @@ export function DawPage() {
     <div className={styles.container}>
       {/* Left (Track Info) Toggle Button */}
       <button
-        className={`${styles.leftToggleButton} ${isTrackInfoOpen ? styles.leftToggleButtonOpen : ''
-          }`}
+        className={`${styles.leftToggleButton} ${
+          isTrackInfoOpen ? styles.leftToggleButtonOpen : ''
+        }`}
         onClick={() => setIsTrackInfoOpen(!isTrackInfoOpen)}
         title={isTrackInfoOpen ? 'Close Track Info' : 'Open Track Info'}
       >
@@ -72,7 +78,9 @@ export function DawPage() {
       {/* Right (Terminal) Toggle Button */}
       <button
         className={`${styles.cliToggleButton} ${isTerminalOpen ? styles.cliToggleButtonOpen : ''}`}
-        style={isTerminalOpen ? { right: `${chatPanelWidth + 25}px` } : undefined}
+        style={
+          isTerminalOpen ? { right: `${chatPanelWidth + 25}px` } : undefined
+        }
         onClick={() => setIsTerminalOpen(!isTerminalOpen)}
         title={isTerminalOpen ? 'Close Terminal' : 'Open Terminal'}
       >
@@ -80,8 +88,9 @@ export function DawPage() {
       </button>
 
       <div
-        className={`${styles.leftPanel} ${!isTrackInfoOpen ? styles.leftPanelCollapsed : ''
-          }`}
+        className={`${styles.leftPanel} ${
+          !isTrackInfoOpen ? styles.leftPanelCollapsed : ''
+        }`}
       >
         <TrackInfoSidebar />
       </div>
@@ -93,15 +102,26 @@ export function DawPage() {
 
         {hasTracks ? (
           <>
-            <DawHeader trackCount={trackCount} />
-            <TimeRuler />
-            <TrackList />
-            <PlaybackControls />
-            <AudioFileDrop
-              onAudioFileDrop={() => {
-                // @todo: 추가시 트랙에 자동 추가 기능 추가 예정
-              }}
-            />
+            {/* Sticky Header */}
+            <div className={styles.stickyHeader}>
+              <DawHeader trackCount={trackCount} />
+            </div>
+
+            {/* Sticky Ruler */}
+            <div className={styles.stickyRuler}>
+              <TimeRuler />
+            </div>
+
+            {/* Scrollable Content (Tracks) */}
+            <div className={styles.trackContainer}>
+              <TrackList />
+              <PlaybackControls />
+              <AudioFileDrop
+                onAudioFileDrop={() => {
+                  // @todo: 추가시 트랙에 자동 추가 기능 추가 예정
+                }}
+              />
+            </div>
           </>
         ) : (
           <div className={styles.modalOverlay}>
@@ -117,11 +137,7 @@ export function DawPage() {
       </div>
       <div
         className={`${styles.cliPanel} ${!isTerminalOpen ? styles.cliPanelCollapsed : ''} ${isResizing ? styles.cliPanelResizing : ''}`}
-        style={
-          isTerminalOpen
-            ? { width: chatPanelWidth }
-            : undefined
-        }
+        style={isTerminalOpen ? { width: chatPanelWidth } : undefined}
       >
         {isTerminalOpen && (
           <div

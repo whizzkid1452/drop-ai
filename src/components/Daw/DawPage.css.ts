@@ -15,12 +15,39 @@ export const container = style({
 export const mainContent = style({
   flex: 1,
   position: 'relative',
-  padding: '24px',
-  overflowX: 'auto',
-  overflowY: 'hidden',
+  padding: '0', // Full width/height for scroll container
+  overflow: 'auto', // Single scroll container for everything
   backgroundColor: '#0a0a0a',
-  display: 'flex',
-  flexDirection: 'column',
+  display: 'block', // Standard flow
+});
+
+// Wrapper for the Header to make it sticky
+export const stickyHeader = style({
+  position: 'sticky',
+  top: 0,
+  left: 0, // Stick to left on horizontal scroll
+  zIndex: 30, // Highest priority
+  width: '100%', // Ensure it spans full viewport width
+  backgroundColor: '#0a0a0a',
+});
+
+// Wrapper for the TimeRuler to make it sticky vertically but scroll horizontally
+export const stickyRuler = style({
+  position: 'sticky',
+  top: '60px', // Stick below the header (approx header height)
+  zIndex: 20,
+  backgroundColor: '#0a0a0a',
+  // No 'left' property -> flows naturally processing horizontal scroll
+  width: 'fit-content', // Allow it to expand with content
+  minWidth: '100%',
+  borderBottom: '1px solid #333',
+});
+
+// Container for tracks - no special scroll needed, just flow
+export const trackContainer = style({
+  position: 'relative',
+  padding: '24px 0',
+  minWidth: 'fit-content', // Ensure it wraps wide tracks
 });
 
 export const cliPanel = style({

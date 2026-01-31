@@ -11,24 +11,24 @@ import { useErrorBoundary } from 'react-error-boundary';
 // ...
 
 export const TimeRuler = memo(() => {
-  const { 
-    tracks,
-    exportStartTime,
-    exportEndTime
-  } = useAudioService(useShallow(state => ({
-    tracks: state.tracks,
-    exportStartTime: state.exportStartTime,
-    exportEndTime: state.exportEndTime,
-  })));
-  
+  const { tracks, exportStartTime, exportEndTime } = useAudioService(
+    useShallow(state => ({
+      tracks: state.tracks,
+      exportStartTime: state.exportStartTime,
+      exportEndTime: state.exportEndTime,
+    }))
+  );
+
   const pixelsPerSecond = usePlaybackStore(state => state.pixelsPerSecond);
-  
+
   const trackArray = (tracks || []) as unknown as Track[];
 
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const dragStartPosRef = useRef<number | null>(null);
-  const currentDragRangeRef = useRef<{ start: number; end: number } | null>(null);
+  const currentDragRangeRef = useRef<{ start: number; end: number } | null>(
+    null
+  );
   const [isDraggingRange, setIsDraggingRange] = useState(false);
 
   const { execute } = useAudioCommand();
@@ -36,14 +36,22 @@ export const TimeRuler = memo(() => {
 
   const maxDuration = useMemo(() => getMaxDuration(trackArray), [trackArray]);
 
-  const showExportRange = exportStartTime !== null && exportEndTime !== null && exportStartTime !== exportEndTime;
+  const showExportRange =
+    exportStartTime !== null &&
+    exportEndTime !== null &&
+    exportStartTime !== exportEndTime;
 
   // Handle global mouse events for dragging
   useEffect(() => {
     if (!isDraggingRange) return;
 
     const handleWindowMouseMove = (e: MouseEvent) => {
-      if (!containerRef.current || dragStartPosRef.current === null || !overlayRef.current) return;
+      if (
+        !containerRef.current ||
+        dragStartPosRef.current === null ||
+        !overlayRef.current
+      )
+        return;
 
       const rect = containerRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -85,7 +93,6 @@ export const TimeRuler = memo(() => {
       window.removeEventListener('mouseup', handleWindowMouseUp);
     };
   }, [isDraggingRange, pixelsPerSecond, execute, showBoundary]);
-
 
   const ticks = useMemo(() => {
     const tickElements = [];
@@ -162,11 +169,20 @@ export const TimeRuler = memo(() => {
     }
   };
 
+  // Total width of the ruler content.
+  // We use maxDuration for the layout size so the scrollbar works correctly.
+  // We force a minimum 10 minutes (600s) buffer to ensure there's enough room to scroll horizontally
+  // even for short tracks.
+  const effectiveMaxDuration = Math.max(maxDuration + 300, 600);
+  const totalWidth = effectiveMaxDuration * pixelsPerSecond;
+
   return (
     <div
       className={styles.container}
       ref={containerRef}
       onDoubleClick={handleDoubleClick}
+      // Set minWidth to ensure scrollbar appears for full content
+      style={{ minWidth: `${totalWidth}px` }}
     >
       {ticks}
 
@@ -177,7 +193,7 @@ export const TimeRuler = memo(() => {
         style={{
           display: showExportRange || isDraggingRange ? 'block' : 'none',
           left: `${(exportStartTime ?? 0) * pixelsPerSecond}px`,
-          width: `${((exportEndTime ?? 0) - (exportStartTime ?? 0)) * pixelsPerSecond}px`
+          width: `${((exportEndTime ?? 0) - (exportStartTime ?? 0)) * pixelsPerSecond}px`,
         }}
       >
         <span className={styles.exportRangeLabel}>Export Range</span>
