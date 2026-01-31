@@ -112,9 +112,9 @@ export function TrackList() {
   }, []);
 
   return (
-    <div className={styles.trackList}>
+    <div ref={containerRef} className={styles.trackList}>
       {/* @todo: 추후 디자인 수정 예정 */}
-      <div ref={containerRef} className={styles.tracksContainer}>
+      <div className={styles.tracksContainer}>
         <Cursor />
         {trackArray.map(track => {
           const thisWs = wavesurferInstances.get(track.id);
