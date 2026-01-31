@@ -173,7 +173,7 @@ export const TimeRuler = memo(() => {
   // We use maxDuration for the layout size so the scrollbar works correctly.
   // We force a minimum 10 minutes (600s) buffer to ensure there's enough room to scroll horizontally
   // even for short tracks.
-  const effectiveMaxDuration = Math.max(maxDuration + 300, 600);
+  const effectiveMaxDuration = Math.max(maxDuration + 60, 60);
   const totalWidth = effectiveMaxDuration * pixelsPerSecond;
 
   return (
