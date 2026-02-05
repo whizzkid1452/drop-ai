@@ -1,5 +1,7 @@
 
 import * as Tone from 'tone';
+import type { LiveInstrument } from './instruments/LiveInstrument';
+import { DefaultSynth } from './instruments/DefaultSynth';
 
 /**
  * LiveAudioEngine
@@ -8,17 +10,19 @@ import * as Tone from 'tone';
  * AudioService에서 분리되어 단일 책임 원칙(SRP)을 준수합니다.
  */
 export class LiveAudioEngine {
-    private synth: Tone.PolySynth;
+    private instrument: LiveInstrument;
 
     constructor() {
-        this.synth = new Tone.PolySynth(Tone.Synth, {
-            envelope: {
-                attack: 0.02,
-                decay: 0.1,
-                sustain: 0.3,
-                release: 1
-            }
-        }).toDestination();
+        // 기본 악기로 초기화
+        this.instrument = new DefaultSynth();
+    }
+
+    /**
+     * 악기 교체
+     */
+    setInstrument(instrument: LiveInstrument) {
+        this.instrument.dispose(); // 기존 악기 정리
+        this.instrument = instrument;
     }
 
     /**
@@ -30,11 +34,7 @@ export class LiveAudioEngine {
         const vel = velocity / 127;
         const freq = this.toFrequency(note);
 
-        if (Tone.getContext().state !== 'running') {
-            Tone.start();
-        }
-
-        this.synth.triggerAttack(freq, Tone.now(), vel);
+        this.instrument.triggerAttack(freq, vel);
     }
 
     /**
@@ -43,7 +43,7 @@ export class LiveAudioEngine {
      */
     triggerRelease(note: string | number): void {
         const freq = this.toFrequency(note);
-        this.synth.triggerRelease(freq, Tone.now());
+        this.instrument.triggerRelease(freq);
     }
 
     /**
@@ -56,6 +56,6 @@ export class LiveAudioEngine {
     }
 
     dispose(): void {
-        this.synth.dispose();
+        this.instrument.dispose();
     }
 }
