@@ -13,11 +13,26 @@ import { AudioExporter } from './export/AudioExporter';
 import type { ExportOptions } from './export/ExportOptions';
 
 /**
- * AudioService (Core + Engine Integration)
+ * AudioService (Facade Pattern)
  * 
- * "Married" implementation of Domain Logic and Tone.js Engine.
- * - Manages the lifecycle of Tone.js objects (Channel, Player).
- * - Syncs Domain Model state (Tracks, Regions) with Audio Graph.
+ * 프론트엔드와 오디오 엔진 사이의 레이어.
+ * 모든 오디오 관련 기능의 단일 진입점을 제공합니다.
+ * 
+ * 설계 목적:
+ * - 프론트엔드는 AudioService만 알면 되고, 내부 구현(Tone.js, AudioExporter 등)을 몰라도 됨
+ * - 오디오 엔진 교체 시 프론트엔드 수정 불필요
+ * - 레이어 분리 원칙 준수
+ * 
+ * 책임:
+ * 1. 실시간 오디오 재생 관리 (핵심)
+ *    - Transport 제어 (play/pause/stop)
+ *    - 오디오 그래프 관리 (Channel/Player)
+ * 2. 트랙/리전 관리 (핵심)
+ *    - 도메인 모델(Session/Track/Region)과 Tone.js 엔진 동기화
+ *    - 상태 동기화 (도메인 → Store)
+ * 3. Export (위임)
+ *    - 오디오 관련 기능이므로 Facade를 통해 접근
+ *    - 내부 구현은 AudioExporter에 위임
  */
 export class AudioService {
     private static instance: AudioService;
