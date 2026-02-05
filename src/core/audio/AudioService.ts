@@ -1,3 +1,4 @@
+import { AudioPort } from './io/AudioPort';
 import * as Tone from 'tone';
 import { createStore } from 'zustand/vanilla';
 import type { AudioSnapshot } from '@/types/audioTypes';
@@ -50,7 +51,7 @@ export class AudioService {
 
     // Tone.js Objects
     // Key: TrackId
-    private channels: Map<string, Tone.Channel> = new Map();
+    private ports: Map<string, AudioPort> = new Map();
     // Key: TrackId -> RegionId -> Tone.Player
     private players: Map<string, Map<string, Tone.Player>> = new Map();
 
@@ -154,17 +155,43 @@ export class AudioService {
 
     // --- Track Management ---
 
-    private getOrInitChannel(trackId: string): Tone.Channel {
-        let channel = this.channels.get(trackId);
-        if (!channel) {
-            channel = new Tone.Channel({
+    removeTrack(trackId: string): void {
+        // 1. Update Domain
+        this.session.removeTrack(trackId);
+
+        // 2. Update Engine
+        // Dispose AudioPort (disconnects nodes)
+        const port = this.ports.get(trackId);
+        if (port) {
+            port.dispose();
+            this.ports.delete(trackId);
+        }
+
+        // Dispose Players
+        const trackPlayers = this.players.get(trackId);
+        if (trackPlayers) {
+            trackPlayers.forEach(p => {
+                p.stop();
+                p.dispose();
+            });
+            this.players.delete(trackId);
+        }
+
+        // 3. Notify UI
+        this.syncStore();
+    }
+
+    private getOrInitPort(trackId: string): AudioPort {
+        let port = this.ports.get(trackId);
+        if (!port) {
+            port = new AudioPort({
                 volume: 0,
                 pan: 0,
-            }).toDestination();
-            this.channels.set(trackId, channel);
+            });
+            this.ports.set(trackId, port);
             this.players.set(trackId, new Map());
         }
-        return channel;
+        return port;
     }
 
     setTrackVolume(trackId: string, volume: number): void {
@@ -175,9 +202,9 @@ export class AudioService {
         }
 
         // 2. Update Engine
-        const channel = this.getOrInitChannel(trackId);
-        const volumeInDb = Tone.gainToDb(volume);
-        channel.volume.rampTo(volumeInDb, 0.1);
+        const port = this.getOrInitPort(trackId);
+        // AudioPort handles linear -> dB conversion
+        port.volume = volume;
 
         // 3. Notify UI (Partial Update)
         this.updateTrackState(trackId, { volume });
@@ -191,8 +218,8 @@ export class AudioService {
         }
 
         // 2. Update Engine
-        const channel = this.getOrInitChannel(trackId);
-        channel.pan.rampTo(pan, 0.1);
+        const port = this.getOrInitPort(trackId);
+        port.pan = pan;
 
         // 3. Notify UI (Partial Update)
         this.updateTrackState(trackId, { pan });
@@ -211,12 +238,12 @@ export class AudioService {
     }
 
     getTrackParams(trackId: string): { volume: number; pan: number } | null {
-        const channel = this.channels.get(trackId);
-        if (!channel) return null;
+        const port = this.ports.get(trackId);
+        if (!port) return null;
 
         return {
-            volume: channel.volume.value,
-            pan: channel.pan.value
+            volume: port.volume,
+            pan: port.pan
         };
     }
 
@@ -244,7 +271,7 @@ export class AudioService {
         }
 
         // 2. Ensure Channel exists in Engine
-        const channel = this.getOrInitChannel(trackId);
+        const channel = this.getOrInitPort(trackId);
         const trackPlayers = this.players.get(trackId)!;
 
         // 3. Check if player already exists
@@ -313,7 +340,7 @@ export class AudioService {
                     console.error('[AudioService] Player load error', e);
                     reject(e);
                 }
-            }).connect(channel);
+            }).connect(channel.inputNode); // Connect to AudioPort input
 
             trackPlayers.set(regionData.id, player);
         });
