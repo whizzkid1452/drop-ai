@@ -1,31 +1,42 @@
-
-import { useMidiNote } from "@/hooks/useMidi";
 import { AudioService } from "@/core/audio/AudioService";
-import { useEffect } from "react";
-import { useMidi } from "@/hooks/useMidi";
+import { useEffect, useRef } from 'react';
+import { PushController } from '@/core/control-surface/push/PushController';
 
-export function MidiListener() {
-    const { isEnabled, error } = useMidi();
+export const MidiListener = () => {
+    const controllerRef = useRef<PushController | null>(null);
 
     useEffect(() => {
-        if (isEnabled) {
-            console.log("MIDI Enabled");
-        }
-        if (error) {
-            console.warn("MIDI Error:", error);
-        }
-    }, [isEnabled, error]);
-
-    useMidiNote((note, velocity, isNoteOn) => {
+        const controller = new PushController();
+        controllerRef.current = controller;
         const audioService = AudioService.getInstance();
-        if (isNoteOn) {
-            console.log(`Note On: ${note} (vel: ${velocity})`);
-            audioService.playNote(note, velocity);
-        } else {
-            console.log(`Note Off: ${note}`);
-            audioService.stopNote(note);
-        }
-    });
+
+        const connect = async () => {
+            try {
+                await controller.connect();
+
+                if (controller.isConnected()) {
+                    // 이벤트 핸들러 등록
+                    controller.onPadPress = (note, velocity) => {
+                        audioService.playNote(note, velocity);
+                        // 시각적 피드백 (선택 사항)
+                        controller.getPad(note)?.pulse(122); // White pulse
+                    };
+
+                    controller.onPadRelease = (note) => {
+                        audioService.stopNote(note);
+                    };
+                }
+            } catch (error) {
+                console.error("Failed to connect controller:", error);
+            }
+        };
+
+        connect();
+
+        return () => {
+            controller.disconnect();
+        };
+    }, []);
 
     return null; // Headless component
-}
+};
