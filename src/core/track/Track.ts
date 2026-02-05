@@ -63,6 +63,32 @@ export class Track implements TrackData {
         this._regions.delete(regionId);
     }
 
+    splitRegion(regionId: RegionId, splitTime: number): { left: Region, right: Region } | null {
+        const region = this.getRegion(regionId);
+        if (!region) return null;
+
+        const splitResult = region.split(splitTime);
+        if (!splitResult) return null;
+
+        const { left, right } = splitResult;
+
+        // Transaction-like update: Remove old, Add new
+        this.removeRegion(regionId);
+
+        try {
+            this.addRegion(left);
+            this.addRegion(right);
+        } catch (e) {
+            // Rollback if something weird happens (unlikely for split)
+            this.removeRegion(left.id);
+            this.removeRegion(right.id);
+            this.addRegion(region); // Restore original
+            throw e;
+        }
+
+        return { left, right };
+    }
+
     getRegion(regionId: RegionId): Region | undefined {
         return this._regions.get(regionId);
     }

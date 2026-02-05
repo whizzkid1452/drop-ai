@@ -346,8 +346,17 @@ export class AudioService {
         const track = this.session.getTrack(trackId);
         if (!track) return;
 
-        // Find region at splitTime
-        // (Simple find, assuming no overlaps for now)
+        // Domain Logic: Delegated to Track
+        // Find region at splitTime (we need the ID first... wait, AudioService usually receives ID or Time?)
+        // The signature is splitRegion(trackId, splitTime). 
+        // We need to find the region ID first to call track.splitRegion(id, time).
+
+        // Find region at splitTime (UI/Service responsibility to identify target?)
+        // Ideally UI passes RegionId, but here we only have Time.
+        // Let's keep the find logic here or move "findAt" to Track?
+        // "Track.getRegionAt(time)" would be useful.
+
+        // For now, let's keep the finding logic but use track.splitRegion for the operation.
         const region = track.regions.find(r =>
             splitTime > r.startTime && splitTime < r.endTime
         );
@@ -357,16 +366,10 @@ export class AudioService {
             return;
         }
 
-        // Domain Logic: Split
-        const splitResult = region.split(splitTime);
+        const splitResult = track.splitRegion(region.id, splitTime);
         if (!splitResult) return;
 
         const { left, right } = splitResult;
-
-        // Update Domain
-        track.removeRegion(region.id);
-        track.addRegion(left);
-        track.addRegion(right);
 
         // Update Engine
         // Unload old
