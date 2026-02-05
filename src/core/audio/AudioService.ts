@@ -9,6 +9,7 @@ import {
     configurePlayerLoop,
     startPlayer
 } from '../../logics/audio/playerConfig';
+import { LiveAudioEngine } from './live/LiveAudioEngine';
 import { AudioExporter } from './export/AudioExporter';
 import type { ExportOptions } from './export/ExportOptions';
 
@@ -36,7 +37,7 @@ import type { ExportOptions } from './export/ExportOptions';
  */
 export class AudioService {
     private static instance: AudioService;
-    
+
     // ✅ Zustand Vanilla Store for Logic-State Binding
     public readonly store = createStore<AudioSnapshot>(() => ({
         isPlaying: false,
@@ -56,10 +57,14 @@ export class AudioService {
     // Export 기능은 AudioExporter에 위임
     private exporter: AudioExporter;
 
+    // Live Playback 위임
+    private liveAudio: LiveAudioEngine;
+
     private constructor(private session: Session) {
         // Initialize Global Transport Loop?
         // For now, we rely on Tone.Transport events if needed.
         this.exporter = new AudioExporter();
+        this.liveAudio = new LiveAudioEngine();
     }
 
     static initialize(session: Session): AudioService {
@@ -135,6 +140,16 @@ export class AudioService {
 
     getCurrentTime(): number {
         return Tone.getTransport().seconds;
+    }
+
+    // --- Live Performance ---
+
+    playNote(note: string | number, velocity: number = 1): void {
+        this.liveAudio.triggerAttack(note, velocity);
+    }
+
+    stopNote(note: string | number): void {
+        this.liveAudio.triggerRelease(note);
     }
 
     // --- Track Management ---
@@ -248,10 +263,10 @@ export class AudioService {
                 ...PLAYER_CONFIG,
                 onload: () => {
                     console.log('[AudioService] Player loaded for region', regionData.id);
-                    
+
                     // Determine duration (provided or from buffer)
                     const duration = regionData.duration ?? player.buffer.duration;
-                    
+
                     // Create Domain Region (now that we have duration)
                     const region = new Region({
                         id: regionData.id,
@@ -267,8 +282,8 @@ export class AudioService {
                     if (regionData.duration !== undefined) {
                         configurePlayerLoop(player, regionData.sourceStartTime, regionData.duration);
                     } else {
-                         // Ensure loop config if full duration
-                         configurePlayerLoop(player, regionData.sourceStartTime, duration);
+                        // Ensure loop config if full duration
+                        configurePlayerLoop(player, regionData.sourceStartTime, duration);
                     }
 
                     startPlayer({

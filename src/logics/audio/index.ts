@@ -3,7 +3,7 @@
  */
 
 
-export { useAudioCommand } from './useAudioCommand';
+export { useAudioCommand, executeAudioCommand } from './useAudioCommand';
 export { RegionRenderer } from './regionRenderer';
 export { AudioEngineError, AudioEngineErrorCode } from './audioEngine.errors';
 

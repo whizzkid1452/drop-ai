@@ -50,13 +50,15 @@
 └─────────────────────────────────────┘
               ↓
 ┌─────────────────────────────────────┐
-│   Core Layer                        │
+│   Facade Layer                      │
 │   - AudioService (싱글톤)          │
 │   - Session/Track/Region (도메인)  │
 └─────────────────────────────────────┘
               ↓
 ┌─────────────────────────────────────┐
-│   Infrastructure Layer              │
+│   AudioEngine Layer                 │
+│   - LiveAudioEngine (실시간 연주)   │
+│   - AudioExporter (내보내기)        │
 │   - Tone.js (오디오 엔진)           │
 │   - Zustand (상태 관리)             │
 │   - Web Audio API                   │

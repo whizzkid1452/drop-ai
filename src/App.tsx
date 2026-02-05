@@ -6,6 +6,7 @@ import { AppRouter } from './router/AppRouter';
 import { AnalyticsTracker } from '@/components/common/AnalyticsTracker';
 import { AudioService } from '@/core/audio/AudioService';
 import { Session } from '@/core/session/Session';
+import { MidiListener } from '@/components/MidiListener';
 
 
 function App() {
@@ -50,6 +51,7 @@ function App() {
     <DefaultLayout>
       <BrowserRouter>
         <AnalyticsTracker />
+        <MidiListener />
         <AppRouter />
       </BrowserRouter>
     </DefaultLayout>
