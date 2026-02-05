@@ -9,17 +9,30 @@ import {
     configurePlayerLoop,
     startPlayer
 } from '../../logics/audio/playerConfig';
-import { RegionRenderer } from '@/logics/audio/regionRenderer';
-import { loadAndDecodeAudioBuffer } from '@/logics/audio/loadAndDecodeAudioBuffer';
-import { AudioEngineError, AudioEngineErrorCode } from '@/logics/audio/audioEngine.errors';
-import { audioBufferToWav } from '@/components/Daw/components/ExportButton/utils/wavConverter';
+import { AudioExporter } from './export/AudioExporter';
+import type { ExportOptions } from './export/ExportOptions';
 
 /**
- * AudioService (Core + Engine Integration)
+ * AudioService (Facade Pattern)
  * 
- * "Married" implementation of Domain Logic and Tone.js Engine.
- * - Manages the lifecycle of Tone.js objects (Channel, Player).
- * - Syncs Domain Model state (Tracks, Regions) with Audio Graph.
+ * 프론트엔드와 오디오 엔진 사이의 레이어.
+ * 모든 오디오 관련 기능의 단일 진입점을 제공합니다.
+ * 
+ * 설계 목적:
+ * - 프론트엔드는 AudioService만 알면 되고, 내부 구현(Tone.js, AudioExporter 등)을 몰라도 됨
+ * - 오디오 엔진 교체 시 프론트엔드 수정 불필요
+ * - 레이어 분리 원칙 준수
+ * 
+ * 책임:
+ * 1. 실시간 오디오 재생 관리 (핵심)
+ *    - Transport 제어 (play/pause/stop)
+ *    - 오디오 그래프 관리 (Channel/Player)
+ * 2. 트랙/리전 관리 (핵심)
+ *    - 도메인 모델(Session/Track/Region)과 Tone.js 엔진 동기화
+ *    - 상태 동기화 (도메인 → Store)
+ * 3. Export (위임)
+ *    - 오디오 관련 기능이므로 Facade를 통해 접근
+ *    - 내부 구현은 AudioExporter에 위임
  */
 export class AudioService {
     private static instance: AudioService;
@@ -40,9 +53,13 @@ export class AudioService {
     // Key: TrackId -> RegionId -> Tone.Player
     private players: Map<string, Map<string, Tone.Player>> = new Map();
 
+    // Export 기능은 AudioExporter에 위임
+    private exporter: AudioExporter;
+
     private constructor(private session: Session) {
         // Initialize Global Transport Loop?
         // For now, we rely on Tone.Transport events if needed.
+        this.exporter = new AudioExporter();
     }
 
     static initialize(session: Session): AudioService {
@@ -359,16 +376,15 @@ export class AudioService {
 
     /**
      * 프로젝트 전체를 오디오 파일로 내보냅니다.
-     * Tone.Offline을 사용하여 정확한 타이밍과 이펙트를 반영합니다.
-     * @todo 추후에 별도 파일로 분리하기(너무 큼)
+     * Export 로직은 AudioExporter에 위임합니다.
+     * 
+     * @param options - Export 옵션 (트랙 목록, 범위 등)
+     * @returns WAV 형식의 Blob
      */
-    async exportProject(options?: {
-        tracks?: TrackData[];
-        range?: { startTime: number; endTime: number };
-    }): Promise<Blob> {
+    async exportProject(options?: ExportOptions): Promise<Blob> {
         const snapshot = this.store.getState();
         const tracksToExport = options?.tracks ?? snapshot.tracks;
-        
+
         // Resolve range: option -> store -> full
         let exportRange = options?.range;
         if (!exportRange && snapshot.exportStartTime !== null && snapshot.exportEndTime !== null) {
@@ -378,123 +394,7 @@ export class AudioService {
             };
         }
 
-        if (tracksToExport.length === 0) {
-            throw new AudioEngineError(
-                AudioEngineErrorCode.EXPORT_NO_TRACKS,
-                'No tracks to export'
-            );
-        }
-
-        // 1. Preload Audio Buffers
-        const audioBuffers = await this.preloadAudioBuffers(tracksToExport);
-
-        // 2. Calculate Duration
-        const totalDuration = exportRange
-            ? exportRange.endTime - exportRange.startTime
-            : this.getTotalDuration(tracksToExport);
-
-        if (totalDuration <= 0) {
-            throw new AudioEngineError(
-                AudioEngineErrorCode.EXPORT_ZERO_DURATION,
-                'Export duration must be greater than 0',
-                { totalDuration, range: exportRange }
-            );
-        }
-
-        // 3. Offline Rendering
-        const renderedBuffer = await Tone.Offline(({ transport }) => {
-            tracksToExport.forEach(track => {
-                const channel = new Tone.Channel({
-                    volume: track.volume ? Tone.gainToDb(track.volume) : 0,
-                    pan: track.pan ?? 0,
-                }).toDestination();
-
-                track.regions.forEach((region) => {
-                    if (!region.audioFile) return;
-                    
-                    const buffer = audioBuffers.get(region.audioFile.url);
-                    if (!buffer) return;
-
-                    // region.audioFile이 확인됐으므로 렌더링 파라미터 계산
-                    const baseParams = RegionRenderer.calculateRenderParams(region);
-                    const adjustedParams = RegionRenderer.adjustForExportRange(baseParams, exportRange);
-
-                    if (adjustedParams.duration <= 0) return;
-
-                    const player = new Tone.Player({
-                        url: buffer,
-                        loop: false,
-                        ...PLAYER_CONFIG,
-                    }).connect(channel);
-
-                    configurePlayerLoop(
-                        player,
-                        adjustedParams.startOffset,
-                        adjustedParams.duration
-                    );
-
-                    startPlayer({
-                        player,
-                        syncMode: false,
-                        startTime: adjustedParams.startTime,
-                        startOffset: adjustedParams.startOffset,
-                        duration: adjustedParams.duration,
-                    });
-                });
-            });
-
-            transport.start();
-        }, totalDuration);
-
-        // 4. Convert to WAV
-        const audioBuffer = renderedBuffer.get();
-        if (!audioBuffer) {
-            throw new AudioEngineError(
-                AudioEngineErrorCode.RENDER_FAILED,
-                'Failed to render audio buffer'
-            );
-        }
-
-        return audioBufferToWav(audioBuffer);
-    }
-
-    private async preloadAudioBuffers(tracks: TrackData[]) {
-        const audioBuffers = new Map<string, AudioBuffer>();
-        const context = Tone.getContext();
-      
-        await Promise.all(
-          tracks.flatMap(track =>
-            track.regions.map(async (region) => {
-              if (!region.audioFile) return;
-              const audioUrl = region.audioFile.url;
-              if (audioBuffers.has(audioUrl)) return;
-              
-              const audioBuffer = await loadAndDecodeAudioBuffer({
-                audioContext: context,
-                audioUrl,
-              });
-              audioBuffers.set(audioUrl, audioBuffer);
-            })
-          )
-        );
-      
-        return audioBuffers;
-    }
-
-    private getTotalDuration(tracks: TrackData[]): number {
-        let totalDuration = 0;
-      
-        tracks.forEach(track => {
-          track.regions.forEach((region) => {
-            if (!region.audioFile) return;
-            const duration = region.audioFile.duration ?? 0;
-            const endPoint = region.startTime + duration;
-            if (endPoint > totalDuration) {
-              totalDuration = endPoint;
-            }
-          });
-        });
-        
-        return totalDuration;
+        // AudioExporter에 위임
+        return this.exporter.exportProject(tracksToExport, exportRange);
     }
 }
