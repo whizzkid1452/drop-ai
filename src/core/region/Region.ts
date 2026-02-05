@@ -20,12 +20,12 @@ interface RegionProps {
   duration: number;
   sourceStartTime: number;
   audioFile?: RegionAudioFile | AudioFile;
-  status: RegionStatus[]; 
+  status: RegionStatus[];
 }
 
 export interface RegionData extends RegionProps {
-    endTime: number;
-    audioFile?: RegionAudioFile | AudioFile;
+  endTime: number;
+  audioFile?: RegionAudioFile | AudioFile;
 }
 
 /**
@@ -49,6 +49,13 @@ export class Region implements RegionData {
     this.audioFile = props.audioFile;
     this.duration = props.duration;
     this.status = props.status;
+  }
+
+  /**
+   * Check if this region overlaps with another region.
+   */
+  overlaps(other: Region): boolean {
+    return this.startTime < other.endTime && this.endTime > other.startTime;
   }
 
   /**

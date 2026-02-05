@@ -276,7 +276,16 @@ export class AudioService {
                         audioFile: regionData.audioFile,
                         status: []
                     });
-                    track.addRegion(region);
+
+                    try {
+                        track.addRegion(region);
+                    } catch (e) {
+                        console.error('[AudioService] Failed to add region to track', e);
+                        player.dispose(); // Cleanup potentially created player
+                        reject(e);
+                        return;
+                    }
+
                     console.log('[AudioService] Region added to track', { trackId, regionId: regionData.id });
 
                     if (regionData.duration !== undefined) {

@@ -45,9 +45,17 @@ export class Track implements TrackData {
 
     // --- Region Management ---
 
+    canAddRegion(newRegion: Region): boolean {
+        // Validation: Overlap check
+        // Returns true if no region overlaps with newRegion
+        return !this.regions.some(existingRegion => existingRegion.overlaps(newRegion));
+    }
+
     addRegion(region: Region) {
-        // TODO: Check for overlaps? For now, we allow overlaps in model, 
-        // but UI/Service might prevent it.
+        if (!this.canAddRegion(region)) {
+            // TODO: Custom Error class would be better
+            throw new Error(`Cannot add region: Overlaps with an existing region on Track ${this.id}`);
+        }
         this._regions.set(region.id, region);
     }
 
