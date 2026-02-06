@@ -13,6 +13,7 @@ import {
 import { LiveAudioEngine } from './live/LiveAudioEngine';
 import { AudioExporter } from './export/AudioExporter';
 import type { ExportOptions } from './export/ExportOptions';
+import { AutomationEngine } from '../automation/AutomationEngine';
 
 /**
  * AudioService (Facade Pattern)
@@ -61,45 +62,24 @@ export class AudioService {
     // Live Playback 위임
     private liveAudio: LiveAudioEngine;
 
+    // Automation Engine
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    private automationEngine: AutomationEngine;
+
     private constructor(private session: Session) {
         // Initialize Global Transport Loop?
         // For now, we rely on Tone.Transport events if needed.
         this.exporter = new AudioExporter();
         this.liveAudio = new LiveAudioEngine();
 
-        this.setupAutomationLoop();
+        // Initialize Automation Engine
+        this.automationEngine = new AutomationEngine(
+            this.session,
+            (trackId) => this.ports.get(trackId)
+        );
     }
 
-    private setupAutomationLoop() {
-        // Update automation every 0.1 seconds (approx 10Hz control rate)
-        // Higher rate = smoother curves but more CPU
-        Tone.Transport.scheduleRepeat((_time) => {
-            // Use the precise time of the event
-            // Note: Tone.Transport.seconds might differ slightly from 'time' during lookahead
-            const currentTime = Tone.Transport.seconds;
 
-            this.session.tracks.forEach(track => {
-                const port = this.ports.get(track.id);
-                if (!port) return;
-
-                // 1. Volume Automation
-                const volConfig = track.automations.get('volume');
-                if (volConfig && volConfig.getPoints().length > 0) {
-                    const val = volConfig.getValueAt(currentTime);
-                    port.volume = val;
-                    // Note: We are NOT updating track.volume or UI store here to avoid performance issues.
-                    // If UI needs to reflect this, we should use a separate animation frame loop in UI.
-                }
-
-                // 2. Pan Automation
-                const panConfig = track.automations.get('pan');
-                if (panConfig && panConfig.getPoints().length > 0) {
-                    const val = panConfig.getValueAt(currentTime);
-                    port.pan = val;
-                }
-            });
-        }, "0.1");
-    }
 
     static initialize(session: Session): AudioService {
         if (!AudioService.instance) {
@@ -483,5 +463,9 @@ export class AudioService {
 
         // AudioExporter에 위임
         return this.exporter.exportProject(tracksToExport, exportRange);
+    }
+
+    dispose() {
+        this.automationEngine.dispose();
     }
 }
