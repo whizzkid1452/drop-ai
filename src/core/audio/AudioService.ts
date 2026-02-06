@@ -66,6 +66,39 @@ export class AudioService {
         // For now, we rely on Tone.Transport events if needed.
         this.exporter = new AudioExporter();
         this.liveAudio = new LiveAudioEngine();
+
+        this.setupAutomationLoop();
+    }
+
+    private setupAutomationLoop() {
+        // Update automation every 0.1 seconds (approx 10Hz control rate)
+        // Higher rate = smoother curves but more CPU
+        Tone.Transport.scheduleRepeat((_time) => {
+            // Use the precise time of the event
+            // Note: Tone.Transport.seconds might differ slightly from 'time' during lookahead
+            const currentTime = Tone.Transport.seconds;
+
+            this.session.tracks.forEach(track => {
+                const port = this.ports.get(track.id);
+                if (!port) return;
+
+                // 1. Volume Automation
+                const volConfig = track.automations.get('volume');
+                if (volConfig && volConfig.getPoints().length > 0) {
+                    const val = volConfig.getValueAt(currentTime);
+                    port.volume = val;
+                    // Note: We are NOT updating track.volume or UI store here to avoid performance issues.
+                    // If UI needs to reflect this, we should use a separate animation frame loop in UI.
+                }
+
+                // 2. Pan Automation
+                const panConfig = track.automations.get('pan');
+                if (panConfig && panConfig.getPoints().length > 0) {
+                    const val = panConfig.getValueAt(currentTime);
+                    port.pan = val;
+                }
+            });
+        }, "0.1");
     }
 
     static initialize(session: Session): AudioService {

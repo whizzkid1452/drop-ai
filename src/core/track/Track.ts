@@ -1,6 +1,7 @@
 import { Region, type RegionId } from '../region/Region';
 import type { RegionData } from '../region/Region';
 import { TRACK_STATUS, type TrackStatus } from '@/types/statusTypes';
+import { AutomationTrack } from '../automation/AutomationTrack';
 
 export type TrackId = string;
 
@@ -35,12 +36,19 @@ export class Track implements TrackData {
     // State
     public status: TrackStatus[] = [];
 
+    // Automation
+    public automations: Map<string, AutomationTrack> = new Map();
+
     constructor(props: TrackProps) {
         this.id = props.id;
         this.name = props.name ?? `Track ${props.id}`;
         if (props.volume !== undefined) this.volume = props.volume;
         if (props.pan !== undefined) this.pan = props.pan;
         this.status = props.status;
+
+        // Initialize default automation tracks
+        this.automations.set('volume', new AutomationTrack());
+        this.automations.set('pan', new AutomationTrack());
     }
 
     // --- Region Management ---
