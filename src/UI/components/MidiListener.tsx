@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useAudioServiceActions } from '@/FACADE/useEngineFacade';
+import { useAudioServiceActions } from '@/AudioEngine/FACADE/useAudioEngineFacade';
 import { PushController } from '@/AudioEngine/control-surface/push/PushController';
 
 export const MidiListener = () => {

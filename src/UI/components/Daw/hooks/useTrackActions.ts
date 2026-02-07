@@ -1,4 +1,4 @@
-import { useAudioServiceActions } from '@/FACADE/useEngineFacade';
+import { useAudioServiceActions } from '@/AudioEngine/FACADE/useAudioEngineFacade';
 
 /**
  * @deprecated Use useAudioServiceActions() directly instead.

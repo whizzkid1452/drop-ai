@@ -7,14 +7,15 @@ import { TrackInfoSidebar } from './components/TrackInfoSidebar';
 import { TimeRuler } from './components/TimeRuler/TimeRuler';
 import { PlaybackControls } from './components/PlaybackControls/PlaybackControls';
 import * as styles from './DawPage.css';
-import { useAudioService } from '@/FACADE/useEngineFacade';
+import { useAudioService } from '@/AudioEngine/FACADE/useAudioEngineFacade';
+import type { AudioSnapshot } from '@/types/audioTypes';
 
 const CHAT_PANEL_MIN_WIDTH = 280;
 const CHAT_PANEL_MAX_WIDTH = 600;
 const CHAT_PANEL_DEFAULT_WIDTH = 350;
 
 export function DawPage() {
-  const trackCount = useAudioService(state => state.tracks.length);
+  const trackCount = useAudioService((state: AudioSnapshot) => state.tracks.length);
   const hasTracks = trackCount > 0;
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);

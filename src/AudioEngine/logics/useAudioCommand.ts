@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { AudioService } from '@/FACADE/engineFacade';
+import { AudioService } from '@/AudioEngine/FACADE/audioEngineFacade';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
 import { downloadBlob } from '@/UI/components/Daw/components/ExportButton/utils/audioExport';
 
@@ -29,7 +29,7 @@ function getFirstTrackId(): string {
 function getFirstRegionId(trackId: string): string {
   const service = AudioService.getInstance();
   const tracks = service.store.getState().tracks;
-  const track = tracks.find(t => t.id === trackId);
+  const track = tracks.find((t: { id: string }) => t.id === trackId);
 
   if (!track) {
     throw new Error(`Track not found: ${trackId}`);
@@ -49,7 +49,7 @@ function getFirstRegionId(trackId: string): string {
 function getFirstRegionUrl(trackId: string): string {
   const service = AudioService.getInstance();
   const tracks = service.store.getState().tracks;
-  const track = tracks.find(t => t.id === trackId);
+  const track = tracks.find((t: { id: string }) => t.id === trackId);
 
   if (!track) {
     throw new Error(`Track not found: ${trackId}`);

@@ -1,14 +1,16 @@
 import { useAudioCommand } from '@/AudioEngine/logics';
-import { useAudioService, useAudioServiceActions } from '@/FACADE/useEngineFacade';
+import { useAudioService, useAudioServiceActions } from '@/AudioEngine/FACADE/useAudioEngineFacade';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
 import { useErrorBoundary } from 'react-error-boundary';
 import { TrackComponent } from './Track/TrackComponent';
 import * as styles from './TrackList.css';
 import { Cursor } from './Cursor/Cursor';
+import type { AudioSnapshot } from '@/types/audioTypes';
+import type { TrackData } from '@/AudioEngine/track/Track';
 
 export function TrackList() {
-  const tracks = useAudioService(state => state.tracks);
+  const tracks = useAudioService((state: AudioSnapshot) => state.tracks);
   const trackArray = tracks || [];
 
   const [wavesurferInstances, setWavesurferInstances] = useState<
@@ -20,7 +22,7 @@ export function TrackList() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // ✅ Use Facade for state access
-  const pixelsPerSecond = useAudioService(state => state.pixelsPerSecond);
+  const pixelsPerSecond = useAudioService((state: AudioSnapshot) => state.pixelsPerSecond);
   const { setPixelsPerSecond } = useAudioServiceActions();
 
   useEffect(() => {
@@ -98,7 +100,7 @@ export function TrackList() {
       {/* @todo: 추후 디자인 수정 예정 */}
       <div ref={containerRef} className={styles.tracksContainer}>
         <Cursor />
-        {trackArray.map(track => {
+        {trackArray.map((track: TrackData) => {
           const thisWs = wavesurferInstances.get(track.id);
           const thisMedia = thisWs?.getMediaElement();
 

@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { useAudioService, useAudioServiceActions } from '@/FACADE/useEngineFacade';
+import { useAudioService, useAudioServiceActions } from '@/AudioEngine/FACADE/useAudioEngineFacade';
 import * as styles from './Cursor.css';
 
 export const Cursor = () => {

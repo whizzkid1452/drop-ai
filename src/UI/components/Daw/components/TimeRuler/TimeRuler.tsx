@@ -1,11 +1,12 @@
 import { memo, useMemo, useRef, useState, useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { useAudioService } from '@/FACADE/useEngineFacade';
+import { useAudioService } from '@/AudioEngine/FACADE/useAudioEngineFacade';
 import * as styles from './TimeRuler.css';
 import type { Track } from '@/types/track';
 import { useAudioCommand } from '@/AudioEngine/logics';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import { useErrorBoundary } from 'react-error-boundary';
+import type { AudioSnapshot } from '@/types/audioTypes';
 
 // ...
 
@@ -15,7 +16,7 @@ export const TimeRuler = memo(() => {
     exportStartTime,
     exportEndTime,
     pixelsPerSecond
-  } = useAudioService(useShallow(state => ({
+  } = useAudioService(useShallow((state: AudioSnapshot) => ({
     tracks: state.tracks,
     exportStartTime: state.exportStartTime,
     exportEndTime: state.exportEndTime,

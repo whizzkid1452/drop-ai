@@ -1,13 +1,15 @@
 import * as styles from './TrackInfoSidebar.css';
-import { useAudioService } from '@/FACADE/useEngineFacade';
+import { useAudioService } from '@/AudioEngine/FACADE/useAudioEngineFacade';
+import type { AudioSnapshot } from '@/types/audioTypes';
+import type { TrackData } from '@/AudioEngine/track/Track';
 
 /** @description For Debugging */
 export function TrackInfoSidebar() {
-  const tracks = useAudioService(state => state.tracks);
+  const tracks = useAudioService((state: AudioSnapshot) => state.tracks);
 
   // Convert array to object for display (keyed by track id)
   const tracksDisplay = tracks.reduce(
-    (acc, track) => ({
+    (acc: Record<string, TrackData>, track: TrackData) => ({
       ...acc,
       [track.id]: {
         ...track,

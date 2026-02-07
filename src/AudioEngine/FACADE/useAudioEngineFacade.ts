@@ -1,6 +1,6 @@
 import { useStore } from 'zustand';
 import { useMemo } from 'react';
-import { AudioService } from '@/FACADE/engineFacade';
+import { AudioService } from '@/AudioEngine/FACADE/audioEngineFacade';
 import type { AudioSnapshot } from '@/types/audioTypes';
 
 /**

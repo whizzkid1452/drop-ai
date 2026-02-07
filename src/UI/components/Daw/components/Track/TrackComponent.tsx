@@ -1,7 +1,7 @@
 import type { TrackData } from '@/AudioEngine/track/Track';
 import type WaveSurfer from 'wavesurfer.js';
 import { memo } from 'react';
-import { useAudioService, useAudioServiceActions } from '@/FACADE/useEngineFacade';
+import { useAudioService, useAudioServiceActions } from '@/AudioEngine/FACADE/useAudioEngineFacade';
 import { TrackPanController } from './components/TrackPanController';
 import { TrackVolumeController } from './components/TrackVolumeController';
 import { RegionComponent } from './RegionComponent';

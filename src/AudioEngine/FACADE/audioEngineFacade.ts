@@ -1,14 +1,14 @@
 import { createStore } from 'zustand/vanilla';
 import type { AudioSnapshot } from '@/types/audioTypes';
-import { Session } from '../AudioEngine/session/Session';
-import type { TrackData } from '../AudioEngine/track/Track';
-import { Track } from '../AudioEngine/track/Track';
-import { Region } from '../AudioEngine/region/Region';
-import { AudioExporter } from '../AudioEngine/export/AudioExporter';
-import type { ExportOptions } from '../AudioEngine/export/ExportOptions';
-import { AutomationEngine } from '../AudioEngine/automation/AutomationEngine';
-import type { IAudioEngine, RegionData } from '../AudioEngine/audio/engine/IAudioEngine';
-import { ToneAudioEngine } from '../AudioEngine/audio/engine/ToneAudioEngine';
+import { Session } from '../session/Session';
+import type { TrackData } from '../track/Track';
+import { Track } from '../track/Track';
+import { Region } from '../region/Region';
+import { AudioExporter } from '../export/AudioExporter';
+import type { ExportOptions } from '../export/ExportOptions';
+import { AutomationEngine } from '../automation/AutomationEngine';
+import type { IAudioEngine, RegionData } from '../audio/engine/IAudioEngine';
+import { ToneAudioEngine } from '../audio/engine/ToneAudioEngine';
 
 /**
  * AudioService (Pure Facade Pattern)
@@ -57,7 +57,7 @@ export class AudioService {
         // Initialize Automation Engine
         this.automationEngine = new AutomationEngine(
             this.session,
-            (trackId) => (this.engine as ToneAudioEngine).getPort(trackId)
+            (trackId: string) => (this.engine as ToneAudioEngine).getPort(trackId)
         );
     }
 
@@ -88,7 +88,7 @@ export class AudioService {
             this.store.setState({
                 isPlaying: this.engine.getTransportState() === 'started',
                 currentTime: this.engine.getCurrentTime(),
-                tracks: this.session.tracks.map(t => t.toSnapshot())
+                tracks: this.session.tracks.map((t: Track) => t.toSnapshot())
             });
         }
     }
@@ -281,7 +281,7 @@ export class AudioService {
         // "Track.getRegionAt(time)" would be useful.
 
         // For now, let's keep the finding logic but use track.splitRegion for the operation.
-        const region = track.regions.find(r =>
+        const region = track.regions.find((r: Region) =>
             splitTime > r.startTime && splitTime < r.endTime
         );
 
