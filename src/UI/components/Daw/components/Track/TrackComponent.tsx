@@ -1,8 +1,7 @@
 import type { TrackData } from '@/AudioEngine/track/Track';
 import type WaveSurfer from 'wavesurfer.js';
 import { memo } from 'react';
-import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { useTrackActions } from '../../hooks/useTrackActions';
+import { useAudioService, useAudioServiceActions } from '@/FACADE/useEngineFacade';
 import { TrackPanController } from './components/TrackPanController';
 import { TrackVolumeController } from './components/TrackVolumeController';
 import { RegionComponent } from './RegionComponent';
@@ -22,7 +21,8 @@ export const TrackComponent = memo(({
   onVolumeChange: (trackId: string, volume: number) => void;
   onPanChange: (trackId: string, pan: number) => void;
 }) => {
-  const { splitRegion } = useTrackActions();
+  const { currentTime } = useAudioService();
+  const { splitRegion } = useAudioServiceActions();
 
   return (
     <>
@@ -47,7 +47,6 @@ export const TrackComponent = memo(({
             <TrackPanController pan={track.pan ?? 0} onPanChange={(val) => onPanChange(track.id, val)} />
             <button
               onClick={() => {
-                const currentTime = usePlaybackStore.getState().currentTime;
                 splitRegion(track.id, currentTime);
               }}
               style={{

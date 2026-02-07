@@ -1,7 +1,7 @@
 import type { AudioFile } from '@/types/audioFile';
 import { convertFileToAudioFile } from '@/AudioEngine/logics/convertFileToAudioFile';
 import { useAudioFileStore } from '@/stores/useAudioFileStore';
-import { AudioService } from '@/FACADE/engineFacade';
+import { useAudioServiceActions } from '@/FACADE/useEngineFacade';
 import { useCallback } from 'react';
 import { BasicFileDrop } from './BasicFileDrop';
 
@@ -11,7 +11,8 @@ interface AudioFileDropProps {
 
 export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
   const { addAudioFile, getAudioFile } = useAudioFileStore();
-  // const { addTrack } = useTrackStore(); // Removed
+  const { addRegion } = useAudioServiceActions();
+  
   const onFileDrop = useCallback(
     async (file: File) => {
       const audioFileData = await convertFileToAudioFile(file);
@@ -33,11 +34,8 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
       const regionId = crypto.randomUUID();
       const duration = uploadedAudioFile.duration ?? 0;
 
-      // Use AudioService directly
-      const service = AudioService.getInstance();
-
-      // Note: addRegion in Service will internally create Track and Region in Domain
-      await service.addRegion(trackId, {
+      // ✅ Use Facade hook instead of direct AudioService access
+      await addRegion(trackId, {
         id: regionId,
         url: uploadedAudioFile.url,
         startTime: 0,
@@ -51,7 +49,7 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
 
       return uploadedAudioFile;
     },
-    [addAudioFile, getAudioFile, onAudioFileDrop]
+    [addAudioFile, getAudioFile, onAudioFileDrop, addRegion]
   );
 
   return (

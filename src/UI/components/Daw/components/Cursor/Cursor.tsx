@@ -1,14 +1,12 @@
 import { useRef, useEffect } from 'react';
-import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { AudioService } from '@/FACADE/engineFacade';
-import { useAudioService } from '@/FACADE/useEngineFacade';
+import { useAudioService, useAudioServiceActions } from '@/FACADE/useEngineFacade';
 import * as styles from './Cursor.css';
 
 export const Cursor = () => {
   const cursorRef = useRef<HTMLDivElement>(null);
   const rAF = useRef<number>(0);
-  const { isPlaying, currentTime } = useAudioService();
-  const pixelsPerSecond = usePlaybackStore(state => state.pixelsPerSecond);
+  const { isPlaying, currentTime, pixelsPerSecond } = useAudioService();
+  const { getCurrentTime } = useAudioServiceActions();
 
   useEffect(() => {
     const updatePosition = (time: number) => {
@@ -19,7 +17,7 @@ export const Cursor = () => {
     };
 
     const animate = () => {
-      const time = AudioService.getInstance().getCurrentTime();
+      const time = getCurrentTime();
       updatePosition(time);
       rAF.current = requestAnimationFrame(animate);
     };
@@ -36,7 +34,7 @@ export const Cursor = () => {
     return () => {
       cancelAnimationFrame(rAF.current);
     };
-  }, [isPlaying, currentTime, pixelsPerSecond]);
+  }, [isPlaying, currentTime, pixelsPerSecond, getCurrentTime]);
 
   return <div ref={cursorRef} className={styles.cursor} />;
 };

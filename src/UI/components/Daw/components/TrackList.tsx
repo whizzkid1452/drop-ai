@@ -1,13 +1,11 @@
 import { useAudioCommand } from '@/AudioEngine/logics';
-import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { useAudioService } from '@/FACADE/useEngineFacade';
+import { useAudioService, useAudioServiceActions } from '@/FACADE/useEngineFacade';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
 import { useErrorBoundary } from 'react-error-boundary';
 import { TrackComponent } from './Track/TrackComponent';
 import * as styles from './TrackList.css';
 import { Cursor } from './Cursor/Cursor';
-import { useShallow } from 'zustand/react/shallow';
 
 export function TrackList() {
   const tracks = useAudioService(state => state.tracks);
@@ -21,13 +19,9 @@ export function TrackList() {
   const { showBoundary } = useErrorBoundary();
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // 🔧 Use Selector to prevent re-renders when other state changes
-  const { pixelsPerSecond, setPixelsPerSecond } = usePlaybackStore(
-    useShallow(state => ({
-      pixelsPerSecond: state.pixelsPerSecond,
-      setPixelsPerSecond: state.setPixelsPerSecond,
-    }))
-  );
+  // ✅ Use Facade for state access
+  const pixelsPerSecond = useAudioService(state => state.pixelsPerSecond);
+  const { setPixelsPerSecond } = useAudioServiceActions();
 
   useEffect(() => {
     const container = containerRef.current;
@@ -46,7 +40,7 @@ export function TrackList() {
         // Clamp
         const clamped = Math.max(1, Math.min(1000, newPixelsPerSecond));
 
-        // 🔧 Update to PlaybackStore
+        // ✅ Update through Facade
         setPixelsPerSecond(clamped);
 
         wavesurferInstances.forEach(ws => {
