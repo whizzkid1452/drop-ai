@@ -1,6 +1,6 @@
 import { Routes, Route } from 'react-router-dom';
-import { DawPage } from '@/components/Daw/DawPage';
-import { DropPage } from '@/components/Drop/DropPage';
+import { DawPage } from '@/UI/components/Daw/DawPage';
+import { DropPage } from '@/UI/components/Drop/DropPage';
 
 export function AppRouter() {
   return (

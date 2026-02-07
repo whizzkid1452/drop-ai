@@ -1,4 +1,4 @@
-import type { TrackData } from '@/core/track/Track';
+import type { TrackData } from '@/AudioEngine/track/Track';
 
 
 /**
@@ -9,7 +9,7 @@ export interface AudioSnapshot {
     // Playback State
     isPlaying: boolean;
     currentTime: number;
-    
+
     // Configuration State
     tempo: number;
     exportStartTime: number | null;

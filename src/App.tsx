@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { useErrorBoundary } from 'react-error-boundary';
-import { DefaultLayout } from '@/components/Layouts/DefaultLayout';
+import { DefaultLayout } from '@/UI/components/Layouts/DefaultLayout';
 import { AppRouter } from './router/AppRouter';
-import { AnalyticsTracker } from '@/components/common/AnalyticsTracker';
-import { AudioService } from '@/core/audio/AudioService';
-import { Session } from '@/core/session/Session';
-import { MidiListener } from '@/components/MidiListener';
+import { AnalyticsTracker } from '@/UI/components/common/AnalyticsTracker';
+import { AudioService } from '@/FACADE/Facade';
+import { Session } from '@/AudioEngine/session/Session';
+import { MidiListener } from '@/UI/components/MidiListener';
 
 
 function App() {
