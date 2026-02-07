@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { AudioService } from '@/FACADE/Facade';
+import { AudioService } from '@/FACADE/engineFacade';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
 import { downloadBlob } from '@/UI/components/Daw/components/ExportButton/utils/audioExport';
 

@@ -1,6 +1,6 @@
 import { useAudioCommand } from '@/AudioEngine/logics';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { useAudioService } from '@/FACADE/useFacade';
+import { useAudioService } from '@/FACADE/useEngineFacade';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
 import { useErrorBoundary } from 'react-error-boundary';

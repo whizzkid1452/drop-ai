@@ -4,7 +4,7 @@ import { useErrorBoundary } from 'react-error-boundary';
 import { DefaultLayout } from '@/UI/components/Layouts/DefaultLayout';
 import { AppRouter } from './router/AppRouter';
 import { AnalyticsTracker } from '@/UI/components/common/AnalyticsTracker';
-import { AudioService } from '@/FACADE/Facade';
+import { AudioService } from '@/FACADE/engineFacade';
 import { Session } from '@/AudioEngine/session/Session';
 import { MidiListener } from '@/UI/components/MidiListener';
 

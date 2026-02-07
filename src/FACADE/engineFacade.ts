@@ -36,7 +36,8 @@ export class AudioService {
         tempo: 120,
         exportStartTime: null,
         exportEndTime: null,
-        tracks: []
+        tracks: [],
+        pixelsPerSecond: 20 // UI zoom level
     }));
 
     // 엔진 의존성 (인터페이스만 참조)
@@ -106,6 +107,10 @@ export class AudioService {
     setTempo(tempo: number) {
         this.engine.setTempo(tempo);
         this.store.setState({ tempo });
+    }
+
+    setPixelsPerSecond(pixelsPerSecond: number): void {
+        this.store.setState({ pixelsPerSecond });
     }
 
     // --- Transport Control ---

@@ -17,4 +17,7 @@ export interface AudioSnapshot {
 
     // Track State
     tracks: TrackData[];
+
+    // UI State (managed through Facade for consistency)
+    pixelsPerSecond: number;
 }

@@ -1,6 +1,6 @@
 import { memo, useMemo, useRef, useState, useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { useAudioService } from '@/FACADE/useFacade';
+import { useAudioService } from '@/FACADE/useEngineFacade';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import * as styles from './TimeRuler.css';
 import type { Track } from '@/types/track';

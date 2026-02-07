@@ -1,5 +1,5 @@
 import { useStore } from 'zustand';
-import { AudioService } from '@/FACADE/Facade';
+import { AudioService } from '@/FACADE/engineFacade';
 import type { AudioSnapshot } from '@/types/audioTypes';
 
 /**

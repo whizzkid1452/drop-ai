@@ -2,7 +2,7 @@ import { ErrorBoundary, useErrorBoundary, type FallbackProps } from 'react-error
 import { useAudioCommand } from '@/AudioEngine/logics';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import * as styles from './PlaybackControls.css';
-import { useAudioService } from '@/FACADE/useFacade';
+import { useAudioService } from '@/FACADE/useEngineFacade';
 import { AudioEngineError, getUserFriendlyMessage } from '@/AudioEngine/logics/audioEngine.errors';
 
 function PlaybackErrorFallback({ error, resetErrorBoundary }: FallbackProps) {

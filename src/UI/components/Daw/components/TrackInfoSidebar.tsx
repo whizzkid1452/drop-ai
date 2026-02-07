@@ -1,5 +1,5 @@
 import * as styles from './TrackInfoSidebar.css';
-import { useAudioService } from '@/FACADE/useFacade';
+import { useAudioService } from '@/FACADE/useEngineFacade';
 
 /** @description For Debugging */
 export function TrackInfoSidebar() {

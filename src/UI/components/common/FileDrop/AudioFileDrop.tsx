@@ -1,7 +1,7 @@
 import type { AudioFile } from '@/types/audioFile';
 import { convertFileToAudioFile } from '@/AudioEngine/logics/convertFileToAudioFile';
 import { useAudioFileStore } from '@/stores/useAudioFileStore';
-import { AudioService } from '@/FACADE/Facade';
+import { AudioService } from '@/FACADE/engineFacade';
 import { useCallback } from 'react';
 import { BasicFileDrop } from './BasicFileDrop';
 
