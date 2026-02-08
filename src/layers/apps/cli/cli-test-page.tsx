@@ -13,7 +13,6 @@ const CliTestContent = () => {
   const inputBufferRef = useRef<string>('');
   const commandsRef = useRef(commands);
 
-  // commands가 변경될 때마다 ref 업데이트 (터미널 초기화 없이 최신 로직 반영)
   useEffect(() => {
     commandsRef.current = commands;
   }, [commands]);
@@ -37,7 +36,9 @@ const CliTestContent = () => {
     term.focus();
 
     term.write('Welcome to Drop-AI CLI (xterm.js)\r\n');
-    term.write('Hint: Type "help" to see all commands.\r\n\r\n');
+    // 초기 로드 시 help 명령어 자동 실행 결과 출력
+    const helpOutput = commandsRef.current['help'].fn() as string;
+    term.write(helpOutput.replace(/\n/g, "\r\n") + '\r\n\r\n');
     term.write('drop-ai > ');
 
     xtermRef.current = term;
@@ -46,7 +47,7 @@ const CliTestContent = () => {
       const [cmdName, ...args] = input.trim().split(/\s+/);
       if (!cmdName) return;
 
-      const command = commandsRef.current[cmdName]; // ref를 통해 최신 명령어 참조
+      const command = commandsRef.current[cmdName];
       if (command) {
         try {
           const output = await command.fn(...args);
@@ -89,7 +90,7 @@ const CliTestContent = () => {
       term.dispose();
       xtermRef.current = null;
     };
-  }, []); // 의존성을 비워 마운트 시 한 번만 실행 보장
+  }, []);
 
   return (
     <div style={{ padding: '20px', fontFamily: 'monospace', height: '100vh', display: 'flex', flexDirection: 'column' }}>
