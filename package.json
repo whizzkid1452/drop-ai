@@ -26,7 +26,8 @@
     "docker:compose:build": "docker-compose build",
     "docker:compose:down": "docker-compose down",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "worktree:add": "bash scripts/worktree-add.sh"
   },
   "dependencies": {
     "@mlc-ai/web-llm": "^0.2.80",
