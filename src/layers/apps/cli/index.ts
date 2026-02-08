@@ -1,8 +1,5 @@
 import { useMemo } from 'react';
-import {
-  useController,
-  useSession,
-} from '../../presentation/context/LayerContext';
+import { useController, useSession } from '../../presentation/context/LayerContext';
 import { AppController } from '../../controllers/app-controller';
 
 export interface CliCommand {
@@ -14,51 +11,68 @@ export interface CliCommand {
 export type CliCommands = Record<string, CliCommand>;
 
 export const createCliCommands = (
-  controller: AppController,
+  controller: AppController, 
   state: { isPlaying: boolean; trackCount: number }
-): CliCommands => ({
-  play: {
-    description: 'Play Audio',
-    usage: 'play',
-    fn: async () => {
-      await controller.playback.handlePlay();
-      return 'Playback started...';
+): CliCommands => {
+  const commands: CliCommands = {
+    play: {
+      description: 'Start audio playback',
+      usage: 'play',
+      fn: async () => {
+        await controller.playback.handlePlay();
+        return 'Playback started...';
+      }
     },
-  },
-  stop: {
-    description: 'Stop Audio',
-    usage: 'stop',
-    fn: () => {
-      controller.playback.handleStop();
-      return 'Playback stopped.';
+    stop: {
+      description: 'Stop audio playback',
+      usage: 'stop',
+      fn: () => {
+        controller.playback.handleStop();
+        return 'Playback stopped.';
+      }
     },
-  },
-  'add-track': {
-    description: 'Add a mock track',
-    usage: 'add-track <id>',
-    fn: async (id: string) => {
-      if (!id) return 'Error: Track ID required.';
-      await controller.track.addTrack('mock-url', id);
-      return 'Track ' + id + ' added.';
+    track: {
+      description: 'Track management (add/remove)',
+      usage: 'track add <id> | track remove <id>',
+      fn: async (sub: string, id: string) => {
+        if (sub === 'add') {
+          if (!id) return 'Error: Track ID required.';
+          await controller.track.addTrack('mock-url', id);
+          return 'Track ' + id + ' added.';
+        } else if (sub === 'remove') {
+          if (!id) return 'Error: Track ID required.';
+          controller.track.removeTrack(id);
+          return 'Track ' + id + ' removed.';
+        }
+        return 'Usage: track add <id> OR track remove <id>';
+      }
     },
-  },
-  status: {
-    description: 'Check status',
-    usage: 'status',
-    fn: () => {
-      const statusText = state.isPlaying ? 'Playing' : 'Stopped';
-      return 'Status: ' + statusText + '\nTracks: ' + state.trackCount;
+    status: {
+      description: 'Display current session status',
+      usage: 'status',
+      fn: () => {
+        const statusText = state.isPlaying ? 'Playing' : 'Stopped';
+        return 'Status: ' + statusText + '\nTracks: ' + state.trackCount;
+      }
     },
-  },
-});
+    help: {
+      description: 'Show available commands',
+      usage: 'help',
+      fn: () => {
+        const list = Object.entries(commands)
+          .map(([name, cmd]) => `  ${name.padEnd(12)} - ${cmd.description} (Usage: ${cmd.usage})`)
+          .join('\n');
+        return 'Available commands:\n' + list;
+      }
+    }
+  };
+  return commands;
+};
 
 export const useCliApp = () => {
   const controller = useController();
   const isPlaying = useSession(state => state.isPlaying);
   const trackCount = useSession(state => state.tracks.size);
-  const commands = useMemo(
-    () => createCliCommands(controller, { isPlaying, trackCount }),
-    [controller, isPlaying, trackCount]
-  );
+  const commands = useMemo(() => createCliCommands(controller, { isPlaying, trackCount }), [controller, isPlaying, trackCount]);
   return { isPlaying, trackCount, commands };
 };

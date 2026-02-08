@@ -11,26 +11,33 @@ const CliTestContent = () => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const inputBufferRef = useRef<string>('');
+  const commandsRef = useRef(commands);
+
+  // commands가 변경될 때마다 ref 업데이트 (터미널 초기화 없이 최신 로직 반영)
+  useEffect(() => {
+    commandsRef.current = commands;
+  }, [commands]);
 
   useEffect(() => {
-    if (!terminalRef.current || xtermRef.current) return;
+    if (!terminalRef.current) return;
 
     const term = new Terminal({
       cursorBlink: true,
       theme: {
         background: '#1e1e1e',
         foreground: '#33ff33',
-        cursor: '#ffcc00',
-      },
+        cursor: '#ffcc00'
+      }
     });
 
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.open(terminalRef.current);
     fitAddon.fit();
+    term.focus();
 
     term.write('Welcome to Drop-AI CLI (xterm.js)\r\n');
-    term.write('Type "help" to see available commands.\r\n\r\n');
+    term.write('Hint: Type "help" to see all commands.\r\n\r\n');
     term.write('drop-ai > ');
 
     xtermRef.current = term;
@@ -39,25 +46,26 @@ const CliTestContent = () => {
       const [cmdName, ...args] = input.trim().split(/\s+/);
       if (!cmdName) return;
 
-      const command = commands[cmdName];
+      const command = commandsRef.current[cmdName]; // ref를 통해 최신 명령어 참조
       if (command) {
         try {
           const output = await command.fn(...args);
-          term.write(`\r\n${output.replace(/\n/g, '\r\n')}`);
+          term.write(`\r\n${output.replace(/\n/g, "\r\n")}`);
         } catch (err: any) {
           term.write(`\r\nError: ${err.message}`);
         }
       } else {
-        term.write(`\r\nUnknown command: ${cmdName}`);
+        term.write(`\r\nUnknown command: ${cmdName}. Type "help" for usage.`);
       }
     };
 
-    term.onData(async e => {
+    term.onData(async (e) => {
       switch (e) {
         case '\r': // Enter
           await handleCommand(inputBufferRef.current);
           inputBufferRef.current = '';
           term.write('\r\ndrop-ai > ');
+          term.focus();
           break;
         case '\u007F': // Backspace
           if (inputBufferRef.current.length > 0) {
@@ -66,10 +74,7 @@ const CliTestContent = () => {
           }
           break;
         default:
-          if (
-            e >= String.fromCharCode(0x20) &&
-            e <= String.fromCharCode(0x7e)
-          ) {
+          if (e >= String.fromCharCode(0x20) && e <= String.fromCharCode(0x7E)) {
             inputBufferRef.current += e;
             term.write(e);
           }
@@ -84,38 +89,16 @@ const CliTestContent = () => {
       term.dispose();
       xtermRef.current = null;
     };
-  }, [commands]);
+  }, []); // 의존성을 비워 마운트 시 한 번만 실행 보장
 
   return (
-    <div
-      style={{
-        padding: '20px',
-        fontFamily: 'monospace',
-        height: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
+    <div style={{ padding: '20px', fontFamily: 'monospace', height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <h1>CLI Logic Terminal (xterm.js)</h1>
-      <div
-        style={{
-          marginBottom: '10px',
-          padding: '10px',
-          border: '1px solid #ddd',
-          background: '#f9f9f9',
-        }}
-      >
-        <span>
-          Status:{' '}
-          <strong style={{ color: isPlaying ? 'green' : 'red' }}>
-            {isPlaying ? 'PLAYING' : 'STOPPED'}
-          </strong>
-        </span>
-        <span style={{ marginLeft: '20px' }}>
-          Tracks: <strong>{trackCount}</strong>
-        </span>
+      <div style={{ marginBottom: '10px', padding: '10px', border: '1px solid #ddd', background: '#f9f9f9' }}>
+        <span>Status: <strong style={{ color: isPlaying ? 'green' : 'red' }}>{isPlaying ? 'PLAYING' : 'STOPPED'}</strong></span>
+        <span style={{ marginLeft: '20px' }}>Tracks: <strong>{trackCount}</strong></span>
       </div>
-      <div ref={terminalRef} style={{ flex: 1, overflow: 'hidden' }} />
+      <div ref={terminalRef} style={{ flex: 1, overflow: 'hidden' }} onClick={() => xtermRef.current?.focus()} />
     </div>
   );
 };
@@ -124,7 +107,7 @@ export const CliTestPage = () => {
   const mockEngine = useRef(new MockAudioEngine()).current;
   return (
     <LayerProvider engine={mockEngine}>
-      <CliTestContent />
+        <CliTestContent />
     </LayerProvider>
   );
 };
