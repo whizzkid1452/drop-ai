@@ -1,28 +1,50 @@
-import { useState } from 'react';
-import { createConsoleApp } from '../../main-factory';
+import { useState, useCallback } from 'react';
+import { useController, useSession } from '../../presentation/context/LayerContext';
 
+/**
+ * CLI App Presentation Logic Hook
+ */
 export const useCliApp = () => {
-  // Initialize the app logic (same as CLI)
-  // We use useState lazy initialization to create it once
-  const [app] = useState(() => createConsoleApp());
-  const [isPlaying, setIsPlaying] = useState(false);
+  const controller = useController();
+  
+  // 상태 구독
+  const isPlaying = useSession(state => state.isPlaying);
+  const trackCount = useSession(state => state.tracks.size);
+  
+  // CLI 특화 로직 (로그 관리)
+  const [logs, setLogs] = useState<string[]>([]);
 
-  const handlePlay = async () => {
-    await app.controller.playback.handlePlay();
-    // @todo session을 reactive하게 변경할 필요가 있음
-    // Manually sync state since Session is not reactive yet
-    setIsPlaying(app.session.isPlaying);
+  const addLog = useCallback((msg: string) => {
+    const time = new Date().toLocaleTimeString();
+    setLogs(prev => [`[${time}] ${msg}`, ...prev]);
+  }, []);
+
+  // 비즈니스 액션 시퀀스 정의
+  const play = async () => {
+    addLog('Requesting Play...');
+    await controller.playback.handlePlay();
+    addLog(`Session Action: Play command executed`);
   };
 
-  const handleStop = () => {
-    app.controller.playback.handleStop();
-    setIsPlaying(app.session.isPlaying);
+  const stop = () => {
+    addLog('Requesting Stop...');
+    controller.playback.handleStop();
+    addLog(`Session Action: Stop command executed`);
+  };
+
+  const addTrack = async () => {
+    const id = `track-${Math.random().toString(36).substr(2, 5)}`;
+    addLog(`Adding track: ${id}`);
+    await controller.track.addTrack('mock-url', id);
+    addLog(`Session Action: Track ${id} added`);
   };
 
   return {
-    app,
     isPlaying,
-    handlePlay,
-    handleStop,
+    trackCount,
+    logs,
+    play,
+    stop,
+    addTrack
   };
 };

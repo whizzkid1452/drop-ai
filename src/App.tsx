@@ -1,36 +1,40 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { useErrorBoundary } from 'react-error-boundary';
 import { DefaultLayout } from '@/components/Layouts/DefaultLayout';
 import { AppRouter } from './router/AppRouter';
 import { AnalyticsTracker } from '@/components/common/AnalyticsTracker';
-import { AudioService } from '@/core/audio/AudioService';
-import { Session } from '@/core/session/Session';
 
+// 기존 로직 유지
+import { AudioService } from '@/core/audio/AudioService';
+import { Session as LegacySession } from '@/core/session/Session';
+
+// 신규 레이어 추가
+import { AudioEngine } from './layers/audio-engine/audio-engine';
+import { LayerProvider } from './layers/presentation/context/LayerContext';
 
 function App() {
   const [isAudioEngineReady, setIsAudioEngineReady] = useState(false);
   const { showBoundary } = useErrorBoundary();
 
-  // AudioEngine 초기화 (앱 시작 시 한 번만)
-  // AudioService 초기화 (앱 시작 시 한 번만)
+  // 신규 레이어 엔진 생성 (추가)
+  const audioEngine = useMemo(() => new AudioEngine(), []);
+
   useEffect(() => {
     try {
-      // 1. Session (Project) 생성
-      const session = new Session();
+      // 1. 기존 로직: Legacy Session 및 AudioService 초기화 (유지)
+      const legacySession = new LegacySession();
+      AudioService.initialize(legacySession);
+      console.log('[App] Legacy AudioService initialized');
 
-      // 2. AudioService (Engine) 초기화
-      AudioService.initialize(session);
-
-      console.log('[App] AudioService initialized');
+      // 2. 신규 로직: 준비 완료 상태 설정 (추가)
       setIsAudioEngineReady(true);
     } catch (error) {
-      console.error('[App] Failed to initialize AudioService:', error);
+      console.error('[App] Failed to initialize Audio Engine:', error);
       showBoundary(error);
     }
-  }, [showBoundary]); // 빈 배열: 마운트 시 한 번만 실행
+  }, [showBoundary]);
 
-  // AudioEngine이 초기화될 때까지 대기
   if (!isAudioEngineReady) {
     return (
       <div style={{
@@ -47,12 +51,15 @@ function App() {
   }
 
   return (
-    <DefaultLayout>
-      <BrowserRouter>
-        <AnalyticsTracker />
-        <AppRouter />
-      </BrowserRouter>
-    </DefaultLayout>
+    // LayerProvider를 추가하되, 기존 DefaultLayout과 AppRouter는 그대로 둡니다.
+    <LayerProvider engine={audioEngine}>
+      <DefaultLayout>
+        <BrowserRouter>
+          <AnalyticsTracker />
+          <AppRouter />
+        </BrowserRouter>
+      </DefaultLayout>
+    </LayerProvider>
   );
 }
 
