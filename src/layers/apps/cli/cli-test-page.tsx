@@ -1,104 +1,114 @@
-import { useState } from 'react';
+import { useEffect, useRef } from 'react';
+import { Terminal } from 'xterm';
+import { FitAddon } from 'xterm-addon-fit';
+import 'xterm/css/xterm.css';
 import { LayerProvider } from '../../presentation/context/LayerContext';
 import { MockAudioEngine } from '../../audio-engine/mock-audio-engine';
 import { useCliApp } from './index';
 
-/**
- * CLI 앱의 UI를 담당하는 순수 컴포넌트
- */
 const CliTestContent = () => {
-  // 모든 비즈니스 로직과 상태를 훅에서 가져옵니다.
-  const { isPlaying, trackCount, logs, play, stop, addTrack } = useCliApp();
+  const { isPlaying, trackCount, commands } = useCliApp();
+  const terminalRef = useRef<HTMLDivElement>(null);
+  const xtermRef = useRef<Terminal | null>(null);
+  const inputBufferRef = useRef<string>('');
+  const commandsRef = useRef(commands);
+
+  useEffect(() => {
+    commandsRef.current = commands;
+  }, [commands]);
+
+  useEffect(() => {
+    if (!terminalRef.current) return;
+
+    const term = new Terminal({
+      cursorBlink: true,
+      theme: {
+        background: '#1e1e1e',
+        foreground: '#33ff33',
+        cursor: '#ffcc00'
+      }
+    });
+
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(terminalRef.current);
+    fitAddon.fit();
+    term.focus();
+
+    term.write('Welcome to Drop-AI CLI (xterm.js)\r\n');
+    // 초기 로드 시 help 명령어 자동 실행 결과 출력
+    const helpOutput = commandsRef.current['help'].fn() as string;
+    term.write(helpOutput.replace(/\n/g, "\r\n") + '\r\n\r\n');
+    term.write('drop-ai > ');
+
+    xtermRef.current = term;
+
+    const handleCommand = async (input: string) => {
+      const [cmdName, ...args] = input.trim().split(/\s+/);
+      if (!cmdName) return;
+
+      const command = commandsRef.current[cmdName];
+      if (command) {
+        try {
+          const output = await command.fn(...args);
+          term.write(`\r\n${output.replace(/\n/g, "\r\n")}`);
+        } catch (err: any) {
+          term.write(`\r\nError: ${err.message}`);
+        }
+      } else {
+        term.write(`\r\nUnknown command: ${cmdName}. Type "help" for usage.`);
+      }
+    };
+
+    term.onData(async (e) => {
+      switch (e) {
+        case '\r': // Enter
+          await handleCommand(inputBufferRef.current);
+          inputBufferRef.current = '';
+          term.write('\r\ndrop-ai > ');
+          term.focus();
+          break;
+        case '\u007F': // Backspace
+          if (inputBufferRef.current.length > 0) {
+            inputBufferRef.current = inputBufferRef.current.slice(0, -1);
+            term.write('\b \b');
+          }
+          break;
+        default:
+          if (e >= String.fromCharCode(0x20) && e <= String.fromCharCode(0x7E)) {
+            inputBufferRef.current += e;
+            term.write(e);
+          }
+      }
+    });
+
+    const handleResize = () => fitAddon.fit();
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      term.dispose();
+      xtermRef.current = null;
+    };
+  }, []);
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'monospace' }}>
-      <h1>CLI Logic Test (Layer Architecture)</h1>
-
-      {/* 상태 표시 영역 */}
-      <div
-        style={{
-          marginBottom: '20px',
-          padding: '10px',
-          border: '1px solid #ddd',
-        }}
-      >
-        <div>
-          Status:{' '}
-          <strong style={{ color: isPlaying ? 'green' : 'red' }}>
-            {isPlaying ? 'PLAYING' : 'STOPPED'}
-          </strong>
-        </div>
-        <div>
-          Tracks: <strong>{trackCount}</strong>
-        </div>
+    <div style={{ padding: '20px', fontFamily: 'monospace', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <h1>CLI Logic Terminal (xterm.js)</h1>
+      <div style={{ marginBottom: '10px', padding: '10px', border: '1px solid #ddd', background: '#f9f9f9' }}>
+        <span>Status: <strong style={{ color: isPlaying ? 'green' : 'red' }}>{isPlaying ? 'PLAYING' : 'STOPPED'}</strong></span>
+        <span style={{ marginLeft: '20px' }}>Tracks: <strong>{trackCount}</strong></span>
       </div>
-
-      {/* 컨트롤 영역 */}
-      <div style={{ marginBottom: '20px' }}>
-        <button
-          onClick={play}
-          disabled={isPlaying}
-          style={{
-            padding: '10px 20px',
-            marginRight: '10px',
-            cursor: 'pointer',
-          }}
-        >
-          Play
-        </button>
-        <button
-          onClick={stop}
-          disabled={!isPlaying}
-          style={{
-            padding: '10px 20px',
-            marginRight: '10px',
-            cursor: 'pointer',
-          }}
-        >
-          Stop
-        </button>
-        <button
-          onClick={addTrack}
-          style={{ padding: '10px 20px', cursor: 'pointer' }}
-        >
-          Add Random Track
-        </button>
-      </div>
-
-      {/* 로그 출력 영역 */}
-      <div
-        style={{
-          border: '1px solid #ccc',
-          padding: '10px',
-          height: '250px',
-          overflowY: 'auto',
-          backgroundColor: '#f5f5f5',
-        }}
-      >
-        <h3>Real-time Logs</h3>
-        {logs.length === 0 && (
-          <div style={{ color: '#888' }}>No actions yet...</div>
-        )}
-        {logs.map((log, i) => (
-          <div
-            key={i}
-            style={{ borderBottom: '1px solid #eee', padding: '2px 0' }}
-          >
-            {log}
-          </div>
-        ))}
-      </div>
+      <div ref={terminalRef} style={{ flex: 1, overflow: 'hidden' }} onClick={() => xtermRef.current?.focus()} />
     </div>
   );
 };
 
 export const CliTestPage = () => {
-  // 엔진 인스턴스만 관리하고 Provider를 통해 하위에 공유합니다.
-  const [mockEngine] = useState(() => new MockAudioEngine());
-
+  const mockEngine = useRef(new MockAudioEngine()).current;
   return (
     <LayerProvider engine={mockEngine}>
-      <CliTestContent />
+        <CliTestContent />
     </LayerProvider>
   );
 };

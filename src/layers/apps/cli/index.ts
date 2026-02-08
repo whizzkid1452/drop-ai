@@ -1,50 +1,78 @@
-import { useState, useCallback } from 'react';
+import { useMemo } from 'react';
 import { useController, useSession } from '../../presentation/context/LayerContext';
+import { AppController } from '../../controllers/app-controller';
 
-/**
- * CLI App Presentation Logic Hook
- */
+export interface CliCommand {
+  description: string;
+  usage: string;
+  fn: (...args: any[]) => string | Promise<string>;
+}
+
+export type CliCommands = Record<string, CliCommand>;
+
+export const createCliCommands = (
+  controller: AppController, 
+  state: { isPlaying: boolean; trackCount: number }
+): CliCommands => {
+  const commands: CliCommands = {
+    play: {
+      description: 'Start audio playback',
+      usage: 'play',
+      fn: async () => {
+        await controller.playback.handlePlay();
+        return 'Playback started...';
+      }
+    },
+    stop: {
+      description: 'Stop audio playback',
+      usage: 'stop',
+      fn: () => {
+        controller.playback.handleStop();
+        return 'Playback stopped.';
+      }
+    },
+    track: {
+      description: 'Track management (add/remove)',
+      usage: 'track add <id> | track remove <id>',
+      fn: async (sub: string, id: string) => {
+        if (sub === 'add') {
+          if (!id) return 'Error: Track ID required.';
+          await controller.track.addTrack('mock-url', id);
+          return 'Track ' + id + ' added.';
+        } else if (sub === 'remove') {
+          if (!id) return 'Error: Track ID required.';
+          controller.track.removeTrack(id);
+          return 'Track ' + id + ' removed.';
+        }
+        return 'Usage: track add <id> OR track remove <id>';
+      }
+    },
+    status: {
+      description: 'Display current session status',
+      usage: 'status',
+      fn: () => {
+        const statusText = state.isPlaying ? 'Playing' : 'Stopped';
+        return 'Status: ' + statusText + '\nTracks: ' + state.trackCount;
+      }
+    },
+    help: {
+      description: 'Show available commands',
+      usage: 'help',
+      fn: () => {
+        const list = Object.entries(commands)
+          .map(([name, cmd]) => `  ${name.padEnd(12)} - ${cmd.description} (Usage: ${cmd.usage})`)
+          .join('\n');
+        return 'Available commands:\n' + list;
+      }
+    }
+  };
+  return commands;
+};
+
 export const useCliApp = () => {
   const controller = useController();
-  
-  // 상태 구독
   const isPlaying = useSession(state => state.isPlaying);
   const trackCount = useSession(state => state.tracks.size);
-  
-  // CLI 특화 로직 (로그 관리)
-  const [logs, setLogs] = useState<string[]>([]);
-
-  const addLog = useCallback((msg: string) => {
-    const time = new Date().toLocaleTimeString();
-    setLogs(prev => [`[${time}] ${msg}`, ...prev]);
-  }, []);
-
-  // 비즈니스 액션 시퀀스 정의
-  const play = async () => {
-    addLog('Requesting Play...');
-    await controller.playback.handlePlay();
-    addLog(`Session Action: Play command executed`);
-  };
-
-  const stop = () => {
-    addLog('Requesting Stop...');
-    controller.playback.handleStop();
-    addLog(`Session Action: Stop command executed`);
-  };
-
-  const addTrack = async () => {
-    const id = `track-${Math.random().toString(36).substr(2, 5)}`;
-    addLog(`Adding track: ${id}`);
-    await controller.track.addTrack('mock-url', id);
-    addLog(`Session Action: Track ${id} added`);
-  };
-
-  return {
-    isPlaying,
-    trackCount,
-    logs,
-    play,
-    stop,
-    addTrack
-  };
+  const commands = useMemo(() => createCliCommands(controller, { isPlaying, trackCount }), [controller, isPlaying, trackCount]);
+  return { isPlaying, trackCount, commands };
 };
