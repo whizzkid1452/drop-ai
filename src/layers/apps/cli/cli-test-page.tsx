@@ -121,9 +121,7 @@ const CliTestContent = () => {
 };
 
 export const CliTestPage = () => {
-  // MockEngine을 사용하는 App 인스턴스를 LayerProvider로 감싸 하위에서 공유합니다.
   const mockEngine = useRef(new MockAudioEngine()).current;
-
   return (
     <LayerProvider engine={mockEngine}>
       <CliTestContent />
