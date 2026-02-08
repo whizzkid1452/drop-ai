@@ -24,7 +24,9 @@
     "docker:compose:dev": "docker-compose up app-dev",
     "docker:compose:prod": "docker-compose up app-prod",
     "docker:compose:build": "docker-compose build",
-    "docker:compose:down": "docker-compose down"
+    "docker:compose:down": "docker-compose down",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@mlc-ai/web-llm": "^0.2.80",
@@ -41,12 +43,12 @@
     "react-dom": "^19.0.0",
     "react-dropzone": "^14.3.8",
     "react-error-boundary": "^6.1.0",
+    "react-ga4": "^2.1.0",
     "react-router-dom": "^7.10.0",
     "react-simplikit": "^0.0.46",
     "tone": "^15.1.22",
     "wavesurfer.js": "^7.10.1",
     "zod": "^4.2.1",
-    "react-ga4": "^2.1.0",
     "zustand": "^5.0.9"
   },
   "devDependencies": {
@@ -71,6 +73,7 @@
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.40.0",
     "vite": "^7.1.2",
-    "vite-plugin-checker": "^0.8.0"
+    "vite-plugin-checker": "^0.8.0",
+    "vitest": "^4.0.18"
   }
 }

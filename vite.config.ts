@@ -6,10 +6,7 @@ import path from 'path';
 // https://vite.dev/config/
 export default defineConfig({
   base: process.env.BASE_URL || '/',
-  plugins: [
-    react(),
-    vanillaExtractPlugin(),
-  ],
+  plugins: [react(), vanillaExtractPlugin()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
