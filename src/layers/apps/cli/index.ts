@@ -1,21 +1,28 @@
+import { useState } from 'react';
 import { createConsoleApp } from '../../main-factory';
 
-async function main() {
-    console.log('Initializing App...');
+export const useCliApp = () => {
+  // Initialize the app logic (same as CLI)
+  // We use useState lazy initialization to create it once
+  const [app] = useState(() => createConsoleApp());
+  const [isPlaying, setIsPlaying] = useState(false);
 
-    // Apps layer only sees the Controller (and Session if needed for initial state)
-    // It does NOT see the AudioEngine implementation directly.
-    const { controller } = createConsoleApp();
+  const handlePlay = async () => {
+    await app.controller.playback.handlePlay();
+    // @todo session을 reactive하게 변경할 필요가 있음
+    // Manually sync state since Session is not reactive yet
+    setIsPlaying(app.session.isPlaying);
+  };
 
-    // 4. Simulate User Interaction
-    console.log('\n--- Simulation Start ---');
+  const handleStop = () => {
+    app.controller.playback.handleStop();
+    setIsPlaying(app.session.isPlaying);
+  };
 
-    await controller.playback.handlePlay();
-
-    setTimeout(() => {
-        controller.playback.handleStop();
-        console.log('--- Simulation End ---');
-    }, 1000);
-}
-
-main().catch(console.error);
+  return {
+    app,
+    isPlaying,
+    handlePlay,
+    handleStop,
+  };
+};
