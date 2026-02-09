@@ -27,7 +27,11 @@
     "docker:compose:down": "docker-compose down",
     "test": "vitest run",
     "test:watch": "vitest",
-    "worktree:add": "bash scripts/worktree-add.sh"
+    "worktree:add": "bash scripts/worktree-add.sh",
+    "worktree:add:internal": "bash scripts/worktree-add.sh --internal",
+    "worktree:remove": "bash scripts/worktree-remove.sh",
+    "worktree:remove:internal": "bash scripts/worktree-remove.sh --internal",
+    "worktree:list": "git worktree list"
   },
   "dependencies": {
     "@mlc-ai/web-llm": "^0.2.80",

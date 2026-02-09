@@ -7,6 +7,16 @@
 - `pnpm lint` - eslint 실행
 - `pnpm build` - 빌드
 
+## Git Worktree
+
+- 이 프로젝트는 monorepo가 아니므로 `pnpm-workspace.yaml`을 사용하지 않는다 (`.npmrc`로 대체)
+- `pnpm worktree:add <branch>` — 외부 worktree 생성 (`../drop-ai--<branch>`)
+- `pnpm worktree:add:internal <branch>` — 내부 worktree 생성 (`worktrees/<branch>`)
+- `pnpm worktree:remove <branch>` — 외부 worktree 제거
+- `pnpm worktree:remove:internal <branch>` — 내부 worktree 제거
+- `pnpm worktree:list` — 현재 worktree 목록 확인
+- `pnpm-workspace.yaml`을 다시 추가하면 내부 worktree에서 상위를 workspace root로 인식하는 문제가 발생하므로 추가하지 않는다
+
 ## Code Style
 
 - `tsconfig.app.json`의 컴파일러 옵션을 따른다
