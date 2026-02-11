@@ -10,15 +10,19 @@ import { AudioService } from '@/core/audio/AudioService';
 import { Session as LegacySession } from '@/core/session/Session';
 
 // 신규 레이어 추가
-import { MockAudioEngine } from './layers/audio-engine/mock-audio-engine';
+import { AudioEngine } from './layers/audio-engine/audio-engine';
 import { LayerProvider } from './layers/presentation/context/LayerContext';
+import { createSessionStore } from './layers/session/session';
 
 function App() {
   const [isAudioEngineReady, setIsAudioEngineReady] = useState(false);
   const { showBoundary } = useErrorBoundary();
 
-  // 신규 레이어 엔진 생성 (Mock 사용)
-  const audioEngine = useMemo(() => new MockAudioEngine(), []);
+  // 신규 레이어 엔진 생성 (실제 AudioEngine 사용)
+  const audioEngine = useMemo(() => {
+    const sessionStore = createSessionStore();
+    return new AudioEngine(sessionStore);
+  }, []);
 
   useEffect(() => {
     try {
@@ -37,14 +41,16 @@ function App() {
 
   if (!isAudioEngineReady) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        fontSize: '18px',
-        color: '#666'
-      }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+          fontSize: '18px',
+          color: '#666',
+        }}
+      >
         Loading Audio Engine...
       </div>
     );

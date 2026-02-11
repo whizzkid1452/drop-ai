@@ -1,33 +1,27 @@
-import { useAudioCommand } from '@/logics/audio';
-import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { useAudioService } from '@/presentation/hooks/useAudioService';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
 import { useErrorBoundary } from 'react-error-boundary';
 import { TrackComponent } from './Track/TrackComponent';
 import * as styles from './TrackList.css';
 import { Cursor } from './Cursor/Cursor';
-import { useShallow } from 'zustand/react/shallow';
+import { useSession, useController } from '@/layers/presentation/context/LayerContext';
 
-export function TrackList() {
-  const tracks = useAudioService(state => state.tracks);
-  const trackArray = tracks || [];
+interface TrackListProps {
+  pixelsPerSecond: number;
+  setPixelsPerSecond: (value: number) => void;
+}
 
+export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProps) {
+  const tracks = useSession(state => state.tracks);
+  const trackArray = Array.from(tracks.values());
+  const controller = useController();
+  
   const [wavesurferInstances, setWavesurferInstances] = useState<
     Map<string, WaveSurfer>
   >(new Map());
 
-  const { execute } = useAudioCommand();
   const { showBoundary } = useErrorBoundary();
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // 🔧 Use Selector to prevent re-renders when other state changes
-  const { pixelsPerSecond, setPixelsPerSecond } = usePlaybackStore(
-    useShallow(state => ({
-      pixelsPerSecond: state.pixelsPerSecond,
-      setPixelsPerSecond: state.setPixelsPerSecond,
-    }))
-  );
 
   useEffect(() => {
     const container = containerRef.current;
@@ -64,31 +58,23 @@ export function TrackList() {
   const handleVolumeChange = useCallback(
     async (trackId: string, vol: number) => {
       try {
-        await execute({
-          type: 'SET_TRACK_VOLUME',
-          trackId: trackId,
-          volume: vol,
-        });
+        controller.track.setVolume(trackId, vol);
       } catch (error) {
         showBoundary(error);
       }
     },
-    [execute, showBoundary]
+    [controller, showBoundary]
   );
 
   const handlePanChange = useCallback(
     async (trackId: string, pan: number) => {
       try {
-        await execute({
-          type: 'SET_TRACK_PAN',
-          trackId: trackId,
-          pan: pan,
-        });
+        controller.track.setPan(trackId, pan);
       } catch (error) {
         showBoundary(error);
       }
     },
-    [execute, showBoundary]
+    [controller, showBoundary]
   );
 
   const handleReady = useCallback((trackId: string, ws: WaveSurfer) => {
@@ -103,7 +89,7 @@ export function TrackList() {
     <div className={styles.trackList}>
       {/* @todo: 추후 디자인 수정 예정 */}
       <div ref={containerRef} className={styles.tracksContainer}>
-        <Cursor />
+        <Cursor pixelsPerSecond={pixelsPerSecond} />
         {trackArray.map(track => {
           const thisWs = wavesurferInstances.get(track.id);
           const thisMedia = thisWs?.getMediaElement();
@@ -111,7 +97,7 @@ export function TrackList() {
           return (
             <TrackComponent
               key={track.id}
-              track={track}
+              track={track as any} // TODO Phase 7: TrackState → TrackData 타입 정리
               mediaElement={thisMedia ?? null}
               pixelsPerSecond={pixelsPerSecond}
               onReady={handleReady}

@@ -81,10 +81,12 @@ describe('Session Store - Phase 1 검증', () => {
     it('addTrack으로 트랙을 추가할 수 있어야 함', () => {
       const track1 = {
         id: 'track-1',
+        name: 'Track 1',
         volume: 0.8,
         pan: 0,
         isMuted: false,
         isSoloed: false,
+        status: [],
         regions: [],
       };
 
@@ -96,19 +98,23 @@ describe('Session Store - Phase 1 검증', () => {
     it('여러 트랙을 추가할 수 있어야 함', () => {
       const track1 = {
         id: 'track-1',
+        name: 'Track 1',
         volume: 0.8,
         pan: 0,
         isMuted: false,
         isSoloed: false,
+        status: [],
         regions: [],
       };
 
       const track2 = {
         id: 'track-2',
+        name: 'Track 2',
         volume: 1.0,
         pan: -0.5,
         isMuted: true,
         isSoloed: false,
+        status: [],
         regions: [],
       };
 
@@ -123,10 +129,12 @@ describe('Session Store - Phase 1 검증', () => {
     it('updateTrack으로 트랙을 업데이트할 수 있어야 함', () => {
       const track = {
         id: 'track-1',
+        name: 'Track 1',
         volume: 0.8,
         pan: 0,
         isMuted: false,
         isSoloed: false,
+        status: [],
         regions: [],
       };
 
@@ -148,10 +156,12 @@ describe('Session Store - Phase 1 검증', () => {
     it('removeTrack으로 트랙을 제거할 수 있어야 함', () => {
       const track = {
         id: 'track-1',
+        name: 'Track 1',
         volume: 0.8,
         pan: 0,
         isMuted: false,
         isSoloed: false,
+        status: [],
         regions: [],
       };
 
@@ -168,10 +178,12 @@ describe('Session Store - Phase 1 검증', () => {
     it('TrackState에 pan 속성이 있어야 함', () => {
       const track = {
         id: 'track-1',
+        name: 'Track 1',
         volume: 0.8,
         pan: 0.5, // Phase 1에서 추가된 속성
         isMuted: false,
         isSoloed: false,
+        status: [],
         regions: [],
       };
 
@@ -184,17 +196,21 @@ describe('Session Store - Phase 1 검증', () => {
       const region1 = {
         id: 'region-1',
         startTime: 0,
+        endTime: 5.0,
         sourceStartTime: 0,
         duration: 5.0,
+        status: [],
         audioFileUrl: 'test.mp3',
       };
 
       const track = {
         id: 'track-1',
+        name: 'Track 1',
         volume: 0.8,
         pan: 0,
         isMuted: false,
         isSoloed: false,
+        status: [],
         regions: [region1], // Phase 1에서 추가된 속성
       };
 
@@ -209,10 +225,12 @@ describe('Session Store - Phase 1 검증', () => {
     it('tracks Map은 업데이트 시마다 새로운 참조여야 함', () => {
       const track1 = {
         id: 'track-1',
+        name: 'Track 1',
         volume: 0.8,
         pan: 0,
         isMuted: false,
         isSoloed: false,
+        status: [],
         regions: [],
       };
 
@@ -227,10 +245,12 @@ describe('Session Store - Phase 1 검증', () => {
     it('updateTrack 시 Map과 Track 객체 모두 새로운 참조여야 함', () => {
       const track = {
         id: 'track-1',
+        name: 'Track 1',
         volume: 0.8,
         pan: 0,
         isMuted: false,
         isSoloed: false,
+        status: [],
         regions: [],
       };
 

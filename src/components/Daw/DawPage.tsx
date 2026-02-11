@@ -7,19 +7,20 @@ import { TrackInfoSidebar } from './components/TrackInfoSidebar';
 import { TimeRuler } from './components/TimeRuler/TimeRuler';
 import { PlaybackControls } from './components/PlaybackControls/PlaybackControls';
 import * as styles from './DawPage.css';
-import { useAudioService } from '@/presentation/hooks/useAudioService';
+import { useSession } from '@/layers/presentation/context/LayerContext';
 
 const CHAT_PANEL_MIN_WIDTH = 280;
 const CHAT_PANEL_MAX_WIDTH = 600;
 const CHAT_PANEL_DEFAULT_WIDTH = 350;
 
 export function DawPage() {
-  const trackCount = useAudioService(state => state.tracks.length);
+  const trackCount = useSession(state => state.tracks.size);
   const hasTracks = trackCount > 0;
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
   const [chatPanelWidth, setChatPanelWidth] = useState(CHAT_PANEL_DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
+  const [pixelsPerSecond, setPixelsPerSecond] = useState(20);
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(CHAT_PANEL_DEFAULT_WIDTH);
 
@@ -94,8 +95,8 @@ export function DawPage() {
         {hasTracks ? (
           <>
             <DawHeader trackCount={trackCount} />
-            <TimeRuler />
-            <TrackList />
+            <TimeRuler pixelsPerSecond={pixelsPerSecond} />
+            <TrackList pixelsPerSecond={pixelsPerSecond} setPixelsPerSecond={setPixelsPerSecond} />
             <PlaybackControls />
             <AudioFileDrop
               onAudioFileDrop={() => {

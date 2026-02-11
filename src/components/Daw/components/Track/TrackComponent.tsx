@@ -1,7 +1,7 @@
-import type { TrackData } from '@/core/track/Track';
 import type WaveSurfer from 'wavesurfer.js';
 import { memo } from 'react';
-import { usePlaybackStore } from '@/stores/usePlaybackStore';
+import { useSession } from '@/layers/presentation/context/LayerContext';
+import type { TrackState } from '@/layers/session/session';
 import { useTrackActions } from '../../hooks/useTrackActions';
 import { TrackPanController } from './components/TrackPanController';
 import { TrackVolumeController } from './components/TrackVolumeController';
@@ -16,13 +16,14 @@ export const TrackComponent = memo(({
   onPanChange,
 }: {
   mediaElement: HTMLMediaElement | null;
-  track: TrackData;
+  track: TrackState;
   pixelsPerSecond: number;
   onReady: (trackId: string, ws: WaveSurfer) => void;
   onVolumeChange: (trackId: string, volume: number) => void;
   onPanChange: (trackId: string, pan: number) => void;
 }) => {
   const { splitRegion } = useTrackActions();
+  const currentTime = useSession(state => state.currentTime);
 
   return (
     <>
@@ -30,7 +31,7 @@ export const TrackComponent = memo(({
         {track.regions.map(region => (
           <RegionComponent
             key={region.id}
-            region={region}
+            region={region as any} // TODO Phase 7: RegionState → RegionData 타입 정리
             pixelsPerSecond={pixelsPerSecond}
             onReady={(ws) => onReady(track.id, ws)}
           />
@@ -47,7 +48,6 @@ export const TrackComponent = memo(({
             <TrackPanController pan={track.pan ?? 0} onPanChange={(val) => onPanChange(track.id, val)} />
             <button
               onClick={() => {
-                const currentTime = usePlaybackStore.getState().currentTime;
                 splitRegion(track.id, currentTime);
               }}
               style={{

@@ -130,10 +130,12 @@ export class AudioEngine implements IAudioEngine {
           const track = this.sessionStore.getState().tracks.get(trackId);
           if (track) {
             const newRegion = {
-              id: regionData.id,
-              startTime: regionData.startTime,
+              id: `region-${Date.now()}`,
+              startTime: 0,
+              endTime: duration, // RegionState 타입 호환
               sourceStartTime: regionData.sourceStartTime,
               duration,
+              status: [], // RegionState 타입 호환
               audioFileUrl: regionData.url,
             };
             

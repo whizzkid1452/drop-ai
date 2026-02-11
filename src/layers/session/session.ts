@@ -3,17 +3,21 @@ import { createStore } from 'zustand/vanilla';
 export interface RegionState {
   id: string;
   startTime: number;
+  endTime: number; // RegionData 호환
   sourceStartTime: number;
   duration: number;
+  status: string[]; // RegionData 호환
   audioFileUrl?: string;
 }
 
 export interface TrackState {
   id: string;
+  name: string; // 트랙 이름 추가
   volume: number;
   pan: number;
   isMuted: boolean;
   isSoloed: boolean;
+  status: string[]; // TrackData 호환성을 위한 status (mute, solo, normal 등)
   regions: RegionState[];
 }
 

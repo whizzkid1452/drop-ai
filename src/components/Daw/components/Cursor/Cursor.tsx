@@ -1,14 +1,19 @@
 import { useRef, useEffect } from 'react';
-import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { AudioService } from '@/core/audio/AudioService';
-import { useAudioService } from '@/presentation/hooks/useAudioService';
+import { useSession, useController } from '@/layers/presentation/context/LayerContext';
 import * as styles from './Cursor.css';
 
-export const Cursor = () => {
+interface CursorProps {
+  pixelsPerSecond: number;
+}
+
+export const Cursor = ({ pixelsPerSecond }: CursorProps) => {
   const cursorRef = useRef<HTMLDivElement>(null);
   const rAF = useRef<number>(0);
-  const { isPlaying, currentTime } = useAudioService();
-  const pixelsPerSecond = usePlaybackStore(state => state.pixelsPerSecond);
+  const { isPlaying, currentTime } = useSession(state => ({
+    isPlaying: state.isPlaying,
+    currentTime: state.currentTime
+  }));
+  const controller = useController();
 
   useEffect(() => {
     const updatePosition = (time: number) => {
@@ -19,7 +24,7 @@ export const Cursor = () => {
     };
 
     const animate = () => {
-      const time = AudioService.getInstance().getCurrentTime();
+      const time = controller.playback.getCurrentTime();
       updatePosition(time);
       rAF.current = requestAnimationFrame(animate);
     };
