@@ -1,9 +1,9 @@
 import { useEffect, useState, useMemo } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { useErrorBoundary } from 'react-error-boundary';
-import { DefaultLayout } from '@/components/Layouts/DefaultLayout';
+import { DefaultLayout } from '@/layers/apps/web/layouts/DefaultLayout';
 import { AppRouter } from './router/AppRouter';
-import { AnalyticsTracker } from '@/components/common/AnalyticsTracker';
+import { AnalyticsTracker } from '@/layers/apps/web/components/common/AnalyticsTracker';
 
 // 기존 로직 유지
 import { AudioService } from '@/core/audio/AudioService';

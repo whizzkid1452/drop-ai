@@ -1,6 +1,6 @@
 import { Routes, Route } from 'react-router-dom';
-import { DawPage } from '@/components/Daw/DawPage';
-import { DropPage } from '@/components/Drop/DropPage';
+import { DawPage } from '@/layers/apps/web/components/Daw/DawPage';
+import { DropPage } from '@/layers/apps/web/components/Daw/components/Drop/DropPage';
 import { CliTestPage } from '../layers/apps/cli/cli-test-page';
 
 export function AppRouter() {
