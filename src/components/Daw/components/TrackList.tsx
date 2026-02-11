@@ -97,7 +97,7 @@ export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProp
           return (
             <TrackComponent
               key={track.id}
-              track={track as any} // TODO Phase 7: TrackState → TrackData 타입 정리
+              track={track}
               mediaElement={thisMedia ?? null}
               pixelsPerSecond={pixelsPerSecond}
               onReady={handleReady}

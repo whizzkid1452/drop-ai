@@ -31,7 +31,7 @@ export const TrackComponent = memo(({
         {track.regions.map(region => (
           <RegionComponent
             key={region.id}
-            region={region as any} // TODO Phase 7: RegionState → RegionData 타입 정리
+            region={region}
             pixelsPerSecond={pixelsPerSecond}
             onReady={(ws) => onReady(track.id, ws)}
           />
