@@ -1,13 +1,13 @@
 import * as Tone from 'tone';
 import type { TrackData } from '@/core/track/Track';
-import { RegionRenderer } from '@/logics/audio/regionRenderer';
+import { RegionRenderer } from '@/layers/audio-engine/renderers/region-renderer';
 import {
     PLAYER_CONFIG,
     configurePlayerLoop,
     startPlayer
-} from '@/logics/audio/playerConfig';
-import { loadAndDecodeAudioBuffer } from '@/logics/audio/loadAndDecodeAudioBuffer';
-import { AudioEngineError, AudioEngineErrorCode } from '@/logics/audio/audioEngine.errors';
+} from '@/layers/audio-engine/config/player-config';
+import { loadAndDecodeAudioBuffer } from '@/utils/audio/load-and-decode-audio-buffer';
+import { AudioEngineError, AudioEngineErrorCode } from '@/layers/audio-engine/errors';
 import { audioBufferToWav } from '@/components/Daw/components/ExportButton/utils/wavConverter';
 import type { ExportRange } from './ExportOptions';
 

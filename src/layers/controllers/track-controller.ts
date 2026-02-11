@@ -17,8 +17,10 @@ export class TrackController {
     this.sessionStore.getState().addTrack({
       id,
       volume: 1.0,
+      pan: 0,
       isMuted: false,
       isSoloed: false,
+      regions: [],
     });
   }
 
@@ -27,7 +29,37 @@ export class TrackController {
     this.sessionStore.getState().removeTrack(id);
   }
 
-  setTrackVolume(id: string, volume: number): void {
-    this.sessionStore.getState().updateTrack(id, { volume });
+  setVolume(trackId: string, volume: number): void {
+    console.log(`[TrackController] Setting volume for ${trackId}: ${volume}`);
+    
+    // 1. AudioEngine을 통해 오디오 업데이트
+    this.audioEngine.setTrackVolume(trackId, volume);
+    
+    // 2. SessionStore도 명시적으로 업데이트 (MockAudioEngine에서는 SessionStore가 없으므로)
+    this.sessionStore.getState().updateTrack(trackId, { volume });
+  }
+
+  setPan(trackId: string, pan: number): void {
+    console.log(`[TrackController] Setting pan for ${trackId}: ${pan}`);
+    
+    // 1. AudioEngine을 통해 오디오 업데이트
+    this.audioEngine.setTrackPan(trackId, pan);
+    
+    // 2. SessionStore도 명시적으로 업데이트 (MockAudioEngine에서는 SessionStore가 없으므로)
+    this.sessionStore.getState().updateTrack(trackId, { pan });
+  }
+
+  setMute(trackId: string, muted: boolean): void {
+    console.log(`[TrackController] Setting mute for ${trackId}: ${muted}`);
+    
+    // SessionStore 업데이트
+    this.sessionStore.getState().updateTrack(trackId, { isMuted: muted });
+  }
+
+  setSolo(trackId: string, soloed: boolean): void {
+    console.log(`[TrackController] Setting solo for ${trackId}: ${soloed}`);
+    
+    // SessionStore 업데이트
+    this.sessionStore.getState().updateTrack(trackId, { isSoloed: soloed });
   }
 }

@@ -3,7 +3,7 @@ import { useAudioCommand } from '@/logics/audio';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import * as styles from './PlaybackControls.css';
 import { useAudioService } from '@/presentation/hooks/useAudioService';
-import { AudioEngineError, getUserFriendlyMessage } from '@/logics/audio/audioEngine.errors';
+import { AudioEngineError, getUserFriendlyMessage } from '@/layers/audio-engine/errors';
 
 function PlaybackErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   const message = error instanceof AudioEngineError ? getUserFriendlyMessage(error) : 'Playback Error';

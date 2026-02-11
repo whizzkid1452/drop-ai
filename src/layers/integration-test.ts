@@ -38,7 +38,7 @@ async function runIntegrationTest() {
   const track = session.getState().tracks.get('track-1');
   if (track?.id !== 'track-1') throw new Error('Track ID mismatch');
 
-  controller.track.setTrackVolume('track-1', 0.5);
+  controller.track.setVolume('track-1', 0.5);
   if (session.getState().tracks.get('track-1')?.volume !== 0.5)
     throw new Error('Track volume update failed');
 

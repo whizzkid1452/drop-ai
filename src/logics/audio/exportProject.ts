@@ -1,14 +1,14 @@
 import * as Tone from 'tone';
 import { audioBufferToWav } from '@/components/Daw/components/ExportButton/utils/wavConverter';
 import type { Track } from '@/types/track';
-import { loadAndDecodeAudioBuffer } from './loadAndDecodeAudioBuffer';
-import { AudioEngineError, AudioEngineErrorCode } from './audioEngine.errors';
-import { RegionRenderer } from './regionRenderer';
+import { loadAndDecodeAudioBuffer } from '@/utils/audio/load-and-decode-audio-buffer';
+import { AudioEngineError, AudioEngineErrorCode } from '@/layers/audio-engine/errors';
+import { RegionRenderer } from '@/layers/audio-engine/renderers/region-renderer';
 import {
   PLAYER_CONFIG,
   configurePlayerLoop,
   startPlayer,
-} from './playerConfig';
+} from '@/layers/audio-engine/config/player-config';
 
 /**
  * 프로젝트 전체를 오디오 파일로 내보냅니다.

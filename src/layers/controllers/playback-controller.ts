@@ -36,4 +36,22 @@ export class PlaybackController {
     // 2. Update Session State
     this.sessionStore.getState().setPlaying(false);
   }
+
+  handleSeek(time: number): void {
+    console.log(`[PlaybackController] Seeking to ${time}`);
+
+    // Command Audio Engine
+    this.audioEngine.setTime(time);
+  }
+
+  handleSetTempo(tempo: number): void {
+    console.log(`[PlaybackController] Setting tempo to ${tempo}`);
+
+    // Command Audio Engine
+    this.audioEngine.setTempo(tempo);
+  }
+
+  getCurrentTime(): number {
+    return this.audioEngine.getCurrentTime();
+  }
 }
