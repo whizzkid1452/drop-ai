@@ -1,5 +1,5 @@
 import type { AudioFile } from '@/types/audioFile';
-import { convertFileToAudioFile } from '@/logics/audio/convertFileToAudioFile';
+import { convertFileToAudioFile } from '@/utils/audio/convert-file-to-audio-file';
 import { useAudioFileStore } from '@/stores/useAudioFileStore';
 import { AudioService } from '@/core/audio/AudioService';
 import { useCallback } from 'react';

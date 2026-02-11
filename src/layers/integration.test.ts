@@ -53,7 +53,7 @@ describe('Layers Integration', () => {
       const { session, controller } = setup();
       await controller.track.addTrack('test-url', 'track-1');
 
-      controller.track.setTrackVolume('track-1', 0.5);
+      controller.track.setVolume('track-1', 0.5);
 
       expect(session.getState().tracks.get('track-1')?.volume).toBe(0.5);
     });

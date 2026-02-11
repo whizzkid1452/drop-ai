@@ -10,15 +10,15 @@ import { AudioService } from '@/core/audio/AudioService';
 import { Session as LegacySession } from '@/core/session/Session';
 
 // 신규 레이어 추가
-import { AudioEngine } from './layers/audio-engine/audio-engine';
+import { MockAudioEngine } from './layers/audio-engine/mock-audio-engine';
 import { LayerProvider } from './layers/presentation/context/LayerContext';
 
 function App() {
   const [isAudioEngineReady, setIsAudioEngineReady] = useState(false);
   const { showBoundary } = useErrorBoundary();
 
-  // 신규 레이어 엔진 생성 (추가)
-  const audioEngine = useMemo(() => new AudioEngine(), []);
+  // 신규 레이어 엔진 생성 (Mock 사용)
+  const audioEngine = useMemo(() => new MockAudioEngine(), []);
 
   useEffect(() => {
     try {

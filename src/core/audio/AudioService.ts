@@ -8,7 +8,7 @@ import {
     PLAYER_CONFIG,
     configurePlayerLoop,
     startPlayer
-} from '../../logics/audio/playerConfig';
+} from '../../layers/audio-engine/config/player-config';
 import { AudioExporter } from './export/AudioExporter';
 import type { ExportOptions } from './export/ExportOptions';
 

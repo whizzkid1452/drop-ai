@@ -1,5 +1,5 @@
 import type { AudioFile } from '../../types/audioFile';
-import { getFileDuration } from './getAudioMetadata';
+import { getFileDuration } from './get-audio-metadata';
 import { formatDuration } from '@/utils/audio/formatDuration';
 import { formatFileSize } from '@/utils/audio/formatFileSize';
 
