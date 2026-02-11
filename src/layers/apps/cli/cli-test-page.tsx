@@ -60,8 +60,8 @@ const CliTestContent = () => {
       }
     };
 
-    term.onData(async (e) => {
-      switch (e) {
+    term.onData(async (data: string) => {
+      switch (data) {
         case '\r': // Enter
           await handleCommand(inputBufferRef.current);
           inputBufferRef.current = '';
@@ -75,9 +75,9 @@ const CliTestContent = () => {
           }
           break;
         default:
-          if (e >= String.fromCharCode(0x20) && e <= String.fromCharCode(0x7E)) {
-            inputBufferRef.current += e;
-            term.write(e);
+          if (data >= String.fromCharCode(0x20) && data <= String.fromCharCode(0x7E)) {
+            inputBufferRef.current += data;
+            term.write(data);
           }
       }
     });
