@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { AudioService } from '@/core/audio/AudioService';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
-import { downloadBlob } from '@/components/Daw/components/ExportButton/utils/audioExport';
+import { downloadBlob } from '@/layers/apps/web/components/Daw/components/ExportButton/utils/audioExport';
 
 /**
  * Audio Command Executor Hook

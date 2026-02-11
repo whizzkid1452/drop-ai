@@ -1,5 +1,5 @@
 import * as Tone from 'tone';
-import { audioBufferToWav } from '@/components/Daw/components/ExportButton/utils/wavConverter';
+import { audioBufferToWav } from '@/layers/apps/web/components/Daw/components/ExportButton/utils/wavConverter';
 import type { Track } from '@/types/track';
 import { loadAndDecodeAudioBuffer } from '@/utils/audio/load-and-decode-audio-buffer';
 import { AudioEngineError, AudioEngineErrorCode } from '@/layers/audio-engine/errors';

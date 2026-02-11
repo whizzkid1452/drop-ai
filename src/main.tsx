@@ -1,5 +1,5 @@
 import { ErrorBoundary } from 'react-error-boundary';
-import { GlobalErrorFallback } from './components/common/ErrorBoundary/GlobalErrorFallback';
+import { GlobalErrorFallback } from './layers/apps/web/components/common/ErrorBoundary/GlobalErrorFallback';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

@@ -8,7 +8,7 @@ import {
 } from '@/layers/audio-engine/config/player-config';
 import { loadAndDecodeAudioBuffer } from '@/utils/audio/load-and-decode-audio-buffer';
 import { AudioEngineError, AudioEngineErrorCode } from '@/layers/audio-engine/errors';
-import { audioBufferToWav } from '@/components/Daw/components/ExportButton/utils/wavConverter';
+import { audioBufferToWav } from '@/layers/apps/web/components/Daw/components/ExportButton/utils/wavConverter';
 import type { ExportRange } from './ExportOptions';
 
 /**
