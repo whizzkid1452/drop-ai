@@ -1,5 +1,5 @@
 import { AppController } from '@/layers/controllers';
-import type { CliCommands, CliState } from '../types';
+import type { CliCommands, CliState } from '../../types';
 
 export const createInfoCommands = (
   _controller: AppController,

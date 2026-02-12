@@ -22,7 +22,7 @@ export function useWebLLM() {
     const initEngine = async () => {
       try {
         const worker = new Worker(
-          new URL('../../workers/llm.worker.ts', import.meta.url),
+          new URL('../../../../../workers/llm.worker.ts', import.meta.url),
           { type: 'module' }
         );
 

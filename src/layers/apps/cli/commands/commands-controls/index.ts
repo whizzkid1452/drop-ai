@@ -1,4 +1,4 @@
-export * from './transport';
+export * from './play';
 export * from './track';
 export * from './region';
 export * from './export';

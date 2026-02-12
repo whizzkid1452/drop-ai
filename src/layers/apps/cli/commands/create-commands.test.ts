@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createCliCommands } from './index';
-import { AppController } from '../../controllers';
-import type { CliState, Track } from './types';
+import { createCliCommands } from '../index';
+import { AppController } from '@/layers/controllers';
+import type { CliState, Track } from '../types';
 
 describe('CLI Command Logic', () => {
   const mockController = {

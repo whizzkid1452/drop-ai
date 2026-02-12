@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useController, useSession } from '@/layers/apps/web/context/LayerContext';
-import { createCliCommands } from './factory';
+import { createCliCommands } from './commands/create-commands';
 
 export const useCliApp = () => {
   const controller = useController();
