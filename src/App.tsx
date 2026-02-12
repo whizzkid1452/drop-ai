@@ -1,33 +1,28 @@
 import { useEffect, useState, useMemo } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { useErrorBoundary } from 'react-error-boundary';
-import { DefaultLayout } from '@/components/Layouts/DefaultLayout';
-import { AppRouter } from './router/AppRouter';
-import { AnalyticsTracker } from '@/components/common/AnalyticsTracker';
-
-// 기존 로직 유지
-import { AudioService } from '@/core/audio/AudioService';
-import { Session as LegacySession } from '@/core/session/Session';
+import { DefaultLayout } from '@/layers/apps/web/layouts/DefaultLayout';
+import { AppRouter } from '@/layers/apps/web/router/AppRouter';
+import { AnalyticsTracker } from '@/layers/apps/web/components/common/AnalyticsTracker';
 
 // 신규 레이어 추가
-import { MockAudioEngine } from './layers/audio-engine/mock-audio-engine';
-import { LayerProvider } from './layers/presentation/context/LayerContext';
+import { AudioEngine } from './layers/audio-engine/audio-engine';
+import { LayerProvider } from './layers/apps/web/context/LayerContext';
+import { createSessionStore } from './layers/session/session';
 
 function App() {
   const [isAudioEngineReady, setIsAudioEngineReady] = useState(false);
   const { showBoundary } = useErrorBoundary();
 
-  // 신규 레이어 엔진 생성 (Mock 사용)
-  const audioEngine = useMemo(() => new MockAudioEngine(), []);
+  // 신규 레이어 엔진 생성 (실제 AudioEngine 사용)
+  const audioEngine = useMemo(() => {
+    const sessionStore = createSessionStore();
+    return new AudioEngine(sessionStore);
+  }, []);
 
   useEffect(() => {
     try {
-      // 1. 기존 로직: Legacy Session 및 AudioService 초기화 (유지)
-      const legacySession = new LegacySession();
-      AudioService.initialize(legacySession);
-      console.log('[App] Legacy AudioService initialized');
-
-      // 2. 신규 로직: 준비 완료 상태 설정 (추가)
+      // 신규 로직: 준비 완료 상태 설정
       setIsAudioEngineReady(true);
     } catch (error) {
       console.error('[App] Failed to initialize Audio Engine:', error);
@@ -37,14 +32,16 @@ function App() {
 
   if (!isAudioEngineReady) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        fontSize: '18px',
-        color: '#666'
-      }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+          fontSize: '18px',
+          color: '#666',
+        }}
+      >
         Loading Audio Engine...
       </div>
     );

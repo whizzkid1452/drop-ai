@@ -3,7 +3,7 @@ import { type SessionStore } from '../session/session';
 
 export class ExportController {
   constructor(
-    _sessionStore: SessionStore, // 미사용이지만 AppController 패턴 일관성 유지
+    private sessionStore: SessionStore,
     private audioEngine: IAudioEngine
   ) {}
 
@@ -11,6 +11,10 @@ export class ExportController {
     console.log(`[ExportController] Setting export range: ${startTime} - ${endTime}`);
 
     this.audioEngine.setExportRange(startTime, endTime);
+    
+    // Update Session State (via injected store, assuming it's available or need to change constructor)
+    // Constructor has `_sessionStore`. I need to change it to `private sessionStore`.
+    this.sessionStore.getState().setExportRange(startTime, endTime);
   }
 
   async exportProject(): Promise<Blob> {

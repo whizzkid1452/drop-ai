@@ -16,10 +16,12 @@ export class TrackController {
     // 2. Update Session via Zustand
     this.sessionStore.getState().addTrack({
       id,
+      name: `Track ${id}`, // TODO Phase 7: name 관리 개선
       volume: 1.0,
       pan: 0,
       isMuted: false,
       isSoloed: false,
+      status: [], // TODO Phase 7: status 타입 정리
       regions: [],
     });
   }
