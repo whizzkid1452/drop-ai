@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { MockAudioEngine } from './audio-engine/mock-audio-engine';
+import { MockAudioEngine } from './audio-engine';
 import { createApp } from './apps/create-app';
 
 describe('Layers Integration', () => {

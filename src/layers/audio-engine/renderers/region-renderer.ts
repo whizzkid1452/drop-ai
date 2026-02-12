@@ -1,4 +1,4 @@
-import type { RegionState } from '@/layers/session/session';
+import type { RegionState } from '@/layers/session';
 
 /**
  * Region 렌더링 파라미터

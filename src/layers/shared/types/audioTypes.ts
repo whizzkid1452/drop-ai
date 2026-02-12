@@ -1,5 +1,5 @@
 import type { TrackStatus } from '@/types/statusTypes';
-import type { RegionState } from '@/layers/session/session';
+import type { RegionState } from '@/layers/session';
 
 export interface TrackData {
     id: string;

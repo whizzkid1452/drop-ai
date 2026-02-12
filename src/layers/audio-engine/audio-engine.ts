@@ -1,6 +1,6 @@
 import * as Tone from 'tone';
 import type { IAudioEngine, RegionData, ExportOptions } from './i-audio-engine';
-import type { SessionStore } from '../session/session';
+import type { SessionStore } from '../session';
 
 /**
  * AudioEngine - Tone.js 기반 오디오 엔진 구현

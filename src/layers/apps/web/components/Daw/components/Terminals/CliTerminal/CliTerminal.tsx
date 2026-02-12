@@ -1,7 +1,7 @@
 import { useState, useRef, type KeyboardEvent, useEffect } from 'react';
 import * as styles from './CliTerminal.css.ts';
 import { useController, useSessionStore } from '@/layers/apps/web/context/LayerContext';
-import { executeAudioCommand } from '@/layers/controllers/utils/command-dispatcher';
+import { executeAudioCommand } from '@/layers/controllers';
 import { parseAudioCommandString } from '@/types/audioCommand.schema';
 
 interface LogItem {

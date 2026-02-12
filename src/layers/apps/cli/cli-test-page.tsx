@@ -3,7 +3,7 @@ import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 import { LayerProvider } from '../web/context/LayerContext';
-import { MockAudioEngine } from '../../audio-engine/mock-audio-engine';
+import { MockAudioEngine } from '../../audio-engine';
 import { useCliApp } from './index';
 
 const CliTestContent = () => {
