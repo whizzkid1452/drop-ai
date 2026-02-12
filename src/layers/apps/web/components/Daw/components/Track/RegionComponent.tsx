@@ -1,80 +1,80 @@
-import type { RegionData } from '@/core/region/Region';
+// import { useRef } from 'react';
 import WavesurferPlayer from '@wavesurfer/react';
-import type WaveSurfer from 'wavesurfer.js';
 import * as styles from './RegionComponent.css.ts';
+import type { RegionState } from '@/layers/session/session';
 
 interface RegionComponentProps {
-    region: RegionData;
-    pixelsPerSecond: number;
-    onReady: (ws: WaveSurfer) => void;
+  region: RegionState;
+  pixelsPerSecond: number;
+  onReady?: (ws: any) => void;
 }
 
 export const RegionComponent = ({
-    region,
-    pixelsPerSecond,
-    onReady,
+  region,
+  pixelsPerSecond,
+  onReady: onReadyProp,
 }: RegionComponentProps) => {
-    const width = (region.endTime - region.startTime) * pixelsPerSecond;
-    const left = region.startTime * pixelsPerSecond;
-    // Calculate visual offset for sourceStartTime
-    // If the region starts at 5s in the file, we pull the waveform left by 5s worth of pixels
-    const visualOffset = -(region.sourceStartTime * pixelsPerSecond);
+  const left = region.startTime * pixelsPerSecond;
+  const width = region.duration * pixelsPerSecond;
 
-    if (!region.audioFile) {
-        return null;
+  const onReady = (ws: any) => {
+    ws.setVolume(0);
+    ws.zoom(pixelsPerSecond);
+    
+    // Shadow DOM style injection to hide scrollbars
+    if (ws.renderer?.container?.shadowRoot) {
+      const shadowRoot = ws.renderer.container.shadowRoot;
+      const styleId = 'wavesurfer-style-overrides';
+      if (!shadowRoot.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+          .scroll {
+            overflow-x: hidden !important;
+            overflow-y: hidden !important;
+          }
+          .scroll::-webkit-scrollbar {
+            display: none;
+          }
+        `;
+        shadowRoot.appendChild(style);
+      }
     }
+    
+    if (onReadyProp) {
+        onReadyProp(ws);
+    }
+  };
 
-    return (
-        <div
-            className={styles.regionContainer}
-            style={{
-                transform: `translateX(${left}px)`,
-                width: `${width}px`,
-            }}
-        >
-            <div
-                className={styles.waveformContainer}
-                style={{
-                    transform: `translateX(${visualOffset}px)`,
-                }}
-            >
-                <WavesurferPlayer
-                    url={region.audioFile.url}
-                    onReady={ws => {
-                        onReady(ws);
-                        ws.setVolume(0);
-                        ws.zoom(pixelsPerSecond);
-                        const shadowRoot = ws.getWrapper()?.getRootNode();
-                        injectShadowRootOverflowHidden({ shadowRoot });
-                    }}
-                    interact={false}
-                    cursorWidth={0}
-                    fillParent={false}
-                    hideScrollbar={true}
-                    autoScroll={false}
-                />
-            </div>
-        </div>
-    );
+  return (
+    <div
+      className={styles.regionContainer}
+      style={{
+        transform: `translateX(${left}px)`,
+        width: `${width}px`,
+        position: 'absolute',
+        top: 0,
+        height: '100%',
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          marginLeft: `-${region.sourceStartTime * pixelsPerSecond}px`,
+          height: '100%',
+        }}
+      >
+        <WavesurferPlayer
+          height={100}
+          waveColor="#555"
+          progressColor="#555"
+          url={region.audioFileUrl}
+          onReady={onReady}
+          interact={false}
+          cursorWidth={0}
+          autoScroll={false}
+        />
+      </div>
+    </div>
+  );
 };
-
-/** @description wavesurfer??scrollbarë¥?ê°€ë¦¬ê¸° ?„í•¨. shadowRoot ?´ë????µì?ë¡?style ì£¼ìž… */
-function injectShadowRootOverflowHidden({ shadowRoot }: { shadowRoot: Node }) {
-    if (shadowRoot instanceof ShadowRoot) {
-        const styleId = 'drop-ai-wavesurfer-style';
-        if (!shadowRoot.querySelector(`#${styleId}`)) {
-            const style = document.createElement('style');
-            style.id = styleId;
-            style.textContent = `
-  .scroll {
-    overflow-x: hidden !important;
-    overflow-y: hidden !important;
-  }
-  .scroll::-webkit-scrollbar {
-    display: none;
-  }
-`;
-            shadowRoot.appendChild(style);
-        }
-    }
-}

@@ -9,10 +9,8 @@ interface CursorProps {
 export const Cursor = ({ pixelsPerSecond }: CursorProps) => {
   const cursorRef = useRef<HTMLDivElement>(null);
   const rAF = useRef<number>(0);
-  const { isPlaying, currentTime } = useSession(state => ({
-    isPlaying: state.isPlaying,
-    currentTime: state.currentTime
-  }));
+  const isPlaying = useSession(state => state.isPlaying);
+  const currentTime = useSession(state => state.currentTime);
   const controller = useController();
 
   useEffect(() => {

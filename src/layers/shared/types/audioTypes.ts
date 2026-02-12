@@ -1,4 +1,14 @@
-import type { TrackData } from '@/core/track/Track';
+import type { TrackStatus } from '@/types/statusTypes';
+import type { RegionState } from '@/layers/session/session';
+
+export interface TrackData {
+    id: string;
+    name: string;
+    volume: number;
+    pan: number;
+    status: TrackStatus[];
+    regions: RegionState[];
+}
 
 
 /**

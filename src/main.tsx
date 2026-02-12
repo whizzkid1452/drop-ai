@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ReactGA from 'react-ga4';
 import App from './App.tsx';
-import './styles/global.css';
+import '@/styles/global.css.ts';
 
 // TanStack Query 설정
 const queryClient = new QueryClient({

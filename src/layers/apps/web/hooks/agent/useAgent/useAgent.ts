@@ -1,8 +1,8 @@
 import { useState, useCallback, useMemo } from 'react';
 import type { Message, AgentStatus } from '@/types/agent';
 import { useWebLLM } from '@/layers/apps/web/hooks/agent/useWebLLM';
-import { useTrackStore } from '@/stores/useTrackStore';
-import { useAudioCommand } from '@/logics/audio';
+import { useSession, useController, useSessionStore } from '@/layers/presentation/context/LayerContext';
+import { executeAudioCommand } from '@/layers/controllers/utils/command-dispatcher';
 import { handleAIResponse } from '@/layers/apps/web/hooks/agent/useAgent/utils/aiResponseHandler';
 import {
   createUserMessage,
@@ -15,7 +15,9 @@ export function useAgent() {
   const [status, setStatus] = useState<AgentStatus>('idle');
 
   const { engine } = useWebLLM();
-  const trackMap = useTrackStore(state => state.tracks);
+  const trackMap = useSession(state => state.tracks);
+  const sessionStore = useSessionStore();
+  const controller = useController();
 
   const tracks = useMemo(
     () =>
@@ -30,7 +32,12 @@ export function useAgent() {
       })),
     [trackMap]
   );
-  const { execute } = useAudioCommand();
+  
+  const execute = useCallback(async (command: any) => {
+      // Get current session state at the moment of execution
+      const currentSession = sessionStore.getState();
+      await executeAudioCommand(controller, currentSession, command);
+  }, [controller, sessionStore]);
 
   const addMessage = useCallback((message: Message) => {
     setMessages(prev => [...prev, message]);

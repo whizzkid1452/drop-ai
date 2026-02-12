@@ -1,9 +1,7 @@
 import { ErrorBoundary, useErrorBoundary, type FallbackProps } from 'react-error-boundary';
-import { useAudioCommand } from '@/logics/audio';
-import { AudioCommandType } from '@/types/audioCommand.schema';
 import * as styles from './PlaybackControls.css.ts';
-import { useAudioService } from '@/presentation/hooks/useAudioService';
 import { AudioEngineError, getUserFriendlyMessage } from '@/layers/audio-engine/errors';
+import { useController, useSession } from '@/layers/presentation/context/LayerContext';
 
 function PlaybackErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   const message = error instanceof AudioEngineError ? getUserFriendlyMessage(error) : 'Playback Error';
@@ -23,13 +21,13 @@ function PlaybackErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
 }
 
 function PlaybackControlsContent() {
-  const { execute } = useAudioCommand();
-  const isPlaying = useAudioService(state => state.isPlaying);
+  const controller = useController();
+  const isPlaying = useSession(state => state.isPlaying);
   const { showBoundary } = useErrorBoundary();
 
   const handlePlay = async () => {
     try {
-      await execute({ type: AudioCommandType.PLAY });
+      await controller.playback.handlePlay();
     } catch (error) {
       showBoundary(error);
     }
@@ -37,7 +35,7 @@ function PlaybackControlsContent() {
 
   const handlePause = async () => {
     try {
-      await execute({ type: AudioCommandType.PAUSE });
+      controller.playback.handlePause();
     } catch (error) {
       showBoundary(error);
     }
@@ -45,7 +43,7 @@ function PlaybackControlsContent() {
 
   const handleStop = async () => {
     try {
-      await execute({ type: AudioCommandType.STOP });
+      controller.playback.handleStop();
     } catch (error) {
       showBoundary(error);
     }

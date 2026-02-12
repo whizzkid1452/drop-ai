@@ -1,6 +1,6 @@
 import { useAgent } from '@/layers/apps/web/hooks/agent/useAgent/useAgent';
 import { useWebLLM } from '@/layers/apps/web/hooks/agent/useWebLLM';
-import { useAgentStore } from '@/stores/useAgentStore';
+import { useSession } from '@/layers/presentation/context/LayerContext';
 import { useState, useRef, useEffect } from 'react';
 import * as styles from './ChatModalTerminal.css.ts';
 import { AgentTerminalHeader } from './components/AgentTerminalHeader';
@@ -11,11 +11,11 @@ import { CommandComposer } from './components/CommandComposer';
 
 export function AgentTerminal() {
   const [input, setInput] = useState('');
-  const isModelReady = useAgentStore(state => state.isModelReady);
-  const modelLoadingProgress = useAgentStore(
+  const isModelReady = useSession(state => state.isModelReady);
+  const modelLoadingProgress = useSession(
     state => state.modelLoadingProgress
   );
-  const modelLoadingText = useAgentStore(state => state.modelLoadingText);
+  const modelLoadingText = useSession(state => state.modelLoadingText);
 
   const { sendMessage, messages, status } = useAgent();
   const { resetEngine, purgeCache } = useWebLLM();

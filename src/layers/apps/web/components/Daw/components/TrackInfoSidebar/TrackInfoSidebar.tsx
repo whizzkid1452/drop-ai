@@ -1,9 +1,10 @@
 import * as styles from './TrackInfoSidebar.css.ts';
-import { useAudioService } from '@/presentation/hooks/useAudioService';
+import { useSession } from '@/layers/presentation/context/LayerContext';
 
 /** @description For Debugging */
 export function TrackInfoSidebar() {
-  const tracks = useAudioService(state => state.tracks);
+  const tracksMap = useSession(state => state.tracks);
+  const tracks = Array.from(tracksMap.values());
 
   // Convert array to object for display (keyed by track id)
   const tracksDisplay = tracks.reduce(

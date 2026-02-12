@@ -1,7 +1,9 @@
 import { useCallback } from 'react';
-import { AudioService } from '@/core/audio/AudioService';
+import { useController } from '@/layers/presentation/context/LayerContext';
 
 export const useTrackActions = () => {
+    const controller = useController();
+
     /**
      * Split a region at the specified time
      * @param trackId - The ID of the track containing the region
@@ -9,10 +11,9 @@ export const useTrackActions = () => {
      */
     const splitRegion = useCallback(
         async (trackId: string, splitTime: number) => {
-            const service = AudioService.getInstance();
-            await service.splitRegion(trackId, splitTime);
+            await controller.region.splitRegion(trackId, splitTime);
         },
-        []
+        [controller]
     );
 
     return {

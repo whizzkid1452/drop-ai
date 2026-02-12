@@ -3,16 +3,16 @@ import {
   CreateWebWorkerMLCEngine,
   type InitProgressReport,
 } from '@mlc-ai/web-llm';
-import { useAgentStore } from '@/stores/useAgentStore';
+import { useSession } from '@/layers/presentation/context/LayerContext';
 import type { MLCEngine } from '@/types/webllm.types';
 
 let globalEngine: MLCEngine | null = null;
 let isInitializing = false;
 
 export function useWebLLM() {
-  const setModelReady = useAgentStore(state => state.actions.setModelReady);
-  const setLoadingProgress = useAgentStore(
-    state => state.actions.setLoadingProgress
+  const setModelReady = useSession(state => state.setAgentModelReady);
+  const setLoadingProgress = useSession(
+    state => state.setAgentLoadingProgress
   );
 
   useEffect(() => {

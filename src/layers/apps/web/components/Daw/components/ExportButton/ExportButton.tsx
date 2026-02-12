@@ -1,100 +1,65 @@
-import { useState, useCallback } from 'react';
-import { ErrorBoundary, useErrorBoundary, type FallbackProps } from 'react-error-boundary';
+import { useState } from 'react';
 import * as styles from './ExportButton.css.ts';
-import type { ExportSettings } from './utils/audioExport';
-import { useAudioCommand } from '@/logics/audio';
+import { useController, useSessionStore } from '@/layers/presentation/context/LayerContext';
+import { executeAudioCommand } from '@/layers/controllers/utils/command-dispatcher';
 import { AudioCommandType } from '@/types/audioCommand.schema';
+import { ErrorBoundary, useErrorBoundary, type FallbackProps } from 'react-error-boundary';
 
-/**
- * ExportButton Ïª¥Ìè¨?åÌä∏??Props ?Ä???ïÏùò
- */
-interface ExportButtonProps {
-  /** Export ?§Ï†ï ?µÏÖò (?†ÌÉù?? */
-  settings?: ExportSettings;
-  /** Export ?ÑÎ£å ???∏Ï∂ú?òÎäî ÏΩúÎ∞± ?®Ïàò (?†ÌÉù?? */
-  onExportComplete?: () => void;
-  /** Export ?§Ìå® ???∏Ï∂ú?òÎäî ÏΩúÎ∞± ?®Ïàò (?†ÌÉù?? */
-  onExportError?: (error: Error) => void;
-}
+// interface ExportButtonProps removed
 
 function ExportErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
-  const errorMessage = error instanceof Error ? error.message : 'Export failed';
   return (
-    <div className={styles.container}>
-      <div className={styles.errorMessage} role="alert">
-        {errorMessage}
-      </div>
-      <button 
-        className={styles.exportButton} 
-        onClick={resetErrorBoundary}
-        style={{ marginTop: '4px' }}
-      >
-        <span className={styles.buttonText}>Retry</span>
+    <div className={styles.container} style={{ borderColor: '#ff4444' }}>
+      <span style={{ fontSize: '12px', color: '#ff4444', marginRight: '8px' }}>
+        Export Failed: {(error as Error).message}
+      </span>
+      <button className={styles.exportButton} onClick={resetErrorBoundary} title="Retry">
+        Retry
       </button>
     </div>
   );
 }
 
-/**
- * ExportButton Î°úÏßÅ Î∞?UI (?¥Î? Ïª¥Ìè¨?åÌä∏)
- */
-function ExportButtonContent({
-  settings,
-  onExportComplete,
-  onExportError,
-}: ExportButtonProps) {
-  const { execute } = useAudioCommand();
-  const { showBoundary } = useErrorBoundary();
+function ExportButtonContent() {
   const [isExporting, setIsExporting] = useState(false);
+  const controller = useController();
+  const sessionStore = useSessionStore();
+  const { showBoundary } = useErrorBoundary();
 
-  const handleExport = useCallback(async () => {
+  const handleExport = async () => {
+    if (isExporting) return;
     setIsExporting(true);
 
     try {
-      await execute({
+      const filename = `project-${Date.now()}`;
+      await executeAudioCommand(controller, sessionStore.getState(), {
         type: AudioCommandType.EXPORT_AUDIO,
-        filename: settings?.filename,
+        filename
       });
-      onExportComplete?.();
-    } catch (err) {
-      const errorObj = err instanceof Error ? err : new Error('Export failed');
-      onExportError?.(errorObj);
-      showBoundary(errorObj);
+    } catch (error) {
+      console.error('Export failed:', error);
+      showBoundary(error);
     } finally {
       setIsExporting(false);
     }
-  }, [execute, settings, onExportComplete, onExportError, showBoundary]);
-
-  // Î≤ÑÌäº ÎπÑÌôú?±Ìôî: export Ï§ëÏùº ?åÎßå
-  const isDisabled = isExporting;
+  };
 
   return (
-    <div className={styles.container}>
-      <button
-        className={styles.exportButton}
-        onClick={handleExport}
-        disabled={isDisabled}
-        aria-label="Export audio"
-      >
-        {isExporting ? (
-          <span className={styles.progressText}>Exporting...</span>
-        ) : (
-          <span className={styles.buttonText}>Export</span>
-        )}
-      </button>
-    </div>
+    <button 
+      className={styles.exportButton} 
+      onClick={handleExport}
+      disabled={isExporting}
+      title="Export Audio"
+    >
+      {isExporting ? 'Exporting...' : 'Export'}
+    </button>
   );
 }
 
-/**
- * ExportButton Ïª¥Ìè¨?åÌä∏
- * 
- * ErrorBoundaryÎ°?Í∞êÏã∏???àÏñ¥ ?êÎü¨ Î∞úÏÉù ??Fallback UIÎ•?Î≥¥Ïó¨Ï§çÎãà??
- */
-export function ExportButton(props: ExportButtonProps) {
+export function ExportButton() {
   return (
     <ErrorBoundary FallbackComponent={ExportErrorFallback}>
-      <ExportButtonContent {...props} />
+      <ExportButtonContent />
     </ErrorBoundary>
   );
 }

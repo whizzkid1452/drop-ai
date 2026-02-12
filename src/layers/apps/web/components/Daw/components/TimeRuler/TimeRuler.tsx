@@ -11,15 +11,9 @@ interface TimeRulerProps {
 }
 
 export const TimeRuler = memo(({ pixelsPerSecond }: TimeRulerProps) => {
-  const { 
-    tracks,
-    exportStartTime,
-    exportEndTime
-  } = useSession(state => ({
-    tracks: state.tracks,
-    exportStartTime: state.exportStartTime,
-    exportEndTime: state.exportEndTime,
-  }));
+  const tracks = useSession(state => state.tracks);
+  const exportStartTime = useSession(state => state.exportStartTime);
+  const exportEndTime = useSession(state => state.exportEndTime);
   
   const controller = useController();
   

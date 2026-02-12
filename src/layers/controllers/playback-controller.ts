@@ -42,6 +42,9 @@ export class PlaybackController {
 
     // Command Audio Engine
     this.audioEngine.setTime(time);
+    
+    // Update Session State
+    this.sessionStore.getState().setCurrentTime(time);
   }
 
   handleSetTempo(tempo: number): void {
@@ -49,6 +52,9 @@ export class PlaybackController {
 
     // Command Audio Engine
     this.audioEngine.setTempo(tempo);
+
+    // Update Session State
+    this.sessionStore.getState().setTempo(tempo);
   }
 
   getCurrentTime(): number {

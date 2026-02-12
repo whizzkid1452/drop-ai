@@ -1,5 +1,4 @@
-import type { Region } from '@/types/track';
-import type { RegionData } from '@/core/region/Region';
+import type { RegionState } from '@/layers/session/session';
 
 /**
  * Region 렌더링 파라미터
@@ -29,8 +28,8 @@ export interface ExportRange {
  * Split된 두 Region
  */
 export interface SplitRegionResult {
-  left: Region;
-  right: Region;
+  left: RegionState;
+  right: RegionState;
 }
 
 /**
@@ -44,19 +43,6 @@ export interface SplitRegionResult {
  * - 순수 함수만 포함 (Side Effect 없음)
  * - Tone.js 인스턴스를 생성하지 않음 (계산만 수행)
  * - 테스트 가능한 구조
- * 
- * @example
- * ```typescript
- * // 실시간 재생
- * const params = RegionRenderer.calculateRenderParams(region);
- * const player = new Tone.Player(params.url);
- * player.sync().start(params.startTime, params.startOffset, params.duration);
- * 
- * // Export
- * const params = RegionRenderer.calculateRenderParams(region);
- * const player = new Tone.Player(params.url);
- * player.start(params.startTime, params.startOffset, params.duration);
- * ```
  */
 export class RegionRenderer {
   /**
@@ -65,28 +51,15 @@ export class RegionRenderer {
    * 이 함수는 실시간 재생과 Export 모두에서 사용되어
    * 동일한 결과를 보장합니다.
    * 
-   * @param region - 렌더링할 Region (Region 또는 RegionData)
+   * @param region - 렌더링할 Region
    * @returns Tone.js Player에 전달할 파라미터
-   * 
-   * @example
-   * ```typescript
-   * const region: Region = {
-   *   startTime: 5,
-   *   endTime: 10,
-   *   sourceStartTime: 2,
-   *   audioFile: { url: 'audio.wav' }
-   * };
-   * 
-   * const params = RegionRenderer.calculateRenderParams(region);
-   * // { url: 'audio.wav', startTime: 5, startOffset: 2, duration: 5 }
-   * ```
    */
-  static calculateRenderParams(region: Region | RegionData): RegionRenderParams {
-    if (!region.audioFile) {
-      throw new Error('Region audioFile is required for rendering');
+  static calculateRenderParams(region: RegionState): RegionRenderParams {
+    if (!region.audioFileUrl) {
+      throw new Error('Region audioFileUrl is required for rendering');
     }
     return {
-      url: region.audioFile.url,
+      url: region.audioFileUrl,
       startTime: region.startTime,
       startOffset: region.sourceStartTime,
       duration: region.endTime - region.startTime,
@@ -102,20 +75,6 @@ export class RegionRenderer {
    * @param params - 원본 렌더링 파라미터
    * @param exportRange - Export 범위 (선택적)
    * @returns 조정된 렌더링 파라미터
-   * 
-   * @example
-   * ```typescript
-   * const params = { url: 'a.wav', startTime: 5, startOffset: 0, duration: 10 };
-   * const range = { startTime: 8, endTime: 12 };
-   * 
-   * const adjusted = RegionRenderer.adjustForExportRange(params, range);
-   * // {
-   * //   url: 'a.wav',
-   * //   startTime: 8,      // Export 시작점으로 이동
-   * //   startOffset: 3,    // 왼쪽 3초 잘림 (8-5)
-   * //   duration: 4        // 오른쪽 3초 잘림 (10-3-3)
-   * // }
-   * ```
    */
   static adjustForExportRange(
     params: RegionRenderParams,
@@ -167,25 +126,9 @@ export class RegionRenderer {
    * @param region - 분할할 Region
    * @param splitTime - 타임라인 상의 분할 시간 (초)
    * @returns 분할된 두 Region (left, right) 또는 null (분할 불가능한 경우)
-   * 
-   * @example
-   * ```typescript
-   * const region: Region = {
-   *   startTime: 0,
-   *   endTime: 10,
-   *   sourceStartTime: 0,
-   *   audioFile: { url: 'audio.wav', duration: 20 }
-   * };
-   * 
-   * const result = RegionRenderer.calculateSplitRegion(region, 5);
-   * // {
-   * //   left: { startTime: 0, endTime: 5, sourceStartTime: 0 },
-   * //   right: { startTime: 5, endTime: 10, sourceStartTime: 5 }
-   * // }
-   * ```
    */
   static calculateSplitRegion(
-    region: Region,
+    region: RegionState,
     splitTime: number
   ): SplitRegionResult | null {
     // 1. 유효성 검사: 분할 시간이 Region 범위 내에 있어야 함 (양 끝점 제외)
@@ -193,22 +136,23 @@ export class RegionRenderer {
       return null;
     }
 
+    const offsetAmount = splitTime - region.startTime;
+
     // 2. 왼쪽 Region 생성
-    const leftRegion: Region = {
+    const leftRegion: RegionState = {
       ...region,
       id: crypto.randomUUID(),
       endTime: splitTime,
+      duration: offsetAmount,
     };
 
     // 3. 오른쪽 Region 생성
-    // sourceStartTime 계산이 핵심: 잘린 시간만큼 뒤로 밀어야 함
-    const offsetAmount = splitTime - region.startTime;
-
-    const rightRegion: Region = {
+    const rightRegion: RegionState = {
       ...region,
       id: crypto.randomUUID(),
       startTime: splitTime,
       sourceStartTime: region.sourceStartTime + offsetAmount,
+      duration: region.duration - offsetAmount,
     };
 
     return {

@@ -54,3 +54,11 @@ export function useSession<T>(selector: (state: SessionState) => T): T {
   const { session } = useLayer();
   return useStore(session, selector);
 }
+
+/**
+ * Hook to access the raw SessionStore (Zustand store instance).
+ * Useful for accessing state in callbacks without subscribing to updates.
+ */
+export function useSessionStore(): SessionStore {
+  return useLayer().session;
+}

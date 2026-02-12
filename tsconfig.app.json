@@ -30,6 +30,10 @@
     /* Path aliases */
     "baseUrl": ".",
     "paths": {
+      "@/utils/*": ["./src/layers/shared/utils/*"],
+      "@/types/*": ["./src/layers/shared/types/*"],
+      "@/styles/*": ["./src/layers/apps/web/styles/*"],
+      "@/common/*": ["./src/layers/apps/web/components/common/*"],
       "@/*": ["./src/*"]
     }
   },
