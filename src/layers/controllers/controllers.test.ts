@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
+import { MockAudioEngine } from '../audio-engine';
 import { createApp } from '../apps/create-app';
-import { type AppController } from '@/layers/controllers';
+import { type AppController } from './app-controller';
 import { type SessionStore } from '@/layers/session';
 
 describe('Controllers - Phase 3 검증', () => {
