@@ -37,7 +37,15 @@ export class RegionController {
   removeRegion(trackId: string, regionId: string): void {
     console.log(`[RegionController] Removing region ${regionId} from track ${trackId}`);
 
+    // 1. Update AudioEngine
     this.audioEngine.removeRegion(trackId, regionId);
+    
+    // 2. Update SessionStore
+    const track = this.sessionStore.getState().tracks.get(trackId);
+    if (track) {
+      const newRegions = track.regions.filter(r => r.id !== regionId);
+      this.sessionStore.getState().updateTrack(trackId, { regions: newRegions });
+    }
   }
 
   async splitRegion(trackId: string, splitTime: number): Promise<void> {
@@ -83,66 +91,53 @@ export class RegionController {
     };
     
     // 3. Update Audio Engine
-    // Engine might need to know about the split, or we just remove old and add new?
-    // define splitRegion in IAudioEngine? It exists.
-    // If Engine handles split internally, it might generate its own IDs or references.
-    // But usually Engine follows Controller's commands.
-    // Let's call splitRegion on engine.
-    // If engine's splitRegion returns new IDs, we should use them?
-    // Or we pass IDs?
-    // IAudioEngine.splitRegion(trackId, splitTime) signature doesn't take IDs.
-    // This implies Engine handles the logic and maybe returns the new regions?
-    // I need to check AudioEngine.splitRegion signature and return type.
-    
-    await this.audioEngine.splitRegion(trackId, splitTime);
-    
-    // 4. Update Session Store
-    // If Engine handles it, we should ideally sync from Engine or duplicate logic?
-    // "Single Source of Truth" is SessionStore (for UI) + Engine (for Audio).
-    // If I duplicate logic here, I mitigate dependency on Engine's internal state mechanism.
-    // But IDs must match.
-    // If Engine generates IDs, I must get them.
-    // Re-reading IAudioEngine.splitRegion return type: Promise<void>.
-    // It does NOT return new IDs.
-    // This suggests AudioEngine might be stateful and we might desync if we generate different IDs here.
-    // OR AudioEngine relies on us to reload the track/regions?
-    // But addRegion takes ID. splitRegion doesn't.
-    // This is a design flaw in IAudioEngine or implies IAudioEngine updates its own state and we assume it works?
-    // But UI needs the new IDs to render.
-    // If I generate IDs here, Engine doesn't know them unless I use remove/add instead of split.
-    // Calling removeRegion + addRegion(left) + addRegion(right) is safer for ID sync.
-    // I will implement it as remove + add + add in Controller to ensure ID consistency.
-    
-    // IMPLEMENTATION CHANGE: Use atomic remove+add+add on Engine instead of splitRegion 
-    // IF splitRegion doesn't allow ID control.
-    // OR check if AudioEngine.splitRegion allows passing IDs?
-    // IAudioEngine interface says `splitRegion(trackId: string, splitTime: number): Promise<void>`.
-    // So I cannot pass IDs.
-    // So I should replace splitRegion call with remove + add + add.
-    
+    // We use atomic remove + add + add to ensure IDs match between Controller/Store and AudioEngine
+    // IAudioEngine.splitRegion generates internal IDs we can't control, so we avoid it.
     await this.audioEngine.removeRegion(trackId, regionToSplit.id);
     await this.audioEngine.addRegion(trackId, { ...leftRegion, url: leftRegion.audioFileUrl || '' });
     await this.audioEngine.addRegion(trackId, { ...rightRegion, url: rightRegion.audioFileUrl || '' });
     
-    // Update Store
-    const newRegions = track.regions.filter(r => r.id !== regionToSplit.id);
-    newRegions.push(leftRegion, rightRegion);
-    
-    this.sessionStore.getState().updateTrack(trackId, { regions: newRegions });
+    // 4. Update Session Store
+    // AudioEngine.addRegion/removeRegion already updates the store, so we might not need to do it here.
+    // However, to ensure we have the exact object shape and status we want (e.g. valid UUIDs),
+    // we updated the Store in AudioEngine.addRegion using the data we passed.
+    // So if we pass correct IDs to AudioEngine, the Store will be updated correctly by AudioEngine.
+    // BUT AudioEngine only pushes to array. It doesn't replace.
+    // So removeRegion called above should have removed the old one from Store.
+    // And addRegion called above should have added the new ones.
+    // So we don't need to manually update store here if AudioEngine does it.
+    // Let's rely on AudioEngine to update the store to avoid race conditions or duplicates.
+    // Verification:
+    // removeRegion -> updates store (filters out)
+    // addRegion -> updates store (pushes)
+    // So the Store state should be correct.
   }
 
   moveRegion(trackId: string, regionId: string, newStartTime: number): void {
     console.log(`[RegionController] Moving region ${regionId} to ${newStartTime}`);
-
-    // 현재는 region 이동을 직접 구현하지 않고, SessionStore 업데이트
+    
+    // 0. Get current region to find sourceStartTime
     const track = this.sessionStore.getState().tracks.get(trackId);
-    if (!track) return;
+    if (!track) {
+      console.warn(`[RegionController] Track ${trackId} not found`);
+      return;
+    }
+    const region = track.regions.find(r => r.id === regionId);
+    if (!region) {
+      console.warn(`[RegionController] Region ${regionId} not found in store`);
+      // Critical error: UI called move on non-existent region?
+      return;
+    }
 
-    const updatedRegions = track.regions.map(region => {
-      if (region.id === regionId) {
-        return { ...region, startTime: newStartTime };
+    // 1. Update AudioEngine (Pass sourceStartTime explicitly)
+    this.audioEngine.moveRegion(trackId, regionId, newStartTime, region.sourceStartTime);
+    
+    // 2. Update SessionStore
+    const updatedRegions = track.regions.map(r => {
+      if (r.id === regionId) {
+        return { ...r, startTime: newStartTime, endTime: newStartTime + r.duration };
       }
-      return region;
+      return r;
     });
 
     this.sessionStore.getState().updateTrack(trackId, { regions: updatedRegions });

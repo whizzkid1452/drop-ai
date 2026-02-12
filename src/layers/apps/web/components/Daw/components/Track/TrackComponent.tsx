@@ -31,6 +31,7 @@ export const TrackComponent = memo(({
         {track.regions.map(region => (
           <RegionComponent
             key={region.id}
+            trackId={track.id}
             region={region}
             pixelsPerSecond={pixelsPerSecond}
             onReady={(ws) => onReady(track.id, ws)}

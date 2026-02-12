@@ -124,27 +124,7 @@ export class AudioEngine implements IAudioEngine {
         onload: () => {
           console.log('[AudioEngine] Player loaded for region', regionData.id);
           
-          const duration = regionData.duration ?? player.buffer.duration;
-          
-          // SessionStore의 해당 track regions 배열 업데이트
-          const track = this.sessionStore.getState().tracks.get(trackId);
-          if (track) {
-            const newRegion = {
-              id: `region-${Date.now()}`,
-              startTime: 0,
-              endTime: duration, // RegionState 타입 호환
-              sourceStartTime: regionData.sourceStartTime,
-              duration,
-              status: [], // RegionState 타입 호환
-              audioFileUrl: regionData.url,
-            };
-            
-            this.sessionStore.getState().updateTrack(trackId, {
-              regions: [...track.regions, newRegion]
-            });
-          }
-          
-          // Tone.js Player 동기화
+          // Tone.js Player 동기화 (Store 업데이트는 Controller가 담당)
           player.sync().start(regionData.startTime, regionData.sourceStartTime);
           
           resolve();
@@ -169,13 +149,6 @@ export class AudioEngine implements IAudioEngine {
       player.disconnect();
       player.dispose();
       trackPlayers?.delete(regionId);
-    }
-    
-    // SessionStore 업데이트
-    const track = this.sessionStore.getState().tracks.get(trackId);
-    if (track) {
-      const newRegions = track.regions.filter(r => r.id !== regionId);
-      this.sessionStore.getState().updateTrack(trackId, { regions: newRegions });
     }
   }
 
@@ -215,6 +188,27 @@ export class AudioEngine implements IAudioEngine {
       sourceStartTime: region.sourceStartTime + leftDuration,
       duration: rightDuration,
     });
+  }
+
+  moveRegion(trackId: string, regionId: string, newStartTime: number, sourceStartTime: number): void {
+    const trackPlayers = this.players.get(trackId);
+    const player = trackPlayers?.get(regionId);
+    
+    if (player) {
+      // 1. Unsync existing schedule
+      if (player.state === 'started') {
+        player.stop();
+      }
+      player.unsync();
+      
+      // 2. Resync with new startTime using passed sourceStartTime
+      // Store lookup removed to prevent "Region not found" errors due to state desync
+      player.sync().start(newStartTime, sourceStartTime);
+      console.log(`[AudioEngine] Moved region ${regionId} to ${newStartTime}, sourceStart: ${sourceStartTime}`);
+
+    } else {
+       console.warn(`[AudioEngine] Player for region ${regionId} not found`);
+    }
   }
 
   // ===== Export =====

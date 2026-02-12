@@ -71,6 +71,10 @@ export class MockAudioEngine implements IAudioEngine {
     console.log(`[MockAudioEngine] Splitting region at ${splitTime} on track ${trackId}`);
   }
 
+  moveRegion(trackId: string, regionId: string, newStartTime: number): void {
+    console.log(`[MockAudioEngine] Moving region ${regionId} on track ${trackId} to ${newStartTime}`);
+  }
+
   // Export
   setExportRange(startTime: number | null, endTime: number | null): void {
     console.log(`[MockAudioEngine] Export range set: ${startTime} - ${endTime}`);
