@@ -3,7 +3,8 @@ import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 import { LayerProvider } from '../web/context/LayerContext';
-import { MockAudioEngine } from '../../audio-engine';
+import { createSessionStore } from '../../session';
+import { AudioEngine } from '../../audio-engine';
 import { useCliApp, type CliCommands } from './index';
 
 // --- Command Palette Component ---
@@ -273,9 +274,14 @@ const CliTestContent = () => {
 };
 
 export const CliTestPage = () => {
-  const mockEngine = useRef(new MockAudioEngine()).current;
+  // Use real AudioEngine and SessionStore for integration testing
+  const engine = useMemo(() => {
+    const sessionStore = createSessionStore();
+    return new AudioEngine(sessionStore);
+  }, []);
+
   return (
-    <LayerProvider engine={mockEngine}>
+    <LayerProvider engine={engine}>
         <CliTestContent />
     </LayerProvider>
   );

@@ -1,13 +1,13 @@
 import { useState, useCallback, useMemo } from 'react';
 import type { Message, AgentStatus } from '@/types/agent';
-import { useWebLLM } from '@/layers/apps/web/hooks/agent/useWebLLM';
+import { useWebLLM } from '@/layers/apps/web/components/Daw/components/Terminals/utils/useWebLLM';
 import { useSession, useController, useSessionStore } from '@/layers/apps/web/context/LayerContext';
 import { executeAudioCommand } from '@/layers/controllers';
-import { handleAIResponse } from '@/layers/apps/web/hooks/agent/useAgent/utils/aiResponseHandler';
+import { handleAIResponse } from '@/layers/apps/web/components/Daw/components/Terminals/utils/aiResponseHandler';
 import {
   createUserMessage,
   createAssistantMessage,
-} from '@/layers/apps/web/hooks/agent/useAgent/utils/messageHelpers';
+} from '@/layers/apps/web/components/Daw/components/Terminals/utils/messageHelpers';
 import { trackChatMessageSent } from '@/utils/analytics';
 
 export function useAgent() {
