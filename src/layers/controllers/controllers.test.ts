@@ -95,7 +95,7 @@ describe('Controllers - Phase 3 검증', () => {
       await controller.region.addRegion('track-1', { id: 'region-1', url: 'region.mp3', startTime: 0, sourceStartTime: 0, duration: 10 });
       
       // moveRegion은 SessionStore만 업데이트
-      expect(() => controller.region.moveRegion('track-1', 'region-1', 5.0)).not.toThrow();
+      expect(() => controller.region.moveRegion({ trackId: 'track-1', regionId: 'region-1', newStartTime: 5.0 })).not.toThrow();
     });
   });
 

@@ -190,7 +190,7 @@ export class AudioEngine implements IAudioEngine {
     });
   }
 
-  moveRegion(trackId: string, regionId: string, newStartTime: number, sourceStartTime: number): void {
+  moveRegion({ trackId, regionId, newStartTime, sourceStartTime }: { trackId: string; regionId: string; newStartTime: number; sourceStartTime: number }): void {
     const trackPlayers = this.players.get(trackId);
     const player = trackPlayers?.get(regionId);
     

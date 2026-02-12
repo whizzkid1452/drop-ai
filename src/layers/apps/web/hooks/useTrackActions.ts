@@ -17,8 +17,8 @@ export const useTrackActions = () => {
     );
 
     const moveRegion = useCallback(
-        (trackId: string, regionId: string, newStartTime: number) => {
-            controller.region.moveRegion(trackId, regionId, newStartTime);
+        (params: { trackId: string; regionId: string; newStartTime: number }) => {
+            controller.region.moveRegion(params);
         },
         [controller]
     );

@@ -90,7 +90,7 @@ export const RegionComponent = ({
     }
 
     // Call Controller to update Backend
-    moveRegion(trackId, region.id, newStartTime);
+    moveRegion({ trackId, regionId: region.id, newStartTime });
     
     // Reset offset immediately after calling moveRegion
     // The visual position will jump to newStartTime calculated from the updated prop

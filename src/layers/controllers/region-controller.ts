@@ -113,7 +113,8 @@ export class RegionController {
     // So the Store state should be correct.
   }
 
-  moveRegion(trackId: string, regionId: string, newStartTime: number): void {
+  moveRegion(params: { trackId: string; regionId: string; newStartTime: number }): void {
+    const { trackId, regionId, newStartTime } = params;
     console.log(`[RegionController] Moving region ${regionId} to ${newStartTime}`);
     
     // 0. Get current region to find sourceStartTime
@@ -130,7 +131,12 @@ export class RegionController {
     }
 
     // 1. Update AudioEngine (Pass sourceStartTime explicitly)
-    this.audioEngine.moveRegion(trackId, regionId, newStartTime, region.sourceStartTime);
+    this.audioEngine.moveRegion({
+      trackId, 
+      regionId, 
+      newStartTime, 
+      sourceStartTime: region.sourceStartTime
+    });
     
     // 2. Update SessionStore
     const updatedRegions = track.regions.map(r => {
