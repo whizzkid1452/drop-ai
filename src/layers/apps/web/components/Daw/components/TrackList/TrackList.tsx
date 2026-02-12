@@ -4,7 +4,7 @@ import { useErrorBoundary } from 'react-error-boundary';
 import { TrackComponent } from '../Track/TrackComponent';
 import * as styles from './TrackList.css.ts';
 import { Cursor } from '@/layers/apps/web/components/Cursor/Cursor';
-import { useSession, useController } from '@/layers/presentation/context/LayerContext';
+import { useSession, useController } from '@/layers/apps/web/context/LayerContext';
 
 interface TrackListProps {
   pixelsPerSecond: number;

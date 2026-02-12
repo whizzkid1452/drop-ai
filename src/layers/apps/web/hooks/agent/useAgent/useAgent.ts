@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import type { Message, AgentStatus } from '@/types/agent';
 import { useWebLLM } from '@/layers/apps/web/hooks/agent/useWebLLM';
-import { useSession, useController, useSessionStore } from '@/layers/presentation/context/LayerContext';
+import { useSession, useController, useSessionStore } from '@/layers/apps/web/context/LayerContext';
 import { executeAudioCommand } from '@/layers/controllers/utils/command-dispatcher';
 import { handleAIResponse } from '@/layers/apps/web/hooks/agent/useAgent/utils/aiResponseHandler';
 import {

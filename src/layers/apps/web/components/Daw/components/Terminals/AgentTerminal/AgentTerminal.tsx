@@ -1,6 +1,6 @@
 import { useAgent } from '@/layers/apps/web/hooks/agent/useAgent/useAgent';
 import { useWebLLM } from '@/layers/apps/web/hooks/agent/useWebLLM';
-import { useSession } from '@/layers/presentation/context/LayerContext';
+import { useSession } from '@/layers/apps/web/context/LayerContext';
 import { useState, useRef, useEffect } from 'react';
 import * as styles from './ChatModalTerminal.css.ts';
 import { AgentTerminalHeader } from './components/AgentTerminalHeader';

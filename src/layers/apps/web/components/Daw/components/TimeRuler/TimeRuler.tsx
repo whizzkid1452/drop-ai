@@ -1,7 +1,7 @@
 import { memo, useMemo, useRef, useState, useEffect } from 'react';
 import * as styles from './TimeRuler.css.ts';
 import type { Track } from '@/types/track';
-import { useSession, useController } from '@/layers/presentation/context/LayerContext';
+import { useSession, useController } from '@/layers/apps/web/context/LayerContext';
 import { useErrorBoundary } from 'react-error-boundary';
 
 // ...

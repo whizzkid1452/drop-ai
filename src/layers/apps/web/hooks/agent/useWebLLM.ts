@@ -3,7 +3,7 @@ import {
   CreateWebWorkerMLCEngine,
   type InitProgressReport,
 } from '@mlc-ai/web-llm';
-import { useSession } from '@/layers/presentation/context/LayerContext';
+import { useSession } from '@/layers/apps/web/context/LayerContext';
 import type { MLCEngine } from '@/types/webllm.types';
 
 let globalEngine: MLCEngine | null = null;

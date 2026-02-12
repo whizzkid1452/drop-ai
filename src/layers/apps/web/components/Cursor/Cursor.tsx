@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { useSession, useController } from '@/layers/presentation/context/LayerContext';
+import { useSession, useController } from '@/layers/apps/web/context/LayerContext';
 import * as styles from './Cursor.css.ts';
 
 interface CursorProps {

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
-import { LayerProvider } from '../../presentation/context/LayerContext';
+import { LayerProvider } from '../web/context/LayerContext';
 import { MockAudioEngine } from '../../audio-engine/mock-audio-engine';
 import { useCliApp } from './index';
 

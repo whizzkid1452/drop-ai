@@ -7,7 +7,7 @@ import { TrackInfoSidebar } from './components/TrackInfoSidebar/TrackInfoSidebar
 import { TimeRuler } from './components/TimeRuler/TimeRuler';
 import { PlaybackControls } from './components/PlaybackControls/PlaybackControls';
 import * as styles from './DawPage.css.ts';
-import { useSession } from '@/layers/presentation/context/LayerContext';
+import { useSession } from '@/layers/apps/web/context/LayerContext';
 
 const CHAT_PANEL_MIN_WIDTH = 280;
 const CHAT_PANEL_MAX_WIDTH = 600;

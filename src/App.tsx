@@ -7,7 +7,7 @@ import { AnalyticsTracker } from '@/layers/apps/web/components/common/AnalyticsT
 
 // 신규 레이어 추가
 import { AudioEngine } from './layers/audio-engine/audio-engine';
-import { LayerProvider } from './layers/presentation/context/LayerContext';
+import { LayerProvider } from './layers/apps/web/context/LayerContext';
 import { createSessionStore } from './layers/session/session';
 
 function App() {
