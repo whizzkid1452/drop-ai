@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MockAudioEngine } from './mock-audio-engine';
-import type { RegionData } from './i-audio-engine';
+import type { RegionData } from '../i-audio-engine';
 
 describe('MockAudioEngine - Phase 2 검증', () => {
   let engine: MockAudioEngine;

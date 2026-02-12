@@ -1,4 +1,4 @@
-import type { IAudioEngine, RegionData, ExportOptions } from './i-audio-engine';
+import type { IAudioEngine, RegionData, ExportOptions } from '../i-audio-engine';
 
 /**
  * Mock Audio Engine for testing and CLI environments.
