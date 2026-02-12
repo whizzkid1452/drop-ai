@@ -1,10 +1,12 @@
 import { AppController } from '@/layers/controllers';
 import type { CliCommands, CliState } from './types';
-import { createTransportCommands } from './commands/transport';
-import { createTrackCommands } from './commands/track';
-import { createRegionCommands } from './commands/region';
-import { createExportCommands } from './commands/export';
-import { createInfoCommands } from './commands/info';
+import { 
+  createTransportCommands,
+  createTrackCommands,
+  createRegionCommands,
+  createExportCommands,
+  createInfoCommands
+} from './commands';
 
 export const createCliCommands = (
   controller: AppController,
