@@ -10,9 +10,15 @@ export interface CliCommand {
 
 export type CliCommands = Record<string, CliCommand>;
 
+// Minimal Track interface for CLI usage
+interface Track {
+  id: string;
+  regions: { id: string; startTime: number; endTime: number; duration: number; }[];
+}
+
 export const createCliCommands = (
   controller: AppController,
-  state: { isPlaying: boolean; trackCount: number; currentTime: number; tempo: number }
+  state: { isPlaying: boolean; tracks: Map<string, Track>; currentTime: number; tempo: number }
 ): CliCommands => {
   const commands: CliCommands = {
     // ===== Transport Control =====
@@ -66,18 +72,19 @@ export const createCliCommands = (
     // ===== Track Management =====
     track: {
       description: 'Track management',
-      usage: 'track add <id> | track remove <id>',
-      fn: async (sub: string, id: string) => {
+      usage: 'track add <id> [url] | track remove <id>',
+      fn: async (sub: string, id: string, url?: string) => {
         if (sub === 'add') {
           if (!id) return 'Error: Track ID required.';
-          await controller.track.addTrack('mock-url', id);
-          return 'Track ' + id + ' added.';
+          const trackUrl = url || 'mock-url';
+          await controller.track.addTrack(trackUrl, id);
+          return `Track ${id} added with URL: ${trackUrl}`;
         } else if (sub === 'remove') {
           if (!id) return 'Error: Track ID required.';
           controller.track.removeTrack(id);
           return 'Track ' + id + ' removed.';
         }
-        return 'Usage: track add <id> OR track remove <id>';
+        return 'Usage: track add <id> [url] OR track remove <id>';
       }
     },
     volume: {
@@ -142,20 +149,39 @@ export const createCliCommands = (
     // ===== Region Management =====
     region: {
       description: 'Region management',
-      usage: 'region split <trackId> <time> | region remove <trackId> <regionId>',
-      fn: async (sub: string, trackId: string, arg: string) => {
+      usage: 'region split <trackId> <time> | region remove <trackId> <regionId> | region move <trackId> <regionId> <time> | region list <trackId>',
+      fn: async (sub: string, trackId: string, arg1: string, arg2?: string) => {
         if (sub === 'split') {
-          if (!trackId || !arg) return 'Error: Usage: region split <trackId> <time>';
-          const time = parseFloat(arg);
+          // arg1: time
+          if (!trackId || !arg1) return 'Error: Usage: region split <trackId> <time>';
+          const time = parseFloat(arg1);
           if (isNaN(time)) return 'Error: Invalid time value.';
           await controller.region.splitRegion(trackId, time);
           return `Region split at ${time} on track ${trackId}`;
         } else if (sub === 'remove') {
-          if (!trackId || !arg) return 'Error: Usage: region remove <trackId> <regionId>';
-          controller.region.removeRegion(trackId, arg);
-          return `Region ${arg} removed from track ${trackId}`;
+          // arg1: regionId
+          if (!trackId || !arg1) return 'Error: Usage: region remove <trackId> <regionId>';
+          controller.region.removeRegion(trackId, arg1);
+          return `Region ${arg1} removed from track ${trackId}`;
+        } else if (sub === 'move') {
+          // arg1: regionId, arg2: time
+          if (!trackId || !arg1 || !arg2) return 'Error: Usage: region move <trackId> <regionId> <time>';
+          const time = parseFloat(arg2);
+          if (isNaN(time)) return 'Error: Invalid time value.';
+          controller.region.moveRegion({ trackId, regionId: arg1, newStartTime: time });
+          return `Region ${arg1} moved to ${time}s on track ${trackId}`;
+        } else if (sub === 'list') {
+             if (!trackId) return 'Error: Track ID required.';
+             const track = state.tracks.get(trackId);
+             if (!track) return `Error: Track ${trackId} not found.`;
+             if (track.regions.length === 0) return `Track ${trackId} has no regions.`;
+             
+             const list = track.regions.map(r => 
+               `  [${r.id}] Start: ${r.startTime.toFixed(2)}s, Dur: ${r.duration.toFixed(2)}s`
+             ).join('\n');
+             return `Regions in ${trackId}:\n${list}`;
         }
-        return 'Usage: region split <trackId> <time> OR region remove <trackId> <regionId>';
+        return 'Usage: region split... | remove... | move... | list...';
       }
     },
 
@@ -185,15 +211,18 @@ export const createCliCommands = (
       usage: 'status',
       fn: () => {
         const statusText = state.isPlaying ? 'Playing' : 'Stopped';
-        return `Status: ${statusText}\nTracks: ${state.trackCount}\nTime: ${state.currentTime.toFixed(2)}s\nTempo: ${state.tempo} BPM`;
+        return `Status: ${statusText}\nTracks: ${state.tracks.size}\nTime: ${state.currentTime.toFixed(2)}s\nTempo: ${state.tempo} BPM`;
       }
     },
     list: {
       description: 'List all tracks',
       usage: 'list',
       fn: () => {
-        // tracks 정보를 가져오려면 session state를 직접 접근해야 할 수도 있음
-        return 'Track list (use status for count)';
+        if (state.tracks.size === 0) return 'No tracks.';
+        const list = Array.from(state.tracks.entries()).map(([id, t]) => 
+             `  [${id}] Regions: ${t.regions.length}`
+        ).join('\n');
+        return `Track List (${state.tracks.size}):\n${list}`;
       }
     },
     help: {
@@ -213,14 +242,14 @@ export const createCliCommands = (
 export const useCliApp = () => {
   const controller = useController();
   const isPlaying = useSession(state => state.isPlaying);
-  const trackCount = useSession(state => state.tracks.size);
+  const tracks = useSession(state => state.tracks);
   const currentTime = useSession(state => state.currentTime);
   const tempo = useSession(state => state.tempo);
   
   const commands = useMemo(
-    () => createCliCommands(controller, { isPlaying, trackCount, currentTime, tempo }),
-    [controller, isPlaying, trackCount, currentTime, tempo]
+    () => createCliCommands(controller, { isPlaying, tracks, currentTime, tempo }),
+    [controller, isPlaying, tracks, currentTime, tempo]
   );
   
-  return { isPlaying, trackCount, currentTime, tempo, commands };
+  return { isPlaying, trackCount: tracks.size, currentTime, tempo, commands };
 };
