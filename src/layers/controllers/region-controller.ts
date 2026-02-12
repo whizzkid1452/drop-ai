@@ -1,5 +1,5 @@
-import type { IAudioEngine, RegionData } from '../audio-engine/i-audio-engine';
-import { type SessionStore } from '../session/session';
+import { type IAudioEngine, type RegionData } from '@/layers/audio-engine';
+import { type SessionStore } from '@/layers/session';
 
 export class RegionController {
   constructor(

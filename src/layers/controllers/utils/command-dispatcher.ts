@@ -1,5 +1,5 @@
-import { AppController } from '../app-controller';
-import { type SessionState } from '../../session/session';
+import { AppController } from '@/layers/controllers';
+import { type SessionState } from '@/layers/session';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
 import { downloadBlob } from '@/layers/apps/web/components/Daw/components/ExportButton/utils/audioExport';
 

@@ -1,6 +1,6 @@
 import { ErrorBoundary, useErrorBoundary, type FallbackProps } from 'react-error-boundary';
 import * as styles from './PlaybackControls.css.ts';
-import { AudioEngineError, getUserFriendlyMessage } from '@/layers/audio-engine/errors';
+import { AudioEngineError, getUserFriendlyMessage } from '@/layers/audio-engine';
 import { useController, useSession } from '@/layers/apps/web/context/LayerContext';
 
 function PlaybackErrorFallback({ error, resetErrorBoundary }: FallbackProps) {

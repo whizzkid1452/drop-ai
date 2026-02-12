@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useController, useSession } from '../web/context/LayerContext';
-import { AppController } from '../../controllers/app-controller';
+import { AppController } from '@/layers/controllers';
 
 export interface CliCommand {
   description: string;

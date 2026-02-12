@@ -1,9 +1,9 @@
 import React, { createContext, use, useMemo } from 'react';
 import { useStore } from 'zustand';
 import { createApp } from '../../create-app';
-import { type IAudioEngine } from '../../../audio-engine/i-audio-engine';
-import { AppController } from '../../../controllers/app-controller';
-import { type SessionStore, type SessionState } from '../../../session/session';
+import { type IAudioEngine } from '@/layers/audio-engine';
+import { AppController } from '@/layers/controllers';
+import { type SessionStore, type SessionState } from '@/layers/session';
 
 interface LayerContextValue {
   session: SessionStore;
