@@ -1,5 +1,5 @@
-import type { IAudioEngine } from '../audio-engine/i-audio-engine';
-import { type SessionStore } from '../session/session';
+import { type IAudioEngine } from '@/layers/audio-engine';
+import { type SessionStore } from '@/layers/session';
 import { PlaybackController } from './playback-controller';
 import { TrackController } from './track-controller';
 import { RegionController } from './region-controller';

@@ -1,7 +1,7 @@
 // import { useRef } from 'react';
 import WavesurferPlayer from '@wavesurfer/react';
 import * as styles from './RegionComponent.css.ts';
-import type { RegionState } from '@/layers/session/session';
+import type { RegionState } from '@/layers/session';
 
 interface RegionComponentProps {
   region: RegionState;
