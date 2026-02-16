@@ -34,6 +34,8 @@ describe('SessionStore', () => {
     it('should add a track', () => {
       const track = {
         id: 'track-1',
+        name: 'Track 1',
+        duration: 0,
         volume: 0.8,
         isMuted: false,
         isSoloed: false,
@@ -50,6 +52,8 @@ describe('SessionStore', () => {
     it('should update a track', () => {
       const initialTrack = {
         id: 'track-1',
+        name: 'Track 1',
+        duration: 0,
         volume: 0.8,
         isMuted: false,
         isSoloed: false,
@@ -75,6 +79,8 @@ describe('SessionStore', () => {
     it('should remove a track', () => {
       const track = {
         id: 'track-1',
+        name: 'Track 1',
+        duration: 0,
         volume: 0.8,
         isMuted: false,
         isSoloed: false,

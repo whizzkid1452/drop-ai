@@ -28,7 +28,6 @@ describe('CLI Audio Controls', () => {
 
     commands = createCliCommands({
       controller: mockController,
-      initialState: { isPlaying: false, trackCount: 0 },
     });
   });
 

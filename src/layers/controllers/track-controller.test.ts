@@ -19,13 +19,14 @@ describe('TrackController', () => {
       pause: vi.fn(),
       setVolume: vi.fn(),
       seekTo: vi.fn(),
-      loadFile: vi.fn(),
-      setTrackSource: vi.fn(),
-      setTrackVolume: vi.fn(),
-      setTrackMute: vi.fn(),
-      setTrackSolo: vi.fn(),
-      removeTrack: vi.fn(),
       createTrack: vi.fn(),
+      setTrackSource: vi.fn(),
+      getTrackDuration: vi.fn().mockReturnValue(180),
+      removeTrack: vi.fn(),
+      setTrackVolume: vi.fn(),
+      setTrackSolo: vi.fn(),
+      setTrackMute: vi.fn(), // This was in the original and not in the provided snippet, keeping it.
+      loadFile: vi.fn(), // This was in the original and not in the provided snippet, keeping it.
     };
 
     trackController = new TrackController(sessionStore, audioEngine);
@@ -40,6 +41,8 @@ describe('TrackController', () => {
       const track = Array.from(tracks.values())[0];
       expect(track).toEqual({
         id: expect.any(String),
+        name: expect.stringContaining('Track'),
+        duration: 0,
         volume: 1.0,
         isMuted: false,
         isSoloed: false,
@@ -55,7 +58,18 @@ describe('TrackController', () => {
       const id = 'track-1';
       sessionStore.setState({
         tracks: new Map([
-          [id, { id, volume: 1.0, isMuted: false, isSoloed: false, src: null }],
+          [
+            id,
+            {
+              id,
+              name: 'Track 1',
+              duration: 0,
+              volume: 1.0,
+              isMuted: false,
+              isSoloed: false,
+              src: null,
+            },
+          ],
         ]),
       });
 
@@ -72,7 +86,18 @@ describe('TrackController', () => {
       const id = 'track-1';
       sessionStore.setState({
         tracks: new Map([
-          [id, { id, volume: 1.0, isMuted: false, isSoloed: false, src: null }],
+          [
+            id,
+            {
+              id,
+              name: 'Track 1',
+              duration: 0,
+              volume: 1.0,
+              isMuted: false,
+              isSoloed: false,
+              src: null,
+            },
+          ],
         ]),
       });
 

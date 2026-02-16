@@ -114,10 +114,50 @@ describe('AudioEngine', () => {
       engine.createTrack('track-1');
       const playerInstance = vi.mocked(Tone.Player).mock.results.at(-1)?.value;
 
-      await engine.setTrackSource('track-1', 'test.mp3');
+      expect(Tone.Player).toHaveBeenCalledTimes(1); // Should not create new player
+      await engine.setTrackSource('track-1', 'test2.mp3');
 
-      expect(playerInstance.load).toHaveBeenCalledWith('test.mp3');
+      expect(playerInstance.load).toHaveBeenCalledWith('test2.mp3');
       expect(playerInstance.sync).toHaveBeenCalled();
+    });
+
+    it('getTrackDuration returns duration if player is loaded', async () => {
+      const engine = new AudioEngine();
+      engine.createTrack('track-1');
+      await engine.setTrackSource('track-1', 'test.mp3');
+      const playerInstance = vi.mocked(Tone.Player).mock.results.at(-1)?.value;
+
+      // Mock duration on buffer
+      playerInstance.loaded = true;
+      playerInstance.buffer = { duration: 120 };
+
+      // We need to ensure logic in getTrackDuration accesses property safely
+      // In our implementation: track.player.loaded check might depend on Tone.Player internal state
+      // Detailed mock update might be needed if "loaded" property is not on the player instance directly in the mock
+
+      // In the mock definition:
+      // Player returns object with loaded: Promise.resolve()
+      // But getTrackDuration checks `track.player.loaded` property which is boolean in Tone.js
+
+      // Let's rely on the mock implementation or adjust it.
+      // In existing mock, Player returns object. We can check if we can add 'loaded' property.
+
+      playerInstance.loaded = true; // Set boolean loaded as well (Tone.js Player has both getter and promise)
+
+      const duration = engine.getTrackDuration('track-1');
+      expect(duration).toBe(120);
+    });
+
+    it('getTrackDuration returns 0 if track not found or not loaded', () => {
+      const engine = new AudioEngine();
+      expect(engine.getTrackDuration('non-existent')).toBe(0);
+
+      engine.createTrack('track-1');
+      // player exists but not loaded
+      const playerInstance = vi.mocked(Tone.Player).mock.results.at(-1)?.value;
+      playerInstance.loaded = false;
+
+      expect(engine.getTrackDuration('track-1')).toBe(0);
     });
 
     it('setTrackSource throws error if track does not exist', async () => {

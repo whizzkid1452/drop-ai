@@ -17,6 +17,8 @@ export class TrackController {
     // 2. Update Session via Zustand
     this.sessionStore.getState().addTrack({
       id,
+      name: `Track ${id.slice(0, 4)}`, // Default name
+      duration: 0,
       volume: 1.0,
       isMuted: false,
       isSoloed: false,
@@ -37,8 +39,12 @@ export class TrackController {
     this.audioEngine.createTrack(id);
     await this.audioEngine.setTrackSource(id, src);
 
+    const duration = this.audioEngine.getTrackDuration(id);
+
     this.sessionStore.getState().addTrack({
       id,
+      name: file.name,
+      duration,
       volume: 1.0,
       isMuted: false,
       isSoloed: false,
@@ -57,8 +63,14 @@ export class TrackController {
     // AudioEngine에 Source 연결
     await this.audioEngine.setTrackSource(trackId, src);
 
-    // Session 업데이트 (src 추가됨)
-    this.sessionStore.getState().updateTrack(trackId, { src });
+    const duration = this.audioEngine.getTrackDuration(trackId);
+
+    // Session 업데이트 (src, name, duration)
+    this.sessionStore.getState().updateTrack(trackId, {
+      src,
+      name: file.name,
+      duration,
+    });
 
     console.log(`[TrackController] Track source updated: ${src}`);
   }

@@ -2,6 +2,8 @@ import { createStore } from 'zustand/vanilla';
 
 export interface TrackState {
   id: string;
+  name: string;
+  duration: number;
   volume: number;
   isMuted: boolean;
   isSoloed: boolean;

@@ -17,6 +17,7 @@ describe('AppController', () => {
       seekTo: vi.fn(),
       loadFile: vi.fn(),
       setTrackSource: vi.fn(),
+      getTrackDuration: vi.fn().mockReturnValue(120),
       setTrackVolume: vi.fn(),
       setTrackMute: vi.fn(),
       setTrackSolo: vi.fn(),

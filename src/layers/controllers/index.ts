@@ -9,8 +9,10 @@ import { TrackController } from './track-controller';
 export class AppController {
   public readonly playback: PlaybackController;
   public readonly track: TrackController;
+  public readonly session: SessionStore;
 
   constructor(sessionStore: SessionStore, audioEngine: IAudioEngine) {
+    this.session = sessionStore;
     this.playback = new PlaybackController(sessionStore, audioEngine);
     this.track = new TrackController(sessionStore, audioEngine);
   }

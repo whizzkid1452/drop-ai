@@ -11,12 +11,12 @@ export interface CliCommand {
 
 export type CliCommands = Record<CommandsType, CliCommand>;
 
+import { getVisualWidth, padRight } from '@/utils/visual-width';
+
 export const createCliCommands = ({
   controller,
-  initialState,
 }: {
   controller: AppController;
-  initialState: { isPlaying: boolean; trackCount: number };
 }): CliCommands => {
   const commands: CliCommands = {
     [CommandsType.play]: {
@@ -54,8 +54,58 @@ export const createCliCommands = ({
       description: 'Display current session status',
       usage: 'status',
       fn: () => {
-        const statusText = initialState.isPlaying ? 'Playing' : 'Stopped';
-        return 'Status: ' + statusText + '\nTracks: ' + initialState.trackCount;
+        const { isPlaying, tracks } = controller.session.getState();
+        const statusText = isPlaying ? 'Playing' : 'Stopped';
+
+        let output = `Status: ${statusText}\nTracks: ${tracks.size}\n\n`;
+
+        if (tracks.size > 0) {
+          // Table Header
+          output +=
+            padRight('ID', 38) +
+            padRight('Name', 20) +
+            padRight('Duration', 10) +
+            padRight('Vol', 6) +
+            padRight('Mute', 6) +
+            padRight('Solo', 6) +
+            '\n';
+          output += '-'.repeat(86) + '\n';
+
+          // Table Body
+          tracks.forEach(track => {
+            const durationStr = track.duration.toFixed(1) + 's';
+            const volStr = track.volume.toFixed(1);
+            const muteStr = track.isMuted ? 'On' : 'Off';
+            const soloStr = track.isSoloed ? 'On' : 'Off';
+            const nameStr = (track.name || 'Untitled').normalize('NFC');
+            // Truncate name if too long (visual width > 18) to fit column
+            let truncatedName = nameStr;
+            let currentWidth = 0;
+            let charIndex = 0;
+
+            // Calculate truncated string based on visual width
+            for (const char of nameStr) {
+              const w = getVisualWidth(char);
+              if (currentWidth + w > 18) break;
+              currentWidth += w;
+              charIndex++;
+            }
+            if (charIndex < nameStr.length) {
+              truncatedName = nameStr.slice(0, charIndex) + '..';
+            }
+
+            output +=
+              padRight(track.id, 38) +
+              padRight(truncatedName, 20) +
+              padRight(durationStr, 10) +
+              padRight(volStr, 6) +
+              padRight(muteStr, 6) +
+              padRight(soloStr, 6) +
+              '\n';
+          });
+        }
+
+        return output.trim();
       },
     },
     [CommandsType.upload]: {
@@ -160,9 +210,8 @@ export const useCliApp = () => {
     () =>
       createCliCommands({
         controller,
-        initialState: { isPlaying, trackCount },
       }),
-    [controller, isPlaying, trackCount]
+    [controller]
   );
   return { isPlaying, trackCount, commands };
 };

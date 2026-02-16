@@ -7,6 +7,7 @@ export interface IAudioEngine {
   loadFile(file: File): Promise<{ src: string }>;
   createTrack(id: string): void;
   setTrackSource(id: string, src: string): Promise<void>;
+  getTrackDuration(id: string): number;
   setTrackVolume(id: string, volume: number): void;
   setTrackMute(id: string, muted: boolean): void;
   setTrackSolo(id: string, soloed: boolean): void;

@@ -74,6 +74,14 @@ export class AudioEngine implements IAudioEngine {
     track.player.sync().start(0);
   }
 
+  getTrackDuration(id: string): number {
+    const track = this.tracks.get(id);
+    if (track?.player.loaded) {
+      return track.player.buffer.duration;
+    }
+    return 0;
+  }
+
   setTrackVolume(id: string, volume: number): void {
     const track = this.tracks.get(id);
     if (track) {
