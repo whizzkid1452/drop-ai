@@ -37,6 +37,7 @@ describe('SessionStore', () => {
         volume: 0.8,
         isMuted: false,
         isSoloed: false,
+        src: null,
       };
 
       sessionStore.getState().addTrack(track);
@@ -52,6 +53,7 @@ describe('SessionStore', () => {
         volume: 0.8,
         isMuted: false,
         isSoloed: false,
+        src: null,
       };
       sessionStore.getState().addTrack(initialTrack);
 
@@ -76,6 +78,7 @@ describe('SessionStore', () => {
         volume: 0.8,
         isMuted: false,
         isSoloed: false,
+        src: null,
       };
       sessionStore.getState().addTrack(track);
 

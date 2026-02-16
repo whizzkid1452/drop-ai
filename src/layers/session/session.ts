@@ -5,6 +5,7 @@ export interface TrackState {
   volume: number;
   isMuted: boolean;
   isSoloed: boolean;
+  src: string | null;
 }
 
 // State (Data)
