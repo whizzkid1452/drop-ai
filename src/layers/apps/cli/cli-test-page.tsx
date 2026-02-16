@@ -25,8 +25,8 @@ const CliTestContent = () => {
       theme: {
         background: '#1e1e1e',
         foreground: '#33ff33',
-        cursor: '#ffcc00'
-      }
+        cursor: '#ffcc00',
+      },
     });
 
     const fitAddon = new FitAddon();
@@ -38,7 +38,7 @@ const CliTestContent = () => {
     term.write('Welcome to Drop-AI CLI (xterm.js)\r\n');
     // 초기 로드 시 help 명령어 자동 실행 결과 출력
     const helpOutput = commandsRef.current['help'].fn() as string;
-    term.write(helpOutput.replace(/\n/g, "\r\n") + '\r\n\r\n');
+    term.write(helpOutput.replace(/\n/g, '\r\n') + '\r\n\r\n');
     term.write('drop-ai > ');
 
     xtermRef.current = term;
@@ -51,7 +51,7 @@ const CliTestContent = () => {
       if (command) {
         try {
           const output = await command.fn(...args);
-          term.write(`\r\n${output.replace(/\n/g, "\r\n")}`);
+          term.write(`\r\n${output.replace(/\n/g, '\r\n')}`);
         } catch (err: any) {
           term.write(`\r\nError: ${err.message}`);
         }
@@ -75,7 +75,10 @@ const CliTestContent = () => {
           }
           break;
         default:
-          if (data >= String.fromCharCode(0x20) && data <= String.fromCharCode(0x7E)) {
+          if (
+            data >= String.fromCharCode(0x20) &&
+            data <= String.fromCharCode(0x7e)
+          ) {
             inputBufferRef.current += data;
             term.write(data);
           }
@@ -93,13 +96,39 @@ const CliTestContent = () => {
   }, []);
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'monospace', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div
+      style={{
+        padding: '20px',
+        fontFamily: 'monospace',
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
       <h1>CLI Logic Terminal (xterm.js)</h1>
-      <div style={{ marginBottom: '10px', padding: '10px', border: '1px solid #ddd', background: '#f9f9f9' }}>
-        <span>Status: <strong style={{ color: isPlaying ? 'green' : 'red' }}>{isPlaying ? 'PLAYING' : 'STOPPED'}</strong></span>
-        <span style={{ marginLeft: '20px' }}>Tracks: <strong>{trackCount}</strong></span>
+      <div
+        style={{
+          marginBottom: '10px',
+          padding: '10px',
+          border: '1px solid #ddd',
+          background: '#f9f9f9',
+        }}
+      >
+        <span>
+          Status:{' '}
+          <strong style={{ color: isPlaying ? 'green' : 'red' }}>
+            {isPlaying ? 'PLAYING' : 'STOPPED'}
+          </strong>
+        </span>
+        <span style={{ marginLeft: '20px' }}>
+          Tracks: <strong>{trackCount}</strong>
+        </span>
       </div>
-      <div ref={terminalRef} style={{ flex: 1, overflow: 'hidden' }} onClick={() => xtermRef.current?.focus()} />
+      <div
+        ref={terminalRef}
+        style={{ flex: 1, overflow: 'hidden' }}
+        onClick={() => xtermRef.current?.focus()}
+      />
     </div>
   );
 };
@@ -108,7 +137,7 @@ export const CliTestPage = () => {
   const mockEngine = useRef(new MockAudioEngine()).current;
   return (
     <LayerProvider engine={mockEngine}>
-        <CliTestContent />
+      <CliTestContent />
     </LayerProvider>
   );
 };
