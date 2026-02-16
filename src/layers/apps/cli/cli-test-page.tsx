@@ -5,6 +5,7 @@ import 'xterm/css/xterm.css';
 import { LayerProvider } from '../../presentation/context/LayerContext';
 import { MockAudioEngine } from '../../audio-engine/mock-audio-engine';
 import { useCliApp } from './index';
+import { isCommandsType } from './constants';
 
 const CliTestContent = () => {
   const { isPlaying, trackCount, commands } = useCliApp();
@@ -46,6 +47,11 @@ const CliTestContent = () => {
     const handleCommand = async (input: string) => {
       const [cmdName, ...args] = input.trim().split(/\s+/);
       if (!cmdName) return;
+
+      if (!isCommandsType(cmdName)) {
+        term.write(`\r\nUnknown command: ${cmdName}. Type "help" for usage.`);
+        return;
+      }
 
       const command = commandsRef.current[cmdName];
       if (command) {
