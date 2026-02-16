@@ -1,10 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
-import { MockAudioEngine } from './audio-engine/mock-audio-engine';
+import { describe, expect, it, vi } from 'vitest';
 import { createApp } from './apps/create-app';
+import { AudioEngine } from './audio-engine/audio-engine';
 
 describe('Layers Integration', () => {
   function setup() {
-    const mockEngine = new MockAudioEngine();
+    const mockEngine = new AudioEngine();
     const { session, controller } = createApp(mockEngine);
     return { mockEngine, session, controller };
   }

@@ -3,9 +3,9 @@ import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 import { LayerProvider } from '../context/LayerContext';
-import { MockAudioEngine } from '../../audio-engine/mock-audio-engine';
 import { useCliApp } from './index';
 import { isCommandsType } from './constants';
+import { AudioEngine } from '@/layers/audio-engine/audio-engine';
 
 const CliTestContent = () => {
   const { isPlaying, trackCount, commands } = useCliApp();
@@ -140,7 +140,7 @@ const CliTestContent = () => {
 };
 
 export const CliTestPage = () => {
-  const mockEngine = useRef(new MockAudioEngine()).current;
+  const mockEngine = useRef(new AudioEngine()).current;
   return (
     <LayerProvider engine={mockEngine}>
       <CliTestContent />

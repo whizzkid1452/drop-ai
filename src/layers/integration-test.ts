@@ -1,11 +1,11 @@
-import { MockAudioEngine } from './audio-engine/mock-audio-engine';
 import { createApp } from './apps/create-app';
+import { AudioEngine } from './audio-engine/audio-engine';
 
 async function runIntegrationTest() {
   console.log('--- Starting Layers Integration Test ---');
 
   // 1. Setup with Mock Engine
-  const mockEngine = new MockAudioEngine();
+  const mockEngine = new AudioEngine();
   const { session, controller } = createApp(mockEngine);
 
   let notificationCount = 0;
