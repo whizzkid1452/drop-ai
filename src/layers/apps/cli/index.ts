@@ -95,6 +95,46 @@ export const createCliCommands = ({
         });
       },
     },
+    [CommandsType.volume]: {
+      description: 'Set track volume (0.0 to 1.0)',
+      usage: 'volume <trackId> <value>',
+      fn: (trackId: string, value: string) => {
+        if (!trackId || !value)
+          return 'Error: Track ID and volume value required.';
+        const vol = parseFloat(value);
+        if (isNaN(vol) || vol < 0 || vol > 1) {
+          return 'Error: Volume must be a number between 0.0 and 1.0';
+        }
+        controller.track.setTrackVolume(trackId, vol);
+        return 'Set volume of track ' + trackId + ' to ' + vol;
+      },
+    },
+    [CommandsType.mute]: {
+      description: 'Mute/Unmute a track',
+      usage: 'mute <trackId> <on|off>',
+      fn: (trackId: string, state: string) => {
+        if (!trackId || !state)
+          return 'Error: Track ID and state (on/off) required.';
+        if (state !== 'on' && state !== 'off')
+          return 'Error: State must be "on" or "off".';
+        const isMuted = state === 'on';
+        controller.track.setTrackMute(trackId, isMuted);
+        return 'Track ' + trackId + (isMuted ? ' muted.' : ' unmuted.');
+      },
+    },
+    [CommandsType.solo]: {
+      description: 'Solo/Unsolo a track',
+      usage: 'solo <trackId> <on|off>',
+      fn: (trackId: string, state: string) => {
+        if (!trackId || !state)
+          return 'Error: Track ID and state (on/off) required.';
+        if (state !== 'on' && state !== 'off')
+          return 'Error: State must be "on" or "off".';
+        const isSoloed = state === 'on';
+        controller.track.setTrackSolo(trackId, isSoloed);
+        return 'Track ' + trackId + (isSoloed ? ' soloed.' : ' unsoloed.');
+      },
+    },
     [CommandsType.help]: {
       description: 'Show available commands',
       usage: 'help',

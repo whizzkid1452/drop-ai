@@ -5,6 +5,9 @@ export const CommandsType = {
   status: 'status',
   help: 'help',
   upload: 'upload',
+  volume: 'volume',
+  mute: 'mute',
+  solo: 'solo',
 } as const;
 
 export type CommandsType = keyof typeof CommandsType;
