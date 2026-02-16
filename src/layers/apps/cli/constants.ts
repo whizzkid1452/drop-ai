@@ -4,6 +4,7 @@ export const CommandsType = {
   track: 'track',
   status: 'status',
   help: 'help',
+  upload: 'upload',
 } as const;
 
 export type CommandsType = keyof typeof CommandsType;

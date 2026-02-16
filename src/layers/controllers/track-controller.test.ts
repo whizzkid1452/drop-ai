@@ -19,29 +19,23 @@ describe('TrackController', () => {
       pause: vi.fn(),
       setVolume: vi.fn(),
       seekTo: vi.fn(),
-      loadTrack: vi.fn(),
+      loadFile: vi.fn(),
     };
 
     trackController = new TrackController(sessionStore, audioEngine);
   });
 
   describe('addTrack', () => {
-    it('should call audioEngine.loadTrack and add track to session store', async () => {
-      // Arrange
-      const trackUrl = 'http://example.com/track.mp3';
-      const trackId = 'track-1';
-
+    // addTrack no longer calls audioEngine.loadUrl
+    it('should add track to session store', async () => {
       // Act
-      await trackController.addTrack(trackUrl, trackId);
+      const { id } = await trackController.addTrack();
 
       // Assert
-      expect(audioEngine.loadTrack).toHaveBeenCalledWith(trackUrl, trackId);
-      expect(audioEngine.loadTrack).toHaveBeenCalledTimes(1);
-
       const state = sessionStore.getState();
-      expect(state.tracks.has(trackId)).toBe(true);
-      expect(state.tracks.get(trackId)).toEqual({
-        id: trackId,
+      expect(state.tracks.has(id)).toBe(true);
+      expect(state.tracks.get(id)).toEqual({
+        id: id,
         volume: 1.0,
         isMuted: false,
         isSoloed: false,

@@ -15,7 +15,7 @@ describe('AppController', () => {
       pause: vi.fn(),
       setVolume: vi.fn(),
       seekTo: vi.fn(),
-      loadTrack: vi.fn(),
+      loadFile: vi.fn(),
     };
 
     // Act

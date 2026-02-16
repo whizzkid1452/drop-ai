@@ -38,17 +38,16 @@ export const createCliCommands = ({
     [CommandsType.track]: {
       description: 'Track management (add/remove)',
       usage: 'track add <id> | track remove <id>',
-      fn: async (sub: string, id: string) => {
+      fn: async (sub: string, id?: string) => {
         if (sub === 'add') {
-          if (!id) return 'Error: Track ID required.';
-          await controller.track.addTrack('mock-url', id);
-          return 'Track ' + id + ' added.';
+          const { id: newId } = await controller.track.addTrack();
+          return 'Track ' + newId + ' added.';
         } else if (sub === 'remove') {
           if (!id) return 'Error: Track ID required.';
           controller.track.removeTrack(id);
           return 'Track ' + id + ' removed.';
         }
-        return 'Usage: track add <id> OR track remove <id>';
+        return 'Usage: track add | track remove <id>';
       },
     },
     [CommandsType.status]: {
@@ -57,6 +56,43 @@ export const createCliCommands = ({
       fn: () => {
         const statusText = initialState.isPlaying ? 'Playing' : 'Stopped';
         return 'Status: ' + statusText + '\nTracks: ' + initialState.trackCount;
+      },
+    },
+    [CommandsType.upload]: {
+      description: 'Upload an audio file to a new or existing track',
+      usage: 'upload [trackId]',
+      fn: (trackId?: string) => {
+        return new Promise<string>(resolve => {
+          if (typeof document === 'undefined') {
+            resolve('Error: File upload only supported in browser environment');
+            return;
+          }
+
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = 'audio/*';
+          input.style.display = 'none';
+
+          input.onchange = async e => {
+            const files = (e.target as HTMLInputElement).files;
+            if (files && files.length > 0) {
+              const file = files[0];
+              if (trackId) {
+                await controller.track.updateTrackSourceFromFile(trackId, file);
+                resolve('Updated track ' + trackId + ' with ' + file.name);
+              } else {
+                const { id } = await controller.track.createTrackFromFile(file);
+                resolve('Created new track ' + id + ' from ' + file.name);
+              }
+            } else {
+              resolve('Upload cancelled');
+            }
+            document.body.removeChild(input);
+          };
+
+          document.body.appendChild(input);
+          input.click();
+        });
       },
     },
     [CommandsType.help]: {

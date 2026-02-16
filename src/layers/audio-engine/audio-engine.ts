@@ -21,7 +21,9 @@ export class AudioEngine implements IAudioEngine {
     console.log(`[AudioEngine] Seek to: ${time}`);
   }
 
-  async loadTrack(url: string, id: string): Promise<void> {
-    console.log(`[AudioEngine] Loading track ${id} from ${url}`);
+  async loadFile(file: File): Promise<{ src: string }> {
+    const src = URL.createObjectURL(file);
+    console.log(`[AudioEngine] Loading track from ${src}`);
+    return { src };
   }
 }

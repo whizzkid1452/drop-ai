@@ -31,7 +31,7 @@ async function runIntegrationTest() {
 
   // 3. Test Track Management
   console.log('\n[Test] Testing Track Controller...');
-  await controller.track.addTrack('test-url', 'track-1');
+  await controller.track.addTrack();
   if (session.getState().tracks.size !== 1)
     throw new Error('Track addition failed');
 

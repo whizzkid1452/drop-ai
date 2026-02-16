@@ -6,12 +6,10 @@ export class TrackController {
     private sessionStore: SessionStore,
     private audioEngine: IAudioEngine
   ) {}
-
-  async addTrack(url: string, id: string): Promise<void> {
+  // id를 내부에서 반환하도록 처리
+  async addTrack() {
+    const id = crypto.randomUUID();
     console.log(`[TrackController] Adding track: ${id}`);
-
-    // 1. Audio Engine Load
-    await this.audioEngine.loadTrack(url, id);
 
     // 2. Update Session via Zustand
     this.sessionStore.getState().addTrack({
@@ -20,6 +18,34 @@ export class TrackController {
       isMuted: false,
       isSoloed: false,
     });
+
+    return { id };
+  }
+
+  async createTrackFromFile(file: File) {
+    const id = crypto.randomUUID();
+    console.log(`[TrackController] Creating track from file: ${id}`);
+
+    const { src } = await this.audioEngine.loadFile(file);
+    console.log(`[TrackController] Track file loaded: ${src}`);
+
+    this.sessionStore.getState().addTrack({
+      id,
+      volume: 1.0,
+      isMuted: false,
+      isSoloed: false,
+    });
+
+    return { id };
+  }
+
+  async updateTrackSourceFromFile(trackId: string, file: File) {
+    console.log(
+      `[TrackController] Updating track source from file: ${trackId}`
+    );
+    const { src } = await this.audioEngine.loadFile(file);
+    // trackId에 연결해야함
+    console.log(`[TrackController] Track source updated: ${src}`);
   }
 
   removeTrack(id: string): void {

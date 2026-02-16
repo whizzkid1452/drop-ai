@@ -4,5 +4,5 @@ export interface IAudioEngine {
   pause(): void;
   setVolume(value: number): void;
   seekTo(time: number): void;
-  loadTrack(url: string, id: string): Promise<void>;
+  loadFile(file: File): Promise<{ src: string }>;
 }

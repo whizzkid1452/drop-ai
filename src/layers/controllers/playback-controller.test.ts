@@ -16,7 +16,7 @@ describe('PlaybackController', () => {
       pause: vi.fn(),
       setVolume: vi.fn(),
       seekTo: vi.fn(),
-      loadTrack: vi.fn(),
+      loadFile: vi.fn(),
     };
     playbackController = new PlaybackController(sessionStore, audioEngine);
   });
