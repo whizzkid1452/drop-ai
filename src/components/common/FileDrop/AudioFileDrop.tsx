@@ -43,7 +43,7 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
         startTime: 0,
         sourceStartTime: 0,
         duration: duration,
-        audioFile: uploadedAudioFile
+        audioFile: uploadedAudioFile,
       });
 
       // Simple callback

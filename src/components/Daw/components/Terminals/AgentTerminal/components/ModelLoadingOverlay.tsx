@@ -15,10 +15,7 @@ export function ModelLoadingOverlay({
   return (
     <div className={styles.loadingArea}>
       <div className={styles.progressBarContainer}>
-        <div
-          className={styles.progressBar}
-          style={{ width: `${progress}%` }}
-        />
+        <div className={styles.progressBar} style={{ width: `${progress}%` }} />
       </div>
       <div className={styles.statusStrip}>
         <div className={styles.statusInfo}>

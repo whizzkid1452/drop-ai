@@ -1,5 +1,9 @@
 import { useState, useCallback } from 'react';
-import { ErrorBoundary, useErrorBoundary, type FallbackProps } from 'react-error-boundary';
+import {
+  ErrorBoundary,
+  useErrorBoundary,
+  type FallbackProps,
+} from 'react-error-boundary';
 import * as styles from './ExportButton.css';
 import type { ExportSettings } from './utils/audioExport';
 import { useAudioCommand } from '@/logics/audio';
@@ -24,8 +28,8 @@ function ExportErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
       <div className={styles.errorMessage} role="alert">
         {errorMessage}
       </div>
-      <button 
-        className={styles.exportButton} 
+      <button
+        className={styles.exportButton}
         onClick={resetErrorBoundary}
         style={{ marginTop: '4px' }}
       >
@@ -88,7 +92,7 @@ function ExportButtonContent({
 
 /**
  * ExportButton 컴포넌트
- * 
+ *
  * ErrorBoundary로 감싸져 있어 에러 발생 시 Fallback UI를 보여줍니다.
  */
 export function ExportButton(props: ExportButtonProps) {

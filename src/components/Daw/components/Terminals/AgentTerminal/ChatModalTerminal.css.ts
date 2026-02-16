@@ -7,8 +7,8 @@ export const abletonBorder = '#444444';
 export const backgroundDark = '#1a1a1a';
 
 const spin = keyframes({
-  'from': { transform: 'rotate(0deg)' },
-  'to': { transform: 'rotate(360deg)' },
+  from: { transform: 'rotate(0deg)' },
+  to: { transform: 'rotate(360deg)' },
 });
 
 const pulse = keyframes({
@@ -193,7 +193,8 @@ export const gridBackground = style({
   inset: 0,
   pointerEvents: 'none',
   opacity: 0.03,
-  backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)',
+  backgroundImage:
+    'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)',
   backgroundSize: '40px 40px',
 });
 

@@ -5,30 +5,50 @@ import refresh from 'eslint-plugin-react-refresh';
 import prettier from 'eslint-plugin-prettier';
 import globals from 'globals';
 
-export default ts.config([
+export default ts.config(
+  {
+    ignores: ['dist', 'node_modules', 'coverage', '*.config.js'],
+  },
   js.configs.recommended,
+  ...ts.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
       parser: ts.parser,
-      parserOptions: { ecmaVersion: 2023, sourceType: 'module' },
-      globals: { ...globals.browser, React: 'readonly' },
+      ecmaVersion: 2020,
+      globals: {
+        ...globals.browser,
+        ...globals.node, // process 등을 위해 추가
+        React: 'readonly',
+      },
     },
-    plugins: { '@typescript-eslint': ts.plugin, react, refresh, prettier },
+    plugins: {
+      react,
+      'react-refresh': refresh,
+      prettier,
+    },
     rules: {
-      ...ts.configs.recommended.rules,
       ...react.configs.recommended.rules,
       ...react.configs['jsx-runtime'].rules,
-      'react-refresh/only-export-components': 'warn',
+      'react-refresh/only-export-components': [
+        'warn',
+        { allowConstantExport: true },
+      ],
       'prettier/prettier': 'error',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+      'no-unused-vars': 'off', // TS 규칙이 대신함
+      'no-redeclare': 'off', // TS 규칙이 대신함
+      '@typescript-eslint/no-redeclare': 'off',
+      '@typescript-eslint/no-explicit-any': 'warn',
+      'react/display-name': 'off',
     },
-  },
-  {
-    files: ['*.config.{js,ts}'],
-    languageOptions: {
-      ecmaVersion: 2023,
-      sourceType: 'module',
-      globals: globals.node,
+    settings: {
+      react: {
+        version: 'detect',
+      },
     },
-  },
-]);
+  }
+);

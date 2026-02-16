@@ -1,8 +1,8 @@
 const LOADING_TEXT_MAP: Record<string, string> = {
   '분석 중': 'ANALYZING',
-  '분석중': 'ANALYZING',
+  분석중: 'ANALYZING',
   '로딩 중': 'LOADING',
-  '로딩중': 'LOADING',
+  로딩중: 'LOADING',
 };
 
 export function formatLoadingDisplayText(modelLoadingText: string): string {

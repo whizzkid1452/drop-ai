@@ -32,5 +32,3 @@ export interface WavHeaderInfo {
   dataSize: number;
   bytesPerSample: number;
 }
-
-

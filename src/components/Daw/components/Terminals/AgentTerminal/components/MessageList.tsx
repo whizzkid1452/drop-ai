@@ -21,8 +21,7 @@ export function MessageList({ messages, isGenerating }: MessageListProps) {
               className="material-symbols-outlined"
               style={{
                 fontSize: '16px',
-                color:
-                  msg.role === 'assistant' ? styles.primaryColor : '#888',
+                color: msg.role === 'assistant' ? styles.primaryColor : '#888',
               }}
             >
               {msg.role === 'assistant' ? 'smart_toy' : 'person'}

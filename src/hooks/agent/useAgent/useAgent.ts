@@ -65,7 +65,12 @@ export function useAgent() {
 
     // AI 응답 처리
     const startTime = Date.now();
-    const { message, status: newStatus, parsedCommands, executionResults } = await handleAIResponse({
+    const {
+      message,
+      status: newStatus,
+      parsedCommands,
+      executionResults,
+    } = await handleAIResponse({
       engine,
       tracks,
       userInput: trimmedContent,
@@ -75,9 +80,15 @@ export function useAgent() {
 
     // Google Analytics: AI 응답 수신 추적 (프롬프트 개선을 위해 실제 내용 포함)
     if (message) {
-      const { trackAIResponseReceived, trackPromptImprovementSession } = await import('@/utils/analytics');
-      trackAIResponseReceived(message.length, responseTime, message, parsedCommands ?? []);
-      
+      const { trackAIResponseReceived, trackPromptImprovementSession } =
+        await import('@/utils/analytics');
+      trackAIResponseReceived(
+        message.length,
+        responseTime,
+        message,
+        parsedCommands ?? []
+      );
+
       // 프롬프트 개선을 위한 전체 세션 추적
       if (parsedCommands && executionResults) {
         trackPromptImprovementSession({

@@ -21,6 +21,7 @@
 
 - `tsconfig.app.json`의 컴파일러 옵션을 따른다
 - 파일 작성/수정 후 `tsc -b`와 `pnpm lint`로 타입 및 포맷 확인
+- 작업 완료 전 반드시 `pnpm lint`와 `npx prettier --write .`를 실행하여 포맷 및 린트 에러를 해결한다.
 
 ## Architecture
 

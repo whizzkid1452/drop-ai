@@ -1,6 +1,6 @@
 /**
  * Google Analytics 유틸리티
- * 
+ *
  * 개인정보 보호를 위해 사용자 입력의 전체 내용을 전송하지 않고,
  * 이벤트와 메타데이터만 추적합니다.
  */
@@ -25,7 +25,7 @@ function isGAInitialized(): boolean {
 
 /**
  * 사용자 채팅 메시지 전송 이벤트 추적
- * 
+ *
  * @param messageLength - 메시지 길이
  * @param messageContent - 메시지 전체 내용 (프롬프트 개선용, 선택적)
  * @param commandType - 추출된 명령어 타입 (선택적)
@@ -59,7 +59,7 @@ export function trackChatMessageSent(
 
 /**
  * 사용자 메시지에서 민감 정보를 제거하거나 마스킹
- * 
+ *
  * @param message - 원본 메시지
  * @returns 정제된 메시지
  */
@@ -79,17 +79,14 @@ function sanitizeUserMessage(message: string): string {
   );
 
   // URL 마스킹
-  sanitized = sanitized.replace(
-    /https?:\/\/[^\s]+/g,
-    '[URL]'
-  );
+  sanitized = sanitized.replace(/https?:\/\/[^\s]+/g, '[URL]');
 
   return sanitized;
 }
 
 /**
  * AI 응답 수신 이벤트 추적
- * 
+ *
  * @param responseLength - 응답 길이
  * @param responseTime - 응답 시간 (ms)
  * @param responseContent - AI 응답 전체 내용 (프롬프트 개선용, 선택적)
@@ -126,7 +123,7 @@ export function trackAIResponseReceived(
 
 /**
  * 오디오 명령 실행 이벤트 추적
- * 
+ *
  * @param commandType - 명령어 타입
  * @param success - 성공 여부
  * @param errorMessage - 에러 메시지 (실패 시, 선택적)
@@ -156,10 +153,10 @@ export function trackAudioCommandExecuted(
 
 /**
  * 프롬프트 개선을 위한 전체 대화 세션 추적
- * 
+ *
  * 이 함수는 사용자 입력, AI 응답, 실행 결과를 함께 추적하여
  * 프롬프트 개선에 필요한 데이터를 수집합니다.
- * 
+ *
  * @param sessionData - 대화 세션 데이터
  */
 export function trackPromptImprovementSession(sessionData: {
@@ -182,16 +179,19 @@ export function trackPromptImprovementSession(sessionData: {
   window.gtag?.('event', 'prompt_improvement_session', {
     user_input: sanitizedUserInput,
     ai_response: sessionData.aiResponse,
-    parsed_commands: sessionData.parsedCommands?.map(c => c.type).join(',') || 'none',
+    parsed_commands:
+      sessionData.parsedCommands?.map(c => c.type).join(',') || 'none',
     command_count: sessionData.parsedCommands?.length || 0,
     execution_results: sessionData.executionResults.map(r => ({
       command_type: r.commandType,
       success: r.success,
       error: r.errorMessage?.substring(0, 100),
     })),
-    success_rate: sessionData.executionResults.length > 0
-      ? sessionData.executionResults.filter(r => r.success).length / sessionData.executionResults.length
-      : 0,
+    success_rate:
+      sessionData.executionResults.length > 0
+        ? sessionData.executionResults.filter(r => r.success).length /
+          sessionData.executionResults.length
+        : 0,
     response_time_ms: sessionData.responseTime,
     timestamp: new Date().toISOString(),
   });

@@ -1,7 +1,7 @@
 /**
  * 바이트 단위 파일 크기를 사람이 읽기 쉬운 문자열로 변환합니다.
  * 예: 1048576 -> "1.00 MB"
- * 
+ *
  * @param bytes - 바이트 단위의 파일 크기
  * @returns 포맷팅된 파일 크기 문자열
  */
@@ -21,4 +21,3 @@ export function formatFileSize(bytes: number): string {
 
   return `${size.toFixed(2)} ${units[unitIndex]}`;
 }
-

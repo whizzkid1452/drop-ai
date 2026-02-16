@@ -97,43 +97,51 @@ export function parseAudioCommandString({
   error?: string;
 } {
   // 🔧 DEFENSIVE PARSING: Auto-fix malformed JSON from AI
-  
+
   // Pattern 1: Multiple "type" keys in a single object (invalid JSON)
   // Example: [{"type": "SET_TRACK_VOLUME", "volume": 0.5, "type":"PAUSE", "type":"STOP"}]
   // or: {"type": "SET_TRACK_VOLUME", "volume": 0.5, "type":"PAUSE"}
   const multipleTypePattern = /"type"\s*:\s*"[^"]+"[^}]*"type"\s*:\s*"[^"]+"/;
   if (multipleTypePattern.test(commandString)) {
-    console.warn('[parseAudioCommandString] Detected multiple "type" keys in single object, attempting to split');
-    
+    console.warn(
+      '[parseAudioCommandString] Detected multiple "type" keys in single object, attempting to split'
+    );
+
     try {
       // Extract the object with multiple type keys (could be in array or standalone)
       const objectMatch = commandString.match(/\{[\s\S]*?\}/);
       if (objectMatch) {
         const malformedObj = objectMatch[0];
-        
+
         // Find all "type" keys and their positions
-        const typeMatches = [...malformedObj.matchAll(/"type"\s*:\s*"([^"]+)"/g)];
-        
+        const typeMatches = [
+          ...malformedObj.matchAll(/"type"\s*:\s*"([^"]+)"/g),
+        ];
+
         if (typeMatches.length > 1) {
           const commands: string[] = [];
-          
+
           for (let i = 0; i < typeMatches.length; i++) {
             const type = typeMatches[i][1];
             const typeStart = typeMatches[i].index!;
 
-            
             // Find the end of this command (next "type" or end of object)
             let commandEnd = malformedObj.length - 1; // Default to end of object
             if (i < typeMatches.length - 1) {
               // Find the position before the next "type" key
               commandEnd = typeMatches[i + 1].index!;
             }
-            
+
             // Extract the section for this command
-            let commandSection = malformedObj.substring(typeStart, commandEnd);
-            
+            const commandSection = malformedObj.substring(
+              typeStart,
+              commandEnd
+            );
+
             // Extract parameters (everything after "type": "TYPE" until next type or end)
-            const afterType = commandSection.substring(typeMatches[i][0].length);
+            const afterType = commandSection.substring(
+              typeMatches[i][0].length
+            );
             const params = afterType
               .replace(/^[,\s]+/, '') // Remove leading comma/whitespace
               .replace(/[,\s]+$/, '') // Remove trailing comma/whitespace
@@ -144,27 +152,33 @@ export function parseAudioCommandString({
                 return trimmed && !trimmed.match(/^\s*"type"\s*:/);
               })
               .join(',');
-            
+
             // Build the command object
             const paramsStr = params.trim() ? `, ${params.trim()}` : '';
             commands.push(`{"type":"${type}"${paramsStr}}`);
           }
-          
+
           // Reconstruct as array
           const fixedCommand = `[${commands.join(',')}]`;
-          console.warn('[parseAudioCommandString] Auto-fixed multiple type keys');
+          console.warn(
+            '[parseAudioCommandString] Auto-fixed multiple type keys'
+          );
           console.warn('Original:', commandString);
           console.warn('Fixed:', fixedCommand);
           commandString = fixedCommand;
         }
       }
     } catch (err) {
-      console.warn('[parseAudioCommandString] Failed to auto-fix multiple type keys:', err);
+      console.warn(
+        '[parseAudioCommandString] Failed to auto-fix multiple type keys:',
+        err
+      );
     }
   }
 
   // Pattern 2: {"type":"SET_EXPORT_RANGE",...,"type":"EXPORT_AUDIO"}
-  const malformedExportPattern = /"type"\s*:\s*"SET_EXPORT_RANGE"[^}]*"startTime"\s*:\s*(\d+(?:\.\d+)?)[^}]*"endTime"\s*:\s*(\d+(?:\.\d+)?)[^}]*"type"\s*:\s*"EXPORT_AUDIO"/;
+  const malformedExportPattern =
+    /"type"\s*:\s*"SET_EXPORT_RANGE"[^}]*"startTime"\s*:\s*(\d+(?:\.\d+)?)[^}]*"endTime"\s*:\s*(\d+(?:\.\d+)?)[^}]*"type"\s*:\s*"EXPORT_AUDIO"/;
 
   const match = commandString.match(malformedExportPattern);
   if (match) {
@@ -190,7 +204,9 @@ export function parseAudioCommandString({
 
   // Step 2: Try to extract JSON array using improved regex
   // This regex finds arrays that may be embedded in text
-  const arrayMatch = commandString.match(/\[\s*\{[\s\S]*\}\s*(?:,\s*\{[\s\S]*\}\s*)*\]/);
+  const arrayMatch = commandString.match(
+    /\[\s*\{[\s\S]*\}\s*(?:,\s*\{[\s\S]*\}\s*)*\]/
+  );
 
   if (arrayMatch) {
     try {
@@ -214,17 +230,19 @@ export function parseAudioCommandString({
     for (const item of parsed) {
       // 1. Filter out unknown command types (Hallucinations)
       if (!validTypes.includes(item.type)) {
-        console.warn(`[parseAudioCommandString] Filtered out unknown command type: ${item.type}`);
+        console.warn(
+          `[parseAudioCommandString] Filtered out unknown command type: ${item.type}`
+        );
         continue;
       }
 
       // 2. Validate parameters for known types
       const validated = AudioCommandSchema.safeParse(item);
       if (!validated.success) {
-        const errorMsg = validated.error.issues
-          .map((e) => e.message)
-          .join(', ');
-        console.warn(`[parseAudioCommandString] Skipped invalid command (${item.type}): ${errorMsg}`);
+        const errorMsg = validated.error.issues.map(e => e.message).join(', ');
+        console.warn(
+          `[parseAudioCommandString] Skipped invalid command (${item.type}): ${errorMsg}`
+        );
         continue;
       }
       validatedCommands.push(validated.data);
@@ -262,7 +280,9 @@ export function parseAudioCommandString({
       const endParam = parsed.endTime ?? parsed.to ?? parsed.end;
 
       if (startParam !== undefined || endParam !== undefined) {
-        console.warn('[parseAudioCommandString] Auto-converting EXPORT_AUDIO with params to command array');
+        console.warn(
+          '[parseAudioCommandString] Auto-converting EXPORT_AUDIO with params to command array'
+        );
         console.warn('Original:', parsed);
 
         const commands: AudioCommand[] = [];
@@ -290,9 +310,7 @@ export function parseAudioCommandString({
     const validated = AudioCommandSchema.safeParse(parsed);
 
     if (!validated.success) {
-      const errorMsg = validated.error.issues
-        .map((e) => e.message)
-        .join(', ');
+      const errorMsg = validated.error.issues.map(e => e.message).join(', ');
       return {
         commands: null,
         error: `Invalid command format: ${errorMsg}`,
@@ -305,8 +323,9 @@ export function parseAudioCommandString({
   } catch (err) {
     return {
       commands: null,
-      error: `JSON parse error: ${err instanceof Error ? err.message : 'Unknown error'
-        }`,
+      error: `JSON parse error: ${
+        err instanceof Error ? err.message : 'Unknown error'
+      }`,
     };
   }
 }

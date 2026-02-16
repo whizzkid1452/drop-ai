@@ -3,7 +3,7 @@ import type { RegionData } from '@/core/region/Region';
 
 /**
  * Region 렌더링 파라미터
- * 
+ *
  * 목적: Region을 Tone.js Player로 렌더링하기 위한 모든 파라미터
  */
 export interface RegionRenderParams {
@@ -35,23 +35,23 @@ export interface SplitRegionResult {
 
 /**
  * RegionRenderer
- * 
+ *
  * 역할:
  * - Region의 렌더링 파라미터를 계산하는 순수 함수 모음
  * - 실시간 재생(AudioEngine)과 Export(exportProject)에서 공통으로 사용
- * 
+ *
  * 원칙:
  * - 순수 함수만 포함 (Side Effect 없음)
  * - Tone.js 인스턴스를 생성하지 않음 (계산만 수행)
  * - 테스트 가능한 구조
- * 
+ *
  * @example
  * ```typescript
  * // 실시간 재생
  * const params = RegionRenderer.calculateRenderParams(region);
  * const player = new Tone.Player(params.url);
  * player.sync().start(params.startTime, params.startOffset, params.duration);
- * 
+ *
  * // Export
  * const params = RegionRenderer.calculateRenderParams(region);
  * const player = new Tone.Player(params.url);
@@ -61,13 +61,13 @@ export interface SplitRegionResult {
 export class RegionRenderer {
   /**
    * Region을 렌더링하기 위한 파라미터 계산
-   * 
+   *
    * 이 함수는 실시간 재생과 Export 모두에서 사용되어
    * 동일한 결과를 보장합니다.
-   * 
+   *
    * @param region - 렌더링할 Region (Region 또는 RegionData)
    * @returns Tone.js Player에 전달할 파라미터
-   * 
+   *
    * @example
    * ```typescript
    * const region: Region = {
@@ -76,12 +76,14 @@ export class RegionRenderer {
    *   sourceStartTime: 2,
    *   audioFile: { url: 'audio.wav' }
    * };
-   * 
+   *
    * const params = RegionRenderer.calculateRenderParams(region);
    * // { url: 'audio.wav', startTime: 5, startOffset: 2, duration: 5 }
    * ```
    */
-  static calculateRenderParams(region: Region | RegionData): RegionRenderParams {
+  static calculateRenderParams(
+    region: Region | RegionData
+  ): RegionRenderParams {
     if (!region.audioFile) {
       throw new Error('Region audioFile is required for rendering');
     }
@@ -95,19 +97,19 @@ export class RegionRenderer {
 
   /**
    * Export 범위에 따라 렌더링 파라미터 조정
-   * 
+   *
    * Export 범위가 Region의 일부만 포함하는 경우,
    * 파라미터를 조정하여 정확한 구간만 렌더링되도록 합니다.
-   * 
+   *
    * @param params - 원본 렌더링 파라미터
    * @param exportRange - Export 범위 (선택적)
    * @returns 조정된 렌더링 파라미터
-   * 
+   *
    * @example
    * ```typescript
    * const params = { url: 'a.wav', startTime: 5, startOffset: 0, duration: 10 };
    * const range = { startTime: 8, endTime: 12 };
-   * 
+   *
    * const adjusted = RegionRenderer.adjustForExportRange(params, range);
    * // {
    * //   url: 'a.wav',
@@ -129,7 +131,10 @@ export class RegionRenderer {
     const regionEndTime = startTime + duration;
 
     // 1. 리전이 Export 범위 밖인 경우: duration을 0으로
-    if (regionEndTime <= exportRange.startTime || startTime >= exportRange.endTime) {
+    if (
+      regionEndTime <= exportRange.startTime ||
+      startTime >= exportRange.endTime
+    ) {
       return { ...params, duration: 0 };
     }
 
@@ -160,14 +165,14 @@ export class RegionRenderer {
 
   /**
    * Region을 특정 시간에 두 개로 분할
-   * 
+   *
    * Split된 두 Region은 각각 올바른 sourceStartTime을 가지므로
    * 재생 시 연속적으로 들립니다.
-   * 
+   *
    * @param region - 분할할 Region
    * @param splitTime - 타임라인 상의 분할 시간 (초)
    * @returns 분할된 두 Region (left, right) 또는 null (분할 불가능한 경우)
-   * 
+   *
    * @example
    * ```typescript
    * const region: Region = {
@@ -176,7 +181,7 @@ export class RegionRenderer {
    *   sourceStartTime: 0,
    *   audioFile: { url: 'audio.wav', duration: 20 }
    * };
-   * 
+   *
    * const result = RegionRenderer.calculateSplitRegion(region, 5);
    * // {
    * //   left: { startTime: 0, endTime: 5, sourceStartTime: 0 },

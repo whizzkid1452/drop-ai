@@ -13,7 +13,7 @@ import {
 /**
  * 프로젝트 전체를 오디오 파일로 내보냅니다.
  * Tone.Offline을 사용하여 정확한 타이밍과 이펙트(Volume, Pan 등)를 반영합니다.
- * 
+ *
  * @param tracks - 내보낼 트랙 목록
  * @param range - 내보내기 범위 (선택사항)
  * @returns WAV 형식의 Blob
@@ -89,7 +89,7 @@ async function preloadAudioBuffers(tracks: Track[]) {
 
 /**
  * 전체 프로젝트 길이 계산
- * 
+ *
  * @param tracks - 트랙 목록
  * @returns 전체 길이 (초)
  * @throws {AudioEngineError} 길이가 0인 경우
@@ -128,68 +128,74 @@ async function renderBuffer({
   audioBuffers: Map<string, AudioBuffer>;
   range?: { startTime: number; endTime: number };
 }) {
-  return await Tone.Offline(({ transport }: { transport: ReturnType<typeof Tone.getTransport> }) => {
-    tracks.forEach(track => {
-      // Note: renderBuffer는 별도의 AudioEngine 인스턴스가 필요 없음
-      // Export 시에는 Store에서 가져온 Track의 volume/pan 값을 사용
-      const channel = new Tone.Channel({
-        volume: track.volume ? Tone.gainToDb(track.volume) : 0,
-        pan: track.pan ?? 0,
-      }).toDestination();
+  return await Tone.Offline(
+    ({ transport }: { transport: ReturnType<typeof Tone.getTransport> }) => {
+      tracks.forEach(track => {
+        // Note: renderBuffer는 별도의 AudioEngine 인스턴스가 필요 없음
+        // Export 시에는 Store에서 가져온 Track의 volume/pan 값을 사용
+        const channel = new Tone.Channel({
+          volume: track.volume ? Tone.gainToDb(track.volume) : 0,
+          pan: track.pan ?? 0,
+        }).toDestination();
 
-      track.regions.forEach(region => {
-        const buffer = audioBuffers.get(region.audioFile.url);
-        if (!buffer) return;
+        track.regions.forEach(region => {
+          const buffer = audioBuffers.get(region.audioFile.url);
+          if (!buffer) return;
 
-        // ✅ RegionRenderer로 파라미터 계산 (공통 로직)
-        const baseParams = RegionRenderer.calculateRenderParams(region);
-        const adjustedParams = RegionRenderer.adjustForExportRange(baseParams, range);
+          // ✅ RegionRenderer로 파라미터 계산 (공통 로직)
+          const baseParams = RegionRenderer.calculateRenderParams(region);
+          const adjustedParams = RegionRenderer.adjustForExportRange(
+            baseParams,
+            range
+          );
 
-        // duration이 0이면 스킵 (Export 범위 밖)
-        if (adjustedParams.duration <= 0) {
-          return;
-        }
+          // duration이 0이면 스킵 (Export 범위 밖)
+          if (adjustedParams.duration <= 0) {
+            return;
+          }
 
-        const player = new Tone.Player({
-          url: buffer,
-          loop: false,
-          ...PLAYER_CONFIG,  // ✅ 공통 설정 (fadeIn, fadeOut)
-        }).connect(channel);
+          const player = new Tone.Player({
+            url: buffer,
+            loop: false,
+            ...PLAYER_CONFIG, // ✅ 공통 설정 (fadeIn, fadeOut)
+          }).connect(channel);
 
-        /**
-         * ✅ CRITICAL: loopEnd를 설정하여 정확한 구간만 렌더링
-         * 
-         * AudioEngine과 exportProject 공통 로직:
-         * - loopStart/loopEnd로 명시적 구간 제한
-         * - Tone.Player는 loop가 false여도 loopEnd를 존중
-         * - 이를 통해 Split된 Region이 정확한 길이만큼만 재생됩니다.
-         * 
-         * RegionRenderer가 계산한 파라미터 사용:
-         * - startTime: 타임라인에서 시작 시간
-         * - startOffset: 소스 파일에서 시작 위치 (sourceStartTime 반영)
-         * - duration: 재생할 길이 (Export range에 의해 조정됨)
-         * 
-         * 참고: playerConfig.ts의 공통 함수로 관리됩니다.
-         */
-        // ✅ 공통 함수로 loopStart/loopEnd 설정
-        configurePlayerLoop(
-          player,
-          adjustedParams.startOffset,
-          adjustedParams.duration
-        );
+          /**
+           * ✅ CRITICAL: loopEnd를 설정하여 정확한 구간만 렌더링
+           *
+           * AudioEngine과 exportProject 공통 로직:
+           * - loopStart/loopEnd로 명시적 구간 제한
+           * - Tone.Player는 loop가 false여도 loopEnd를 존중
+           * - 이를 통해 Split된 Region이 정확한 길이만큼만 재생됩니다.
+           *
+           * RegionRenderer가 계산한 파라미터 사용:
+           * - startTime: 타임라인에서 시작 시간
+           * - startOffset: 소스 파일에서 시작 위치 (sourceStartTime 반영)
+           * - duration: 재생할 길이 (Export range에 의해 조정됨)
+           *
+           * 참고: playerConfig.ts의 공통 함수로 관리됩니다.
+           */
+          // ✅ 공통 함수로 loopStart/loopEnd 설정
+          configurePlayerLoop(
+            player,
+            adjustedParams.startOffset,
+            adjustedParams.duration
+          );
 
-        // ✅ 공통 함수로 Player 시작 (즉시 재생 모드)
-        startPlayer({
-          player,
-          syncMode: false,
-          startTime: adjustedParams.startTime,
-          startOffset: adjustedParams.startOffset,
-          duration: adjustedParams.duration,
+          // ✅ 공통 함수로 Player 시작 (즉시 재생 모드)
+          startPlayer({
+            player,
+            syncMode: false,
+            startTime: adjustedParams.startTime,
+            startOffset: adjustedParams.startOffset,
+            duration: adjustedParams.duration,
+          });
         });
       });
-    });
 
-    // Transport 시작
-    transport.start();
-  }, totalDuration);
+      // Transport 시작
+      transport.start();
+    },
+    totalDuration
+  );
 }

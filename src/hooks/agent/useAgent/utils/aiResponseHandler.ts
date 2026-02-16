@@ -46,9 +46,11 @@ export async function handleAIResponse(deps: AIResponseHandlerDependencies) {
     };
   }
 
-  let { commands, error } = parseAudioCommandString({
+  const parsedResponse = parseAudioCommandString({
     commandString: fullResponse,
   });
+  let commands = parsedResponse.commands;
+  const error = parsedResponse.error;
 
   // SET_EXPORT_RANGE만 있으면 실제 내보내기가 안 됨. EXPORT_AUDIO 자동 추가
   if (
@@ -80,7 +82,8 @@ export async function handleAIResponse(deps: AIResponseHandlerDependencies) {
           success: true,
         });
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
         // Google Analytics: 명령어 실행 실패 추적
         trackAudioCommandExecuted(command.type, false, errorMessage);
         executionResults.push({

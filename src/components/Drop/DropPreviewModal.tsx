@@ -7,16 +7,15 @@ interface DropPreviewModalProps {
   onClose: () => void;
 }
 
-export function DropPreviewModal({ audioFile, onClose }: DropPreviewModalProps) {
+export function DropPreviewModal({
+  audioFile,
+  onClose,
+}: DropPreviewModalProps) {
   return (
     <div className={styles.modalOverlay}>
       <div className={styles.modal}>
         <h2 className={styles.modalTitle}>Preview audio</h2>
-        <audio
-          src={audioFile.url}
-          controls
-          className={styles.audioPreview}
-        />
+        <audio src={audioFile.url} controls className={styles.audioPreview} />
         <div className={styles.modalActions}>
           <button
             type="button"
@@ -33,4 +32,3 @@ export function DropPreviewModal({ audioFile, onClose }: DropPreviewModalProps) 
     </div>
   );
 }
-

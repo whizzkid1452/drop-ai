@@ -5,7 +5,7 @@ export type RegionId = string;
 
 /**
  * Region의 오디오 파일 정보
- * 
+ *
  * AudioFile의 모든 속성이 필요하지 않으므로,
  * Region이 실제로 사용하는 최소한의 정보만 정의합니다.
  */
@@ -20,17 +20,17 @@ interface RegionProps {
   duration: number;
   sourceStartTime: number;
   audioFile?: RegionAudioFile | AudioFile;
-  status: RegionStatus[]; 
+  status: RegionStatus[];
 }
 
 export interface RegionData extends RegionProps {
-    endTime: number;
-    audioFile?: RegionAudioFile | AudioFile;
+  endTime: number;
+  audioFile?: RegionAudioFile | AudioFile;
 }
 
 /**
  * Domain Model: Region
- * 
+ *
  * Represents a clip of audio on a timeline.
  * It encapsulates logic for timing, duration, and splitting.
  */

@@ -34,7 +34,9 @@ export async function queryToLLM({
     const errorMessage = err instanceof Error ? err.message : 'Unknown error';
     console.error('AI Error:', errorMessage);
 
-    const diagReport = await generateErrorDiagnostic(err instanceof Error ? err : new Error(String(err)));
+    const diagReport = await generateErrorDiagnostic(
+      err instanceof Error ? err : new Error(String(err))
+    );
     return { fullResponse: null, error: diagReport } as const;
   }
 }

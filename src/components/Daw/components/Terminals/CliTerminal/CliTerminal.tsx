@@ -84,12 +84,13 @@ export function CliTerminal() {
         {logs.map(log => (
           <div
             key={log.id}
-            className={`${styles.logItem} ${log.type === 'error'
-              ? styles.logItemError
-              : log.type === 'success'
-                ? styles.logItemSuccess
-                : ''
-              }`}
+            className={`${styles.logItem} ${
+              log.type === 'error'
+                ? styles.logItemError
+                : log.type === 'success'
+                  ? styles.logItemSuccess
+                  : ''
+            }`}
           >
             {log.message}
           </div>
