@@ -21,6 +21,7 @@ vi.mock('tone', () => {
         toDestination: vi.fn().mockReturnThis(),
         connect: vi.fn().mockReturnThis(),
         sync: vi.fn().mockReturnThis(),
+        unsync: vi.fn().mockReturnThis(),
         start: vi.fn(),
         stop: vi.fn(),
         load: vi.fn().mockResolvedValue(undefined),
@@ -41,6 +42,7 @@ vi.mock('tone', () => {
     Destination,
     getTransport: vi.fn().mockReturnValue(Transport),
     getDestination: vi.fn().mockReturnValue(Destination),
+    moveRegion: vi.fn(),
   };
 });
 

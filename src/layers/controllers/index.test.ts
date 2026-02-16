@@ -25,6 +25,7 @@ describe('AppController', () => {
       createTrack: vi.fn(),
       addRegion: vi.fn(),
       removeRegion: vi.fn(),
+      moveRegion: vi.fn(),
     };
 
     // Act

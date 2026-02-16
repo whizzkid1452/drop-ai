@@ -52,6 +52,33 @@ export class TrackController {
     return { regionId };
   }
 
+  moveRegion(trackId: string, regionId: string, newStartTime: number) {
+    console.log(
+      `[TrackController] Moving region: ${regionId} to ${newStartTime}s`
+    );
+
+    const track = this.sessionStore.getState().tracks.get(trackId);
+    const region = track?.regions.find(r => r.id === regionId);
+
+    if (!region) {
+      console.warn(`[TrackController] Region not found: ${regionId}`);
+      return;
+    }
+
+    // Audio Engine 업데이트 (moveRegion 활용)
+    this.audioEngine.moveRegion(trackId, regionId, newStartTime);
+
+    const updatedRegion = { ...region, startTime: newStartTime };
+
+    if (track) {
+      this.sessionStore.getState().updateTrack(trackId, {
+        regions: track.regions.map(r =>
+          r.id === regionId ? updatedRegion : r
+        ),
+      });
+    }
+  }
+
   removeRegion(trackId: string, regionId: string) {
     console.log(`[TrackController] Removing region: ${regionId}`);
     this.audioEngine.removeRegion(trackId, regionId);

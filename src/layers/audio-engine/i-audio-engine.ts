@@ -10,6 +10,7 @@ export interface IAudioEngine {
   createTrack(id: string): void;
   addRegion(trackId: string, region: RegionState): void;
   removeRegion(trackId: string, regionId: string): void;
+  moveRegion(trackId: string, regionId: string, newStartTime: number): void;
   setTrackVolume(id: string, volume: number): void;
   setTrackMute(id: string, muted: boolean): void;
   setTrackSolo(id: string, soloed: boolean): void;

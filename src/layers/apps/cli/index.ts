@@ -204,6 +204,31 @@ export const createCliCommands = ({
         return 'Track ' + trackId + (isSoloed ? ' soloed.' : ' unsoloed.');
       },
     },
+    [CommandsType.region]: {
+      description: 'Region management (move/remove)',
+      usage:
+        'region move <trackId> <regionId> <startTime> | region remove <trackId> <regionId>',
+      fn: (sub: string, trackId: string, regionId: string, value?: string) => {
+        if (!sub || !trackId || !regionId) {
+          return 'Error: Unknown command. Usage: region move ... | region remove ...';
+        }
+
+        if (sub === 'move') {
+          if (!value) return 'Error: Start time required for move.';
+          const startTime = parseFloat(value);
+          if (isNaN(startTime) || startTime < 0) {
+            return 'Error: Start time must be a valid positive number.';
+          }
+          controller.track.moveRegion(trackId, regionId, startTime);
+          return `Moved region ${regionId} to ${startTime}s.`;
+        } else if (sub === 'remove') {
+          controller.track.removeRegion(trackId, regionId);
+          return `Removed region ${regionId} from track ${trackId}.`;
+        }
+
+        return 'Error: Unknown subcommand. Use "move" or "remove".';
+      },
+    },
     [CommandsType.help]: {
       description: 'Show available commands',
       usage: 'help',

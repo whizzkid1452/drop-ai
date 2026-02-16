@@ -144,4 +144,74 @@ describe('CLI Command Logic', () => {
     // "한글" is width 4. Padding 16 spaces.
     expect(result).toContain('한글                ');
   });
+
+  it('should call moveRegion when region move command is executed', async () => {
+    // Override moveRegion mock
+    const mockTrackController = {
+      ...mockController.track,
+      moveRegion: vi.fn(),
+    };
+
+    const mockControllerWithMove = {
+      ...mockController,
+      track: mockTrackController,
+    } as unknown as AppController;
+
+    const commands = createCliCommands({
+      controller: mockControllerWithMove,
+    });
+
+    // region move <trackId> <regionId> <startTime>
+    const result = await commands['region'].fn(
+      'move',
+      'track-1',
+      'region-1',
+      '5.5'
+    );
+
+    expect(mockTrackController.moveRegion).toHaveBeenCalledWith(
+      'track-1',
+      'region-1',
+      5.5
+    );
+    expect(result).toContain('Moved region region-1 to 5.5s');
+  });
+
+  it('should call removeRegion when region remove command is executed', async () => {
+    // Override removeRegion mock
+    const mockTrackController = {
+      ...mockController.track,
+      removeRegion: vi.fn(),
+    };
+
+    const mockControllerWithRemove = {
+      ...mockController,
+      track: mockTrackController,
+    } as unknown as AppController;
+
+    const commands = createCliCommands({
+      controller: mockControllerWithRemove,
+    });
+
+    // region remove <trackId> <regionId>
+    const result = await commands['region'].fn('remove', 'track-1', 'region-1');
+
+    expect(mockTrackController.removeRegion).toHaveBeenCalledWith(
+      'track-1',
+      'region-1'
+    );
+    expect(result).toContain('Removed region region-1');
+  });
+
+  it('should return error for invalid region subcommand', async () => {
+    const commands = createCliCommands({
+      controller: mockController,
+    });
+    const result = await commands['region'].fn(
+      'invalid',
+      'track-1',
+      'region-1'
+    );
+    expect(result).toContain('Error: Unknown subcommand');
+  });
 });

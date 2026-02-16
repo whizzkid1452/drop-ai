@@ -20,6 +20,7 @@ vi.mock('tone', () => {
         toDestination: vi.fn().mockReturnThis(),
         connect: vi.fn().mockReturnThis(),
         sync: vi.fn().mockReturnThis(),
+        unsync: vi.fn().mockReturnThis(),
         start: vi.fn(),
         stop: vi.fn(),
         load: vi.fn().mockResolvedValue(undefined),
@@ -231,6 +232,35 @@ describe('AudioEngine', () => {
       engine.removeTrack('track-1');
       expect(channelInstance.dispose).toHaveBeenCalled();
       expect(playerInstance.dispose).toHaveBeenCalled();
+    });
+
+    it('moveRegion reschedules player', async () => {
+      const engine = new AudioEngine();
+      engine.createTrack('track-1');
+
+      const mockFile = new File([''], 'test.mp3', { type: 'audio/mp3' });
+      URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+      await engine.loadFile(mockFile);
+
+      const region = {
+        id: 'region-1',
+        trackId: 'track-1',
+        src: 'blob:mock-url',
+        startTime: 0,
+        duration: 10,
+        offset: 0,
+      };
+
+      engine.addRegion('track-1', region);
+      const playerInstance = vi.mocked(Tone.Player).mock.results.at(-1)?.value;
+
+      engine.moveRegion('track-1', 'region-1', 5);
+
+      expect(playerInstance.unsync).toHaveBeenCalled();
+      expect(playerInstance.stop).toHaveBeenCalled();
+      expect(playerInstance.sync).toHaveBeenCalled();
+      // start(startTime, offset, duration)
+      expect(playerInstance.start).toHaveBeenLastCalledWith(5, 0, 10);
     });
   });
 });

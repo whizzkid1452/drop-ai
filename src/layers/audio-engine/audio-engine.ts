@@ -9,6 +9,8 @@ interface TrackNodes {
 interface RegionNodes {
   player: Tone.Player;
   trackId: string;
+  duration: number;
+  offset: number;
 }
 
 export class AudioEngine implements IAudioEngine {
@@ -86,7 +88,12 @@ export class AudioEngine implements IAudioEngine {
     // start(startTime, offset, duration)
     player.sync().start(region.startTime, region.offset, region.duration);
 
-    this.regions.set(region.id, { player, trackId });
+    this.regions.set(region.id, {
+      player,
+      trackId,
+      duration: region.duration,
+      offset: region.offset,
+    });
   }
 
   removeRegion(_trackId: string, regionId: string): void {
@@ -96,6 +103,26 @@ export class AudioEngine implements IAudioEngine {
       regionNode.player.dispose();
       this.regions.delete(regionId);
     }
+  }
+
+  moveRegion(_trackId: string, regionId: string, newStartTime: number): void {
+    console.log(`[AudioEngine] Move Region: ${regionId} to ${newStartTime}s`);
+    const regionNode = this.regions.get(regionId);
+    if (!regionNode) {
+      console.warn(`[AudioEngine] Region ${regionId} not found`);
+      return;
+    }
+
+    const { player, duration, offset } = regionNode;
+
+    // unsync detach from transport
+    player.unsync();
+
+    // stop if playing
+    player.stop();
+
+    // reschedule with preserved offset and duration
+    player.sync().start(newStartTime, offset, duration);
   }
 
   setTrackVolume(id: string, volume: number): void {
