@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { AppController } from './app-controller';
 import { createSessionStore } from '../session/session';
 import { PlaybackController } from './playback-controller';
 import { TrackController } from './track-controller';
 import type { IAudioEngine } from '../audio-engine/i-audio-engine';
+import { AppController } from '.';
 
 describe('AppController', () => {
   it('should initialize sub-controllers', () => {
