@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createCliCommands } from './index';
-import { AppController } from '../../controllers';
+import { AppController } from '../../controllers/app-controller';
 
 describe('CLI Command Logic', () => {
   const mockController = {
@@ -15,7 +15,7 @@ describe('CLI Command Logic', () => {
     },
   } as unknown as AppController;
 
-  const mockState = { isPlaying: false, trackCount: 0, currentTime: 0, tempo: 120 };
+  const mockState = { isPlaying: false, trackCount: 0 };
 
   it('should call handlePlay when play command is executed', async () => {
     const commands = createCliCommands(mockController, mockState);
@@ -25,7 +25,7 @@ describe('CLI Command Logic', () => {
   });
 
   it('should reflect current state in status command', () => {
-    const playingState = { isPlaying: true, trackCount: 3, currentTime: 5.5, tempo: 140 };
+    const playingState = { isPlaying: true, trackCount: 3 };
     const commands = createCliCommands(mockController, playingState);
     const result = commands['status'].fn() as string;
     expect(result).toContain('Playing');

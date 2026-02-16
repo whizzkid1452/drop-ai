@@ -1,11 +1,11 @@
 import { ErrorBoundary } from 'react-error-boundary';
-import { GlobalErrorFallback } from './layers/apps/web/components/common/ErrorBoundary/GlobalErrorFallback';
+import { GlobalErrorFallback } from './components/common/ErrorBoundary/GlobalErrorFallback';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ReactGA from 'react-ga4';
 import App from './App.tsx';
-import '@/styles/global.css.ts';
+import './styles/global.css';
 
 // TanStack Query 설정
 const queryClient = new QueryClient({

@@ -1,5 +1,5 @@
-import { type IAudioEngine } from '@/layers/audio-engine';
-import { type SessionStore } from '@/layers/session';
+import type { IAudioEngine } from '../audio-engine/i-audio-engine';
+import { type SessionStore } from '../session/session';
 
 export class PlaybackController {
   constructor(
@@ -35,29 +35,5 @@ export class PlaybackController {
 
     // 2. Update Session State
     this.sessionStore.getState().setPlaying(false);
-  }
-
-  handleSeek(time: number): void {
-    console.log(`[PlaybackController] Seeking to ${time}`);
-
-    // Command Audio Engine
-    this.audioEngine.setTime(time);
-    
-    // Update Session State
-    this.sessionStore.getState().setCurrentTime(time);
-  }
-
-  handleSetTempo(tempo: number): void {
-    console.log(`[PlaybackController] Setting tempo to ${tempo}`);
-
-    // Command Audio Engine
-    this.audioEngine.setTempo(tempo);
-
-    // Update Session State
-    this.sessionStore.getState().setTempo(tempo);
-  }
-
-  getCurrentTime(): number {
-    return this.audioEngine.getCurrentTime();
   }
 }

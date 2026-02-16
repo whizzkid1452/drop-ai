@@ -1,6 +1,6 @@
-import { type IAudioEngine } from '@/layers/audio-engine';
-import { createSessionStore, type SessionStore } from '@/layers/session';
-import { AppController } from '@/layers/controllers';
+import type { IAudioEngine } from '../audio-engine/i-audio-engine';
+import { createSessionStore, type SessionStore } from '../session/session';
+import { AppController } from '../controllers/app-controller';
 
 export interface AppInstance {
   session: SessionStore;
