@@ -2,7 +2,7 @@ import * as Tone from 'tone';
 import type { IAudioEngine } from './i-audio-engine';
 
 interface TrackNodes {
-  player?: Tone.Player;
+  player: Tone.Player;
   channel: Tone.Channel;
 }
 
@@ -53,37 +53,25 @@ export class AudioEngine implements IAudioEngine {
       return;
     }
     const channel = new Tone.Channel().toDestination();
-    this.tracks.set(id, { channel });
+    const player = new Tone.Player().connect(channel);
+    this.tracks.set(id, { channel, player });
   }
 
   async setTrackSource(id: string, src: string): Promise<void> {
     console.log(`[AudioEngine] setTrackSource: ${id}, ${src}`);
 
-    let track = this.tracks.get(id);
+    const track = this.tracks.get(id);
 
-    // If track doesn't exist, create it (fallback)
     if (!track) {
-      this.createTrack(id);
-      track = this.tracks.get(id)!;
+      console.error(`[AudioEngine] Track ${id} not found`);
+      throw new Error(`Track ${id} not found`);
     }
 
-    if (track.player) {
-      // Reuse logic
-      console.log(`[AudioEngine] Reusing player for ${id}`);
-      track.player.stop(); // Stop potential playback
-      await track.player.load(src);
-      // Ensure sync
-      track.player.sync().start(0);
-    } else {
-      // Create new player and connect to existing channel
-      console.log(`[AudioEngine] Creating new player for ${id}`);
-      const player = new Tone.Player(src).connect(track.channel);
-
-      await player.loaded;
-      player.sync().start(0);
-
-      track.player = player;
-    }
+    console.log(`[AudioEngine] Loading source for ${id}`);
+    track.player.stop(); // Stop potential playback
+    await track.player.load(src);
+    // Ensure sync
+    track.player.sync().start(0);
   }
 
   setTrackVolume(id: string, volume: number): void {
@@ -114,7 +102,7 @@ export class AudioEngine implements IAudioEngine {
     console.log(`[AudioEngine] Removing track: ${id}`);
     const track = this.tracks.get(id);
     if (track) {
-      track.player?.dispose();
+      track.player.dispose();
       track.channel.dispose();
       this.tracks.delete(id);
     }

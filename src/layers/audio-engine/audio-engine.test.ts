@@ -94,53 +94,42 @@ describe('AudioEngine', () => {
   });
 
   describe('Track Management', () => {
-    it('createTrack creates channel', () => {
+    it('createTrack creates channel and player', () => {
       const engine = new AudioEngine();
       engine.createTrack('track-1');
 
       const channelInstance = vi
         .mocked(Tone.Channel)
         .mock.results.at(-1)?.value;
-      expect(Tone.Channel).toHaveBeenCalled();
-      expect(channelInstance.toDestination).toHaveBeenCalled();
-    });
-
-    it('setTrackSource creates player and connects to existing channel', async () => {
-      const engine = new AudioEngine();
-      engine.createTrack('track-1');
-      const channelInstance = vi
-        .mocked(Tone.Channel)
-        .mock.results.at(-1)?.value;
-
-      await engine.setTrackSource('track-1', 'test.mp3');
-
-      expect(Tone.Player).toHaveBeenCalledWith('test.mp3');
       const playerInstance = vi.mocked(Tone.Player).mock.results.at(-1)?.value;
-      expect(playerInstance.connect).toHaveBeenCalledWith(channelInstance);
-    });
-
-    it('setTrackSource works even if createTrack was not called (fallback)', async () => {
-      const engine = new AudioEngine();
-      await engine.setTrackSource('track-1', 'test.mp3');
 
       expect(Tone.Channel).toHaveBeenCalled();
       expect(Tone.Player).toHaveBeenCalled();
+      expect(channelInstance.toDestination).toHaveBeenCalled();
+      expect(playerInstance.connect).toHaveBeenCalledWith(channelInstance);
     });
 
-    it('setTrackSource reuses player if exists', async () => {
+    it('setTrackSource loads source into existing player', async () => {
       const engine = new AudioEngine();
-      await engine.setTrackSource('track-1', 'test.mp3');
+      engine.createTrack('track-1');
       const playerInstance = vi.mocked(Tone.Player).mock.results.at(-1)?.value;
 
-      // Call again
-      await engine.setTrackSource('track-1', 'test2.mp3');
+      await engine.setTrackSource('track-1', 'test.mp3');
 
-      expect(Tone.Player).toHaveBeenCalledTimes(1); // Should not create new player
-      expect(playerInstance.load).toHaveBeenCalledWith('test2.mp3');
+      expect(playerInstance.load).toHaveBeenCalledWith('test.mp3');
+      expect(playerInstance.sync).toHaveBeenCalled();
+    });
+
+    it('setTrackSource throws error if track does not exist', async () => {
+      const engine = new AudioEngine();
+      await expect(
+        engine.setTrackSource('track-1', 'test.mp3')
+      ).rejects.toThrow('Track track-1 not found');
     });
 
     it('setTrackVolume updates channel volume', async () => {
       const engine = new AudioEngine();
+      engine.createTrack('track-1');
       await engine.setTrackSource('track-1', 'test.mp3');
       const channelInstance = vi.mocked(Tone.Channel).mock.results[0].value;
 
@@ -150,6 +139,7 @@ describe('AudioEngine', () => {
 
     it('setTrackMute updates channel mute', async () => {
       const engine = new AudioEngine();
+      engine.createTrack('track-1');
       await engine.setTrackSource('track-1', 'test.mp3');
       const channelInstance = vi.mocked(Tone.Channel).mock.results[0].value;
 
@@ -159,6 +149,7 @@ describe('AudioEngine', () => {
 
     it('setTrackSolo updates channel solo', async () => {
       const engine = new AudioEngine();
+      engine.createTrack('track-1');
       await engine.setTrackSource('track-1', 'test.mp3');
       const channelInstance = vi
         .mocked(Tone.Channel)
@@ -170,7 +161,7 @@ describe('AudioEngine', () => {
 
     it('removeTrack disposes player and channel', async () => {
       const engine = new AudioEngine();
-      await engine.setTrackSource('track-1', 'test.mp3');
+      engine.createTrack('track-1');
       const playerInstance = vi.mocked(Tone.Player).mock.results.at(-1)?.value;
       const channelInstance = vi
         .mocked(Tone.Channel)
@@ -178,17 +169,6 @@ describe('AudioEngine', () => {
 
       engine.removeTrack('track-1');
       expect(playerInstance.dispose).toHaveBeenCalled();
-      expect(channelInstance.dispose).toHaveBeenCalled();
-    });
-
-    it('removeTrack disposes channel only if player does not exist', () => {
-      const engine = new AudioEngine();
-      engine.createTrack('track-1');
-      const channelInstance = vi
-        .mocked(Tone.Channel)
-        .mock.results.at(-1)?.value;
-
-      engine.removeTrack('track-1');
       expect(channelInstance.dispose).toHaveBeenCalled();
     });
   });
