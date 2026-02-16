@@ -36,6 +36,13 @@ vi.mock('tone', () => {
         dispose: vi.fn(),
       };
     }),
+    ToneAudioBuffer: vi.fn().mockImplementation(function () {
+      return {
+        load: vi.fn().mockResolvedValue(undefined),
+        duration: 120, // Mock duration
+        dispose: vi.fn(),
+      };
+    }),
     Transport,
     Destination,
     getTransport: vi.fn().mockReturnValue(Transport),
@@ -81,116 +88,115 @@ describe('AudioEngine', () => {
     expect(Tone.Transport.seconds).toBe(10);
   });
 
-  it('loadFile은 File을 로드한다', async () => {
+  it('loadFile decodes and caches buffer', async () => {
     const engine = new AudioEngine();
     const mockFile = new File([''], 'test.mp3', { type: 'audio/mp3' });
     const originalCreateObjectURL = URL.createObjectURL;
     URL.createObjectURL = vi.fn(() => 'blob:mock-url');
 
     const result = await engine.loadFile(mockFile);
-    expect(result).toEqual({ src: 'blob:mock-url' });
+
+    expect(result).toEqual({ src: 'blob:mock-url', duration: 120 });
+    expect(Tone.ToneAudioBuffer).toHaveBeenCalled();
+    const bufferInstance = vi
+      .mocked(Tone.ToneAudioBuffer)
+      .mock.results.at(-1)?.value;
+    expect(bufferInstance.load).toHaveBeenCalledWith('blob:mock-url');
 
     if (originalCreateObjectURL) URL.createObjectURL = originalCreateObjectURL;
   });
 
-  describe('Track Management', () => {
-    it('createTrack creates channel and player', () => {
+  describe('Track & Region Management', () => {
+    it('createTrack creates channel', () => {
       const engine = new AudioEngine();
       engine.createTrack('track-1');
 
       const channelInstance = vi
         .mocked(Tone.Channel)
         .mock.results.at(-1)?.value;
-      const playerInstance = vi.mocked(Tone.Player).mock.results.at(-1)?.value;
 
       expect(Tone.Channel).toHaveBeenCalled();
-      expect(Tone.Player).toHaveBeenCalled();
       expect(channelInstance.toDestination).toHaveBeenCalled();
+    });
+
+    it('addRegion creates player from cached buffer', async () => {
+      const engine = new AudioEngine();
+      engine.createTrack('track-1');
+
+      // Simulate loaded file (cache buffer)
+      const mockFile = new File([''], 'test.mp3', { type: 'audio/mp3' });
+      URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+      await engine.loadFile(mockFile);
+
+      const region = {
+        id: 'region-1',
+        trackId: 'track-1',
+        src: 'blob:mock-url',
+        startTime: 0,
+        duration: 10,
+        offset: 0,
+      };
+
+      engine.addRegion('track-1', region);
+
+      expect(Tone.Player).toHaveBeenCalled();
+      const playerInstance = vi.mocked(Tone.Player).mock.results.at(-1)?.value;
+      const channelInstance = vi
+        .mocked(Tone.Channel)
+        .mock.results.at(-1)?.value;
+
+      // Should connect to channel
       expect(playerInstance.connect).toHaveBeenCalledWith(channelInstance);
-    });
-
-    it('setTrackSource loads source into existing player', async () => {
-      const engine = new AudioEngine();
-      engine.createTrack('track-1');
-      const playerInstance = vi.mocked(Tone.Player).mock.results.at(-1)?.value;
-
-      expect(Tone.Player).toHaveBeenCalledTimes(1); // Should not create new player
-      await engine.setTrackSource('track-1', 'test2.mp3');
-
-      expect(playerInstance.load).toHaveBeenCalledWith('test2.mp3');
+      // Should sync and start
       expect(playerInstance.sync).toHaveBeenCalled();
+      expect(playerInstance.start).toHaveBeenCalledWith(0, 0, 10);
     });
 
-    it('getTrackDuration returns duration if player is loaded', async () => {
+    it('removeRegion disposes player', async () => {
       const engine = new AudioEngine();
       engine.createTrack('track-1');
-      await engine.setTrackSource('track-1', 'test.mp3');
+
+      const mockFile = new File([''], 'test.mp3', { type: 'audio/mp3' });
+      URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+      await engine.loadFile(mockFile);
+
+      const region = {
+        id: 'region-1',
+        trackId: 'track-1',
+        src: 'blob:mock-url',
+        startTime: 0,
+        duration: 10,
+        offset: 0,
+      };
+
+      engine.addRegion('track-1', region);
       const playerInstance = vi.mocked(Tone.Player).mock.results.at(-1)?.value;
 
-      // Mock duration on buffer
-      playerInstance.loaded = true;
-      playerInstance.buffer = { duration: 120 };
-
-      // We need to ensure logic in getTrackDuration accesses property safely
-      // In our implementation: track.player.loaded check might depend on Tone.Player internal state
-      // Detailed mock update might be needed if "loaded" property is not on the player instance directly in the mock
-
-      // In the mock definition:
-      // Player returns object with loaded: Promise.resolve()
-      // But getTrackDuration checks `track.player.loaded` property which is boolean in Tone.js
-
-      // Let's rely on the mock implementation or adjust it.
-      // In existing mock, Player returns object. We can check if we can add 'loaded' property.
-
-      playerInstance.loaded = true; // Set boolean loaded as well (Tone.js Player has both getter and promise)
-
-      const duration = engine.getTrackDuration('track-1');
-      expect(duration).toBe(120);
+      engine.removeRegion('track-1', 'region-1');
+      expect(playerInstance.dispose).toHaveBeenCalled();
     });
 
-    it('getTrackDuration returns 0 if track not found or not loaded', () => {
-      const engine = new AudioEngine();
-      expect(engine.getTrackDuration('non-existent')).toBe(0);
-
-      engine.createTrack('track-1');
-      // player exists but not loaded
-      const playerInstance = vi.mocked(Tone.Player).mock.results.at(-1)?.value;
-      playerInstance.loaded = false;
-
-      expect(engine.getTrackDuration('track-1')).toBe(0);
-    });
-
-    it('setTrackSource throws error if track does not exist', async () => {
-      const engine = new AudioEngine();
-      await expect(
-        engine.setTrackSource('track-1', 'test.mp3')
-      ).rejects.toThrow('Track track-1 not found');
-    });
-
-    it('setTrackVolume updates channel volume', async () => {
+    it('setTrackVolume updates channel volume', () => {
       const engine = new AudioEngine();
       engine.createTrack('track-1');
-      await engine.setTrackSource('track-1', 'test.mp3');
       const channelInstance = vi.mocked(Tone.Channel).mock.results[0].value;
 
       engine.setTrackVolume('track-1', 0.5);
       expect(channelInstance.volume.value).toBeCloseTo(-6, 0);
     });
 
-    it('setTrackMute updates channel mute', async () => {
+    it('setTrackMute updates channel mute', () => {
       const engine = new AudioEngine();
       engine.createTrack('track-1');
-      await engine.setTrackSource('track-1', 'test.mp3');
       const channelInstance = vi.mocked(Tone.Channel).mock.results[0].value;
 
       engine.setTrackMute('track-1', true);
       expect(channelInstance.mute).toBe(true);
     });
 
-    it('setTrackSolo updates channel solo', async () => {
+    it('setTrackSolo updates channel solo', () => {
       const engine = new AudioEngine();
       engine.createTrack('track-1');
-      await engine.setTrackSource('track-1', 'test.mp3');
       const channelInstance = vi
         .mocked(Tone.Channel)
         .mock.results.at(-1)?.value;
@@ -199,17 +205,32 @@ describe('AudioEngine', () => {
       expect(channelInstance.solo).toBe(true);
     });
 
-    it('removeTrack disposes player and channel', async () => {
+    it('removeTrack disposes channel and regions', async () => {
       const engine = new AudioEngine();
       engine.createTrack('track-1');
+
+      const mockFile = new File([''], 'test.mp3', { type: 'audio/mp3' });
+      URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+      await engine.loadFile(mockFile);
+
+      const region = {
+        id: 'region-1',
+        trackId: 'track-1',
+        src: 'blob:mock-url',
+        startTime: 0,
+        duration: 10,
+        offset: 0,
+      };
+
+      engine.addRegion('track-1', region);
       const playerInstance = vi.mocked(Tone.Player).mock.results.at(-1)?.value;
       const channelInstance = vi
         .mocked(Tone.Channel)
         .mock.results.at(-1)?.value;
 
       engine.removeTrack('track-1');
-      expect(playerInstance.dispose).toHaveBeenCalled();
       expect(channelInstance.dispose).toHaveBeenCalled();
+      expect(playerInstance.dispose).toHaveBeenCalled();
     });
   });
 });

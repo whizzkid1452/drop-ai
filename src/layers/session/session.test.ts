@@ -35,11 +35,10 @@ describe('SessionStore', () => {
       const track = {
         id: 'track-1',
         name: 'Track 1',
-        duration: 0,
         volume: 0.8,
         isMuted: false,
         isSoloed: false,
-        src: null,
+        regions: [],
       };
 
       sessionStore.getState().addTrack(track);
@@ -53,11 +52,10 @@ describe('SessionStore', () => {
       const initialTrack = {
         id: 'track-1',
         name: 'Track 1',
-        duration: 0,
         volume: 0.8,
         isMuted: false,
         isSoloed: false,
-        src: null,
+        regions: [],
       };
       sessionStore.getState().addTrack(initialTrack);
 
@@ -80,11 +78,10 @@ describe('SessionStore', () => {
       const track = {
         id: 'track-1',
         name: 'Track 1',
-        duration: 0,
         volume: 0.8,
         isMuted: false,
         isSoloed: false,
-        src: null,
+        regions: [],
       };
       sessionStore.getState().addTrack(track);
 
@@ -92,6 +89,58 @@ describe('SessionStore', () => {
 
       const state = sessionStore.getState();
       expect(state.tracks.has('track-1')).toBe(false);
+    });
+
+    it('should add a region to a track', () => {
+      const track = {
+        id: 'track-1',
+        name: 'Track 1',
+        volume: 1.0,
+        isMuted: false,
+        isSoloed: false,
+        regions: [],
+      };
+      sessionStore.getState().addTrack(track);
+
+      const region = {
+        id: 'region-1',
+        trackId: 'track-1',
+        src: 'blob:url',
+        startTime: 0,
+        duration: 10,
+        offset: 0,
+      };
+
+      sessionStore.getState().addRegion('track-1', region);
+
+      const updatedTrack = sessionStore.getState().tracks.get('track-1');
+      expect(updatedTrack?.regions).toHaveLength(1);
+      expect(updatedTrack?.regions[0]).toEqual(region);
+    });
+
+    it('should remove a region from a track', () => {
+      const region = {
+        id: 'region-1',
+        trackId: 'track-1',
+        src: 'blob:url',
+        startTime: 0,
+        duration: 10,
+        offset: 0,
+      };
+      const track = {
+        id: 'track-1',
+        name: 'Track 1',
+        volume: 1.0,
+        isMuted: false,
+        isSoloed: false,
+        regions: [region],
+      };
+      sessionStore.getState().addTrack(track);
+
+      sessionStore.getState().removeRegion('track-1', 'region-1');
+
+      const updatedTrack = sessionStore.getState().tracks.get('track-1');
+      expect(updatedTrack?.regions).toHaveLength(0);
     });
   });
 });

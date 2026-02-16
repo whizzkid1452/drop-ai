@@ -1,13 +1,20 @@
 import * as Tone from 'tone';
 import type { IAudioEngine } from './i-audio-engine';
+import type { RegionState } from '../session/session';
 
 interface TrackNodes {
-  player: Tone.Player;
   channel: Tone.Channel;
+}
+
+interface RegionNodes {
+  player: Tone.Player;
+  trackId: string;
 }
 
 export class AudioEngine implements IAudioEngine {
   private tracks = new Map<string, TrackNodes>();
+  private regions = new Map<string, RegionNodes>();
+  private buffers = new Map<string, Tone.ToneAudioBuffer>();
 
   async play(): Promise<void> {
     console.log('[AudioEngine] Play');
@@ -28,9 +35,6 @@ export class AudioEngine implements IAudioEngine {
 
   setVolume(value: number): void {
     console.log(`[AudioEngine] Set Volume: ${value}`);
-    // Master volume control (decibels)
-    // Tone.Destination.volume.value = Tone.gainToDb(value);
-    // For now keeping it simple or mapping 0-1 to dB
     Tone.getDestination().volume.value =
       value <= 0 ? -Infinity : 20 * Math.log10(value);
   }
@@ -40,10 +44,16 @@ export class AudioEngine implements IAudioEngine {
     Tone.getTransport().seconds = time;
   }
 
-  async loadFile(file: File): Promise<{ src: string }> {
+  async loadFile(file: File): Promise<{ src: string; duration: number }> {
     const src = URL.createObjectURL(file);
-    console.log(`[AudioEngine] Loading track from ${src}`);
-    return { src };
+    console.log(`[AudioEngine] Loading file from ${src}`);
+
+    // Decode and cache buffer
+    const buffer = new Tone.ToneAudioBuffer();
+    await buffer.load(src);
+    this.buffers.set(src, buffer);
+
+    return { src, duration: buffer.duration };
   }
 
   createTrack(id: string): void {
@@ -53,40 +63,44 @@ export class AudioEngine implements IAudioEngine {
       return;
     }
     const channel = new Tone.Channel().toDestination();
-    const player = new Tone.Player().connect(channel);
-    this.tracks.set(id, { channel, player });
+    this.tracks.set(id, { channel });
   }
 
-  async setTrackSource(id: string, src: string): Promise<void> {
-    console.log(`[AudioEngine] setTrackSource: ${id}, ${src}`);
-
-    const track = this.tracks.get(id);
-
+  addRegion(trackId: string, region: RegionState): void {
+    console.log(`[AudioEngine] Add Region: ${region.id} to ${trackId}`);
+    const track = this.tracks.get(trackId);
     if (!track) {
-      console.error(`[AudioEngine] Track ${id} not found`);
-      throw new Error(`Track ${id} not found`);
+      console.error(`[AudioEngine] Track ${trackId} not found`);
+      return;
     }
 
-    console.log(`[AudioEngine] Loading source for ${id}`);
-    track.player.stop(); // Stop potential playback
-    await track.player.load(src);
-    // Ensure sync
-    track.player.sync().start(0);
+    const buffer = this.buffers.get(region.src);
+    if (!buffer) {
+      console.error(`[AudioEngine] Buffer for ${region.src} not found`);
+      return;
+    }
+
+    const player = new Tone.Player(buffer).connect(track.channel);
+
+    // Sync to transport
+    // start(startTime, offset, duration)
+    player.sync().start(region.startTime, region.offset, region.duration);
+
+    this.regions.set(region.id, { player, trackId });
   }
 
-  getTrackDuration(id: string): number {
-    const track = this.tracks.get(id);
-    if (track?.player.loaded) {
-      return track.player.buffer.duration;
+  removeRegion(_trackId: string, regionId: string): void {
+    console.log(`[AudioEngine] Remove Region: ${regionId}`);
+    const regionNode = this.regions.get(regionId);
+    if (regionNode) {
+      regionNode.player.dispose();
+      this.regions.delete(regionId);
     }
-    return 0;
   }
 
   setTrackVolume(id: string, volume: number): void {
     const track = this.tracks.get(id);
     if (track) {
-      // volume is 0.0 to 1.0
-      // Tone.Channel.volume is in decibels
       const db = volume <= 0 ? -Infinity : 20 * Math.log10(volume);
       track.channel.volume.value = db;
     }
@@ -110,9 +124,15 @@ export class AudioEngine implements IAudioEngine {
     console.log(`[AudioEngine] Removing track: ${id}`);
     const track = this.tracks.get(id);
     if (track) {
-      track.player.dispose();
       track.channel.dispose();
       this.tracks.delete(id);
+    }
+
+    // Also remove all regions associated with this track
+    for (const [regionId, regionNode] of this.regions) {
+      if (regionNode.trackId === id) {
+        this.removeRegion(id, regionId);
+      }
     }
   }
 }

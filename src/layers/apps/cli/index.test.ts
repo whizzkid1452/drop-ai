@@ -43,11 +43,19 @@ describe('CLI Command Logic', () => {
               {
                 id: 'track-1',
                 name: 'Test Track',
-                duration: 120,
                 volume: 1.0,
                 isMuted: false,
                 isSoloed: false,
-                src: null,
+                regions: [
+                  {
+                    id: 'region-1',
+                    trackId: 'track-1',
+                    src: 'blob:url',
+                    startTime: 0,
+                    duration: 120,
+                    offset: 0,
+                  },
+                ],
               },
             ],
           ]),
@@ -60,8 +68,11 @@ describe('CLI Command Logic', () => {
     });
     const result = commands['status'].fn() as string;
     expect(result).toContain('Playing');
-    expect(result).toContain('1');
+    expect(result).toContain('1'); // Track count
     expect(result).toContain('Test Track');
+    // Regions
+    expect(result).toContain('Regions:');
+    expect(result).toContain('region-1');
     expect(result).toContain('120.0s');
   });
 
@@ -77,11 +88,10 @@ describe('CLI Command Logic', () => {
               {
                 id: 'track-1',
                 name: '안녕하세요', // Width 10 (5 chars * 2)
-                duration: 10,
                 volume: 1.0,
                 isMuted: false,
                 isSoloed: false,
-                src: null,
+                regions: [],
               },
             ],
           ]),
@@ -115,11 +125,10 @@ describe('CLI Command Logic', () => {
               {
                 id: 'track-1',
                 name: nfdName,
-                duration: 10,
                 volume: 1.0,
                 isMuted: false,
                 isSoloed: false,
-                src: null,
+                regions: [],
               },
             ],
           ]),
@@ -133,9 +142,6 @@ describe('CLI Command Logic', () => {
     const result = commands['status'].fn() as string;
 
     // "한글" is width 4. Padding 16 spaces.
-    // If not normalized, it might be counted as 6 chars * 2 width = 12 width -> 8 spaces padding.
-    // 8 spaces padding + 2 visual width (if rendered as combined) = 10 visual width. (Short by 10)
-    // We expect normalization to NFC, so width 4, padding 16.
     expect(result).toContain('한글                ');
   });
 });

@@ -1,13 +1,21 @@
 import { createStore } from 'zustand/vanilla';
 
+export interface RegionState {
+  id: string;
+  trackId: string;
+  src: string; // Blob URL
+  startTime: number; // Timeline position (seconds)
+  duration: number; // Region length (seconds)
+  offset: number; // Start point within buffer (seconds)
+}
+
 export interface TrackState {
   id: string;
   name: string;
-  duration: number;
   volume: number;
   isMuted: boolean;
   isSoloed: boolean;
-  src: string | null;
+  regions: RegionState[];
 }
 
 // State (Data)
@@ -24,6 +32,8 @@ export interface SessionActions {
   addTrack: (track: TrackState) => void;
   updateTrack: (id: string, updates: Partial<TrackState>) => void;
   removeTrack: (id: string) => void;
+  addRegion: (trackId: string, region: RegionState) => void;
+  removeRegion: (trackId: string, regionId: string) => void;
 }
 
 export interface SessionState extends SessionData, SessionActions {}
@@ -60,6 +70,30 @@ export function createSessionStore() {
       set(state => {
         const newTracks = new Map(state.tracks);
         newTracks.delete(id);
+        return { tracks: newTracks };
+      }),
+
+    addRegion: (trackId, region) =>
+      set(state => {
+        const track = state.tracks.get(trackId);
+        if (!track) return state;
+
+        const newRegions = [...track.regions, region];
+        const newTrack = { ...track, regions: newRegions };
+        const newTracks = new Map(state.tracks);
+        newTracks.set(trackId, newTrack);
+        return { tracks: newTracks };
+      }),
+
+    removeRegion: (trackId, regionId) =>
+      set(state => {
+        const track = state.tracks.get(trackId);
+        if (!track) return state;
+
+        const newRegions = track.regions.filter(r => r.id !== regionId);
+        const newTrack = { ...track, regions: newRegions };
+        const newTracks = new Map(state.tracks);
+        newTracks.set(trackId, newTrack);
         return { tracks: newTracks };
       }),
   }));

@@ -20,13 +20,15 @@ describe('TrackController', () => {
       setVolume: vi.fn(),
       seekTo: vi.fn(),
       createTrack: vi.fn(),
-      setTrackSource: vi.fn(),
-      getTrackDuration: vi.fn().mockReturnValue(180),
+      // setTrackSource remove
+      // getTrackDuration remove
       removeTrack: vi.fn(),
       setTrackVolume: vi.fn(),
       setTrackSolo: vi.fn(),
-      setTrackMute: vi.fn(), // This was in the original and not in the provided snippet, keeping it.
-      loadFile: vi.fn(), // This was in the original and not in the provided snippet, keeping it.
+      setTrackMute: vi.fn(),
+      loadFile: vi.fn().mockResolvedValue({ src: 'blob:url', duration: 120 }),
+      addRegion: vi.fn(),
+      removeRegion: vi.fn(),
     };
 
     trackController = new TrackController(sessionStore, audioEngine);
@@ -42,14 +44,53 @@ describe('TrackController', () => {
       expect(track).toEqual({
         id: expect.any(String),
         name: expect.stringContaining('Track'),
-        duration: 0,
         volume: 1.0,
         isMuted: false,
         isSoloed: false,
-        src: null,
+        regions: [],
       });
 
       expect(audioEngine.createTrack).toHaveBeenCalledWith(track.id);
+    });
+  });
+
+  describe('addRegion', () => {
+    it('should load file and add region to session and audio engine', async () => {
+      const { id: trackId } = await trackController.addTrack();
+      const file = new File([''], 'test.mp3', { type: 'audio/mp3' });
+
+      await trackController.addRegion(trackId, file, 0);
+
+      const track = sessionStore.getState().tracks.get(trackId);
+      expect(track?.regions).toHaveLength(1);
+      expect(track?.regions[0]).toEqual({
+        id: expect.any(String),
+        trackId,
+        src: 'blob:url',
+        startTime: 0,
+        duration: 120,
+        offset: 0,
+      });
+
+      expect(audioEngine.loadFile).toHaveBeenCalledWith(file);
+      expect(audioEngine.addRegion).toHaveBeenCalledWith(
+        trackId,
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('removeRegion', () => {
+    it('should remove region from session and audio engine', async () => {
+      const { id: trackId } = await trackController.addTrack();
+      const file = new File([''], 'test.mp3', { type: 'audio/mp3' });
+      const { regionId } = await trackController.addRegion(trackId, file, 0);
+
+      trackController.removeRegion(trackId, regionId);
+
+      const track = sessionStore.getState().tracks.get(trackId);
+      expect(track?.regions).toHaveLength(0);
+      expect(audioEngine.removeRegion).toHaveBeenCalledWith(trackId, regionId);
     });
   });
 
@@ -63,11 +104,10 @@ describe('TrackController', () => {
             {
               id,
               name: 'Track 1',
-              duration: 0,
               volume: 1.0,
               isMuted: false,
               isSoloed: false,
-              src: null,
+              regions: [],
             },
           ],
         ]),
@@ -91,11 +131,10 @@ describe('TrackController', () => {
             {
               id,
               name: 'Track 1',
-              duration: 0,
               volume: 1.0,
               isMuted: false,
               isSoloed: false,
-              src: null,
+              regions: [],
             },
           ],
         ]),

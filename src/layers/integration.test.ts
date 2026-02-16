@@ -109,7 +109,7 @@ describe('Layers Integration', () => {
       expect(session.getState().tracks.size).toBe(0);
     });
 
-    it('createTrackFromFile로 파일을 업로드하면 트랙이 추가된다', async () => {
+    it('addRegion으로 파일을 업로드하면 트랙에 리전이 추가된다', async () => {
       const { session, controller } = setup();
       const mockFile = new File([''], 'test.mp3', { type: 'audio/mp3' });
 
@@ -117,13 +117,17 @@ describe('Layers Integration', () => {
       const originalCreateObjectURL = URL.createObjectURL;
       URL.createObjectURL = vi.fn(() => 'blob:mock-url');
 
-      await controller.track.createTrackFromFile(mockFile);
+      // 1. 트랙 생성
+      const { id: trackId } = await controller.track.addTrack();
+
+      // 2. 리전 추가
+      await controller.track.addRegion(trackId, mockFile, 0);
 
       const tracks = session.getState().tracks;
       expect(tracks.size).toBe(1);
       const track = Array.from(tracks.values())[0];
-      expect(typeof track.id).toBe('string');
-      expect(track.id.length).toBeGreaterThan(0);
+      expect(track.regions.length).toBe(1);
+      expect(track.regions[0].src).toBe('blob:mock-url');
 
       // Restore mock
       if (originalCreateObjectURL) {
@@ -131,24 +135,29 @@ describe('Layers Integration', () => {
       }
     });
 
-    it('이미 존재하는 트랙ID로 파일소스 업데이트가 가능하다', async () => {
+    it('이미 존재하는 트랙에 추가 리전을 넣을 수 있다', async () => {
       const { session, controller } = setup();
-      const mockFile = new File([''], 'test.mp3', { type: 'audio/mp3' });
+      const mockFile1 = new File([''], 'test1.mp3', { type: 'audio/mp3' });
+      const mockFile2 = new File([''], 'test2.mp3', { type: 'audio/mp3' });
 
       // 먼저 트랙 추가
-      const { id } = await controller.track.addTrack();
+      const { id: trackId } = await controller.track.addTrack();
       expect(session.getState().tracks.size).toBe(1);
 
       // URL.createObjectURL mock
       const originalCreateObjectURL = URL.createObjectURL;
-      URL.createObjectURL = vi.fn(() => 'blob:new-mock-url');
+      URL.createObjectURL = vi.fn(() => 'blob:mock-url');
 
-      // 기존 트랙 ID로 업로드
-      await controller.track.updateTrackSourceFromFile(id, mockFile);
+      // 첫 번째 리전
+      await controller.track.addRegion(trackId, mockFile1, 0);
+
+      // 두 번째 리전
+      await controller.track.addRegion(trackId, mockFile2, 10);
 
       const tracks = session.getState().tracks;
-      expect(tracks.size).toBe(1); // 개수 유지
-      expect(tracks.get(id)).toBeDefined();
+      const track = tracks.get(trackId);
+      expect(track).toBeDefined();
+      expect(track!.regions.length).toBe(2);
 
       // Restore mock
       if (originalCreateObjectURL) {

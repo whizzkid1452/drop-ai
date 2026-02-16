@@ -18,61 +18,44 @@ export class TrackController {
     this.sessionStore.getState().addTrack({
       id,
       name: `Track ${id.slice(0, 4)}`, // Default name
-      duration: 0,
       volume: 1.0,
       isMuted: false,
       isSoloed: false,
-      src: null,
+      regions: [],
     });
 
     return { id };
   }
 
-  async createTrackFromFile(file: File) {
-    const id = crypto.randomUUID();
-    console.log(`[TrackController] Creating track from file: ${id}`);
+  async addRegion(trackId: string, file: File, startTime: number) {
+    const regionId = crypto.randomUUID();
+    console.log(`[TrackController] Adding region: ${regionId} to ${trackId}`);
 
-    const { src } = await this.audioEngine.loadFile(file);
-    console.log(`[TrackController] Track file loaded: ${src}`);
+    // 1. Load file and get duration
+    const { src, duration } = await this.audioEngine.loadFile(file);
 
-    // AudioEngine에서 트랙 생성 및 소스 연결
-    this.audioEngine.createTrack(id);
-    await this.audioEngine.setTrackSource(id, src);
-
-    const duration = this.audioEngine.getTrackDuration(id);
-
-    this.sessionStore.getState().addTrack({
-      id,
-      name: file.name,
-      duration,
-      volume: 1.0,
-      isMuted: false,
-      isSoloed: false,
+    const region = {
+      id: regionId,
+      trackId,
       src,
-    });
+      startTime,
+      duration,
+      offset: 0,
+    };
 
-    return { id };
+    // 2. Add to AudioEngine
+    this.audioEngine.addRegion(trackId, region);
+
+    // 3. Update Session
+    this.sessionStore.getState().addRegion(trackId, region);
+
+    return { regionId };
   }
 
-  async updateTrackSourceFromFile(trackId: string, file: File) {
-    console.log(
-      `[TrackController] Updating track source from file: ${trackId}`
-    );
-    const { src } = await this.audioEngine.loadFile(file);
-
-    // AudioEngine에 Source 연결
-    await this.audioEngine.setTrackSource(trackId, src);
-
-    const duration = this.audioEngine.getTrackDuration(trackId);
-
-    // Session 업데이트 (src, name, duration)
-    this.sessionStore.getState().updateTrack(trackId, {
-      src,
-      name: file.name,
-      duration,
-    });
-
-    console.log(`[TrackController] Track source updated: ${src}`);
+  removeRegion(trackId: string, regionId: string) {
+    console.log(`[TrackController] Removing region: ${regionId}`);
+    this.audioEngine.removeRegion(trackId, regionId);
+    this.sessionStore.getState().removeRegion(trackId, regionId);
   }
 
   removeTrack(id: string): void {

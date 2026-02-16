@@ -64,26 +64,22 @@ export const createCliCommands = ({
           output +=
             padRight('ID', 38) +
             padRight('Name', 20) +
-            padRight('Duration', 10) +
             padRight('Vol', 6) +
             padRight('Mute', 6) +
             padRight('Solo', 6) +
             '\n';
-          output += '-'.repeat(86) + '\n';
+          output += '-'.repeat(76) + '\n';
 
           // Table Body
           tracks.forEach(track => {
-            const durationStr = track.duration.toFixed(1) + 's';
             const volStr = track.volume.toFixed(1);
             const muteStr = track.isMuted ? 'On' : 'Off';
             const soloStr = track.isSoloed ? 'On' : 'Off';
             const nameStr = (track.name || 'Untitled').normalize('NFC');
-            // Truncate name if too long (visual width > 18) to fit column
+            // Truncate name logic (simplified for now or reused)
             let truncatedName = nameStr;
             let currentWidth = 0;
             let charIndex = 0;
-
-            // Calculate truncated string based on visual width
             for (const char of nameStr) {
               const w = getVisualWidth(char);
               if (currentWidth + w > 18) break;
@@ -97,11 +93,18 @@ export const createCliCommands = ({
             output +=
               padRight(track.id, 38) +
               padRight(truncatedName, 20) +
-              padRight(durationStr, 10) +
               padRight(volStr, 6) +
               padRight(muteStr, 6) +
               padRight(soloStr, 6) +
               '\n';
+
+            // List regions
+            if (track.regions.length > 0) {
+              output += '  Regions:\n';
+              track.regions.forEach(region => {
+                output += `    - [${region.id.slice(0, 8)}] Start: ${region.startTime.toFixed(1)}s, Dur: ${region.duration.toFixed(1)}s\n`;
+              });
+            }
           });
         }
 
@@ -109,7 +112,7 @@ export const createCliCommands = ({
       },
     },
     [CommandsType.upload]: {
-      description: 'Upload an audio file to a new or existing track',
+      description: 'Upload an audio file as a region',
       usage: 'upload [trackId]',
       fn: (trackId?: string) => {
         return new Promise<string>(resolve => {
@@ -127,12 +130,28 @@ export const createCliCommands = ({
             const files = (e.target as HTMLInputElement).files;
             if (files && files.length > 0) {
               const file = files[0];
-              if (trackId) {
-                await controller.track.updateTrackSourceFromFile(trackId, file);
-                resolve('Updated track ' + trackId + ' with ' + file.name);
-              } else {
-                const { id } = await controller.track.createTrackFromFile(file);
-                resolve('Created new track ' + id + ' from ' + file.name);
+              try {
+                let targetTrackId = trackId;
+
+                // If no trackId provided, create a new track first
+                if (!targetTrackId) {
+                  const { id } = await controller.track.addTrack();
+                  targetTrackId = id;
+                }
+
+                // Add region to the track
+                const { regionId } = await controller.track.addRegion(
+                  targetTrackId,
+                  file,
+                  0
+                ); // Default start at 0
+
+                resolve(
+                  `Added region ${regionId} to track ${targetTrackId} from ${file.name}`
+                );
+              } catch (error) {
+                console.error(error);
+                resolve('Error uploading file: ' + (error as Error).message);
               }
             } else {
               resolve('Upload cancelled');
