@@ -16,6 +16,12 @@ describe('AppController', () => {
       setVolume: vi.fn(),
       seekTo: vi.fn(),
       loadFile: vi.fn(),
+      setTrackSource: vi.fn(),
+      setTrackVolume: vi.fn(),
+      setTrackMute: vi.fn(),
+      setTrackSolo: vi.fn(),
+      removeTrack: vi.fn(),
+      createTrack: vi.fn(),
     };
 
     // Act

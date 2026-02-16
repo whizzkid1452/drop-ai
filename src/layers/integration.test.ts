@@ -2,6 +2,48 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApp } from './apps/create-app';
 import { AudioEngine } from './audio-engine/audio-engine';
 
+vi.mock('tone', () => {
+  const Transport = {
+    state: 'stopped',
+    start: vi.fn(),
+    stop: vi.fn(),
+    pause: vi.fn(),
+    seconds: 0,
+  };
+  const Destination = {
+    volume: { value: 0 },
+    gain: { value: 1 },
+  };
+
+  return {
+    Player: vi.fn().mockImplementation(function () {
+      return {
+        toDestination: vi.fn().mockReturnThis(),
+        connect: vi.fn().mockReturnThis(),
+        sync: vi.fn().mockReturnThis(),
+        start: vi.fn(),
+        stop: vi.fn(),
+        load: vi.fn().mockResolvedValue(undefined),
+        dispose: vi.fn(),
+        loaded: Promise.resolve(),
+      };
+    }),
+    Channel: vi.fn().mockImplementation(function () {
+      return {
+        toDestination: vi.fn().mockReturnThis(),
+        volume: { value: 0 },
+        mute: false,
+        solo: false,
+        dispose: vi.fn(),
+      };
+    }),
+    Transport,
+    Destination,
+    getTransport: vi.fn().mockReturnValue(Transport),
+    getDestination: vi.fn().mockReturnValue(Destination),
+  };
+});
+
 describe('Layers Integration', () => {
   function setup() {
     const mockEngine = new AudioEngine();

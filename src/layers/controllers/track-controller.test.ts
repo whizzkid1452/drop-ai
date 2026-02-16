@@ -20,72 +20,67 @@ describe('TrackController', () => {
       setVolume: vi.fn(),
       seekTo: vi.fn(),
       loadFile: vi.fn(),
+      setTrackSource: vi.fn(),
+      setTrackVolume: vi.fn(),
+      setTrackMute: vi.fn(),
+      setTrackSolo: vi.fn(),
+      removeTrack: vi.fn(),
+      createTrack: vi.fn(),
     };
 
     trackController = new TrackController(sessionStore, audioEngine);
   });
 
   describe('addTrack', () => {
-    // addTrack no longer calls audioEngine.loadUrl
-    it('should add track to session store', async () => {
-      // Act
-      const { id } = await trackController.addTrack();
+    it('should add track to session store and create audio track', async () => {
+      await trackController.addTrack();
 
-      // Assert
-      const state = sessionStore.getState();
-      expect(state.tracks.has(id)).toBe(true);
-      expect(state.tracks.get(id)).toEqual({
-        id: id,
+      const tracks = sessionStore.getState().tracks;
+      expect(tracks.size).toBe(1);
+      const track = Array.from(tracks.values())[0];
+      expect(track).toEqual({
+        id: expect.any(String),
         volume: 1.0,
         isMuted: false,
         isSoloed: false,
+        src: null,
       });
+
+      expect(audioEngine.createTrack).toHaveBeenCalledWith(track.id);
     });
   });
 
   describe('removeTrack', () => {
-    it('should remove track from session store', () => {
-      // Arrange
-      const trackId = 'track-1';
+    it('should remove track from session store', async () => {
+      const id = 'track-1';
       sessionStore.setState({
         tracks: new Map([
-          [
-            trackId,
-            { id: trackId, volume: 1.0, isMuted: false, isSoloed: false },
-          ],
+          [id, { id, volume: 1.0, isMuted: false, isSoloed: false, src: null }],
         ]),
       });
 
-      // Act
-      trackController.removeTrack(trackId);
+      trackController.removeTrack(id);
 
-      // Assert
-      const state = sessionStore.getState();
-      expect(state.tracks.has(trackId)).toBe(false);
+      const tracks = sessionStore.getState().tracks;
+      expect(tracks.has(id)).toBe(false);
+      expect(audioEngine.removeTrack).toHaveBeenCalledWith(id);
     });
   });
 
   describe('setTrackVolume', () => {
     it('should update track volume in session store', () => {
-      // Arrange
-      const trackId = 'track-1';
+      const id = 'track-1';
       sessionStore.setState({
         tracks: new Map([
-          [
-            trackId,
-            { id: trackId, volume: 1.0, isMuted: false, isSoloed: false },
-          ],
+          [id, { id, volume: 1.0, isMuted: false, isSoloed: false, src: null }],
         ]),
       });
-      const newVolume = 0.5;
 
-      // Act
-      trackController.setTrackVolume(trackId, newVolume);
+      trackController.setTrackVolume(id, 0.5);
 
-      // Assert
-      const state = sessionStore.getState();
-      const track = state.tracks.get(trackId);
-      expect(track?.volume).toBe(newVolume);
+      const track = sessionStore.getState().tracks.get(id);
+      expect(track?.volume).toBe(0.5);
+      expect(audioEngine.setTrackVolume).toHaveBeenCalledWith(id, 0.5);
     });
   });
 });
