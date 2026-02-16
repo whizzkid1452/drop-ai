@@ -2,7 +2,7 @@ import React, { createContext, use, useMemo } from 'react';
 import { useStore } from 'zustand';
 import { createApp } from '../create-app';
 import { type IAudioEngine } from '../../audio-engine/i-audio-engine';
-import { type SessionStore, type SessionState } from '../../session/session';
+import { type SessionStore, type SessionData } from '../../session/session';
 import type { AppController } from '@/layers/controllers';
 
 interface LayerContextValue {
@@ -50,7 +50,7 @@ export function useController(): AppController {
  * Custom hook to subscribe to the Session state reactively.
  * Bridges Zustand Vanilla Store to React.
  */
-export function useSession<T>(selector: (state: SessionState) => T): T {
+export function useSession<T>(selector: (state: SessionData) => T): T {
   const { session } = useLayer();
   return useStore(session, selector);
 }

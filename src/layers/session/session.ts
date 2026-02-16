@@ -7,18 +7,23 @@ export interface TrackState {
   isSoloed: boolean;
 }
 
-export interface SessionState {
+// State (Data)
+export interface SessionData {
   isPlaying: boolean;
   masterVolume: number;
   tracks: Map<string, TrackState>;
+}
 
-  // Actions (Setters)
+// Actions (Setters)
+export interface SessionActions {
   setPlaying: (playing: boolean) => void;
   setMasterVolume: (volume: number) => void;
   addTrack: (track: TrackState) => void;
   updateTrack: (id: string, updates: Partial<TrackState>) => void;
   removeTrack: (id: string) => void;
 }
+
+export interface SessionState extends SessionData, SessionActions {}
 
 export type SessionStore = ReturnType<typeof createSessionStore>;
 

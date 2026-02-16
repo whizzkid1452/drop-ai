@@ -11,10 +11,13 @@ export interface CliCommand {
 
 export type CliCommands = Record<CommandsType, CliCommand>;
 
-export const createCliCommands = (
-  controller: AppController,
-  state: { isPlaying: boolean; trackCount: number }
-): CliCommands => {
+export const createCliCommands = ({
+  controller,
+  initialState,
+}: {
+  controller: AppController;
+  initialState: { isPlaying: boolean; trackCount: number };
+}): CliCommands => {
   const commands: CliCommands = {
     [CommandsType.play]: {
       description: 'Start audio playback',
@@ -52,8 +55,8 @@ export const createCliCommands = (
       description: 'Display current session status',
       usage: 'status',
       fn: () => {
-        const statusText = state.isPlaying ? 'Playing' : 'Stopped';
-        return 'Status: ' + statusText + '\nTracks: ' + state.trackCount;
+        const statusText = initialState.isPlaying ? 'Playing' : 'Stopped';
+        return 'Status: ' + statusText + '\nTracks: ' + initialState.trackCount;
       },
     },
     [CommandsType.help]: {
@@ -78,7 +81,11 @@ export const useCliApp = () => {
   const isPlaying = useSession(state => state.isPlaying);
   const trackCount = useSession(state => state.tracks.size);
   const commands = useMemo(
-    () => createCliCommands(controller, { isPlaying, trackCount }),
+    () =>
+      createCliCommands({
+        controller,
+        initialState: { isPlaying, trackCount },
+      }),
     [controller, isPlaying, trackCount]
   );
   return { isPlaying, trackCount, commands };

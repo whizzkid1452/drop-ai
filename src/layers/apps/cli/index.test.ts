@@ -18,7 +18,10 @@ describe('CLI Command Logic', () => {
   const mockState = { isPlaying: false, trackCount: 0 };
 
   it('should call handlePlay when play command is executed', async () => {
-    const commands = createCliCommands(mockController, mockState);
+    const commands = createCliCommands({
+      controller: mockController,
+      initialState: mockState,
+    });
     const result = await commands['play'].fn();
     expect(mockController.playback.handlePlay).toHaveBeenCalled();
     expect(result).toContain('started');
@@ -26,7 +29,10 @@ describe('CLI Command Logic', () => {
 
   it('should reflect current state in status command', () => {
     const playingState = { isPlaying: true, trackCount: 3 };
-    const commands = createCliCommands(mockController, playingState);
+    const commands = createCliCommands({
+      controller: mockController,
+      initialState: playingState,
+    });
     const result = commands['status'].fn() as string;
     expect(result).toContain('Playing');
     expect(result).toContain('3');
