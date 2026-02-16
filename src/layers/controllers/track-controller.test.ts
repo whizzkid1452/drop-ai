@@ -1,0 +1,97 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { TrackController } from './track-controller';
+import { createSessionStore, type SessionStore } from '../session/session';
+import type { IAudioEngine } from '../audio-engine/i-audio-engine';
+
+describe('TrackController', () => {
+  let sessionStore: SessionStore;
+  let audioEngine: IAudioEngine;
+  let trackController: TrackController;
+
+  beforeEach(() => {
+    // Session Store 초기화
+    sessionStore = createSessionStore();
+
+    // Audio Engine Mock
+    audioEngine = {
+      play: vi.fn(),
+      stop: vi.fn(),
+      pause: vi.fn(),
+      setVolume: vi.fn(),
+      seekTo: vi.fn(),
+      loadTrack: vi.fn(),
+    };
+
+    trackController = new TrackController(sessionStore, audioEngine);
+  });
+
+  describe('addTrack', () => {
+    it('should call audioEngine.loadTrack and add track to session store', async () => {
+      // Arrange
+      const trackUrl = 'http://example.com/track.mp3';
+      const trackId = 'track-1';
+
+      // Act
+      await trackController.addTrack(trackUrl, trackId);
+
+      // Assert
+      expect(audioEngine.loadTrack).toHaveBeenCalledWith(trackUrl, trackId);
+      expect(audioEngine.loadTrack).toHaveBeenCalledTimes(1);
+
+      const state = sessionStore.getState();
+      expect(state.tracks.has(trackId)).toBe(true);
+      expect(state.tracks.get(trackId)).toEqual({
+        id: trackId,
+        volume: 1.0,
+        isMuted: false,
+        isSoloed: false,
+      });
+    });
+  });
+
+  describe('removeTrack', () => {
+    it('should remove track from session store', () => {
+      // Arrange
+      const trackId = 'track-1';
+      sessionStore.setState({
+        tracks: new Map([
+          [
+            trackId,
+            { id: trackId, volume: 1.0, isMuted: false, isSoloed: false },
+          ],
+        ]),
+      });
+
+      // Act
+      trackController.removeTrack(trackId);
+
+      // Assert
+      const state = sessionStore.getState();
+      expect(state.tracks.has(trackId)).toBe(false);
+    });
+  });
+
+  describe('setTrackVolume', () => {
+    it('should update track volume in session store', () => {
+      // Arrange
+      const trackId = 'track-1';
+      sessionStore.setState({
+        tracks: new Map([
+          [
+            trackId,
+            { id: trackId, volume: 1.0, isMuted: false, isSoloed: false },
+          ],
+        ]),
+      });
+      const newVolume = 0.5;
+
+      // Act
+      trackController.setTrackVolume(trackId, newVolume);
+
+      // Assert
+      const state = sessionStore.getState();
+      const track = state.tracks.get(trackId);
+      expect(track?.volume).toBe(newVolume);
+    });
+  });
+});
