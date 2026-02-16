@@ -102,7 +102,7 @@ export const createCliCommands = ({
             if (track.regions.length > 0) {
               output += '  Regions:\n';
               track.regions.forEach(region => {
-                output += `    - [${region.id.slice(0, 8)}] Start: ${region.startTime.toFixed(1)}s, Dur: ${region.duration.toFixed(1)}s\n`;
+                output += `    - [${region.id}] Start: ${region.startTime.toFixed(1)}s, Dur: ${region.duration.toFixed(1)}s\n`;
               });
             }
           });
