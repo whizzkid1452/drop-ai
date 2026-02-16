@@ -1,8 +1,5 @@
 import { useMemo } from 'react';
-import {
-  useController,
-  useSession,
-} from '../../presentation/context/LayerContext';
+import { useController, useSession } from '../context/LayerContext';
 import { AppController } from '../../controllers/app-controller';
 import { CommandsType } from './constants';
 

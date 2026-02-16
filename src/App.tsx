@@ -11,7 +11,7 @@ import { Session as LegacySession } from '@/core/session/Session';
 
 // 신규 레이어 추가
 import { AudioEngine } from './layers/audio-engine/audio-engine';
-import { LayerProvider } from './layers/presentation/context/LayerContext';
+import { LayerProvider } from './layers/apps/context/LayerContext';
 
 function App() {
   const [isAudioEngineReady, setIsAudioEngineReady] = useState(false);
@@ -37,14 +37,16 @@ function App() {
 
   if (!isAudioEngineReady) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        fontSize: '18px',
-        color: '#666'
-      }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+          fontSize: '18px',
+          color: '#666',
+        }}
+      >
         Loading Audio Engine...
       </div>
     );
