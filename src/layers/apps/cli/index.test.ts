@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createCliCommands } from './index';
-import { AppController } from '../../controllers/app-controller';
+import { AppController } from '../../controllers';
 
 describe('CLI Command Logic', () => {
   const mockController = {

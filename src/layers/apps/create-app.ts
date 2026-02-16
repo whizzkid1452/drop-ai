@@ -1,6 +1,6 @@
 import type { IAudioEngine } from '../audio-engine/i-audio-engine';
 import { createSessionStore, type SessionStore } from '../session/session';
-import { AppController } from '../controllers/app-controller';
+import { AppController } from '../controllers';
 
 export interface AppInstance {
   session: SessionStore;
