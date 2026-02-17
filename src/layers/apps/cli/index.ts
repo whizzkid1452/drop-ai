@@ -355,10 +355,56 @@ export const createCliCommands = ({
         return controller.getDebugInfo?.() || 'No debug info available';
       },
     },
+    [CommandsType.export]: {
+      description: 'Export session to WAV file',
+      usage: 'export [filename]',
+      fn: async (filename?: string) => {
+        if (typeof document === 'undefined') {
+          return 'Error: Export only supported in browser environment';
+        }
+
+        const name = filename || 'export.wav';
+        try {
+          // Get current session duration.
+          // For now, let's look at the end of the last region in the session.
+          // Or use a default duration if empty.
+          const { tracks } = controller.session.getState();
+          let maxTime = 0;
+          tracks.forEach(track => {
+            track.regions.forEach(region => {
+              const end = region.startTime + region.duration;
+              if (end > maxTime) maxTime = end;
+            });
+          });
+
+          if (maxTime === 0) {
+            return 'Error: Session is empty (no regions). Nothing to export.';
+          }
+
+          // Add a small buffer to the end (e.g., 1s reverb tail or just safety)
+          const duration = maxTime + 1.0;
+
+          // Perform Export
+          // We need to access AudioEngine directly or via Controller.
+          // Ideally Controller should expose this.
+          // But for now, let's access via window.audioEngine if possible, or assume controller has it.
+          // The AppController doesn't expose 'exportSession' yet.
+          // We should add it to AppController or SessionController.
+          // Let's add 'exportSession' to SessionController?
+          // Or just cast for now to make progress, but better to do it right.
+
+          await controller.exportSession(duration, name);
+
+          return `Exported session to ${name} (${duration.toFixed(1)}s)`;
+        } catch (e) {
+          console.error(e);
+          return `Error exporting session: ${(e as Error).message}`;
+        }
+      },
+    },
   };
   return commands;
 };
-
 export const useCliApp = () => {
   const controller = useController();
   const isPlaying = useSession(state => state.isPlaying);

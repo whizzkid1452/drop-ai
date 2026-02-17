@@ -1,6 +1,7 @@
 import * as Tone from 'tone';
 import type { IAudioEngine } from './i-audio-engine';
 import type { RegionState } from '../session/session';
+import { encodeWav } from '@/utils/wav-encoder';
 
 interface TrackNodes {
   channel: Tone.Channel;
@@ -204,5 +205,54 @@ export class AudioEngine implements IAudioEngine {
       // But we stored it in 'r.duration' etc.
     });
     return info;
+  }
+  async exportSession(
+    duration: number,
+    tracks: Map<
+      string,
+      {
+        volume: number;
+        isMuted: boolean;
+        isSoloed: boolean;
+        regions: RegionState[];
+      }
+    >
+  ): Promise<Blob> {
+    console.log(`[AudioEngine] Exporting session: ${duration}s`);
+
+    // Use Tone.Offline to render audio
+    const buffer = await Tone.Offline(({ transport }) => {
+      // 1. Setup Transport
+      transport.bpm.value = Tone.getTransport().bpm.value;
+
+      // 2. Reconstruct Tracks & Regions in Offline Context
+      tracks.forEach((trackState, _trackId) => {
+        const channel = new Tone.Channel().toDestination();
+        channel.volume.value =
+          trackState.volume <= 0
+            ? -Infinity
+            : 20 * Math.log10(trackState.volume);
+        channel.mute = trackState.isMuted;
+        channel.solo = trackState.isSoloed;
+
+        trackState.regions.forEach(region => {
+          const originalBuffer = this.buffers.get(region.src);
+          if (originalBuffer) {
+            const player = new Tone.Player(originalBuffer).connect(channel);
+            player
+              .sync()
+              .start(region.startTime, region.offset, region.duration);
+          }
+        });
+      });
+
+      // 3. Start Transport
+      transport.start();
+    }, duration);
+
+    // 4. Encode to WAV
+    // Tone.Offline returns a ToneAudioBuffer, access native AudioBuffer via .get()
+    const wavBlob = encodeWav(buffer.get() as AudioBuffer);
+    return wavBlob;
   }
 }

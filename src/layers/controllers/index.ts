@@ -22,4 +22,20 @@ export class AppController {
   public getDebugInfo(): string {
     return this.audioEngine.getDebugInfo();
   }
+
+  public async exportSession(
+    duration: number,
+    filename: string
+  ): Promise<void> {
+    const { tracks } = this.session.getState();
+    const blob = await this.audioEngine.exportSession(duration, tracks);
+
+    // Trigger Download
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 }

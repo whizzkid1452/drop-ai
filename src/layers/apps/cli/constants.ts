@@ -15,6 +15,7 @@ export const CommandsType = {
   bpm: 'bpm',
   master: 'master',
   debug: 'debug',
+  export: 'export',
 } as const;
 
 export type CommandsType = keyof typeof CommandsType;

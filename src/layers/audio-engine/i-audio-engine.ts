@@ -19,4 +19,16 @@ export interface IAudioEngine {
   setLoopPoints(start: number, end: number): void;
   setBpm(bpm: number): void;
   getDebugInfo(): string;
+  exportSession(
+    duration: number,
+    tracks: Map<
+      string,
+      {
+        volume: number;
+        isMuted: boolean;
+        isSoloed: boolean;
+        regions: RegionState[];
+      }
+    >
+  ): Promise<Blob>;
 }
