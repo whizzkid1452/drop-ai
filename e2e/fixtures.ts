@@ -25,6 +25,10 @@ type AudioFixtures = {
      * Must be called once before checking levels.
      */
     attachMeter: () => Promise<void>;
+    /**
+     * Gets the dominant frequency from the FFT analysis.
+     */
+    getDominantFrequency: () => Promise<number>;
   };
 };
 
@@ -38,11 +42,48 @@ export const test = base.extend<AudioFixtures>({
             // @ts-ignore
             const Tone = window.Tone;
             const meter = new Tone.Meter();
+            const fft = new Tone.FFT(2048);
             Tone.getDestination().connect(meter);
+            Tone.getDestination().connect(fft);
             // @ts-ignore
             window._testMeter = meter;
-            console.log('Test Meter Attached');
+            // @ts-ignore
+            window._testFFT = fft;
+            console.log('Test Meter & FFT Attached');
           }
+        });
+      },
+
+      getDominantFrequency: async () => {
+        return await page.evaluate(() => {
+          // @ts-ignore
+          const fft = window._testFFT;
+          if (!fft) return 0;
+          const values = fft.getValue();
+          let maxVal = -Infinity;
+          let maxIndex = -1;
+          for (let i = 0; i < values.length; i++) {
+            if (values[i] > maxVal) {
+              maxVal = values[i];
+              maxIndex = i;
+            }
+          }
+          // @ts-ignore
+          const sampleRate = window.Tone.context.sampleRate;
+          console.log(
+            '[Fixture] FFT Size:',
+            fft.size,
+            'Values Len:',
+            values.length,
+            'SampleRate:',
+            sampleRate,
+            'MaxIndex:',
+            maxIndex
+          );
+          // Frequency = index * sampleRate / fftSize
+          // fftSize = 2 * frequencyBinCount (values.length)
+          const freq = (maxIndex * sampleRate) / (values.length * 2);
+          return freq;
         });
       },
 

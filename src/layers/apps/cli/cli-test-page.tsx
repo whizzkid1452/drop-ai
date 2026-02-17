@@ -140,9 +140,14 @@ const CliTestContent = () => {
 };
 
 export const CliTestPage = () => {
-  const mockEngine = useRef(new AudioEngine()).current;
+  const audioEngine = useRef(new AudioEngine()).current;
+  useEffect(() => {
+    // Expose engine for E2E tests to inject data
+    // @ts-ignore
+    window.audioEngine = audioEngine;
+  }, [audioEngine]);
   return (
-    <LayerProvider engine={mockEngine}>
+    <LayerProvider engine={audioEngine}>
       <CliTestContent />
     </LayerProvider>
   );
