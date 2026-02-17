@@ -1,10 +1,8 @@
-import {
-  TransportBpmControl,
-  TransportControls,
-  TransportLoopControl,
-  TransportMasterVolume,
-  TransportTimeDisplay,
-} from './components/transport';
+import { TransportControls } from './components/controls';
+import { TransportTimeDisplay } from './components/time-display';
+import { TransportBpmControl } from './components/bpm-control';
+import { TransportLoopControl } from './components/loop-control';
+import { TransportMasterVolume } from './components/master-volume';
 
 export const Transport = () => {
   return (

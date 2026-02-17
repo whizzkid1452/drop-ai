@@ -1,5 +1,5 @@
-import { useSession, useController } from '../../context/LayerContext';
-import { TrackItem } from './TrackItem';
+import { useSession, useController } from '../../../../context/LayerContext';
+import { TrackItem } from './components/track-item';
 
 export const TrackList = () => {
   const controller = useController();

@@ -2,8 +2,8 @@ import { useRef, useEffect } from 'react';
 import { LayerProvider } from '../context/LayerContext';
 import { AudioEngine } from '@/layers/audio-engine/audio-engine';
 import { WebLayout } from './layout/WebLayout';
-import { Transport } from './ui/Transport';
-import { TrackList } from './ui/TrackList';
+import { Transport } from './ui/components/transport/transport';
+import { TrackList } from './ui/components/track-list/track-list';
 
 export const WebDAW = () => {
   // Using a singleton-like ref pattern for AudioEngine to persist across renders

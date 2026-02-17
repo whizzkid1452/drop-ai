@@ -1,8 +1,9 @@
 import React from 'react';
-import { useController, useSession } from '../../../../context/LayerContext';
+
 import { useShallow } from 'zustand/react/shallow';
 import { DebouncedInput } from '@/components/common/DebouncedInput';
 import type { SessionData } from '@/layers/session/session';
+import { useController, useSession } from '@/layers/apps/context/LayerContext';
 
 export const TransportBpmControl = () => {
   const controller = useController();
