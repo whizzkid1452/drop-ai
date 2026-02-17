@@ -41,6 +41,10 @@ describe('CLI Command Logic', () => {
       session: {
         getState: () => ({
           isPlaying: true,
+          bpm: 120,
+          isLooping: true,
+          loopStart: 0,
+          loopEnd: 4,
           tracks: new Map([
             [
               'track-1',
@@ -72,6 +76,8 @@ describe('CLI Command Logic', () => {
     });
     const result = commands['status'].fn() as string;
     expect(result).toContain('Playing');
+    expect(result).toContain('BPM: 120');
+    expect(result).toContain('Loop: ON (0s - 4s)');
     expect(result).toContain('1'); // Track count
     expect(result).toContain('Test Track');
     // Regions

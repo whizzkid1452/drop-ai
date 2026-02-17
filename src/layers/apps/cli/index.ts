@@ -62,10 +62,12 @@ export const createCliCommands = ({
       description: 'Display current session status',
       usage: 'status',
       fn: () => {
-        const { isPlaying, tracks } = controller.session.getState();
+        const { isPlaying, tracks, bpm, isLooping, loopStart, loopEnd } =
+          controller.session.getState();
         const statusText = isPlaying ? 'Playing' : 'Stopped';
+        const loopText = isLooping ? `ON (${loopStart}s - ${loopEnd}s)` : 'OFF';
 
-        let output = `Status: ${statusText}\nTracks: ${tracks.size}\n\n`;
+        let output = `Status: ${statusText}\nBPM: ${bpm}\nLoop: ${loopText}\nTracks: ${tracks.size}\n\n`;
 
         if (tracks.size > 0) {
           // Table Header

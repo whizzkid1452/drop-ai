@@ -47,19 +47,24 @@ export class PlaybackController {
       console.log(`[PlaybackController] Set Loop: ${start} -> ${end}`);
       this.audioEngine.setLoopPoints(start, end);
       this.audioEngine.setLoop(true);
+      this.sessionStore.getState().setLoopPoints(start, end);
+      this.sessionStore.getState().setLoop(true);
     } else {
       console.log('[PlaybackController] Loop Off');
       this.audioEngine.setLoop(false);
+      this.sessionStore.getState().setLoop(false);
     }
   }
 
   handleBpm(bpm: number): void {
     console.log(`[PlaybackController] Set BPM: ${bpm}`);
     this.audioEngine.setBpm(bpm);
+    this.sessionStore.getState().setBpm(bpm);
   }
 
   handleMasterVolume(volume: number): void {
     console.log(`[PlaybackController] Set Master Volume: ${volume}`);
     this.audioEngine.setVolume(volume);
+    this.sessionStore.getState().setMasterVolume(volume);
   }
 }

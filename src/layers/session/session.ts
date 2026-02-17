@@ -22,6 +22,10 @@ export interface TrackState {
 export interface SessionData {
   isPlaying: boolean;
   masterVolume: number;
+  bpm: number;
+  isLooping: boolean;
+  loopStart: number;
+  loopEnd: number;
   tracks: Map<string, TrackState>;
 }
 
@@ -29,6 +33,9 @@ export interface SessionData {
 export interface SessionActions {
   setPlaying: (playing: boolean) => void;
   setMasterVolume: (volume: number) => void;
+  setBpm: (bpm: number) => void;
+  setLoop: (isLooping: boolean) => void;
+  setLoopPoints: (start: number, end: number) => void;
   addTrack: (track: TrackState) => void;
   updateTrack: (id: string, updates: Partial<TrackState>) => void;
   removeTrack: (id: string) => void;
@@ -44,11 +51,21 @@ export function createSessionStore() {
   return createStore<SessionState>(set => ({
     isPlaying: false,
     masterVolume: 1.0,
+    bpm: 120,
+    isLooping: false,
+    loopStart: 0,
+    loopEnd: 4,
     tracks: new Map(),
 
     setPlaying: playing => set({ isPlaying: playing }),
 
     setMasterVolume: volume => set({ masterVolume: volume }),
+
+    setBpm: bpm => set({ bpm }),
+
+    setLoop: isLooping => set({ isLooping }),
+
+    setLoopPoints: (start, end) => set({ loopStart: start, loopEnd: end }),
 
     addTrack: track =>
       set(state => {
