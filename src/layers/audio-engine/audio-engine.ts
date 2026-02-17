@@ -161,6 +161,13 @@ export class AudioEngine implements IAudioEngine {
     }
   }
 
+  setTrackPan(id: string, pan: number): void {
+    const track = this.tracks.get(id);
+    if (track) {
+      track.channel.pan.value = pan;
+    }
+  }
+
   removeTrack(id: string): void {
     console.log(`[AudioEngine] Removing track: ${id}`);
     const track = this.tracks.get(id);
@@ -206,6 +213,7 @@ export class AudioEngine implements IAudioEngine {
     });
     return info;
   }
+
   async exportSession(
     duration: number,
     tracks: Map<
@@ -214,6 +222,7 @@ export class AudioEngine implements IAudioEngine {
         volume: number;
         isMuted: boolean;
         isSoloed: boolean;
+        pan: number;
         regions: RegionState[];
       }
     >
@@ -234,6 +243,7 @@ export class AudioEngine implements IAudioEngine {
             : 20 * Math.log10(trackState.volume);
         channel.mute = trackState.isMuted;
         channel.solo = trackState.isSoloed;
+        channel.pan.value = trackState.pan;
 
         trackState.regions.forEach(region => {
           const originalBuffer = this.buffers.get(region.src);

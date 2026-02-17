@@ -68,6 +68,26 @@ test.describe('CLI Workflow', () => {
     console.log('Captured Track ID:', trackId);
     expect(trackId).toBeTruthy();
 
+    // 5. Test Audio Controls (Volume, Pan)
+    await page.keyboard.type(`volume ${trackId} 0.5`);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.xterm-rows')).toContainText(
+      `Set volume of track ${trackId} to 0.5`
+    );
+
+    await page.keyboard.type(`pan ${trackId} -0.5`);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.xterm-rows')).toContainText(
+      `Set pan of track ${trackId} to -0.5`
+    );
+
+    // Verify status update
+    await page.keyboard.type('status');
+    await page.keyboard.press('Enter');
+    // Check if Pan column reflects change (regex or simple text check)
+    // The table formatting might make strict regex hard, but let's check for the value
+    await expect(page.locator('.xterm-rows')).toContainText('-0.5'); // Pan value check
+
     // Now upload to this specific track
     const fileChooserPromise = page.waitForEvent('filechooser');
     // Ensure we type valid command

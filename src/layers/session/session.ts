@@ -15,6 +15,7 @@ export interface TrackState {
   volume: number;
   isMuted: boolean;
   isSoloed: boolean;
+  pan: number;
   regions: RegionState[];
 }
 

@@ -21,6 +21,7 @@ export class TrackController {
       volume: 1.0,
       isMuted: false,
       isSoloed: false,
+      pan: 0,
       regions: [],
     });
 
@@ -181,5 +182,10 @@ export class TrackController {
   setTrackSolo(id: string, isSoloed: boolean): void {
     this.audioEngine.setTrackSolo(id, isSoloed);
     this.sessionStore.getState().updateTrack(id, { isSoloed });
+  }
+
+  setTrackPan(id: string, pan: number): void {
+    this.audioEngine.setTrackPan(id, pan);
+    this.sessionStore.getState().updateTrack(id, { pan });
   }
 }

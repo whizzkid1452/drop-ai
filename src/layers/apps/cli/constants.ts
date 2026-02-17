@@ -14,6 +14,7 @@ export const CommandsType = {
   loop: 'loop',
   bpm: 'bpm',
   master: 'master',
+  pan: 'pan',
   debug: 'debug',
   export: 'export',
 } as const;

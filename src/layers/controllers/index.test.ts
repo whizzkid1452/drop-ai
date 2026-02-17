@@ -21,6 +21,7 @@ describe('AppController', () => {
       setTrackVolume: vi.fn(),
       setTrackMute: vi.fn(),
       setTrackSolo: vi.fn(),
+      setTrackPan: vi.fn(),
       removeTrack: vi.fn(),
       createTrack: vi.fn(),
       addRegion: vi.fn(),

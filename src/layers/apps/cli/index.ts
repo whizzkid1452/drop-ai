@@ -75,6 +75,7 @@ export const createCliCommands = ({
             padRight('ID', 38) +
             padRight('Name', 20) +
             padRight('Vol', 6) +
+            padRight('Pan', 6) +
             padRight('Mute', 6) +
             padRight('Solo', 6) +
             '\n';
@@ -104,6 +105,7 @@ export const createCliCommands = ({
               padRight(track.id, 38) +
               padRight(truncatedName, 20) +
               padRight(volStr, 6) +
+              padRight(track.pan.toFixed(1), 6) +
               padRight(muteStr, 6) +
               padRight(soloStr, 6) +
               '\n';
@@ -212,6 +214,20 @@ export const createCliCommands = ({
         const isSoloed = state === 'on';
         controller.track.setTrackSolo(trackId, isSoloed);
         return 'Track ' + trackId + (isSoloed ? ' soloed.' : ' unsoloed.');
+      },
+    },
+    [CommandsType.pan]: {
+      description: 'Set track panning (-1.0 to 1.0)',
+      usage: 'pan <trackId> <value>',
+      fn: (trackId: string, value: string) => {
+        if (!trackId || !value)
+          return 'Error: Track ID and pan value required.';
+        const pan = parseFloat(value);
+        if (isNaN(pan) || pan < -1 || pan > 1) {
+          return 'Error: Pan must be a number between -1.0 (Left) and 1.0 (Right)';
+        }
+        controller.track.setTrackPan(trackId, pan);
+        return 'Set pan of track ' + trackId + ' to ' + pan;
       },
     },
     [CommandsType.region]: {
