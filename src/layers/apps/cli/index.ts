@@ -35,6 +35,14 @@ export const createCliCommands = ({
         return 'Playback stopped.';
       },
     },
+    [CommandsType.pause]: {
+      description: 'Pause audio playback',
+      usage: 'pause',
+      fn: () => {
+        controller.playback.handlePause();
+        return 'Playback paused.';
+      },
+    },
     [CommandsType.track]: {
       description: 'Track management (add/remove)',
       usage: 'track add <id> | track remove <id>',

@@ -232,4 +232,13 @@ describe('CLI Command Logic', () => {
     const result = await commands['seek'].fn('invalid');
     expect(result).toContain('Error: Time must be a valid positive number');
   });
+
+  it('should call handlePause when pause command is executed', async () => {
+    const commands = createCliCommands({
+      controller: mockController,
+    });
+    const result = await commands['pause'].fn();
+    expect(mockController.playback.handlePause).toHaveBeenCalled();
+    expect(result).toContain('paused');
+  });
 });

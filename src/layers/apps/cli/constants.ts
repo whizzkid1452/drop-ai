@@ -1,6 +1,7 @@
 export const CommandsType = {
   play: 'play',
   stop: 'stop',
+  pause: 'pause',
   track: 'track',
   region: 'region',
   status: 'status',
