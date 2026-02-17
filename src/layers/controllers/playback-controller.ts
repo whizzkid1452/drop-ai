@@ -41,4 +41,25 @@ export class PlaybackController {
     console.log(`[PlaybackController] Handling Seek Request: ${time}s`);
     this.audioEngine.seekTo(time);
   }
+
+  handleLoop(start: number, end: number, isLooping: boolean): void {
+    if (isLooping) {
+      console.log(`[PlaybackController] Set Loop: ${start} -> ${end}`);
+      this.audioEngine.setLoopPoints(start, end);
+      this.audioEngine.setLoop(true);
+    } else {
+      console.log('[PlaybackController] Loop Off');
+      this.audioEngine.setLoop(false);
+    }
+  }
+
+  handleBpm(bpm: number): void {
+    console.log(`[PlaybackController] Set BPM: ${bpm}`);
+    this.audioEngine.setBpm(bpm);
+  }
+
+  handleMasterVolume(volume: number): void {
+    console.log(`[PlaybackController] Set Master Volume: ${volume}`);
+    this.audioEngine.setVolume(volume);
+  }
 }

@@ -15,4 +15,7 @@ export interface IAudioEngine {
   setTrackMute(id: string, muted: boolean): void;
   setTrackSolo(id: string, soloed: boolean): void;
   removeTrack(id: string): void;
+  setLoop(loop: boolean): void;
+  setLoopPoints(start: number, end: number): void;
+  setBpm(bpm: number): void;
 }

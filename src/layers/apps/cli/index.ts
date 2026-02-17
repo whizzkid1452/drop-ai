@@ -250,6 +250,52 @@ export const createCliCommands = ({
         return `Seek to ${time}s`;
       },
     },
+    [CommandsType.loop]: {
+      description: 'Set loop range or turn off loop',
+      usage: 'loop <start> <end> | loop off',
+      fn: (arg1: string, arg2?: string) => {
+        if (arg1 === 'off') {
+          controller.playback.handleLoop(0, 0, false);
+          return 'Loop turned off.';
+        }
+        if (!arg1 || !arg2) {
+          return 'Error: Usage: loop <start> <end> or loop off';
+        }
+        const start = parseFloat(arg1);
+        const end = parseFloat(arg2);
+        if (isNaN(start) || isNaN(end) || start < 0 || end <= start) {
+          return 'Error: Invalid loop points. Ensure start < end and both are positive numbers.';
+        }
+        controller.playback.handleLoop(start, end, true);
+        return `Loop set from ${start}s to ${end}s.`;
+      },
+    },
+    [CommandsType.bpm]: {
+      description: 'Set BPM',
+      usage: 'bpm <value>',
+      fn: (value: string) => {
+        if (!value) return 'Error: BPM value required.';
+        const bpm = parseFloat(value);
+        if (isNaN(bpm) || bpm <= 0) {
+          return 'Error: BPM must be a valid positive number.';
+        }
+        controller.playback.handleBpm(bpm);
+        return `BPM set to ${bpm}`;
+      },
+    },
+    [CommandsType.master]: {
+      description: 'Set Master Volume (0.0 - 1.0)',
+      usage: 'master <value>',
+      fn: (value: string) => {
+        if (!value) return 'Error: Volume value required.';
+        const vol = parseFloat(value);
+        if (isNaN(vol) || vol < 0 || vol > 1) {
+          return 'Error: Volume must be a number between 0.0 and 1.0';
+        }
+        controller.playback.handleMasterVolume(vol);
+        return `Master volume set to ${vol}`;
+      },
+    },
     [CommandsType.help]: {
       description: 'Show available commands',
       usage: 'help',

@@ -11,6 +11,9 @@ export const CommandsType = {
   mute: 'mute',
   solo: 'solo',
   seek: 'seek',
+  loop: 'loop',
+  bpm: 'bpm',
+  master: 'master',
 } as const;
 
 export type CommandsType = keyof typeof CommandsType;

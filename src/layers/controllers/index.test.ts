@@ -26,6 +26,9 @@ describe('AppController', () => {
       addRegion: vi.fn(),
       removeRegion: vi.fn(),
       moveRegion: vi.fn(),
+      setLoop: vi.fn(),
+      setLoopPoints: vi.fn(),
+      setBpm: vi.fn(),
     };
 
     // Act

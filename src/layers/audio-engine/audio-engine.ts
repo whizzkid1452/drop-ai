@@ -162,4 +162,20 @@ export class AudioEngine implements IAudioEngine {
       }
     }
   }
+
+  setLoop(loop: boolean): void {
+    console.log(`[AudioEngine] Set Loop: ${loop}`);
+    Tone.getTransport().loop = loop;
+  }
+
+  setLoopPoints(start: number, end: number): void {
+    console.log(`[AudioEngine] Set Loop Points: ${start} -> ${end}`);
+    Tone.getTransport().loopStart = start;
+    Tone.getTransport().loopEnd = end;
+  }
+
+  setBpm(bpm: number): void {
+    console.log(`[AudioEngine] Set BPM: ${bpm}`);
+    Tone.getTransport().bpm.value = bpm;
+  }
 }

@@ -9,6 +9,9 @@ describe('CLI Command Logic', () => {
       handleStop: vi.fn(),
       handlePause: vi.fn(),
       handleSeek: vi.fn(),
+      handleLoop: vi.fn(),
+      handleBpm: vi.fn(),
+      handleMasterVolume: vi.fn(),
     },
     track: {
       addTrack: vi.fn(),
@@ -240,5 +243,45 @@ describe('CLI Command Logic', () => {
     const result = await commands['pause'].fn();
     expect(mockController.playback.handlePause).toHaveBeenCalled();
     expect(result).toContain('paused');
+  });
+
+  it('should call handleLoop when loop command is executed', async () => {
+    const commands = createCliCommands({
+      controller: mockController,
+    });
+
+    // Loop On
+    const resultOn = await commands['loop'].fn('1', '4');
+    expect(mockController.playback.handleLoop).toHaveBeenCalledWith(1, 4, true);
+    expect(resultOn).toContain('Loop set from 1s to 4s');
+
+    // Loop Off
+    const resultOff = await commands['loop'].fn('off');
+    expect(mockController.playback.handleLoop).toHaveBeenCalledWith(
+      0,
+      0,
+      false
+    );
+    expect(resultOff).toContain('Loop turned off');
+  });
+
+  it('should call handleBpm when bpm command is executed', async () => {
+    const commands = createCliCommands({
+      controller: mockController,
+    });
+    const result = await commands['bpm'].fn('120');
+    expect(mockController.playback.handleBpm).toHaveBeenCalledWith(120);
+    expect(result).toContain('BPM set to 120');
+  });
+
+  it('should call handleMasterVolume when master command is executed', async () => {
+    const commands = createCliCommands({
+      controller: mockController,
+    });
+    const result = await commands['master'].fn('0.8');
+    expect(mockController.playback.handleMasterVolume).toHaveBeenCalledWith(
+      0.8
+    );
+    expect(result).toContain('Master volume set to 0.8');
   });
 });

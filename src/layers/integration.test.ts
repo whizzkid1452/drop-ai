@@ -38,11 +38,20 @@ vi.mock('tone', () => {
         dispose: vi.fn(),
       };
     }),
+    ToneAudioBuffer: vi.fn().mockImplementation(function () {
+      return {
+        load: vi.fn().mockResolvedValue(undefined),
+        duration: 120, // Mock duration
+      };
+    }),
     Transport,
     Destination,
     getTransport: vi.fn().mockReturnValue(Transport),
     getDestination: vi.fn().mockReturnValue(Destination),
     moveRegion: vi.fn(),
+    setLoop: vi.fn(),
+    setLoopPoints: vi.fn(),
+    setBpm: vi.fn(),
   };
 });
 
