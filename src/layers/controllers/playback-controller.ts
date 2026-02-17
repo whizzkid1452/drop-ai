@@ -36,4 +36,9 @@ export class PlaybackController {
     // 2. Update Session State
     this.sessionStore.getState().setPlaying(false);
   }
+
+  handleSeek(time: number): void {
+    console.log(`[PlaybackController] Handling Seek Request: ${time}s`);
+    this.audioEngine.seekTo(time);
+  }
 }

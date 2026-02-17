@@ -8,6 +8,7 @@ describe('CLI Command Logic', () => {
       handlePlay: vi.fn(),
       handleStop: vi.fn(),
       handlePause: vi.fn(),
+      handleSeek: vi.fn(),
     },
     track: {
       addTrack: vi.fn(),
@@ -213,5 +214,22 @@ describe('CLI Command Logic', () => {
       'region-1'
     );
     expect(result).toContain('Error: Unknown subcommand');
+  });
+
+  it('should call handleSeek when seek command is executed', async () => {
+    const commands = createCliCommands({
+      controller: mockController,
+    });
+    const result = await commands['seek'].fn('10.5');
+    expect(mockController.playback.handleSeek).toHaveBeenCalledWith(10.5);
+    expect(result).toContain('Seek to 10.5s');
+  });
+
+  it('should return error for invalid seek time', async () => {
+    const commands = createCliCommands({
+      controller: mockController,
+    });
+    const result = await commands['seek'].fn('invalid');
+    expect(result).toContain('Error: Time must be a valid positive number');
   });
 });

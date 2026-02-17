@@ -229,6 +229,19 @@ export const createCliCommands = ({
         return 'Error: Unknown subcommand. Use "move" or "remove".';
       },
     },
+    [CommandsType.seek]: {
+      description: 'Seek to a specific time',
+      usage: 'seek <time>',
+      fn: (timeStr: string) => {
+        if (!timeStr) return 'Error: Time (seconds) required.';
+        const time = parseFloat(timeStr);
+        if (isNaN(time) || time < 0) {
+          return 'Error: Time must be a valid positive number.';
+        }
+        controller.playback.handleSeek(time);
+        return `Seek to ${time}s`;
+      },
+    },
     [CommandsType.help]: {
       description: 'Show available commands',
       usage: 'help',
