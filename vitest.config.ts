@@ -9,6 +9,7 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    include: ['src/layers/**/*.test.ts'],
+    environment: 'jsdom',
+    include: ['src/layers/**/*.test.{ts,tsx}'],
   },
 });

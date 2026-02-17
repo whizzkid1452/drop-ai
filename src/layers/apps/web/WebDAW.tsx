@@ -2,6 +2,8 @@ import { useRef, useEffect } from 'react';
 import { LayerProvider } from '../context/LayerContext';
 import { AudioEngine } from '@/layers/audio-engine/audio-engine';
 import { WebLayout } from './layout/WebLayout';
+import { Transport } from './ui/Transport';
+import { TrackList } from './ui/TrackList';
 
 export const WebDAW = () => {
   // Using a singleton-like ref pattern for AudioEngine to persist across renders
@@ -18,18 +20,27 @@ export const WebDAW = () => {
     <LayerProvider engine={audioEngine}>
       <WebLayout>
         <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            color: '#666',
-            flexDirection: 'column',
-            gap: '16px',
-          }}
+          style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
         >
-          <h2>Work in Progress</h2>
-          <p>Transport, TrackList, and Timeline components will go here.</p>
+          <Transport />
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+            <TrackList />
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#666',
+                flexDirection: 'column',
+                gap: '16px',
+                background: '#121212',
+              }}
+            >
+              <h2>Timeline Placeholder</h2>
+              <p>Arrangement view will go here.</p>
+            </div>
+          </div>
         </div>
       </WebLayout>
     </LayerProvider>
