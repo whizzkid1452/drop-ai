@@ -56,6 +56,10 @@ export class AudioEngine implements IAudioEngine {
     Tone.getTransport().seconds = time;
   }
 
+  getCurrentTime(): number {
+    return Tone.getTransport().seconds;
+  }
+
   async loadFile(file: File): Promise<{ src: string; duration: number }> {
     const src = URL.createObjectURL(file);
     console.log(`[AudioEngine] Loading file from ${src}`);

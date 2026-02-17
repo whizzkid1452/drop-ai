@@ -16,6 +16,7 @@ describe('PlaybackController', () => {
       pause: vi.fn(),
       setVolume: vi.fn(),
       seekTo: vi.fn(),
+      getCurrentTime: vi.fn(),
       loadFile: vi.fn(),
       setTrackVolume: vi.fn(),
       setTrackMute: vi.fn(),

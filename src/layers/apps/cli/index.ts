@@ -66,8 +66,9 @@ export const createCliCommands = ({
           controller.session.getState();
         const statusText = isPlaying ? 'Playing' : 'Stopped';
         const loopText = isLooping ? `ON (${loopStart}s - ${loopEnd}s)` : 'OFF';
+        const currentTime = controller.playback.getCurrentTime();
 
-        let output = `Status: ${statusText}\nBPM: ${bpm}\nLoop: ${loopText}\nTracks: ${tracks.size}\n\n`;
+        let output = `Status: ${statusText}\nTime: ${currentTime.toFixed(2)}s\nBPM: ${bpm}\nLoop: ${loopText}\nTracks: ${tracks.size}\n\n`;
 
         if (tracks.size > 0) {
           // Table Header

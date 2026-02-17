@@ -12,6 +12,7 @@ describe('CLI Command Logic', () => {
       handleLoop: vi.fn(),
       handleBpm: vi.fn(),
       handleMasterVolume: vi.fn(),
+      getCurrentTime: vi.fn().mockReturnValue(10.5),
     },
     track: {
       addTrack: vi.fn(),

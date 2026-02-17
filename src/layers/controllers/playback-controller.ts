@@ -42,6 +42,10 @@ export class PlaybackController {
     this.audioEngine.seekTo(time);
   }
 
+  getCurrentTime(): number {
+    return this.audioEngine.getCurrentTime();
+  }
+
   handleLoop(start: number, end: number, isLooping: boolean): void {
     if (isLooping) {
       console.log(`[PlaybackController] Set Loop: ${start} -> ${end}`);

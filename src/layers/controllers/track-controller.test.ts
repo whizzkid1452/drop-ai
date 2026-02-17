@@ -19,6 +19,7 @@ describe('TrackController', () => {
       pause: vi.fn(),
       setVolume: vi.fn(),
       seekTo: vi.fn(),
+      getCurrentTime: vi.fn(),
       createTrack: vi.fn(),
       // setTrackSource remove
       // getTrackDuration remove

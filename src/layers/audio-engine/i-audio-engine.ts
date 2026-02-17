@@ -6,6 +6,7 @@ export interface IAudioEngine {
   pause(): void;
   setVolume(value: number): void;
   seekTo(time: number): void;
+  getCurrentTime(): number;
   loadFile(file: File): Promise<{ src: string; duration: number }>;
   createTrack(id: string): void;
   addRegion(trackId: string, region: RegionState): void;
