@@ -1,99 +1,85 @@
 import { createStore } from 'zustand/vanilla';
-import type { RegionStatus, TrackStatus } from '@/types/statusTypes';
-import type { AudioFile } from '@/types/audioFile';
 
 export interface RegionState {
   id: string;
-  startTime: number;
-  endTime: number;
-  sourceStartTime: number;
-  duration: number;
-  status: RegionStatus[]; // types/track.ts와 통일
-  audioFileUrl?: string;
+  trackId: string;
+  src: string; // Blob URL
+  startTime: number; // Timeline position (seconds)
+  duration: number; // Region length (seconds)
+  offset: number; // Start point within buffer (seconds)
 }
 
 export interface TrackState {
   id: string;
   name: string;
   volume: number;
-  pan: number;
   isMuted: boolean;
   isSoloed: boolean;
-  status: TrackStatus[]; // types/track.ts와 통일
+  pan: number;
   regions: RegionState[];
 }
 
-export interface SessionState {
+// State (Data)
+export interface SessionData {
   isPlaying: boolean;
-  currentTime: number;
-  tempo: number;
   masterVolume: number;
-  exportStartTime: number | null;
-  exportEndTime: number | null;
+  bpm: number;
+  isLooping: boolean;
+  loopStart: number;
+  loopEnd: number;
   tracks: Map<string, TrackState>;
+}
 
-  // Actions (Setters)
-  /* Agent State */
-  isModelReady: boolean;
-  modelLoadingProgress: number;
-  modelLoadingText: string;
-
-  /* Audio File State */
-  audioFiles: Map<string, AudioFile>;
-
-  // Actions (Setters)
+// Actions (Setters)
+export interface SessionActions {
   setPlaying: (playing: boolean) => void;
-  setCurrentTime: (time: number) => void;
-  setTempo: (tempo: number) => void;
   setMasterVolume: (volume: number) => void;
-  setExportRange: (startTime: number | null, endTime: number | null) => void;
-  
+  setBpm: (bpm: number) => void;
+  setLoop: (isLooping: boolean) => void;
+  setLoopPoints: (start: number, end: number) => void;
   addTrack: (track: TrackState) => void;
   updateTrack: (id: string, updates: Partial<TrackState>) => void;
   removeTrack: (id: string) => void;
-
-  setAgentModelReady: (ready: boolean) => void;
-  setAgentLoadingProgress: (progress: number, text: string) => void;
-
-  addAudioFile: (url: string, file: AudioFile) => void;
-  removeAudioFile: (url: string) => void;
+  addRegion: (trackId: string, region: RegionState) => void;
+  updateRegion: (
+    trackId: string,
+    regionId: string,
+    updates: Partial<RegionState>
+  ) => void;
+  removeRegion: (trackId: string, regionId: string) => void;
 }
+
+export interface SessionState extends SessionData, SessionActions {}
 
 export type SessionStore = ReturnType<typeof createSessionStore>;
 
 export function createSessionStore() {
   return createStore<SessionState>(set => ({
     isPlaying: false,
-    currentTime: 0,
-    tempo: 120,
     masterVolume: 1.0,
-    exportStartTime: null,
-    exportEndTime: null,
+    bpm: 120,
+    isLooping: false,
+    loopStart: 0,
+    loopEnd: 4,
     tracks: new Map(),
 
-    /* Agent State */
-    isModelReady: false,
-    modelLoadingProgress: 0,
-    modelLoadingText: 'Initializing...',
-
-    /* Audio File State */
-    audioFiles: new Map(),
-
-    /* Actions */
     setPlaying: playing => set({ isPlaying: playing }),
-    setCurrentTime: time => set({ currentTime: time }),
-    setTempo: tempo => set({ tempo: tempo }),
-    setMasterVolume: volume => set({ masterVolume: volume }),
-    setExportRange: (startTime, endTime) =>
-      set({ exportStartTime: startTime, exportEndTime: endTime }),
 
-    /* Track Actions */
+    setMasterVolume: volume => set({ masterVolume: volume }),
+
+    setBpm: bpm => set({ bpm }),
+
+    setLoop: isLooping => set({ isLooping }),
+
+    setLoopPoints: (start, end) => set({ loopStart: start, loopEnd: end }),
+
     addTrack: track =>
       set(state => {
         const newTracks = new Map(state.tracks);
         newTracks.set(track.id, track);
         return { tracks: newTracks };
       }),
+
     updateTrack: (id, updates) =>
       set(state => {
         const track = state.tracks.get(id);
@@ -102,6 +88,7 @@ export function createSessionStore() {
         newTracks.set(id, { ...track, ...updates });
         return { tracks: newTracks };
       }),
+
     removeTrack: id =>
       set(state => {
         const newTracks = new Map(state.tracks);
@@ -109,23 +96,42 @@ export function createSessionStore() {
         return { tracks: newTracks };
       }),
 
-    /* Agent Actions */
-    setAgentModelReady: ready => set({ isModelReady: ready }),
-    setAgentLoadingProgress: (progress, text) =>
-      set({ modelLoadingProgress: progress, modelLoadingText: text }),
+    addRegion: (trackId, region) =>
+      set(state => {
+        const track = state.tracks.get(trackId);
+        if (!track) return state;
 
-    /* Audio File Actions */
-    addAudioFile: (url, file) =>
-      set(state => {
-        const newAudioFiles = new Map(state.audioFiles);
-        newAudioFiles.set(url, file);
-        return { audioFiles: newAudioFiles };
+        const newRegions = [...track.regions, region];
+        const newTrack = { ...track, regions: newRegions };
+        const newTracks = new Map(state.tracks);
+        newTracks.set(trackId, newTrack);
+        return { tracks: newTracks };
       }),
-    removeAudioFile: url =>
+
+    updateRegion: (trackId, regionId, updates) =>
       set(state => {
-        const newAudioFiles = new Map(state.audioFiles);
-        newAudioFiles.delete(url);
-        return { audioFiles: newAudioFiles };
+        const track = state.tracks.get(trackId);
+        if (!track) return state;
+
+        const newRegions = track.regions.map(r =>
+          r.id === regionId ? { ...r, ...updates } : r
+        );
+        const newTrack = { ...track, regions: newRegions };
+        const newTracks = new Map(state.tracks);
+        newTracks.set(trackId, newTrack);
+        return { tracks: newTracks };
+      }),
+
+    removeRegion: (trackId, regionId) =>
+      set(state => {
+        const track = state.tracks.get(trackId);
+        if (!track) return state;
+
+        const newRegions = track.regions.filter(r => r.id !== regionId);
+        const newTrack = { ...track, regions: newRegions };
+        const newTracks = new Map(state.tracks);
+        newTracks.set(trackId, newTrack);
+        return { tracks: newTracks };
       }),
   }));
 }

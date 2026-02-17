@@ -1,5 +1,5 @@
-import { type IAudioEngine } from '@/layers/audio-engine';
-import { type SessionStore } from '@/layers/session';
+import type { IAudioEngine } from '../audio-engine/i-audio-engine';
+import { type SessionStore } from '../session/session';
 
 export class PlaybackController {
   constructor(
@@ -38,26 +38,33 @@ export class PlaybackController {
   }
 
   handleSeek(time: number): void {
-    console.log(`[PlaybackController] Seeking to ${time}`);
-
-    // Command Audio Engine
-    this.audioEngine.setTime(time);
-    
-    // Update Session State
-    this.sessionStore.getState().setCurrentTime(time);
+    console.log(`[PlaybackController] Handling Seek Request: ${time}s`);
+    this.audioEngine.seekTo(time);
   }
 
-  handleSetTempo(tempo: number): void {
-    console.log(`[PlaybackController] Setting tempo to ${tempo}`);
-
-    // Command Audio Engine
-    this.audioEngine.setTempo(tempo);
-
-    // Update Session State
-    this.sessionStore.getState().setTempo(tempo);
+  handleLoop(start: number, end: number, isLooping: boolean): void {
+    if (isLooping) {
+      console.log(`[PlaybackController] Set Loop: ${start} -> ${end}`);
+      this.audioEngine.setLoopPoints(start, end);
+      this.audioEngine.setLoop(true);
+      this.sessionStore.getState().setLoopPoints(start, end);
+      this.sessionStore.getState().setLoop(true);
+    } else {
+      console.log('[PlaybackController] Loop Off');
+      this.audioEngine.setLoop(false);
+      this.sessionStore.getState().setLoop(false);
+    }
   }
 
-  getCurrentTime(): number {
-    return this.audioEngine.getCurrentTime();
+  handleBpm(bpm: number): void {
+    console.log(`[PlaybackController] Set BPM: ${bpm}`);
+    this.audioEngine.setBpm(bpm);
+    this.sessionStore.getState().setBpm(bpm);
+  }
+
+  handleMasterVolume(volume: number): void {
+    console.log(`[PlaybackController] Set Master Volume: ${volume}`);
+    this.audioEngine.setVolume(volume);
+    this.sessionStore.getState().setMasterVolume(volume);
   }
 }

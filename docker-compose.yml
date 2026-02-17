@@ -7,7 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     ports:
-      - "5173:5173"
+      - '5173:5173'
     volumes:
       - .:/app
       - /app/node_modules
@@ -23,7 +23,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "80:80"
+      - '80:80'
     environment:
       - NODE_ENV=production
     networks:
@@ -34,7 +34,7 @@ services:
   nginx-dev:
     image: nginx:alpine
     ports:
-      - "8080:80"
+      - '8080:80'
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./dist:/usr/share/nginx/html:ro

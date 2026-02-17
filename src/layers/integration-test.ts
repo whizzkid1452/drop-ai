@@ -1,11 +1,11 @@
-import { MockAudioEngine } from './audio-engine';
 import { createApp } from './apps/create-app';
+import { AudioEngine } from './audio-engine/audio-engine';
 
 async function runIntegrationTest() {
   console.log('--- Starting Layers Integration Test ---');
 
   // 1. Setup with Mock Engine
-  const mockEngine = new MockAudioEngine();
+  const mockEngine = new AudioEngine();
   const { session, controller } = createApp(mockEngine);
 
   let notificationCount = 0;
@@ -31,14 +31,14 @@ async function runIntegrationTest() {
 
   // 3. Test Track Management
   console.log('\n[Test] Testing Track Controller...');
-  await controller.track.addTrack('test-url', 'track-1');
+  await controller.track.addTrack();
   if (session.getState().tracks.size !== 1)
     throw new Error('Track addition failed');
 
   const track = session.getState().tracks.get('track-1');
   if (track?.id !== 'track-1') throw new Error('Track ID mismatch');
 
-  controller.track.setVolume('track-1', 0.5);
+  controller.track.setTrackVolume('track-1', 0.5);
   if (session.getState().tracks.get('track-1')?.volume !== 0.5)
     throw new Error('Track volume update failed');
 
