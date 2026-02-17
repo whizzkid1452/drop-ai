@@ -26,6 +26,14 @@ export class AudioEngine implements IAudioEngine {
     }
   }
 
+  // Debug helper for E2E tests
+  constructor() {
+    if (typeof window !== 'undefined') {
+      // @ts-ignore
+      window.Tone = Tone;
+    }
+  }
+
   stop(): void {
     console.log('[AudioEngine] Stop');
     Tone.getTransport().stop();
