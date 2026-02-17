@@ -29,6 +29,8 @@ describe('PlaybackController', () => {
       setLoopPoints: vi.fn(),
       setBpm: vi.fn(),
       getDebugInfo: vi.fn(),
+      setTrackPan: vi.fn(),
+      exportSession: vi.fn(),
     };
     playbackController = new PlaybackController(sessionStore, audioEngine);
   });

@@ -214,12 +214,13 @@ export function parseAudioCommandString({
       if (Array.isArray(parsed)) {
         return validateAndParseCommands(parsed);
       }
-    } catch (err) {
+    } catch {
       // Continue to fallback
     }
   }
 
   // Helper function to validate and parse commands
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function validateAndParseCommands(parsed: any[]): {
     commands: AudioCommand[] | null;
     error?: string;

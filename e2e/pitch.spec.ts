@@ -69,15 +69,15 @@ test.describe('Pitch Verification', () => {
       const blob = new Blob([wavBuffer], { type: 'audio/wav' });
 
       // Inject into AudioEngine
-      // @ts-ignore
+      // @ts-expect-error - audioEngine is added to window for testing
       if (window.audioEngine) {
-        // @ts-ignore
+        // @ts-expect-error - audioEngine is added to window for testing
         const { src, duration: d } = await window.audioEngine.loadFile(
           new File([blob], 'test.wav')
         );
-        // @ts-ignore
+        // @ts-expect-error - audioEngine is added to window for testing
         window.audioEngine.createTrack('track-1');
-        // @ts-ignore
+        // @ts-expect-error - audioEngine is added to window for testing
         window.audioEngine.addRegion('track-1', {
           id: 'region-1',
           trackId: 'track-1',

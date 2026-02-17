@@ -30,6 +30,12 @@ describe('TrackController', () => {
       addRegion: vi.fn(),
       removeRegion: vi.fn(),
       getDebugInfo: vi.fn(),
+      moveRegion: vi.fn(),
+      setTrackPan: vi.fn(),
+      setLoop: vi.fn(),
+      setLoopPoints: vi.fn(),
+      setBpm: vi.fn(),
+      exportSession: vi.fn(),
     };
 
     trackController = new TrackController(sessionStore, audioEngine);
@@ -48,6 +54,7 @@ describe('TrackController', () => {
         volume: 1.0,
         isMuted: false,
         isSoloed: false,
+        pan: 0,
         regions: [],
       });
 
@@ -170,6 +177,7 @@ describe('TrackController', () => {
               volume: 1.0,
               isMuted: false,
               isSoloed: false,
+              pan: 0,
               regions: [],
             },
           ],
@@ -197,6 +205,7 @@ describe('TrackController', () => {
               volume: 1.0,
               isMuted: false,
               isSoloed: false,
+              pan: 0,
               regions: [],
             },
           ],

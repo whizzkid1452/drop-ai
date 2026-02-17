@@ -47,7 +47,7 @@ export const CliTestPage = () => {
   const audioEngine = useRef(new AudioEngine()).current;
   useEffect(() => {
     // Expose engine for E2E tests to inject data
-    // @ts-ignore
+    // @ts-expect-error - Exposing audio engine for debugging
     window.audioEngine = audioEngine;
   }, [audioEngine]);
   return (

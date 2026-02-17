@@ -30,7 +30,7 @@ export class AudioEngine implements IAudioEngine {
   // Debug helper for E2E tests
   constructor() {
     if (typeof window !== 'undefined') {
-      // @ts-ignore
+      // @ts-expect-error - Tone is extended globally for debugging
       window.Tone = Tone;
     }
   }

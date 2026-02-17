@@ -10,7 +10,7 @@ export const WebDAW = () => {
 
   useEffect(() => {
     // Expose engine for debugging/tests
-    // @ts-ignore
+    // @ts-expect-error - Exposing audio engine for debugging
     window.audioEngine = audioEngine;
   }, [audioEngine]);
 

@@ -21,7 +21,7 @@ describe('CLI Command Logic', () => {
       getState: () => ({
         isPlaying: false,
         tracks: new Map([
-          ['track-1', { id: 'track-1', name: 'Track 1', regions: [] }],
+          ['track-1', { id: 'track-1', name: 'Track 1', regions: [], pan: 0 }],
         ]),
       }),
     },
@@ -56,6 +56,7 @@ describe('CLI Command Logic', () => {
                 volume: 1.0,
                 isMuted: false,
                 isSoloed: false,
+                pan: 0,
                 regions: [
                   {
                     id: 'region-1',
@@ -103,6 +104,7 @@ describe('CLI Command Logic', () => {
                 volume: 1.0,
                 isMuted: false,
                 isSoloed: false,
+                pan: 0,
                 regions: [],
               },
             ],
@@ -140,6 +142,7 @@ describe('CLI Command Logic', () => {
                 volume: 1.0,
                 isMuted: false,
                 isSoloed: false,
+                pan: 0,
                 regions: [],
               },
             ],

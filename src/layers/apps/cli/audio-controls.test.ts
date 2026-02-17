@@ -50,7 +50,6 @@ describe('CLI Audio Controls', () => {
     });
 
     it('should validate inputs', async () => {
-      // @ts-ignore
       const result = await commands[CommandsType.volume].fn('track-1');
       expect(mockController.track.setTrackVolume).not.toHaveBeenCalled();
       expect(result).toContain('Error: Track ID and volume value required');

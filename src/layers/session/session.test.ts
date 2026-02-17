@@ -38,6 +38,7 @@ describe('SessionStore', () => {
         volume: 0.8,
         isMuted: false,
         isSoloed: false,
+        pan: 0,
         regions: [],
       };
 
@@ -55,6 +56,7 @@ describe('SessionStore', () => {
         volume: 0.8,
         isMuted: false,
         isSoloed: false,
+        pan: 0,
         regions: [],
       };
       sessionStore.getState().addTrack(initialTrack);
@@ -81,6 +83,7 @@ describe('SessionStore', () => {
         volume: 0.8,
         isMuted: false,
         isSoloed: false,
+        pan: 0,
         regions: [],
       };
       sessionStore.getState().addTrack(track);
@@ -98,6 +101,7 @@ describe('SessionStore', () => {
         volume: 1.0,
         isMuted: false,
         isSoloed: false,
+        pan: 0,
         regions: [],
       };
       sessionStore.getState().addTrack(track);
@@ -133,6 +137,7 @@ describe('SessionStore', () => {
         volume: 1.0,
         isMuted: false,
         isSoloed: false,
+        pan: 0,
         regions: [region],
       };
       sessionStore.getState().addTrack(track);

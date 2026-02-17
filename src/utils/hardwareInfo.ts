@@ -1,9 +1,18 @@
 /**
  * WebGPU Navigator 인터페이스 확장
  */
+interface GPUAdapterInfo {
+  vendor: string;
+  device: string;
+}
+
+interface GPUAdapter {
+  requestAdapterInfo(): Promise<GPUAdapterInfo>;
+}
+
 interface NavigatorWithGPU extends Navigator {
   gpu?: {
-    requestAdapter(): Promise<any>;
+    requestAdapter(): Promise<GPUAdapter | null>;
   };
 }
 

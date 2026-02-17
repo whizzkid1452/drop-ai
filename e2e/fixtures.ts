@@ -37,17 +37,17 @@ export const test = base.extend<AudioFixtures>({
     const audioHelper = {
       attachMeter: async () => {
         await page.evaluate(async () => {
-          // @ts-ignore
+          // @ts-expect-error - Tone is available in window
           if (window.Tone && !window._testMeter) {
-            // @ts-ignore
+            // @ts-expect-error - Tone is available in window
             const Tone = window.Tone;
             const meter = new Tone.Meter();
             const fft = new Tone.FFT(2048);
             Tone.getDestination().connect(meter);
             Tone.getDestination().connect(fft);
-            // @ts-ignore
+            // @ts-expect-error - _testMeter is added for testing
             window._testMeter = meter;
-            // @ts-ignore
+            // @ts-expect-error - _testFFT is added for testing
             window._testFFT = fft;
             console.log('Test Meter & FFT Attached');
           }
@@ -56,7 +56,7 @@ export const test = base.extend<AudioFixtures>({
 
       getDominantFrequency: async () => {
         return await page.evaluate(() => {
-          // @ts-ignore
+          // @ts-expect-error - _testFFT is added for testing
           const fft = window._testFFT;
           if (!fft) return 0;
           const values = fft.getValue();
@@ -68,7 +68,7 @@ export const test = base.extend<AudioFixtures>({
               maxIndex = i;
             }
           }
-          // @ts-ignore
+          // @ts-expect-error - Tone is available in window
           const sampleRate = window.Tone.context.sampleRate;
           console.log(
             '[Fixture] FFT Size:',
@@ -89,7 +89,7 @@ export const test = base.extend<AudioFixtures>({
 
       isPlaying: async (threshold = -60) => {
         return await page.evaluate(thresh => {
-          // @ts-ignore
+          // @ts-expect-error - _testMeter is added for testing
           const meter = window._testMeter;
           if (!meter) return false;
           const level = meter.getValue();
@@ -101,7 +101,7 @@ export const test = base.extend<AudioFixtures>({
 
       isSilent: async (threshold = -60) => {
         return await page.evaluate(thresh => {
-          // @ts-ignore
+          // @ts-expect-error - _testMeter is added for testing
           const meter = window._testMeter;
           if (!meter) return true; // No meter means no monitoring, but technically silence at the meter loc
           const level = meter.getValue();
@@ -111,14 +111,14 @@ export const test = base.extend<AudioFixtures>({
 
       getTransportSeconds: async () => {
         return await page.evaluate(() => {
-          // @ts-ignore
+          // @ts-expect-error - Tone is available in window
           return window.Tone?.getTransport().seconds ?? 0;
         });
       },
 
       getTransportState: async () => {
         return await page.evaluate(() => {
-          // @ts-ignore
+          // @ts-expect-error - Tone is available in window
           return window.Tone?.getTransport().state ?? 'stopped';
         });
       },
