@@ -20,7 +20,9 @@ describe('CLI Command Logic', () => {
     session: {
       getState: () => ({
         isPlaying: false,
-        tracks: new Map(),
+        tracks: new Map([
+          ['track-1', { id: 'track-1', name: 'Track 1', regions: [] }],
+        ]),
       }),
     },
   } as unknown as AppController;
@@ -211,6 +213,66 @@ describe('CLI Command Logic', () => {
       'region-1'
     );
     expect(result).toContain('Removed region region-1');
+  });
+
+  it('should call splitRegion when region split command is executed', async () => {
+    const mockTrackController = {
+      ...mockController.track,
+      splitRegion: vi.fn().mockReturnValue({ leftId: 'L', rightId: 'R' }),
+    };
+    const mockControllerWithSplit = {
+      ...mockController,
+      track: mockTrackController,
+    } as unknown as AppController;
+
+    const commands = createCliCommands({
+      controller: mockControllerWithSplit,
+    });
+
+    // region split <trackId> <regionId> <time>
+    const result = await commands['region'].fn(
+      'split',
+      'track-1',
+      'region-1',
+      '2.5'
+    );
+
+    expect(mockTrackController.splitRegion).toHaveBeenCalledWith(
+      'track-1',
+      'region-1',
+      2.5
+    );
+    expect(result).toContain('Split region region-1 into L and R');
+  });
+
+  it('should call resizeRegion when region resize command is executed', async () => {
+    const mockTrackController = {
+      ...mockController.track,
+      resizeRegion: vi.fn(),
+    };
+    const mockControllerWithResize = {
+      ...mockController,
+      track: mockTrackController,
+    } as unknown as AppController;
+
+    const commands = createCliCommands({
+      controller: mockControllerWithResize,
+    });
+
+    // region resize <trackId> <regionId> <duration>
+    const result = await commands['region'].fn(
+      'resize',
+      'track-1',
+      'region-1',
+      '5.0'
+    );
+
+    expect(mockTrackController.resizeRegion).toHaveBeenCalledWith(
+      'track-1',
+      'region-1',
+      5.0
+    );
+    expect(result).toContain('Resized region region-1 to 5s');
   });
 
   it('should return error for invalid region subcommand', async () => {

@@ -14,6 +14,7 @@ export const CommandsType = {
   loop: 'loop',
   bpm: 'bpm',
   master: 'master',
+  debug: 'debug',
 } as const;
 
 export type CommandsType = keyof typeof CommandsType;

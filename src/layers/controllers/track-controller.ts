@@ -85,6 +85,83 @@ export class TrackController {
     this.sessionStore.getState().removeRegion(trackId, regionId);
   }
 
+  splitRegion(trackId: string, regionId: string, splitTime: number) {
+    const track = this.sessionStore.getState().tracks.get(trackId);
+    if (!track) {
+      throw new Error(`Track ${trackId} not found`);
+    }
+
+    const region = track.regions.find(r => r.id === regionId);
+    if (!region) {
+      throw new Error(`Region ${regionId} not found in track ${trackId}`);
+    }
+
+    if (
+      splitTime <= region.startTime ||
+      splitTime >= region.startTime + region.duration
+    ) {
+      throw new Error('Split time must be within region duration');
+    }
+
+    console.log(
+      `[TrackController] Splitting region: ${regionId} at ${splitTime}s`
+    );
+
+    const splitOffset = region.offset + (splitTime - region.startTime);
+    const leftDuration = splitTime - region.startTime;
+    const rightDuration = region.duration - leftDuration;
+
+    // 1. Resize original region (Left)
+    this.resizeRegion(trackId, regionId, leftDuration);
+
+    // 2. Create Right Region
+    const rightRegion = {
+      ...region,
+      id: crypto.randomUUID(),
+      startTime: splitTime,
+      offset: splitOffset,
+      duration: rightDuration,
+    };
+
+    // 3. Add Right Region
+    this.audioEngine.addRegion(trackId, rightRegion);
+    this.sessionStore.getState().addRegion(trackId, rightRegion);
+
+    return { leftId: regionId, rightId: rightRegion.id };
+  }
+
+  resizeRegion(trackId: string, regionId: string, newDuration: number) {
+    const track = this.sessionStore.getState().tracks.get(trackId);
+    if (!track) {
+      throw new Error(`Track ${trackId} not found`);
+    }
+
+    const region = track.regions.find(r => r.id === regionId);
+
+    if (!region) {
+      throw new Error(`Region ${regionId} not found`);
+    }
+
+    if (newDuration <= 0) {
+      throw new Error('Duration must be positive');
+    }
+
+    console.log(
+      `[TrackController] Resizing region: ${regionId} to ${newDuration}s`
+    );
+
+    // Update Session
+    this.sessionStore
+      .getState()
+      .updateRegion(trackId, regionId, { duration: newDuration });
+
+    // Update AudioEngine
+    // Reuse remove/add pattern
+    const newRegion = { ...region, duration: newDuration };
+    this.audioEngine.removeRegion(trackId, regionId);
+    this.audioEngine.addRegion(trackId, newRegion);
+  }
+
   removeTrack(id: string): void {
     console.log(`[TrackController] Removing track: ${id}`);
     this.audioEngine.removeTrack(id);

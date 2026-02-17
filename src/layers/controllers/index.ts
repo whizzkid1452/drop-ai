@@ -10,10 +10,16 @@ export class AppController {
   public readonly playback: PlaybackController;
   public readonly track: TrackController;
   public readonly session: SessionStore;
+  private readonly audioEngine: IAudioEngine;
 
   constructor(sessionStore: SessionStore, audioEngine: IAudioEngine) {
     this.session = sessionStore;
+    this.audioEngine = audioEngine;
     this.playback = new PlaybackController(sessionStore, audioEngine);
     this.track = new TrackController(sessionStore, audioEngine);
+  }
+
+  public getDebugInfo(): string {
+    return this.audioEngine.getDebugInfo();
   }
 }

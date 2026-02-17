@@ -29,6 +29,7 @@ describe('TrackController', () => {
       loadFile: vi.fn().mockResolvedValue({ src: 'blob:url', duration: 120 }),
       addRegion: vi.fn(),
       removeRegion: vi.fn(),
+      getDebugInfo: vi.fn(),
     };
 
     trackController = new TrackController(sessionStore, audioEngine);
@@ -91,6 +92,68 @@ describe('TrackController', () => {
       const track = sessionStore.getState().tracks.get(trackId);
       expect(track?.regions).toHaveLength(0);
       expect(audioEngine.removeRegion).toHaveBeenCalledWith(trackId, regionId);
+    });
+  });
+
+  describe('splitRegion', () => {
+    it('should split region into two and update session/audio engine', async () => {
+      const { id: trackId } = await trackController.addTrack();
+      const file = new File([''], 'test.mp3', { type: 'audio/mp3' });
+      const { regionId } = await trackController.addRegion(trackId, file, 0);
+
+      const { leftId, rightId } = trackController.splitRegion(
+        trackId,
+        regionId,
+        30
+      );
+
+      const track = sessionStore.getState().tracks.get(trackId);
+      expect(track?.regions).toHaveLength(2);
+
+      const left = track?.regions.find(r => r.id === leftId);
+      const right = track?.regions.find(r => r.id === rightId);
+
+      expect(left).toMatchObject({ startTime: 0, duration: 30, offset: 0 });
+      expect(right).toMatchObject({ startTime: 30, duration: 90, offset: 30 });
+
+      // Logic changed: resizeRegion is used, so original region is removed/added (updated)
+      // and new right region is added.
+      // Left ID is now same as original region ID.
+      expect(leftId).toBe(regionId);
+
+      // Verify Audio Engine Calls
+      // resizeRegion calls remove/add for original ID
+      expect(audioEngine.removeRegion).toHaveBeenCalledWith(trackId, regionId);
+      expect(audioEngine.addRegion).toHaveBeenCalledWith(
+        trackId,
+        expect.objectContaining({ id: regionId, duration: 30 })
+      );
+
+      // Right region added
+      expect(audioEngine.addRegion).toHaveBeenCalledWith(
+        trackId,
+        expect.objectContaining({ id: rightId })
+      );
+    });
+  });
+
+  describe('resizeRegion', () => {
+    it('should resize region and update session/audio engine', async () => {
+      const { id: trackId } = await trackController.addTrack();
+      const file = new File([''], 'test.mp3', { type: 'audio/mp3' });
+      const { regionId } = await trackController.addRegion(trackId, file, 0);
+
+      trackController.resizeRegion(trackId, regionId, 60);
+
+      const track = sessionStore.getState().tracks.get(trackId);
+      const region = track?.regions.find(r => r.id === regionId);
+
+      expect(region?.duration).toBe(60);
+      expect(audioEngine.removeRegion).toHaveBeenCalledWith(trackId, regionId);
+      expect(audioEngine.addRegion).toHaveBeenCalledWith(
+        trackId,
+        expect.objectContaining({ id: regionId, duration: 60 })
+      );
     });
   });
 

@@ -18,4 +18,5 @@ export interface IAudioEngine {
   setLoop(loop: boolean): void;
   setLoopPoints(start: number, end: number): void;
   setBpm(bpm: number): void;
+  getDebugInfo(): string;
 }

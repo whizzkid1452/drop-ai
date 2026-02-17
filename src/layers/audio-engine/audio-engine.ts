@@ -9,6 +9,7 @@ interface TrackNodes {
 interface RegionNodes {
   player: Tone.Player;
   trackId: string;
+  startTime: number;
   duration: number;
   offset: number;
 }
@@ -91,6 +92,7 @@ export class AudioEngine implements IAudioEngine {
     this.regions.set(region.id, {
       player,
       trackId,
+      startTime: region.startTime,
       duration: region.duration,
       offset: region.offset,
     });
@@ -123,6 +125,9 @@ export class AudioEngine implements IAudioEngine {
 
     // reschedule with preserved offset and duration
     player.sync().start(newStartTime, offset, duration);
+
+    // Update stored state
+    regionNode.startTime = newStartTime;
   }
 
   setTrackVolume(id: string, volume: number): void {
@@ -177,5 +182,19 @@ export class AudioEngine implements IAudioEngine {
   setBpm(bpm: number): void {
     console.log(`[AudioEngine] Set BPM: ${bpm}`);
     Tone.getTransport().bpm.value = bpm;
+  }
+
+  getDebugInfo(): string {
+    const t = Tone.getTransport();
+    let info = `Transport: State=${t.state}, Loop=${t.loop}, BPM=${t.bpm.value}, Pos=${t.position}\n`;
+    info += `LoopPoints: ${t.loopStart} -> ${t.loopEnd}\n`;
+    info += `Tracks: ${this.tracks.size}, Regions: ${this.regions.size}, Buffers: ${this.buffers.size}\n`;
+
+    this.regions.forEach((r, id) => {
+      info += `  [${id}] Track=${r.trackId} Start=${r.player.start} Offset=${r.offset} Dur=${r.duration} State=${r.player.state}\n`;
+      // Note: Tone.Player doesn't expose 'start' time property easily if synced.
+      // But we stored it in 'r.duration' etc.
+    });
+    return info;
   }
 }

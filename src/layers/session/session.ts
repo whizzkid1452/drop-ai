@@ -40,6 +40,11 @@ export interface SessionActions {
   updateTrack: (id: string, updates: Partial<TrackState>) => void;
   removeTrack: (id: string) => void;
   addRegion: (trackId: string, region: RegionState) => void;
+  updateRegion: (
+    trackId: string,
+    regionId: string,
+    updates: Partial<RegionState>
+  ) => void;
   removeRegion: (trackId: string, regionId: string) => void;
 }
 
@@ -96,6 +101,20 @@ export function createSessionStore() {
         if (!track) return state;
 
         const newRegions = [...track.regions, region];
+        const newTrack = { ...track, regions: newRegions };
+        const newTracks = new Map(state.tracks);
+        newTracks.set(trackId, newTrack);
+        return { tracks: newTracks };
+      }),
+
+    updateRegion: (trackId, regionId, updates) =>
+      set(state => {
+        const track = state.tracks.get(trackId);
+        if (!track) return state;
+
+        const newRegions = track.regions.map(r =>
+          r.id === regionId ? { ...r, ...updates } : r
+        );
         const newTrack = { ...track, regions: newRegions };
         const newTracks = new Map(state.tracks);
         newTracks.set(trackId, newTrack);

@@ -219,24 +219,61 @@ export const createCliCommands = ({
       usage:
         'region move <trackId> <regionId> <startTime> | region remove <trackId> <regionId>',
       fn: (sub: string, trackId: string, regionId: string, value?: string) => {
-        if (!sub || !trackId || !regionId) {
-          return 'Error: Unknown command. Usage: region move ... | region remove ...';
+        if (!sub) {
+          return 'Error: Unknown command. Usage: region move <trackId> <regionId> <value> | region remove <trackId> <regionId> | region split ... | region resize ...';
         }
 
-        if (sub === 'move') {
-          if (!value) return 'Error: Start time required for move.';
-          const startTime = parseFloat(value);
-          if (isNaN(startTime) || startTime < 0) {
-            return 'Error: Start time must be a valid positive number.';
+        if (!trackId || !regionId) {
+          return 'Error: Track ID and Region ID are required.';
+        }
+
+        switch (sub) {
+          case 'move': {
+            if (!value) return 'Error: Start time required for move.';
+            const startTime = parseFloat(value);
+            if (isNaN(startTime) || startTime < 0) {
+              return 'Error: Start time must be a valid positive number.';
+            }
+            controller.track.moveRegion(trackId, regionId, startTime);
+            return `Moved region ${regionId} to ${startTime}s.`;
           }
-          controller.track.moveRegion(trackId, regionId, startTime);
-          return `Moved region ${regionId} to ${startTime}s.`;
-        } else if (sub === 'remove') {
-          controller.track.removeRegion(trackId, regionId);
-          return `Removed region ${regionId} from track ${trackId}.`;
+          case 'remove': {
+            controller.track.removeRegion(trackId, regionId);
+            return `Removed region ${regionId}.`;
+          }
+          case 'split': {
+            if (!value) return 'Error: Split time required.';
+            const splitTime = parseFloat(value);
+            if (isNaN(splitTime) || splitTime < 0) {
+              return 'Error: Split time must be a valid positive number.';
+            }
+            try {
+              const { leftId, rightId } = controller.track.splitRegion(
+                trackId,
+                regionId,
+                splitTime
+              );
+              return `Split region ${regionId} into ${leftId} and ${rightId} at ${splitTime}s.`;
+            } catch (e) {
+              return `Error: ${(e as Error).message}`;
+            }
+          }
+          case 'resize': {
+            if (!value) return 'Error: Duration required.';
+            const duration = parseFloat(value);
+            if (isNaN(duration) || duration <= 0) {
+              return 'Error: Duration must be a valid positive number.';
+            }
+            try {
+              controller.track.resizeRegion(trackId, regionId, duration);
+              return `Resized region ${regionId} to ${duration}s.`;
+            } catch (e) {
+              return `Error: ${(e as Error).message}`;
+            }
+          }
+          default:
+            return 'Error: Unknown subcommand. Use "move", "remove", "split", or "resize".';
         }
-
-        return 'Error: Unknown subcommand. Use "move" or "remove".';
       },
     },
     [CommandsType.seek]: {
@@ -309,6 +346,13 @@ export const createCliCommands = ({
           )
           .join('\n');
         return 'Available commands:\n' + list;
+      },
+    },
+    [CommandsType.debug]: {
+      description: 'Show Audio Engine Debug Info',
+      usage: 'debug',
+      fn: () => {
+        return controller.getDebugInfo?.() || 'No debug info available';
       },
     },
   };

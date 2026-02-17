@@ -17,12 +17,18 @@ describe('PlaybackController', () => {
       setVolume: vi.fn(),
       seekTo: vi.fn(),
       loadFile: vi.fn(),
-      setTrackSource: vi.fn(),
       setTrackVolume: vi.fn(),
       setTrackMute: vi.fn(),
       setTrackSolo: vi.fn(),
       removeTrack: vi.fn(),
       createTrack: vi.fn(),
+      addRegion: vi.fn(),
+      removeRegion: vi.fn(),
+      moveRegion: vi.fn(),
+      setLoop: vi.fn(),
+      setLoopPoints: vi.fn(),
+      setBpm: vi.fn(),
+      getDebugInfo: vi.fn(),
     };
     playbackController = new PlaybackController(sessionStore, audioEngine);
   });

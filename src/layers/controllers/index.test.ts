@@ -29,6 +29,7 @@ describe('AppController', () => {
       setLoop: vi.fn(),
       setLoopPoints: vi.fn(),
       setBpm: vi.fn(),
+      getDebugInfo: vi.fn(),
     };
 
     // Act
