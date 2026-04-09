@@ -82,3 +82,7 @@ reference
 /worktrees
 
 work-log/
+.work-log
+
+# Claude
+.claude
