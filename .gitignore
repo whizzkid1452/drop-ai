@@ -80,3 +80,8 @@ reference
 
 # Worktrees
 /worktrees
+
+.work-log
+
+# Claude
+.claude
