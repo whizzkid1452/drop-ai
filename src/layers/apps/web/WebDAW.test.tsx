@@ -1,6 +1,8 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { WebDAW } from './WebDAW';
+import { LayerProvider } from '../context/LayerContext';
+import { AudioEngine } from '@/layers/audio-engine/audio-engine';
 
 // Mock matchMedia for xterm
 window.matchMedia =
@@ -48,16 +50,21 @@ vi.mock('@/layers/audio-engine/audio-engine', () => {
 global.requestAnimationFrame = cb => setTimeout(cb, 16);
 global.cancelAnimationFrame = id => clearTimeout(id);
 
+const renderWithProvider = (ui: React.ReactElement) => {
+  const engine = new AudioEngine();
+  return render(<LayerProvider engine={engine}>{ui}</LayerProvider>);
+};
+
 describe('WebDAW Integration', () => {
   it('renders Transport and TrackList', () => {
-    render(<WebDAW />);
+    renderWithProvider(<WebDAW />);
     expect(screen.getByText('Play')).toBeDefined();
     expect(screen.getByText('Stop')).toBeDefined();
     expect(screen.getByText(/Tracks \(\d+\)/)).toBeDefined();
   });
 
   it('adds a track and displays it', async () => {
-    render(<WebDAW />);
+    renderWithProvider(<WebDAW />);
 
     const addBtn = screen.getByText('+ Add Track');
     await act(async () => {
