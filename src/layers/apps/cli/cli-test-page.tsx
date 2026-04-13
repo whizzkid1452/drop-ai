@@ -1,8 +1,5 @@
-import { useRef, useEffect } from 'react';
-import { LayerProvider } from '../context/LayerContext';
 import { useCliApp } from './index';
 import { CliTerminal } from './ui/CliTerminal';
-import { AudioEngine } from '@/layers/audio-engine/audio-engine';
 
 const CliTestContent = () => {
   const { isPlaying, trackCount } = useCliApp();
@@ -44,15 +41,5 @@ const CliTestContent = () => {
 };
 
 export const CliTestPage = () => {
-  const audioEngine = useRef(new AudioEngine()).current;
-  useEffect(() => {
-    // Expose engine for E2E tests to inject data
-    // @ts-expect-error - Exposing audio engine for debugging
-    window.audioEngine = audioEngine;
-  }, [audioEngine]);
-  return (
-    <LayerProvider engine={audioEngine}>
-      <CliTestContent />
-    </LayerProvider>
-  );
+  return <CliTestContent />;
 };
