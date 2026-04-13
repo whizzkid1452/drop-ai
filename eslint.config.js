@@ -2,12 +2,20 @@ import js from '@eslint/js';
 import ts from 'typescript-eslint';
 import react from 'eslint-plugin-react';
 import refresh from 'eslint-plugin-react-refresh';
-import prettier from 'eslint-plugin-prettier';
+import eslintConfigPrettier from 'eslint-config-prettier/flat';
 import globals from 'globals';
 
 export default ts.config(
   {
-    ignores: ['dist', 'node_modules', 'coverage', '*.config.js'],
+    ignores: [
+      'dist',
+      'node_modules',
+      'coverage',
+      '*.config.js',
+      'reference/**',
+      'worktrees/**',
+      '.work-log/**',
+    ],
   },
   js.configs.recommended,
   ...ts.configs.recommended,
@@ -25,7 +33,6 @@ export default ts.config(
     plugins: {
       react,
       'react-refresh': refresh,
-      prettier,
     },
     rules: {
       ...react.configs.recommended.rules,
@@ -34,7 +41,6 @@ export default ts.config(
         'warn',
         { allowConstantExport: true },
       ],
-      'prettier/prettier': 'error',
       '@typescript-eslint/no-unused-vars': [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
@@ -50,5 +56,6 @@ export default ts.config(
         version: 'detect',
       },
     },
-  }
+  },
+  eslintConfigPrettier
 );
