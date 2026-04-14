@@ -6,6 +6,7 @@ export function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<CliTestPage />} />
+      <Route path="/cli-test" element={<CliTestPage />} />
       <Route path="/web-daw" element={<WebDAW />} />
     </Routes>
   );

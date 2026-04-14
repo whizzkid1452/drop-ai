@@ -76,8 +76,6 @@ Desktop.ini
 !public/**/*.mp3
 !public/**/*.ogg
 
-reference
-
 # Worktrees
 /worktrees
 
@@ -85,3 +83,4 @@ reference
 
 # Claude
 .claude
+.work-log/
