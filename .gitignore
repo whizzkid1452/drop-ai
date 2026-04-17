@@ -79,8 +79,8 @@ Desktop.ini
 # Worktrees
 /worktrees
 
-.docs
+docs
 
 # Claude
 .claude
-.work-log/
+work-log/

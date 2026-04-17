@@ -1,5 +1,3 @@
-# CLAUDE.md
-
 ## Commands
 
 - `pnpm test` - 테스트 실행
