@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /c/Users/ajvl3/Documents/code/wkCode/drop-ai-v2/*)",
+      "Bash(ls:*)",
+      "Bash(wc -l /c/Users/ajvl3/Documents/code/wkCode/drop.ai/src/components/DAW/**/*.tsx)",
+      "Bash(wc -l /c/Users/ajvl3/Documents/code/wkCode/drop.ai/packages/core/src/domain/*.ts)",
+      "Bash(xargs wc:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vite:*)",
+      "Bash(node -e \"const fm = require\\('framer-motion'\\); console.log\\(typeof fm.AnimatePresence, typeof fm.motion\\)\")",
+      "Bash(node -e \"const fm = require\\('framer-motion'\\); console.log\\('MotionStyle' in fm ? 'exists' : 'NOT found'\\)\")",
+      "Bash(gh pr:*)",
+      "Bash(gh api:*)",
+      "Bash(pnpm remove:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm test:unit)",
+      "Bash(pnpm build:*)",
+      "Bash(node -e \"const pkg = require\\('./node_modules/.pnpm/jsdom@28.1.0/node_modules/jsdom/package.json'\\); console.log\\(pkg.version\\)\")",
+      "Bash(node -e \"const pkg = require\\('./node_modules/.pnpm/html-encoding-sniffer@6.0.0/node_modules/html-encoding-sniffer/package.json'\\); console.log\\(pkg.dependencies\\)\")",
+      "Bash(node -e \"const pkg = require\\('./node_modules/.pnpm/@exodus+bytes@1.14.1/node_modules/@exodus/bytes/package.json'\\); console.log\\(pkg.type, pkg.exports?.['./encoding-lite']\\)\")",
+      "Bash(node -e ':*)",
+      "Bash(pnpm add:*)",
+      "Bash(git checkout *)"
+    ]
+  }
+}
