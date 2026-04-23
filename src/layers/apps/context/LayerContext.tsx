@@ -24,7 +24,7 @@ export const LayerProvider: React.FC<LayerProviderProps> = ({
   const value = useMemo(() => createApp(engine), [engine]);
 
   return (
-    <LayerContext.Provider value={value}>{children}</LayerContext.Provider>
+    <LayerContext value={value}>{children}</LayerContext>
   );
 };
 
