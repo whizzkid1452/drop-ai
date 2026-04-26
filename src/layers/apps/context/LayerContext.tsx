@@ -59,6 +59,7 @@ export function useController(): AppController { //AppController를 반환타입
  */
 //매개변수 selector 는 
 export function useSession<T>(selector: (state: SessionData) => T): T {  //: T useSession 의 반환타입 선언 
+  //selector는 sessionData 타입의 state를 입력 받아서 T 타입 값을 반환하는 함수 매개변수다
   const { session } = useLayer(); //useLayer로 컨텍스트를 가져온 뒤 session 스토어를 꺼냅니다. 
   //객체 구조분해 할당> 반환 객체에서 session 속성만 꺼내 변수로 만든다. 
   return useStore(session, selector); //session store와 selector를 인수로 넘겨 선택된 상태를 반환한다. 
@@ -68,3 +69,6 @@ export function useSession<T>(selector: (state: SessionData) => T): T {  //: T u
 function sum(a, b) {} // a, b = 인자(매개변수)
 sum(1, 2);            // 1, 2 = 인수
 */
+
+//store(session, selector)
+//store 인스턴스, selector 함수((state)=> state.000)) 를 인자로
