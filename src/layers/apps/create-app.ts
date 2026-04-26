@@ -12,6 +12,7 @@ export interface AppInstance {
  */
 //인터페이스에 의존 > 구체적인 구현은 몰라도 된다.
 //안전하게 격리하기위해서.. 
+//오디오 엔진을 주입받는다
 export function createApp(audioEngine: IAudioEngine): AppInstance { //함수의 반환 타입
   const session = createSessionStore(); //zustand vanilla store
   //react 훅이아니라 평범한 객체로 다루기 위해. 리액트 의존을 피하기 위해..
@@ -19,10 +20,13 @@ export function createApp(audioEngine: IAudioEngine): AppInstance { //함수의 
   const controller = new AppController(session, audioEngine); //new 로 클래스 객체 인스턴스 생성
 
   return { session, controller }; //객체 축약(변수 이름과 키 이름이 같을 때)
+  //세션스토어와 앱 컨트롤러를 조립한다. 이를 AppInstance형태로 반환하는 팩토리 함수. 
 }
 
 /**
- * creat-app을 composition root로 따로 둔 이유는, 의존성 생성과 연결을 한 곳에 모아 앱의 의존성 구조를 명확히 드러내기 위해서 입니다. 
+ * createApp은 오디오엔진을 주입받고 세션스토어와 앱 컨트롤러를 조립해서 AppInstance 형태로 반환하는 팩토리함수다. 
+ * 
+ * creat-app은 createApp 팩토리함수를 export하는 composition root로, 따로 둔 이유는, 의존성 생성과 연결을 한 곳에 모아 앱의 의존성 구조를 명확히 드러내기 위해서 입니다. 
  * 오디오 엔진은 외부에서 주입받고, 세션 스토어를 생성한 뒤, appController에서 엔진과 스토어의 의존성을 주입합니다. 
  * 이 구조로, 각 계층의 결합도를 낮추고, 오디오 엔진의 구현체를 쉽게 교체할 수 있어 테스트성과 확장성이 좋아집니다.
  */
