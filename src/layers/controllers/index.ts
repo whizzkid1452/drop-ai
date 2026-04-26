@@ -39,3 +39,6 @@ export class AppController {
     URL.revokeObjectURL(url);
   }
 }
+
+//싱글톤으로 하고싶어서 클래스로 생성??
+//합치는 코드가 react app 에 있어야해서.. 클래스코드로... 
