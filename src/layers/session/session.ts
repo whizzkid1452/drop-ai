@@ -20,6 +20,7 @@ export interface TrackState {
 }
 
 // State (Data)
+//프로젝트의 상태값들
 export interface SessionData {
   isPlaying: boolean;
   masterVolume: number;
@@ -30,7 +31,7 @@ export interface SessionData {
   tracks: Map<string, TrackState>;
 }
 
-// Actions (Setters)
+// Actions (Setters) 액션함수들들
 export interface SessionActions {
   //setPlaying은 boolean 값을 인자로 받습니다. 반환값은 없으므로 반환 타입은 void 입니다.
   setPlaying: (playing: boolean) => void;
