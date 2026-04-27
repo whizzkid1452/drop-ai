@@ -1,7 +1,10 @@
 import type { IAudioEngine } from '../audio-engine/i-audio-engine';
 import { type SessionStore } from '../session/session';
 
+//AudioEngine = 실제 소리 상태
+// SessionStore = UI가 보는 앱 상태
 export class PlaybackController {
+  //typescript 축약문법: 프로퍼티 선언과 생성자 매개변수를 동시에 선언하는 방법
   constructor(
     private sessionStore: SessionStore,
     private audioEngine: IAudioEngine
@@ -37,6 +40,7 @@ export class PlaybackController {
     this.sessionStore.getState().setPlaying(false);
   }
 
+  //current time은 스토어에 저장하지않는다. 너무 자주바뀜. 그리고 단일 진실원천 유지를위해 engine에서 받아온다.
   handleSeek(time: number): void {
     console.log(`[PlaybackController] Handling Seek Request: ${time}s`);
     this.audioEngine.seekTo(time);
