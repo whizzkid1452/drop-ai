@@ -14,7 +14,6 @@ export interface IAudioEngine {
   moveRegion(trackId: string, regionId: string, newStartTime: number): void;
   setTrackVolume(id: string, volume: number): void;
   setTrackMute(id: string, muted: boolean): void;
-  setTrackMute(id: string, muted: boolean): void;
   setTrackSolo(id: string, soloed: boolean): void;
   setTrackPan(id: string, pan: number): void;
   removeTrack(id: string): void;
@@ -30,6 +29,7 @@ export interface IAudioEngine {
         volume: number;
         isMuted: boolean;
         isSoloed: boolean;
+        pan: number;
         regions: RegionState[];
       }
     >
