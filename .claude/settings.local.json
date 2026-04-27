@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /c/Users/ajvl3/Documents/code/wkCode/drop-ai-v2/*)",
+      "Bash(ls:*)",
+      "Bash(wc -l /c/Users/ajvl3/Documents/code/wkCode/drop.ai/src/components/DAW/**/*.tsx)",
+      "Bash(wc -l /c/Users/ajvl3/Documents/code/wkCode/drop.ai/packages/core/src/domain/*.ts)",
+      "Bash(xargs wc:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vite:*)",
+      "Bash(node -e \"const fm = require\\('framer-motion'\\); console.log\\(typeof fm.AnimatePresence, typeof fm.motion\\)\")",
+      "Bash(node -e \"const fm = require\\('framer-motion'\\); console.log\\('MotionStyle' in fm ? 'exists' : 'NOT found'\\)\")",
+      "Bash(gh pr:*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:insight74278.tistory.com)",
+      "Bash(git push:*)",
+      "Bash(git fetch:*)",
+      "Bash(awk '{print $1, $3}')",
+      "mcp__claude_ai_Figma__get_design_context",
+      "mcp__claude_ai_Figma__whoami",
+      "Bash(gh auth:*)",
+      "Bash(xargs grep *)",
+      "Bash(git *)",
+      "Bash(gh repo *)",
+      "Bash(GH_USER=HURRAEY gh pr view 119 --repo AnAIAudio/voix-on --json title,body,comments,reviews,state)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(pnpm type-check *)"
+    ]
+  }
+}
