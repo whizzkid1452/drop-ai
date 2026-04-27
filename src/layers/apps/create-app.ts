@@ -14,7 +14,8 @@ export interface AppInstance {
 //안전하게 격리하기위해서.. 
 //오디오 엔진을 주입받는다
 export function createApp(audioEngine: IAudioEngine): AppInstance { //함수의 반환 타입
-  const session = createSessionStore(); //zustand vanilla store
+  const session = createSessionStore(); //선언처 - 세션 데이터 구조 파악
+  //zustand vanilla store
   //react 훅이아니라 평범한 객체로 다루기 위해. 리액트 의존을 피하기 위해..
   //의존성 주입 패턴(DI) 앱컨트롤러가 세션이나 오디오엔진을 직접 만들지않고, 외부에서 주입받습니다. 
   const controller = new AppController(session, audioEngine); //new 로 클래스 객체 인스턴스 생성

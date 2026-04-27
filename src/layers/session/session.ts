@@ -61,7 +61,7 @@ export function createSessionStore() {
     isLooping: false,
     loopStart: 0,
     loopEnd: 4,
-    tracks: new Map(),
+    tracks: new Map(), //트랙 추가/삭제/조회가 많고 키 기반 접근이 많다. id 식별자 기반으로 자주 조회, 수정, 삭제..
 
     setPlaying: playing => set({ isPlaying: playing }),
 
