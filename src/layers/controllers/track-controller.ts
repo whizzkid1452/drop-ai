@@ -7,15 +7,18 @@ export class TrackController {
     private audioEngine: IAudioEngine
   ) {}
   // id를 내부에서 반환하도록 처리
-  async addTrack() {
-    const id = crypto.randomUUID();
+  //async : 함수가 비동기 작업을 처리하고 Promise를 반환한다는 것을 나타낸다는 선언 
+  //addTrack 함수는 비동기 함수로 선언되어 Promise를 반환한다.
+  async addTrack() { 
+    const id = crypto.randomUUID(); //고유한 id 문자열을 만들어주는 브라우저 api
     console.log(`[TrackController] Adding track: ${id}`);
 
     // 1. AudioEngine에서 트랙(채널) 미리 생성
     this.audioEngine.createTrack(id);
 
     // 2. Update Session via Zustand
-    this.sessionStore.getState().addTrack({
+    //세션스토어에 트랙추가, 초기화 트랙상태를 인자로 받아 추가한다.
+    this.sessionStore.getState().addTrack({  //초기 트랙 상태 객체
       id,
       name: `Track ${id.slice(0, 4)}`, // Default name
       volume: 1.0,
@@ -25,8 +28,9 @@ export class TrackController {
       regions: [],
     });
 
-    return { id };
-  }
+    return { id }; //id 객체를 반환 (Promise<{ id: string }> 형태)
+  }//addTrack 내부에는 await가 없어서 기능적으로는 동기처럼 작동하지만, 반환 타입은 Promise
+  //사용처에서 await 가능
 
   async addRegion(trackId: string, file: File, startTime: number) {
     const regionId = crypto.randomUUID();
@@ -59,7 +63,9 @@ export class TrackController {
     );
 
     const track = this.sessionStore.getState().tracks.get(trackId);
+    //세션스토어의 현재 상태에서  track id를 키로 트랙을 조회해 track 변수에 할당한다. 
     const region = track?.regions.find(r => r.id === regionId);
+    //track이 존재하면 track.regions 배열에서 regionId와 일치하는 region을 찾아서 반환한다.
 
     if (!region) {
       console.warn(`[TrackController] Region not found: ${regionId}`);
@@ -108,20 +114,24 @@ export class TrackController {
       `[TrackController] Splitting region: ${regionId} at ${splitTime}s`
     );
 
-    const splitOffset = region.offset + (splitTime - region.startTime);
-    const leftDuration = splitTime - region.startTime;
-    const rightDuration = region.duration - leftDuration;
+    //원본 오디오에서 어디부터 재생해야하나
+    //splitTime: 원본 오디오에서 리전을 분할할 시간 (타임라인 상 절대시간)
+    // splitOffset: 잘랐을때, 원본 음원 기준 오프셋 (오른쪽 조각이 원본 오디오에서 시작해야할 지점 (오디오 파일에서))
+    // region.offset: 원본 오디오에서 리전이 시작하는 지점
+    const splitOffset = region.offset + (splitTime - region.startTime); //리전 시작 지점 + |분할된 시간(왼쪽 리전 길이)| = 잘린시간 절댓값
+    const leftSplitRegionDuration = splitTime - region.startTime;
+    const rightSplitRegionDuration = region.duration - leftSplitRegionDuration;
 
     // 1. Resize original region (Left)
-    this.resizeRegion(trackId, regionId, leftDuration);
+    this.resizeRegion(trackId, regionId, leftSplitRegionDuration);
 
     // 2. Create Right Region
     const rightRegion = {
       ...region,
       id: crypto.randomUUID(),
       startTime: splitTime,
-      offset: splitOffset,
-      duration: rightDuration,
+      offset: splitOffset,//잘린 오프셋 적용
+      duration: rightSplitRegionDuration,
     };
 
     // 3. Add Right Region
