@@ -72,7 +72,7 @@ export class PlaybackController {
 
   handleMasterVolume(volume: number): void {
     console.log(`[PlaybackController] Set Master Volume: ${volume}`);
-    this.audioEngine.setVolume(volume);
+    this.audioEngine.setMasterVolume(volume);
     this.sessionStore.getState().setMasterVolume(volume);
   }
 }

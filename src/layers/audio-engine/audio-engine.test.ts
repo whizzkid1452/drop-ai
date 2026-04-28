@@ -78,7 +78,7 @@ describe('AudioEngine', () => {
 
   it('should set volume', () => {
     const engine = new AudioEngine();
-    engine.setVolume(0.5);
+    engine.setMasterVolume(0.5);
     // 20 * log10(0.5) approx -6
     expect(Tone.Destination.volume.value).toBeCloseTo(-6, 0);
   });

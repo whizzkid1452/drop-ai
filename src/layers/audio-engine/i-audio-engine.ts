@@ -4,7 +4,7 @@ export interface IAudioEngine {
   play(): Promise<void>;
   stop(): void;
   pause(): void;
-  setVolume(value: number): void;
+  setMasterVolume(value: number): void;
   seekTo(time: number): void;
   getCurrentTime(): number;
   loadFile(file: File): Promise<{ src: string; duration: number }>;

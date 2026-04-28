@@ -1,3 +1,10 @@
+// Tone.js API를 앱 전체에 노출하지 않는 이유는 Tone.js가 앱의 도메인 모델이 아니라 오디오 구현체이기 때문입니다. 
+// 추상화 기준이 다른 tone.js API를 오디오 엔진에서 도메인 모델로 어댑팅합니다.
+// 또한, agent 가 명령으로 오디오 편집을 수행해야하기때문에 도메인 명령으로 추상화하는것이 더욱 적합하다고 판단했습니다. 
+// 앱은 Track, Region, Master Volume 같은 개념으로 동작해야 하고, Tone.js의 Player, Channel, Transport, Destination은 그 개념을 구현하는 세부 기술입니다. 
+// 이를 AudioEngine 계층에 캡슐화하면 Controller와 UI는 도메인 명령만 다루고, Tone.js 변경이나 테스트 mock, export/재생 그래프 일관성 관리가 쉬워집니다. 
+// 반대로 Tone.js 호출이 여러 계층에 퍼지면 결합도가 높아지고 상태 동기화와 테스트가 어려워집니다.
+
 import * as Tone from 'tone';
 import type { IAudioEngine } from './i-audio-engine';
 import type { RegionState } from '../session/session';
@@ -15,22 +22,31 @@ interface RegionNodes {
   offset: number;
 }
 
-export class AudioEngine implements IAudioEngine {
+//IAudioEngine 인터페이스 규약을 따른다는 선언 
+export class AudioEngine implements IAudioEngine { 
+  //ID기반 조회/수정/삭제 >> 맵 자료구조 사용
   private tracks = new Map<string, TrackNodes>();
   private regions = new Map<string, RegionNodes>();
   private buffers = new Map<string, Tone.ToneAudioBuffer>();
 
-  async play(): Promise<void> {
+  //클래스 메서드 함수 선언(function 키워드 없이 선언)
+  async play(): Promise<void> { 
     console.log('[AudioEngine] Play');
+    //getTransport() : Tone.js의 전역 타임라인/시계객체(전역 싱글톤 객체)를 가져오는 함수
     if (Tone.getTransport().state !== 'started') {
       Tone.getTransport().start();
     }
   }
 
   // Debug helper for E2E tests
+  //function() {}는 메서드 축약 문법 or 객체 리터럴 안
   constructor() {
+    //실행환경이 브라우저면 window 객체가 존재한다.
     if (typeof window !== 'undefined') {
       // @ts-expect-error - Tone is extended globally for debugging
+      //디버깅을 위해 Tone을 전역(window)에 노출
+      //window객체에 프로퍼티 할당(Tone)
+      //접근은 window.Tone 혹은 window['Tone'](대괄호 표기법, 동적 키)
       window.Tone = Tone;
     }
   }
@@ -45,8 +61,10 @@ export class AudioEngine implements IAudioEngine {
     Tone.getTransport().pause();
   }
 
-  setVolume(value: number): void {
-    console.log(`[AudioEngine] Set Volume: ${value}`);
+  //master volume 설정
+  setMasterVolume(value: number): void {
+    console.log(`[AudioEngine] Set Master Volume: ${value}`);
+    //getDestination() : Tone.js의 마스터 출력을 가져온다
     Tone.getDestination().volume.value =
       value <= 0 ? -Infinity : 20 * Math.log10(value);
   }
