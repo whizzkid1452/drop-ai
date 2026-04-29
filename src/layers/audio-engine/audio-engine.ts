@@ -61,6 +61,7 @@ export class AudioEngine implements IAudioEngine {
     Tone.getTransport().pause();
   }
 
+  // @note 추후 master 버스 모듈 분리 필요
   //master volume 설정
   setMasterVolume(value: number): void {
     console.log(`[AudioEngine] Set Master Volume: ${value}`);
@@ -97,7 +98,8 @@ export class AudioEngine implements IAudioEngine {
       return;
     }
     const channel = new Tone.Channel().toDestination();
-    this.tracks.set(id, { channel });
+    this.tracks.set(id, { channel }); 
+    //객체 축약 {channel: channel} channel 프로퍼티를 가진 객체를 밸류로 tracks 맵에 추가
   }
 
   addRegion(trackId: string, region: RegionState): void {
@@ -114,6 +116,8 @@ export class AudioEngine implements IAudioEngine {
       return;
     }
 
+    //track.channel : 트랙의 믹서 채널
+    //Tone.Player(buffer) : 오디오파일/버커를 재생하는 소스 노드
     const player = new Tone.Player(buffer).connect(track.channel);
 
     // Sync to transport
