@@ -89,7 +89,7 @@ export class AudioEngine implements IAudioEngine {
     // Decode and cache buffer
     const buffer = new Tone.ToneAudioBuffer();
     await buffer.load(src);
-    this.buffers.set(src, buffer);
+    this.buffers.set(src, buffer); //캐시로 저장, Map.set(key, value)
 
     return { src, duration: buffer.duration };
   }
@@ -108,7 +108,7 @@ export class AudioEngine implements IAudioEngine {
 
   addRegion(trackId: string, region: RegionState): void {
     console.log(`[AudioEngine] Add Region: ${region.id} to ${trackId}`);
-    const track = this.tracks.get(trackId);
+    const track = this.tracks.get(trackId); //get(key)
     if (!track) {
       //guard clause (특히 비정상/예외 조건을 early return)
       console.error(`[AudioEngine] Track ${trackId} not found`);
