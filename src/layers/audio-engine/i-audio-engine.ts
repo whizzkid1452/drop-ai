@@ -1,6 +1,7 @@
 import type { RegionState } from '../session/session';
 
 export interface IAudioEngine {
+  //메서드들의 타입 선언
   play(): Promise<void>;
   stop(): void;
   pause(): void;
@@ -23,6 +24,7 @@ export interface IAudioEngine {
   getDebugInfo(): string;
   exportSession(
     duration: number,
+    //Map<key, value> 타입선언
     tracks: Map<
       string,
       {
