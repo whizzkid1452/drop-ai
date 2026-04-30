@@ -14,7 +14,7 @@ export const CliTerminal = () => {
 
   useEffect(() => {
     commandsRef.current = commands;
-  }, [commands]);
+  }, [commands]); //commands 최신값 유지
 
   useEffect(() => {
     if (!terminalRef.current) return;
