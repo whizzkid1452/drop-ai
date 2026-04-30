@@ -307,7 +307,12 @@ export class AudioEngine implements IAudioEngine {
 
     // 4. Encode to WAV
     // Tone.Offline returns a ToneAudioBuffer, access native AudioBuffer via .get()
-    const wavBlob = encodeWav(buffer.get() as AudioBuffer);
+    const renderedBuffer = buffer.get();
+    if (!renderedBuffer) {
+      //undefined 체크해서 as AudioBuffer 제거
+      throw new Error('Failed to get rendered buffer');
+    }
+    const wavBlob = encodeWav(renderedBuffer);
     return wavBlob;
   }
 }
