@@ -44,11 +44,19 @@ export const CliTerminal = () => {
     //IIFE 즉시실행함수: 함수 선언과 동시에 실행
     //void (asyncFn ()) : 반환된 Promise 의도적 무시 
     //await 쓰면 타입 자동으로 풀려서 string으로 추론된다. 
-    void (async () => {
-      const helpOutput = await commandsRef.current['help'].fn();
-      term.write(helpOutput.replace(/\n/g, '\r\n') + '\r\n\r\n');//줄바꿈 형식 변환(\n -> \r\n)
-      term.write('drop-ai > ');
-    })();
+
+    const writeInitialHelp = async () => {
+      try {
+        const helpOutput = await commandsRef.current['help'].fn();
+        term.write(helpOutput.replace(/\n/g, '\r\n') + '\r\n\r\n');//줄바꿈 형식 변환(\n -> \r\n)
+        term.write('drop-ai > ');
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        term.write(`\r\nError: ${message}\r\ndrop-ai >`);
+      }
+    };
+
+    void writeInitialHelp();
 
     xtermRef.current = term;
 
