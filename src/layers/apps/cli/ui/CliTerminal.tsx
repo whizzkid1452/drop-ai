@@ -5,21 +5,28 @@ import 'xterm/css/xterm.css';
 import { useCliApp, type CliCommands } from '../index';
 import { isCommandsType } from '../constants';
 
+//term, commands의 타입
+//호출부에서 term 키로 Terminal 인스턴스를 넘겨주고, commands 키로 CliCommands 객체를 넘겨준다.
 type WriteInitialHelpProps = {
-  terminal: Terminal;
+  //키:타입
+  term: Terminal;
   commands: CliCommands;
 };
 
-  const writeInitialHelp = async ({ terminal:term, commands }: WriteInitialHelpProps): Promise<void> => {
-    try {
-      const helpOutput = await commands.help.fn();
-      term.write(helpOutput.replace(/\n/g, '\r\n') + '\r\n\r\n');//줄바꿈 형식 변환(\n -> \r\n)
-      term.write('drop-ai > ');
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      term.write(`\r\nError: ${message}\r\ndrop-ai >`);
-    }
-  };
+//2. 함수에서 term을 받아서 실행한다.
+const writeInitialHelp = async ({
+  term,
+  commands,
+}: WriteInitialHelpProps): Promise<void> => {
+  try {
+    const helpOutput = await commands.help.fn();
+    term.write(helpOutput.replace(/\n/g, '\r\n') + '\r\n\r\n'); //줄바꿈 형식 변환(\n -> \r\n)
+    term.write('drop-ai > ');
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    term.write(`\r\nError: ${message}\r\ndrop-ai >`);
+  }
+};
 
 export const CliTerminal = () => {
   const { commands } = useCliApp();
@@ -28,7 +35,6 @@ export const CliTerminal = () => {
   const inputBufferRef = useRef<string>('');
   const commandsRef = useRef(commands);
 
-
   useEffect(() => {
     commandsRef.current = commands;
   }, [commands]); //commands 최신값 유지
@@ -36,7 +42,8 @@ export const CliTerminal = () => {
   useEffect(() => {
     if (!terminalRef.current) return;
 
-    const term = new Terminal({ //Terminal 인스턴스 생성
+    const term = new Terminal({
+      //Terminal 인스턴스 생성
       cursorBlink: true,
       theme: {
         background: '#1e1e1e',
@@ -58,7 +65,8 @@ export const CliTerminal = () => {
     //commandsRef.current의 현재값(명령어 객체)를 가져와서 help 라는 키로 해당 프로퍼티를 읽는다
     //help프로퍼티 객체 메서드 fn을 호출하고 그 결과를 helpOutput 변수에 할당한다.
 
-    writeInitialHelp({ terminal:term, commands: commandsRef.current });
+    //1. term을 함수로 params로 넘겨준다. (키:밸류) (new Terminal 인스턴스 term을 넘겨준다.)
+    writeInitialHelp({ term, commands: commandsRef.current });
 
     xtermRef.current = term;
 
@@ -104,7 +112,7 @@ export const CliTerminal = () => {
           break;
         default:
           if (
-            //ASCII 문자 범위 체크 
+            //ASCII 문자 범위 체크
             data >= String.fromCharCode(0x20) && //0x20: 공백(스페이스)
             data <= String.fromCharCode(0x7e) //0x7e: ~
           ) {
