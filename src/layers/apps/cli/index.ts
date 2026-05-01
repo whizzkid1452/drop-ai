@@ -9,17 +9,19 @@ export interface CliCommand {
   fn: (...args: any[]) => string | Promise<string>;
 }
 
+//Record<Keys, Values> : Keys 타입의 키와 Values 타입의 값을 가진 객체 타입
 export type CliCommands = Record<CommandsType, CliCommand>;
 
 import { getVisualWidth, padRight } from '@/utils/visual-width';
 
 export const createCliCommands = ({
-  controller,
-}: {
+  controller,//객체안에서 controller를 구조분해로 꺼낸다
+}: {//파라미터 타입은 {controller: AppController} 
   controller: AppController;
-}): CliCommands => {
+}): CliCommands => { //반환타입은 CliCommands 타입, ()=>{} 화살표 문법
   const commands: CliCommands = {
-    [CommandsType.play]: {
+    //각 commands 타입의 키에 대응하는 값을 객체로 정의
+    [CommandsType.play]: { //객체의 키를 변수/enum으로 넣기 [변수]
       description: 'Start audio playback',
       usage: 'play',
       fn: async () => {
@@ -426,12 +428,16 @@ export const useCliApp = () => {
   const controller = useController();
   const isPlaying = useSession(state => state.isPlaying);
   const trackCount = useSession(state => state.tracks.size);
-  const commands = useMemo(
+  const commands = useMemo( 
     () =>
       createCliCommands({
         controller,
       }),
-    [controller]
-  );
-  return { isPlaying, trackCount, commands };
-};
+      [controller]
+    );
+    return { isPlaying, trackCount, commands };
+  };
+  
+//useMemo : 컴포넌트 안에서 함수 실행 결과를 메모이제이션(캐싱) > 의존성 배열(deps) 변경 시 다시 실행
+//memo: 컴포넌트 자체를 캐싱 > props 변경 시 다시 렌더링
+//useCallback : 함수 자체를 캐싱 > 리렌더되어도 함수 참조 유지, props 함수 넘길때, useEffect 의존성 배열 함수 넘길때 사용
