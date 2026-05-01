@@ -2,8 +2,24 @@ import { useEffect, useRef } from 'react';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
-import { useCliApp } from '../index';
+import { useCliApp, type CliCommands } from '../index';
 import { isCommandsType } from '../constants';
+
+type WriteInitialHelpProps = {
+  terminal: Terminal;
+  commands: CliCommands;
+};
+
+  const writeInitialHelp = async ({ terminal:term, commands }: WriteInitialHelpProps): Promise<void> => {
+    try {
+      const helpOutput = await commands.help.fn();
+      term.write(helpOutput.replace(/\n/g, '\r\n') + '\r\n\r\n');//줄바꿈 형식 변환(\n -> \r\n)
+      term.write('drop-ai > ');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      term.write(`\r\nError: ${message}\r\ndrop-ai >`);
+    }
+  };
 
 export const CliTerminal = () => {
   const { commands } = useCliApp();
@@ -11,6 +27,7 @@ export const CliTerminal = () => {
   const xtermRef = useRef<Terminal | null>(null);
   const inputBufferRef = useRef<string>('');
   const commandsRef = useRef(commands);
+
 
   useEffect(() => {
     commandsRef.current = commands;
@@ -41,22 +58,7 @@ export const CliTerminal = () => {
     //commandsRef.current의 현재값(명령어 객체)를 가져와서 help 라는 키로 해당 프로퍼티를 읽는다
     //help프로퍼티 객체 메서드 fn을 호출하고 그 결과를 helpOutput 변수에 할당한다.
 
-    //IIFE 즉시실행함수: 함수 선언과 동시에 실행
-    //void (asyncFn ()) : 반환된 Promise 의도적 무시 
-    //await 쓰면 타입 자동으로 풀려서 string으로 추론된다. 
-
-    const writeInitialHelp = async () => {
-      try {
-        const helpOutput = await commandsRef.current['help'].fn();
-        term.write(helpOutput.replace(/\n/g, '\r\n') + '\r\n\r\n');//줄바꿈 형식 변환(\n -> \r\n)
-        term.write('drop-ai > ');
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        term.write(`\r\nError: ${message}\r\ndrop-ai >`);
-      }
-    };
-
-    void writeInitialHelp();
+    writeInitialHelp({ terminal:term, commands: commandsRef.current });
 
     xtermRef.current = term;
 
