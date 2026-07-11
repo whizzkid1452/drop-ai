@@ -1,6 +1,6 @@
 좋아. 이 리포 기준으로는 **“단일 리포 + 현재 `layers` 구조 유지 + Command/PluginHost를 끼워 넣는 방식”**이 제일 좋습니다.
 
-지금 베이스로 삼기 좋은 축은 이미 있어요: [create-app.ts](/Users/hurraey/code/whizzkid/drop-ai/src/layers/apps/create-app.ts:13), [[discipline.md](http://discipline.md)](/Users/hurraey/code/whizzkid/drop-ai/src/layers/discipline.md:3), [LayerContext.tsx](/Users/hurraey/code/whizzkid/drop-ai/src/layers/apps/context/LayerContext.tsx:20), [session.ts](/Users/hurraey/code/whizzkid/drop-ai/src/layers/session/session.ts:22), [i-audio-engine.ts](/Users/hurraey/code/whizzkid/drop-ai/src/layers/audio-engine/i-audio-engine.ts:3), [WebDAW.tsx](/Users/hurraey/code/whizzkid/drop-ai/src/layers/apps/web/WebDAW.tsx:5)
+지금 베이스로 삼기 좋은 축은 이미 있어요: [create-app.ts](/Users/hurraey/code/whizzkid/drop-ai/src/layers/apps/create-app.ts:13), [discipline.md](/Users/hurraey/code/whizzkid/drop-ai/src/layers/discipline.md:3), [LayerContext.tsx](/Users/hurraey/code/whizzkid/drop-ai/src/layers/apps/web/context/LayerContext.tsx:20), [session.ts](/Users/hurraey/code/whizzkid/drop-ai/src/layers/session/session.ts:22), [i-audio-engine.ts](/Users/hurraey/code/whizzkid/drop-ai/src/layers/audio-engine/i-audio-engine.ts:3), [DawPage.tsx](/Users/hurraey/code/whizzkid/drop-ai/src/layers/apps/web/components/Daw/DawPage.tsx:11)
 
 **전체 방향**
 
@@ -20,17 +20,17 @@
 
 작업
 
-- `/` 라우트를 `WebDAW`로 변경, `cli-test`는 내부 테스트용으로 유지
+- `/` 진입 화면은 `DropPage`로 유지하고, DAW 작업 화면은 `/daw`의 `DawPage`에서 이어간다. `cli-test`는 내부 테스트용으로 유지
 
 - `src/layers/commands`, `src/layers/plugin-host`, `src/layers/apps/agent`, `src/layers/plugins` 디렉토리 추가
 
-- `docs/REBUILD_PLAN.md`를 이 리포 기준 계획으로 갱신
+- `docs/REBUILD_PLAN.md`의 파일명, 라우팅, 레이어 기준을 현재 리포 구조와 맞춘다
 
 - `createApp()` 조립 구조에 앞으로 `pluginHost`, `commandExecutor`가 들어갈 자리 확보
 
 종료 조건
 
-- 앱 첫 화면이 DAW로 뜬다
+- `/`에서는 기존 업로드/진입 화면이 뜨고, `/daw`에서 DAW 화면이 뜬다
 
 - 새 레이어 폴더가 생기고, 의존 방향이 문서화돼 있다
 
@@ -188,7 +188,7 @@
 
 작업
 
-- `WebDAW`를 3영역으로 정리
+- `DawPage`를 3영역으로 정리
 
   - 왼쪽: Track List
 
@@ -216,7 +216,7 @@
 
 주요 파일
 
-- [WebDAW.tsx](/Users/hurraey/code/whizzkid/drop-ai/src/layers/apps/web/WebDAW.tsx:5)
+- [DawPage.tsx](/Users/hurraey/code/whizzkid/drop-ai/src/layers/apps/web/components/Daw/DawPage.tsx:11)
 
 - `src/layers/apps/web/ui/components/`*
 
@@ -298,7 +298,7 @@
 
 **권장 구현 순서 요약**
 
-1. 라우트/폴더 정리  
+1. 진입 흐름/폴더 정리  
 
 2. CommandExecutor  
 
