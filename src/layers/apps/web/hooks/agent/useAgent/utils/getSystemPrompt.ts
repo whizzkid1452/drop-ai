@@ -1,17 +1,15 @@
 export const getSystemPrompt = ({
-   tracks = [],
+  tracks = [],
 }: {
-   tracks?: {
-      id: string;
-      index: number;
-      regions: { id: string; startTime: number; endTime: number }[];
-   }[];
+  tracks?: {
+    id: string;
+    index: number;
+    regions: { id: string; startTime: number; endTime: number }[];
+  }[];
 }) => {
-   const trackListInfo = (tracks || [])
-      .map(t => `Track ${t.index + 1}: id=${t.id}`)
-      .join('\n');
+  const trackListInfo = (tracks || []).map(t => `Track ${t.index + 1}: id=${t.id}`).join('\n');
 
-   return `# Role
+  return `# Role
 DAW 오디오 명령 파서. 사용자 요청을 JSON 배열로 변환. JSON만 반환.
 
 # Tracks

@@ -24,12 +24,15 @@ export function DawPage() {
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(CHAT_PANEL_DEFAULT_WIDTH);
 
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-    resizeStartXRef.current = e.clientX;
-    resizeStartWidthRef.current = chatPanelWidth;
-  }, [chatPanelWidth]);
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      setIsResizing(true);
+      resizeStartXRef.current = e.clientX;
+      resizeStartWidthRef.current = chatPanelWidth;
+    },
+    [chatPanelWidth]
+  );
 
   useEffect(() => {
     if (!isResizing) return;
@@ -62,8 +65,7 @@ export function DawPage() {
     <div className={styles.container}>
       {/* Left (Track Info) Toggle Button */}
       <button
-        className={`${styles.leftToggleButton} ${isTrackInfoOpen ? styles.leftToggleButtonOpen : ''
-          }`}
+        className={`${styles.leftToggleButton} ${isTrackInfoOpen ? styles.leftToggleButtonOpen : ''}`}
         onClick={() => setIsTrackInfoOpen(!isTrackInfoOpen)}
         title={isTrackInfoOpen ? 'Close Track Info' : 'Open Track Info'}
       >
@@ -80,10 +82,7 @@ export function DawPage() {
         {isTerminalOpen ? '→' : '←'}
       </button>
 
-      <div
-        className={`${styles.leftPanel} ${!isTrackInfoOpen ? styles.leftPanelCollapsed : ''
-          }`}
-      >
+      <div className={`${styles.leftPanel} ${!isTrackInfoOpen ? styles.leftPanelCollapsed : ''}`}>
         <TrackInfoSidebar />
       </div>
 
@@ -118,18 +117,10 @@ export function DawPage() {
       </div>
       <div
         className={`${styles.cliPanel} ${!isTerminalOpen ? styles.cliPanelCollapsed : ''} ${isResizing ? styles.cliPanelResizing : ''}`}
-        style={
-          isTerminalOpen
-            ? { width: chatPanelWidth }
-            : undefined
-        }
+        style={isTerminalOpen ? { width: chatPanelWidth } : undefined}
       >
         {isTerminalOpen && (
-          <div
-            className={styles.resizeHandle}
-            onMouseDown={handleResizeStart}
-            title="드래그하여 크기 조절"
-          />
+          <div className={styles.resizeHandle} onMouseDown={handleResizeStart} title="드래그하여 크기 조절" />
         )}
         <Terminal />
       </div>

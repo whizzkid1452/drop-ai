@@ -69,7 +69,7 @@ describe('MockAudioEngine - Phase 2 검증', () => {
       url: 'test.mp3',
       startTime: 0,
       sourceStartTime: 0,
-      duration: 5
+      duration: 5,
     };
 
     it('addRegion() 호출 가능', async () => {
@@ -104,7 +104,7 @@ describe('MockAudioEngine - Phase 2 검증', () => {
 
     it('exportProject() options 전달 가능', async () => {
       const blob = await engine.exportProject({
-        range: { startTime: 0, endTime: 10 }
+        range: { startTime: 0, endTime: 10 },
       });
       expect(blob).toBeInstanceOf(Blob);
     });

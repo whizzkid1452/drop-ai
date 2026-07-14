@@ -4,10 +4,7 @@ import { useWebLLM } from '@/layers/apps/web/hooks/agent/useWebLLM';
 import { useSession, useController, useSessionStore } from '@/layers/apps/web/context/LayerContext';
 import { executeAudioCommand } from '@/layers/controllers/utils/command-dispatcher';
 import { handleAIResponse } from '@/layers/apps/web/hooks/agent/useAgent/utils/aiResponseHandler';
-import {
-  createUserMessage,
-  createAssistantMessage,
-} from '@/layers/apps/web/hooks/agent/useAgent/utils/messageHelpers';
+import { createUserMessage, createAssistantMessage } from '@/layers/apps/web/hooks/agent/useAgent/utils/messageHelpers';
 import { trackChatMessageSent } from '@/utils/analytics';
 
 export function useAgent() {
@@ -32,12 +29,15 @@ export function useAgent() {
       })),
     [trackMap]
   );
-  
-  const execute = useCallback(async (command: any) => {
+
+  const execute = useCallback(
+    async (command: any) => {
       // Get current session state at the moment of execution
       const currentSession = sessionStore.getState();
       await executeAudioCommand(controller, currentSession, command);
-  }, [controller, sessionStore]);
+    },
+    [controller, sessionStore]
+  );
 
   const addMessage = useCallback((message: Message) => {
     setMessages(prev => [...prev, message]);
@@ -72,7 +72,12 @@ export function useAgent() {
 
     // AI 응답 처리
     const startTime = Date.now();
-    const { message, status: newStatus, parsedCommands, executionResults } = await handleAIResponse({
+    const {
+      message,
+      status: newStatus,
+      parsedCommands,
+      executionResults,
+    } = await handleAIResponse({
       engine,
       tracks,
       userInput: trimmedContent,
@@ -84,7 +89,7 @@ export function useAgent() {
     if (message) {
       const { trackAIResponseReceived, trackPromptImprovementSession } = await import('@/utils/analytics');
       trackAIResponseReceived(message.length, responseTime, message, parsedCommands ?? []);
-      
+
       // 프롬프트 개선을 위한 전체 세션 추적
       if (parsedCommands && executionResults) {
         trackPromptImprovementSession({

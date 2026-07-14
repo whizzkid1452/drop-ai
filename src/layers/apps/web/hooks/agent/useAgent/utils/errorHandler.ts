@@ -9,9 +9,7 @@ import { getHardwareInfo } from '@/utils/hardwareInfo';
 export async function generateErrorDiagnostic(error: Error) {
   const hardwareDetails = await getHardwareInfo();
 
-  const isValidationError =
-    error.message?.includes('contain either output text') ||
-    error.message === 'EMPTY_RESPONSE';
+  const isValidationError = error.message?.includes('contain either output text') || error.message === 'EMPTY_RESPONSE';
 
   const baseReport = `
 - **하드웨어:** ${hardwareDetails}

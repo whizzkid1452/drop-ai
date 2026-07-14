@@ -6,10 +6,7 @@ interface TrackPanControllerProps {
   pan: number;
 }
 
-export function TrackPanController({
-  onPanChange: onPanChange,
-  pan,
-}: TrackPanControllerProps) {
+export function TrackPanController({ onPanChange: onPanChange, pan }: TrackPanControllerProps) {
   const id = crypto.randomUUID();
 
   const sliderValue = useMemo(() => {

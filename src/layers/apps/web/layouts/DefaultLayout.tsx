@@ -1,11 +1,9 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 
 interface DefaultLayoutProps {
-    children: ReactNode;
+  children: ReactNode;
 }
 
 export function DefaultLayout({ children }: DefaultLayoutProps) {
-    return (
-        <>{children}</>
-    );
+  return <>{children}</>;
 }

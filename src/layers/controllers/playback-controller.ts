@@ -42,7 +42,7 @@ export class PlaybackController {
 
     // Command Audio Engine
     this.audioEngine.setTime(time);
-    
+
     // Update Session State
     this.sessionStore.getState().setCurrentTime(time);
   }

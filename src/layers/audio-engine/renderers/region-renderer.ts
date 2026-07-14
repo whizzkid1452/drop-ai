@@ -2,7 +2,7 @@ import type { RegionState } from '@/layers/session/session';
 
 /**
  * Region 렌더링 파라미터
- * 
+ *
  * 목적: Region을 Tone.js Player로 렌더링하기 위한 모든 파라미터
  */
 export interface RegionRenderParams {
@@ -34,11 +34,11 @@ export interface SplitRegionResult {
 
 /**
  * RegionRenderer
- * 
+ *
  * 역할:
  * - Region의 렌더링 파라미터를 계산하는 순수 함수 모음
  * - 실시간 재생(AudioEngine)과 Export(exportProject)에서 공통으로 사용
- * 
+ *
  * 원칙:
  * - 순수 함수만 포함 (Side Effect 없음)
  * - Tone.js 인스턴스를 생성하지 않음 (계산만 수행)
@@ -47,10 +47,10 @@ export interface SplitRegionResult {
 export class RegionRenderer {
   /**
    * Region을 렌더링하기 위한 파라미터 계산
-   * 
+   *
    * 이 함수는 실시간 재생과 Export 모두에서 사용되어
    * 동일한 결과를 보장합니다.
-   * 
+   *
    * @param region - 렌더링할 Region
    * @returns Tone.js Player에 전달할 파라미터
    */
@@ -68,18 +68,15 @@ export class RegionRenderer {
 
   /**
    * Export 범위에 따라 렌더링 파라미터 조정
-   * 
+   *
    * Export 범위가 Region의 일부만 포함하는 경우,
    * 파라미터를 조정하여 정확한 구간만 렌더링되도록 합니다.
-   * 
+   *
    * @param params - 원본 렌더링 파라미터
    * @param exportRange - Export 범위 (선택적)
    * @returns 조정된 렌더링 파라미터
    */
-  static adjustForExportRange(
-    params: RegionRenderParams,
-    exportRange?: ExportRange
-  ): RegionRenderParams {
+  static adjustForExportRange(params: RegionRenderParams, exportRange?: ExportRange): RegionRenderParams {
     if (!exportRange) {
       return params;
     }
@@ -119,18 +116,15 @@ export class RegionRenderer {
 
   /**
    * Region을 특정 시간에 두 개로 분할
-   * 
+   *
    * Split된 두 Region은 각각 올바른 sourceStartTime을 가지므로
    * 재생 시 연속적으로 들립니다.
-   * 
+   *
    * @param region - 분할할 Region
    * @param splitTime - 타임라인 상의 분할 시간 (초)
    * @returns 분할된 두 Region (left, right) 또는 null (분할 불가능한 경우)
    */
-  static calculateSplitRegion(
-    region: RegionState,
-    splitTime: number
-  ): SplitRegionResult | null {
+  static calculateSplitRegion(region: RegionState, splitTime: number): SplitRegionResult | null {
     // 1. 유효성 검사: 분할 시간이 Region 범위 내에 있어야 함 (양 끝점 제외)
     if (splitTime <= region.startTime || splitTime >= region.endTime) {
       return null;

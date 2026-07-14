@@ -45,7 +45,6 @@
 - `CommandType`, `CommandPayload`, `CommandExecutor` 추가
 
 - 최소 command부터:
-
   - `ADD_TRACK`
 
   - `INSTALL_PLUGIN`
@@ -66,7 +65,7 @@
 
 - [index.ts](/Users/hurraey/code/whizzkid/drop-ai/src/layers/controllers/index.ts:9)
 
-- 새 `src/layers/commands/`*
+- 새 `src/layers/commands/`\*
 
 종료 조건
 
@@ -115,7 +114,6 @@
 - `manifest` 스키마 정의
 
 - `PluginHost` 구현:
-
   - manifest validate
 
   - registry 등록
@@ -125,7 +123,6 @@
   - 로그 수집
 
 - `Plugin SDK` 타입 정의:
-
   - `parameters.get/set`
 
   - `log.info/error`
@@ -157,7 +154,6 @@
 작업
 
 - `IAudioEngine` 확장:
-
   - `installPlugin(trackId, manifestId)`
 
   - `removePlugin(trackId, instanceId)`
@@ -189,7 +185,6 @@
 작업
 
 - `DawPage`를 3영역으로 정리
-
   - 왼쪽: Track List
 
   - 가운데: Timeline placeholder 유지
@@ -197,7 +192,6 @@
   - 오른쪽: Plugin Inspector + Dev Center
 
 - manifest 기반 control renderer 추가
-
   - `slider`
 
   - `toggle`
@@ -205,7 +199,6 @@
   - `select`
 
 - Dev Center 기능
-
   - plugin catalog
 
   - validation result
@@ -218,7 +211,7 @@
 
 - [DawPage.tsx](/Users/hurraey/code/whizzkid/drop-ai/src/layers/apps/web/components/Daw/DawPage.tsx:11)
 
-- `src/layers/apps/web/ui/components/`*
+- `src/layers/apps/web/ui/components/`\*
 
 종료 조건
 
@@ -237,7 +230,6 @@
 - `src/layers/apps/agent/` 추가
 
 - tool 4개만 먼저:
-
   - `daw_query`
 
   - `daw_command`
@@ -265,7 +257,6 @@
 작업
 
 - unit test
-
   - command validation
 
   - manifest validation
@@ -275,7 +266,6 @@
   - parameter update
 
 - e2e
-
   - track 생성
 
   - plugin 설치
@@ -298,19 +288,19 @@
 
 **권장 구현 순서 요약**
 
-1. 진입 흐름/폴더 정리  
+1. 진입 흐름/폴더 정리
 
-2. CommandExecutor  
+2. CommandExecutor
 
-3. Session plugin state  
+3. Session plugin state
 
-4. PluginHost/Manifest  
+4. PluginHost/Manifest
 
-5. Audio plugin chain  
+5. Audio plugin chain
 
-6. Web UI/Dev Center  
+6. Web UI/Dev Center
 
-7. Agent  
+7. Agent
 
 8. 테스트/문서
 

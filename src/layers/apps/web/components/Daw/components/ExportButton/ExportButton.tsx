@@ -34,7 +34,7 @@ function ExportButtonContent() {
       const filename = `project-${Date.now()}`;
       await executeAudioCommand(controller, sessionStore.getState(), {
         type: AudioCommandType.EXPORT_AUDIO,
-        filename
+        filename,
       });
     } catch (error) {
       console.error('Export failed:', error);
@@ -45,12 +45,7 @@ function ExportButtonContent() {
   };
 
   return (
-    <button 
-      className={styles.exportButton} 
-      onClick={handleExport}
-      disabled={isExporting}
-      title="Export Audio"
-    >
+    <button className={styles.exportButton} onClick={handleExport} disabled={isExporting} title="Export Audio">
       {isExporting ? 'Exporting...' : 'Export'}
     </button>
   );

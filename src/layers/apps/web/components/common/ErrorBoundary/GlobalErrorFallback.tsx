@@ -12,11 +12,10 @@ export function GlobalErrorFallback({ error, resetErrorBoundary }: FallbackProps
       </div>
       <h1 className={styles.title}>Something went wrong</h1>
       <p className={styles.message}>
-        An unexpected error has occurred. Our team has been notified.
-        Please try refreshing the page.
+        An unexpected error has occurred. Our team has been notified. Please try refreshing the page.
         {errorMessage}
       </p>
-      
+
       <button className={styles.button} onClick={resetErrorBoundary}>
         Reload Application
       </button>

@@ -6,19 +6,13 @@ interface ModelLoadingOverlayProps {
   loadingText: string;
 }
 
-export function ModelLoadingOverlay({
-  progress,
-  loadingText,
-}: ModelLoadingOverlayProps) {
+export function ModelLoadingOverlay({ progress, loadingText }: ModelLoadingOverlayProps) {
   const displayText = formatLoadingDisplayText(loadingText);
 
   return (
     <div className={styles.loadingArea}>
       <div className={styles.progressBarContainer}>
-        <div
-          className={styles.progressBar}
-          style={{ width: `${progress}%` }}
-        />
+        <div className={styles.progressBar} style={{ width: `${progress}%` }} />
       </div>
       <div className={styles.statusStrip}>
         <div className={styles.statusInfo}>

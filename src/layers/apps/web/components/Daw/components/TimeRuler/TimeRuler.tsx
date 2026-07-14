@@ -10,13 +10,13 @@ interface TimeRulerProps {
   pixelsPerSecond: number;
 }
 
-export const TimeRuler = memo(({ pixelsPerSecond }: TimeRulerProps) => {
+export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerProps) {
   const tracks = useSession(state => state.tracks);
   const exportStartTime = useSession(state => state.exportStartTime);
   const exportEndTime = useSession(state => state.exportEndTime);
-  
+
   const controller = useController();
-  
+
   const trackArray = Array.from(tracks.values()) as unknown as Track[];
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -74,7 +74,6 @@ export const TimeRuler = memo(({ pixelsPerSecond }: TimeRulerProps) => {
       window.removeEventListener('mouseup', handleWindowMouseUp);
     };
   }, [isDraggingRange, pixelsPerSecond, controller, showBoundary]);
-
 
   const ticks = useMemo(() => {
     const tickElements = [];
@@ -143,11 +142,7 @@ export const TimeRuler = memo(({ pixelsPerSecond }: TimeRulerProps) => {
   };
 
   return (
-    <div
-      className={styles.container}
-      ref={containerRef}
-      onDoubleClick={handleDoubleClick}
-    >
+    <div className={styles.container} ref={containerRef} onDoubleClick={handleDoubleClick}>
       {ticks}
 
       {/* Export Range Overlay */}
@@ -157,7 +152,7 @@ export const TimeRuler = memo(({ pixelsPerSecond }: TimeRulerProps) => {
         style={{
           display: showExportRange || isDraggingRange ? 'block' : 'none',
           left: `${(exportStartTime ?? 0) * pixelsPerSecond}px`,
-          width: `${((exportEndTime ?? 0) - (exportStartTime ?? 0)) * pixelsPerSecond}px`
+          width: `${((exportEndTime ?? 0) - (exportStartTime ?? 0)) * pixelsPerSecond}px`,
         }}
       >
         <span className={styles.exportRangeLabel}>Export Range</span>
@@ -169,11 +164,7 @@ export const TimeRuler = memo(({ pixelsPerSecond }: TimeRulerProps) => {
         onMouseDown={handleTopMouseDown}
         title="Drag to Select Export Range. Double click to clear."
       />
-      <div
-        className={styles.bottomZone}
-        onMouseDown={handleBottomMouseDown}
-        title="Click to Set Playhead"
-      />
+      <div className={styles.bottomZone} onMouseDown={handleBottomMouseDown} title="Click to Set Playhead" />
     </div>
   );
 });

@@ -17,15 +17,10 @@ interface LayerProviderProps {
   children: React.ReactNode;
 }
 
-export const LayerProvider: React.FC<LayerProviderProps> = ({
-  engine,
-  children,
-}) => {
+export const LayerProvider: React.FC<LayerProviderProps> = ({ engine, children }) => {
   const value = useMemo(() => createApp(engine), [engine]);
 
-  return (
-    <LayerContext.Provider value={value}>{children}</LayerContext.Provider>
-  );
+  return <LayerContext.Provider value={value}>{children}</LayerContext.Provider>;
 };
 
 /**

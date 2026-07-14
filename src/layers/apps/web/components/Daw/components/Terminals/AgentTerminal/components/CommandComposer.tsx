@@ -42,10 +42,7 @@ export function CommandComposer({
           type="button"
         >
           EXECUTE
-          <span
-            className="material-symbols-outlined"
-            style={{ fontSize: '14px' }}
-          >
+          <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
             keyboard_return
           </span>
         </button>

@@ -1,8 +1,5 @@
 import { useEffect } from 'react';
-import {
-  CreateWebWorkerMLCEngine,
-  type InitProgressReport,
-} from '@mlc-ai/web-llm';
+import { CreateWebWorkerMLCEngine, type InitProgressReport } from '@mlc-ai/web-llm';
 import { useSession } from '@/layers/apps/web/context/LayerContext';
 import type { MLCEngine } from '@/types/webllm.types';
 
@@ -11,9 +8,7 @@ let isInitializing = false;
 
 export function useWebLLM() {
   const setModelReady = useSession(state => state.setAgentModelReady);
-  const setLoadingProgress = useSession(
-    state => state.setAgentLoadingProgress
-  );
+  const setLoadingProgress = useSession(state => state.setAgentLoadingProgress);
 
   useEffect(() => {
     if (globalEngine || isInitializing) return;
@@ -21,21 +16,14 @@ export function useWebLLM() {
     isInitializing = true;
     const initEngine = async () => {
       try {
-        const worker = new Worker(
-          new URL('../../workers/llm.worker.ts', import.meta.url),
-          { type: 'module' }
-        );
+        const worker = new Worker(new URL('../../workers/llm.worker.ts', import.meta.url), { type: 'module' });
 
-        globalEngine = await CreateWebWorkerMLCEngine(
-          worker,
-          'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
-          {
-            initProgressCallback: (report: InitProgressReport) => {
-              setLoadingProgress(report.progress, report.text);
-            },
-            logLevel: 'DEBUG',
-          }
-        );
+        globalEngine = await CreateWebWorkerMLCEngine(worker, 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC', {
+          initProgressCallback: (report: InitProgressReport) => {
+            setLoadingProgress(report.progress, report.text);
+          },
+          logLevel: 'DEBUG',
+        });
 
         setModelReady(true);
         console.log('WebLLM Engine Ready');
@@ -66,11 +54,7 @@ export function useWebLLM() {
       if ('caches' in window) {
         const cacheNames = await caches.keys();
         for (const cacheName of cacheNames) {
-          if (
-            cacheName.includes('mlc') ||
-            cacheName.includes('model') ||
-            cacheName.includes('web-llm')
-          ) {
+          if (cacheName.includes('mlc') || cacheName.includes('model') || cacheName.includes('web-llm')) {
             console.log(`Deleting Cache: ${cacheName}`);
             await caches.delete(cacheName);
           }

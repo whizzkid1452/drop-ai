@@ -32,19 +32,16 @@ async function runIntegrationTest() {
   // 3. Test Track Management
   console.log('\n[Test] Testing Track Controller...');
   await controller.track.addTrack('test-url', 'track-1');
-  if (session.getState().tracks.size !== 1)
-    throw new Error('Track addition failed');
+  if (session.getState().tracks.size !== 1) throw new Error('Track addition failed');
 
   const track = session.getState().tracks.get('track-1');
   if (track?.id !== 'track-1') throw new Error('Track ID mismatch');
 
   controller.track.setVolume('track-1', 0.5);
-  if (session.getState().tracks.get('track-1')?.volume !== 0.5)
-    throw new Error('Track volume update failed');
+  if (session.getState().tracks.get('track-1')?.volume !== 0.5) throw new Error('Track volume update failed');
 
   controller.track.removeTrack('track-1');
-  if (session.getState().tracks.size !== 0)
-    throw new Error('Track removal failed');
+  if (session.getState().tracks.size !== 0) throw new Error('Track removal failed');
 
   console.log('\n--- Integration Test Passed Successfully! ---');
   console.log(`Total notifications received: ${notificationCount}`);

@@ -9,18 +9,14 @@ interface RegionComponentProps {
   onReady?: (ws: any) => void;
 }
 
-export const RegionComponent = ({
-  region,
-  pixelsPerSecond,
-  onReady: onReadyProp,
-}: RegionComponentProps) => {
+export const RegionComponent = ({ region, pixelsPerSecond, onReady: onReadyProp }: RegionComponentProps) => {
   const left = region.startTime * pixelsPerSecond;
   const width = region.duration * pixelsPerSecond;
 
   const onReady = (ws: any) => {
     ws.setVolume(0);
     ws.zoom(pixelsPerSecond);
-    
+
     // Shadow DOM style injection to hide scrollbars
     if (ws.renderer?.container?.shadowRoot) {
       const shadowRoot = ws.renderer.container.shadowRoot;
@@ -40,9 +36,9 @@ export const RegionComponent = ({
         shadowRoot.appendChild(style);
       }
     }
-    
+
     if (onReadyProp) {
-        onReadyProp(ws);
+      onReadyProp(ws);
     }
   };
 

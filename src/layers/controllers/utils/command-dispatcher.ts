@@ -86,20 +86,20 @@ export async function executeAudioCommand(
     case AudioCommandType.LOAD_REGION: {
       const trackId = command.trackId ?? getFirstTrackId(session);
       const url = command.url ?? getFirstRegionUrl(session, trackId);
-      
+
       // We need RegionData structure for addRegion
       // But verify if controller.region.addRegion takes RegionData or args.
       // Based on my previous edit, it takes RegionData.
       // But command has startTime, startOffset, duration.
-      
+
       const regionData = {
-          id: command.regionId ?? crypto.randomUUID(),
-          url: url,
-          startTime: command.startTime,
-          sourceStartTime: command.startOffset ?? 0,
-          duration: command.duration,
+        id: command.regionId ?? crypto.randomUUID(),
+        url: url,
+        startTime: command.startTime,
+        sourceStartTime: command.startOffset ?? 0,
+        duration: command.duration,
       };
-      
+
       await controller.region.addRegion(trackId, regionData);
       break;
     }
@@ -119,14 +119,14 @@ export async function executeAudioCommand(
       // AppController should probably expose a way to set this.
       // For now, I'll assume controller.export.setExportRange exists or I need to add it.
       // Actually session store has setExportRange.
-      // I can access session store update via controller? 
+      // I can access session store update via controller?
       // No... I should add method to ExportController or PlaybackController.
       // Let's assume ExportController has it for now, if not I will add it.
-       controller.export.setExportRange(command.startTime, command.endTime);
+      controller.export.setExportRange(command.startTime, command.endTime);
       break;
 
     case AudioCommandType.CLEAR_EXPORT_RANGE:
-       controller.export.setExportRange(null, null);
+      controller.export.setExportRange(null, null);
       break;
 
     case AudioCommandType.EXPORT_AUDIO: {

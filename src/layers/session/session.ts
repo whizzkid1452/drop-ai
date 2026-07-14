@@ -47,7 +47,7 @@ export interface SessionState {
   setTempo: (tempo: number) => void;
   setMasterVolume: (volume: number) => void;
   setExportRange: (startTime: number | null, endTime: number | null) => void;
-  
+
   addTrack: (track: TrackState) => void;
   updateTrack: (id: string, updates: Partial<TrackState>) => void;
   removeTrack: (id: string) => void;
@@ -84,8 +84,7 @@ export function createSessionStore() {
     setCurrentTime: time => set({ currentTime: time }),
     setTempo: tempo => set({ tempo: tempo }),
     setMasterVolume: volume => set({ masterVolume: volume }),
-    setExportRange: (startTime, endTime) =>
-      set({ exportStartTime: startTime, exportEndTime: endTime }),
+    setExportRange: (startTime, endTime) => set({ exportStartTime: startTime, exportEndTime: endTime }),
 
     /* Track Actions */
     addTrack: track =>
@@ -111,8 +110,7 @@ export function createSessionStore() {
 
     /* Agent Actions */
     setAgentModelReady: ready => set({ isModelReady: ready }),
-    setAgentLoadingProgress: (progress, text) =>
-      set({ modelLoadingProgress: progress, modelLoadingText: text }),
+    setAgentLoadingProgress: (progress, text) => set({ modelLoadingProgress: progress, modelLoadingText: text }),
 
     /* Audio File Actions */
     addAudioFile: (url, file) =>
