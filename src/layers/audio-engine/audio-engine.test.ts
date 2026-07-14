@@ -109,6 +109,7 @@ describe('MockAudioEngine - Phase 2 검증', () => {
 
       // Track Management
       expect(typeof engine.loadTrack).toBe('function');
+      expect(typeof engine.removeTrack).toBe('function');
       expect(typeof engine.setTrackVolume).toBe('function');
       expect(typeof engine.setTrackPan).toBe('function');
       expect(typeof engine.getTrackParams).toBe('function');

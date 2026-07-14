@@ -28,6 +28,7 @@ export interface IAudioEngine {
 
   // Track Management
   loadTrack(url: string, id: string): Promise<void>;
+  removeTrack(trackId: string): void;
   setTrackVolume(trackId: string, volume: number): void;
   setTrackPan(trackId: string, pan: number): void;
   getTrackParams(trackId: string): { volume: number; pan: number } | null;

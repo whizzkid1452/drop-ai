@@ -28,6 +28,7 @@ export class TrackController {
 
   removeTrack(id: string): void {
     console.log(`[TrackController] Removing track: ${id}`);
+    this.audioEngine.removeTrack(id);
     this.sessionStore.getState().removeTrack(id);
   }
 
