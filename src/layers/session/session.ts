@@ -44,6 +44,7 @@ export interface SessionState {
   // Actions (Setters)
   setPlaying: (playing: boolean) => void;
   setCurrentTime: (time: number) => void;
+  stopPlayback: () => void;
   setTempo: (tempo: number) => void;
   setMasterVolume: (volume: number) => void;
   setExportRange: (startTime: number | null, endTime: number | null) => void;
@@ -82,6 +83,7 @@ export function createSessionStore() {
     /* Actions */
     setPlaying: playing => set({ isPlaying: playing }),
     setCurrentTime: time => set({ currentTime: time }),
+    stopPlayback: () => set({ isPlaying: false, currentTime: 0 }),
     setTempo: tempo => set({ tempo: tempo }),
     setMasterVolume: volume => set({ masterVolume: volume }),
     setExportRange: (startTime, endTime) => set({ exportStartTime: startTime, exportEndTime: endTime }),

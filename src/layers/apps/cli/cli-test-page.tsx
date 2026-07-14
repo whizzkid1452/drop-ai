@@ -4,6 +4,7 @@ import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 import { LayerProvider } from '../web/context/LayerContext';
 import { MockAudioEngine } from '../../audio-engine/mock-audio-engine';
+import { createApp } from '../create-app';
 import { useCliApp } from './index';
 
 const CliTestContent = () => {
@@ -111,9 +112,9 @@ const CliTestContent = () => {
 };
 
 export const CliTestPage = () => {
-  const mockEngine = useRef(new MockAudioEngine()).current;
+  const app = useRef(createApp({ audioEngine: new MockAudioEngine() })).current;
   return (
-    <LayerProvider engine={mockEngine}>
+    <LayerProvider app={app}>
       <CliTestContent />
     </LayerProvider>
   );

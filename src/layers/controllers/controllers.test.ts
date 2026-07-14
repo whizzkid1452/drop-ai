@@ -11,7 +11,7 @@ describe('Controllers - Phase 3 검증', () => {
 
   beforeEach(() => {
     engine = new MockAudioEngine();
-    const app = createApp(engine);
+    const app = createApp({ audioEngine: engine });
     controller = app.controller;
     session = app.session;
   });
@@ -88,6 +88,7 @@ describe('Controllers - Phase 3 검증', () => {
         duration: 10,
       });
       expect(() => controller.region.removeRegion('track-1', 'region-1')).not.toThrow();
+      expect(session.getState().tracks.get('track-1')?.regions).toHaveLength(0);
     });
 
     it('splitRegion 호출 가능', async () => {

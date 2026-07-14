@@ -1,7 +1,6 @@
-import React, { createContext, use, useMemo } from 'react';
+import React, { createContext, use } from 'react';
 import { useStore } from 'zustand';
-import { createApp } from '../../create-app';
-import { type IAudioEngine } from '../../../audio-engine/i-audio-engine';
+import type { AppInstance } from '../../create-app';
 import { AppController } from '../../../controllers/app-controller';
 import { type SessionStore, type SessionState } from '../../../session/session';
 
@@ -13,14 +12,12 @@ interface LayerContextValue {
 const LayerContext = createContext<LayerContextValue | null>(null);
 
 interface LayerProviderProps {
-  engine: IAudioEngine;
+  app: AppInstance;
   children: React.ReactNode;
 }
 
-export const LayerProvider: React.FC<LayerProviderProps> = ({ engine, children }) => {
-  const value = useMemo(() => createApp(engine), [engine]);
-
-  return <LayerContext.Provider value={value}>{children}</LayerContext.Provider>;
+export const LayerProvider: React.FC<LayerProviderProps> = ({ app, children }) => {
+  return <LayerContext.Provider value={app}>{children}</LayerContext.Provider>;
 };
 
 /**

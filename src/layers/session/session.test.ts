@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSessionStore, type SessionStore } from './session';
 
 describe('Session Store - Phase 1 검증', () => {
@@ -51,6 +51,19 @@ describe('Session Store - Phase 1 검증', () => {
 
       store.getState().setCurrentTime(10.25);
       expect(store.getState().currentTime).toBe(10.25);
+    });
+
+    it('stopPlayback은 재생 상태와 위치를 한 번에 초기화한다', () => {
+      const listener = vi.fn();
+      store.getState().setPlaying(true);
+      store.getState().setCurrentTime(5.5);
+      store.subscribe(listener);
+
+      store.getState().stopPlayback();
+
+      expect(store.getState().isPlaying).toBe(false);
+      expect(store.getState().currentTime).toBe(0);
+      expect(listener).toHaveBeenCalledTimes(1);
     });
 
     it('setTempo로 템포를 변경할 수 있어야 함', () => {

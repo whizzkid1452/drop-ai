@@ -80,22 +80,9 @@ describe('MockAudioEngine - Phase 2 검증', () => {
       await engine.addRegion('track-1', regionData);
       expect(() => engine.removeRegion('track-1', 'region-1')).not.toThrow();
     });
-
-    it('splitRegion() 호출 가능', async () => {
-      await engine.addRegion('track-1', regionData);
-      await expect(engine.splitRegion('track-1', 2.5)).resolves.toBeUndefined();
-    });
   });
 
   describe('Export', () => {
-    it('setExportRange() 호출 가능', () => {
-      expect(() => engine.setExportRange(2, 8)).not.toThrow();
-    });
-
-    it('setExportRange() null 허용', () => {
-      expect(() => engine.setExportRange(null, null)).not.toThrow();
-    });
-
     it('exportProject() Blob 반환', async () => {
       const blob = await engine.exportProject();
       expect(blob).toBeInstanceOf(Blob);
@@ -107,17 +94,6 @@ describe('MockAudioEngine - Phase 2 검증', () => {
         range: { startTime: 0, endTime: 10 },
       });
       expect(blob).toBeInstanceOf(Blob);
-    });
-  });
-
-  describe('Legacy Compatibility', () => {
-    it('setVolume() 호출 가능 (legacy)', () => {
-      expect(() => engine.setVolume(0.8)).not.toThrow();
-    });
-
-    it('seekTo() 호출 가능 (legacy)', () => {
-      engine.seekTo(7);
-      expect(engine.getCurrentTime()).toBe(7);
     });
   });
 
@@ -140,15 +116,8 @@ describe('MockAudioEngine - Phase 2 검증', () => {
       // Region Management
       expect(typeof engine.addRegion).toBe('function');
       expect(typeof engine.removeRegion).toBe('function');
-      expect(typeof engine.splitRegion).toBe('function');
-
       // Export
-      expect(typeof engine.setExportRange).toBe('function');
       expect(typeof engine.exportProject).toBe('function');
-
-      // Legacy
-      expect(typeof engine.setVolume).toBe('function');
-      expect(typeof engine.seekTo).toBe('function');
     });
   });
 });

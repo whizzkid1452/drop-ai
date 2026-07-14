@@ -24,7 +24,7 @@ export class PlaybackController {
     this.audioEngine.stop();
 
     // 2. Update Session State
-    this.sessionStore.getState().setPlaying(false);
+    this.sessionStore.getState().stopPlayback();
   }
 
   handlePause(): void {
