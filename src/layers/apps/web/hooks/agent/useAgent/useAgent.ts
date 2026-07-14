@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo } from 'react';
-import type { Message, AgentStatus } from '@/types/agent';
+import { useCallback, useMemo } from 'react';
+import type { Message } from '@/types/agent';
 import { useWebLLM } from '@/layers/apps/web/hooks/agent/useWebLLM';
 import { useSession, useController, useSessionStore } from '@/layers/apps/web/context/LayerContext';
 import { executeWebAudioCommand } from '@/layers/apps/web/utils/execute-web-audio-command';
@@ -7,13 +7,18 @@ import { handleAIResponse } from '@/layers/apps/web/hooks/agent/useAgent/utils/a
 import { createUserMessage, createAssistantMessage } from '@/layers/apps/web/hooks/agent/useAgent/utils/messageHelpers';
 import { trackAIResponseReceived, trackChatMessageSent, trackPromptImprovementSession } from '@/utils/analytics';
 import type { AudioCommand } from '@/types/audioCommand.schema';
+import { resolveAgentRunStatus } from './utils/resolve-agent-run-status';
 
 export function useAgent() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [status, setStatus] = useState<AgentStatus>('idle');
-
   const { engine } = useWebLLM();
   const trackMap = useSession(state => state.tracks);
+  const messages = useSession(state => state.agentMessages);
+  const status = useSession(state => state.agentStatus);
+  const addAgentMessage = useSession(state => state.addAgentMessage);
+  const updateAgentMessage = useSession(state => state.updateAgentMessage);
+  const setAgentStatus = useSession(state => state.setAgentStatus);
+  const setAgentRunStatus = useSession(state => state.setAgentRunStatus);
+  const markAgentResultSuccessful = useSession(state => state.markAgentResultSuccessful);
   const sessionStore = useSessionStore();
   const controller = useController();
 
@@ -40,14 +45,19 @@ export function useAgent() {
     [controller, sessionStore]
   );
 
-  const addMessage = useCallback((message: Message) => {
-    setMessages(prev => [...prev, message]);
-  }, []);
+  const addMessage = useCallback(
+    (message: Message) => {
+      addAgentMessage(message);
+    },
+    [addAgentMessage]
+  );
 
-  /** @todo(@steinjun0): 좀 더 로직 응집도를 높여야함. updateMessage가 현 단계에서 G필수인지도 고민 필요 */
-  const updateMessage = useCallback((id: string, content: string) => {
-    setMessages(prev => prev.map(m => (m.id === id ? { ...m, content } : m)));
-  }, []);
+  const updateMessage = useCallback(
+    (id: string, content: string) => {
+      updateAgentMessage(id, content);
+    },
+    [updateAgentMessage]
+  );
 
   const sendMessage = async (content: string) => {
     const trimmedContent = content.trim();
@@ -56,6 +66,8 @@ export function useAgent() {
     if (!engine) {
       alert('Engine not initialized');
       console.error('[Agent] Engine not initialized');
+      setAgentStatus('error');
+      setAgentRunStatus('failed');
       return;
     }
 
@@ -64,29 +76,30 @@ export function useAgent() {
     // 사용자 메시지 추가
     const userMsg = createUserMessage(trimmedContent);
     addMessage(userMsg);
-    setStatus('generating');
+    setAgentStatus('generating');
+    setAgentRunStatus('running');
 
     // 어시스턴트 메시지 생성 및 추가
     const assistantMsg = createAssistantMessage();
     addMessage(assistantMsg);
 
     // AI 응답 처리
-    const startTime = Date.now();
-    const {
-      message,
-      status: newStatus,
-      parsedCommands,
-      executionResults,
-    } = await handleAIResponse({
-      engine,
-      tracks,
-      userInput: trimmedContent,
-      execute,
-    });
-    const responseTime = Date.now() - startTime;
-
-    if (message) {
+    try {
+      const startTime = Date.now();
+      const {
+        message,
+        status: newStatus,
+        parsedCommands,
+        executionResults,
+      } = await handleAIResponse({
+        engine,
+        tracks,
+        userInput: trimmedContent,
+        execute,
+      });
+      const responseTime = Date.now() - startTime;
       const commandTypes = (parsedCommands ?? []).map(command => command.type);
+
       trackAIResponseReceived({
         responseLength: message.length,
         responseTimeMs: responseTime,
@@ -105,10 +118,25 @@ export function useAgent() {
           responseTimeMs: responseTime,
         });
       }
-    }
 
-    updateMessage(assistantMsg.id, message);
-    setStatus(newStatus);
+      updateMessage(assistantMsg.id, message);
+      setAgentStatus(newStatus);
+      const agentRunStatus = resolveAgentRunStatus({
+        responseStatus: newStatus,
+        commandCount: parsedCommands?.length ?? 0,
+        executionResults: executionResults ?? [],
+      });
+      setAgentRunStatus(agentRunStatus);
+      if (agentRunStatus === 'succeeded') {
+        markAgentResultSuccessful();
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Agent request failed';
+      updateMessage(assistantMsg.id, errorMessage);
+      setAgentStatus('error');
+      setAgentRunStatus('failed');
+      console.error('[Agent] Failed to process message:', error);
+    }
   };
 
   return { messages, status, sendMessage, addMessage, updateMessage };

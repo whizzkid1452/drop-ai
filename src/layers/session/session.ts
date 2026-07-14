@@ -1,6 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 import type { RegionStatus, TrackStatus } from '@/types/statusTypes';
 import type { AudioFile } from '@/types/audioFile';
+import type { AgentRunStatus, AgentStatus, Message } from '@/types/agent';
 
 export interface RegionState {
   id: string;
@@ -37,6 +38,10 @@ export interface SessionState {
   isModelReady: boolean;
   modelLoadingProgress: number;
   modelLoadingText: string;
+  agentMessages: Message[];
+  agentStatus: AgentStatus;
+  agentRunStatus: AgentRunStatus;
+  hasSuccessfulAgentResult: boolean;
 
   /* Audio File State */
   audioFiles: Map<string, AudioFile>;
@@ -55,6 +60,12 @@ export interface SessionState {
 
   setAgentModelReady: (ready: boolean) => void;
   setAgentLoadingProgress: (progress: number, text: string) => void;
+  addAgentMessage: (message: Message) => void;
+  updateAgentMessage: (id: string, content: string) => void;
+  setAgentStatus: (status: AgentStatus) => void;
+  setAgentRunStatus: (status: AgentRunStatus) => void;
+  markAgentResultSuccessful: () => void;
+  resetAgentWorkflow: () => void;
 
   addAudioFile: (url: string, file: AudioFile) => void;
   removeAudioFile: (url: string) => void;
@@ -76,6 +87,10 @@ export function createSessionStore() {
     isModelReady: false,
     modelLoadingProgress: 0,
     modelLoadingText: 'Initializing...',
+    agentMessages: [],
+    agentStatus: 'idle',
+    agentRunStatus: 'idle',
+    hasSuccessfulAgentResult: false,
 
     /* Audio File State */
     audioFiles: new Map(),
@@ -113,6 +128,22 @@ export function createSessionStore() {
     /* Agent Actions */
     setAgentModelReady: ready => set({ isModelReady: ready }),
     setAgentLoadingProgress: (progress, text) => set({ modelLoadingProgress: progress, modelLoadingText: text }),
+    addAgentMessage: message => set(state => ({ agentMessages: [...state.agentMessages, message] })),
+    updateAgentMessage: (id, content) =>
+      set(state => ({
+        agentMessages: state.agentMessages.map(message => (message.id === id ? { ...message, content } : message)),
+      })),
+    setAgentStatus: agentStatus => set({ agentStatus }),
+    setAgentRunStatus: agentRunStatus => set({ agentRunStatus }),
+    // 최근 실행 상태와 분리해, 후속 요청이 실패해도 이미 열린 편집 화면을 유지한다.
+    markAgentResultSuccessful: () => set({ hasSuccessfulAgentResult: true }),
+    resetAgentWorkflow: () =>
+      set({
+        agentMessages: [],
+        agentStatus: 'idle',
+        agentRunStatus: 'idle',
+        hasSuccessfulAgentResult: false,
+      }),
 
     /* Audio File Actions */
     addAudioFile: (url, file) =>

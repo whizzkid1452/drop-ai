@@ -8,3 +8,5 @@ export interface Message {
 }
 
 export type AgentStatus = 'idle' | 'loading' | 'generating' | 'error';
+
+export type AgentRunStatus = 'idle' | 'running' | 'succeeded' | 'failed';

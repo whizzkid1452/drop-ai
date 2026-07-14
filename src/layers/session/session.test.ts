@@ -34,6 +34,72 @@ describe('Session Store - Phase 1 검증', () => {
       expect(store.getState().tracks).toBeInstanceOf(Map);
       expect(store.getState().tracks.size).toBe(0);
     });
+
+    it('Agent 대화와 실행 상태는 비어 있는 상태로 초기화되어야 함', () => {
+      expect(store.getState().agentMessages).toEqual([]);
+      expect(store.getState().agentStatus).toBe('idle');
+      expect(store.getState().agentRunStatus).toBe('idle');
+      expect(store.getState().hasSuccessfulAgentResult).toBe(false);
+    });
+  });
+
+  describe('Agent 작업 상태 관리', () => {
+    it('Agent 메시지를 추가할 수 있어야 함', () => {
+      const message = {
+        id: 'message-1',
+        role: 'user' as const,
+        content: '보컬을 더 선명하게 만들어줘',
+        timestamp: 1,
+      };
+
+      store.getState().addAgentMessage(message);
+
+      expect(store.getState().agentMessages).toEqual([message]);
+    });
+
+    it('Agent 메시지 내용을 갱신할 수 있어야 함', () => {
+      store.getState().addAgentMessage({
+        id: 'message-1',
+        role: 'assistant',
+        content: '',
+        timestamp: 1,
+      });
+
+      store.getState().updateAgentMessage('message-1', '처리가 완료되었습니다.');
+
+      expect(store.getState().agentMessages[0]?.content).toBe('처리가 완료되었습니다.');
+    });
+
+    it('Agent 실행 성공 상태를 기록할 수 있어야 함', () => {
+      store.getState().setAgentRunStatus('succeeded');
+
+      expect(store.getState().agentRunStatus).toBe('succeeded');
+    });
+
+    it('Agent 성공 결과가 생성됐음을 기록할 수 있어야 함', () => {
+      store.getState().markAgentResultSuccessful();
+
+      expect(store.getState().hasSuccessfulAgentResult).toBe(true);
+    });
+
+    it('새 작업을 시작하면 Agent 대화와 결과 상태를 초기화해야 함', () => {
+      store.getState().addAgentMessage({
+        id: 'message-1',
+        role: 'user',
+        content: '드럼을 줄여줘',
+        timestamp: 1,
+      });
+      store.getState().setAgentStatus('error');
+      store.getState().setAgentRunStatus('failed');
+      store.getState().markAgentResultSuccessful();
+
+      store.getState().resetAgentWorkflow();
+
+      expect(store.getState().agentMessages).toEqual([]);
+      expect(store.getState().agentStatus).toBe('idle');
+      expect(store.getState().agentRunStatus).toBe('idle');
+      expect(store.getState().hasSuccessfulAgentResult).toBe(false);
+    });
   });
 
   describe('재생 상태 관리', () => {

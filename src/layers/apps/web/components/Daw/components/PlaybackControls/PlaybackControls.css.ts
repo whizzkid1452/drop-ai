@@ -17,6 +17,14 @@ export const container = style({
   zIndex: 100,
 });
 
+export const inlineContainer = style({
+  position: 'static',
+  transform: 'none',
+  padding: '10px 16px',
+  backgroundColor: '#151515',
+  zIndex: 'auto',
+});
+
 export const button = style({
   display: 'flex',
   alignItems: 'center',
