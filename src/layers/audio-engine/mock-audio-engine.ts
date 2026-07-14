@@ -40,6 +40,11 @@ export class MockAudioEngine implements IAudioEngine {
     console.log(`[MockAudioEngine] Track ${id} loaded from ${url}`);
   }
 
+  removeTrack(trackId: string): void {
+    this.mockRegions.delete(trackId);
+    console.log(`[MockAudioEngine] Track ${trackId} removed`);
+  }
+
   setTrackVolume(trackId: string, volume: number): void {
     console.log(`[MockAudioEngine] Track ${trackId} volume set to: ${volume}`);
   }

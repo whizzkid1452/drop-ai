@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { createApp } from '../apps/create-app';
 import type { AppController } from './app-controller';
@@ -59,6 +59,15 @@ describe('Controllers - Phase 3 검증', () => {
       controller.track.setSolo('track-1', true);
       const track = session.getState().tracks.get('track-1');
       expect(track?.isSoloed).toBe(true);
+    });
+
+    it('removeTrack 호출 시 AudioEngine과 Session에서 트랙을 제거한다', () => {
+      const removeTrackSpy = vi.spyOn(engine, 'removeTrack');
+
+      controller.track.removeTrack('track-1');
+
+      expect(removeTrackSpy).toHaveBeenCalledWith('track-1');
+      expect(session.getState().tracks.has('track-1')).toBe(false);
     });
   });
 

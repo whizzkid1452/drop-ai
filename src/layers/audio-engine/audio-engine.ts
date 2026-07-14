@@ -60,6 +60,17 @@ export class AudioEngine implements IAudioEngine {
     this.getOrInitChannel(id);
   }
 
+  removeTrack(trackId: string): void {
+    const trackPlayers = this.players.get(trackId);
+    trackPlayers?.forEach(player => this.disposePlayer(player));
+    this.players.delete(trackId);
+
+    const channel = this.channels.get(trackId);
+    channel?.disconnect();
+    channel?.dispose();
+    this.channels.delete(trackId);
+  }
+
   private getOrInitChannel(trackId: string): Tone.Channel {
     let channel = this.channels.get(trackId);
     if (!channel) {
@@ -140,12 +151,17 @@ export class AudioEngine implements IAudioEngine {
     const player = trackPlayers?.get(regionId);
 
     if (player) {
-      player.unsync();
-      player.stop();
-      player.disconnect();
-      player.dispose();
+      this.disposePlayer(player);
       trackPlayers?.delete(regionId);
     }
+  }
+
+  private disposePlayer(player: Tone.Player): void {
+    // Transport 예약을 먼저 해제해야 삭제된 Region이 이후 재생되지 않는다.
+    player.unsync();
+    player.stop();
+    player.disconnect();
+    player.dispose();
   }
 
   // ===== Export =====
