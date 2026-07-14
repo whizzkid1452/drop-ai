@@ -56,7 +56,6 @@ export async function handleAIResponse(deps: AIResponseHandlerDependencies) {
   const executionResults: Array<{
     commandType: string;
     success: boolean;
-    errorMessage?: string;
   }> = [];
 
   if (commands && commands.length > 0) {
@@ -67,20 +66,16 @@ export async function handleAIResponse(deps: AIResponseHandlerDependencies) {
     for (const command of commands) {
       try {
         await execute(command);
-        // Google Analytics: 명령어 실행 성공 추적
-        trackAudioCommandExecuted(command.type, true);
+        trackAudioCommandExecuted({ commandType: command.type, success: true });
         executionResults.push({
           commandType: command.type,
           success: true,
         });
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        // Google Analytics: 명령어 실행 실패 추적
-        trackAudioCommandExecuted(command.type, false, errorMessage);
+        trackAudioCommandExecuted({ commandType: command.type, success: false });
         executionResults.push({
           commandType: command.type,
           success: false,
-          errorMessage,
         });
         console.error('[aiResponseHandler] Command execution failed:', error);
       }

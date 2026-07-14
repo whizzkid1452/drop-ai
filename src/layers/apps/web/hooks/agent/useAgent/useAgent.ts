@@ -5,7 +5,7 @@ import { useSession, useController, useSessionStore } from '@/layers/apps/web/co
 import { executeWebAudioCommand } from '@/layers/apps/web/utils/execute-web-audio-command';
 import { handleAIResponse } from '@/layers/apps/web/hooks/agent/useAgent/utils/aiResponseHandler';
 import { createUserMessage, createAssistantMessage } from '@/layers/apps/web/hooks/agent/useAgent/utils/messageHelpers';
-import { trackChatMessageSent } from '@/utils/analytics';
+import { trackAIResponseReceived, trackChatMessageSent, trackPromptImprovementSession } from '@/utils/analytics';
 import type { AudioCommand } from '@/types/audioCommand.schema';
 
 export function useAgent() {
@@ -59,8 +59,7 @@ export function useAgent() {
       return;
     }
 
-    // Google Analytics: 사용자 메시지 전송 추적 (프롬프트 개선을 위해 실제 내용 포함)
-    trackChatMessageSent(trimmedContent.length, trimmedContent);
+    trackChatMessageSent({ messageLength: trimmedContent.length });
 
     // 사용자 메시지 추가
     const userMsg = createUserMessage(trimmedContent);
@@ -86,19 +85,24 @@ export function useAgent() {
     });
     const responseTime = Date.now() - startTime;
 
-    // Google Analytics: AI 응답 수신 추적 (프롬프트 개선을 위해 실제 내용 포함)
     if (message) {
-      const { trackAIResponseReceived, trackPromptImprovementSession } = await import('@/utils/analytics');
-      trackAIResponseReceived(message.length, responseTime, message, parsedCommands ?? []);
+      const commandTypes = (parsedCommands ?? []).map(command => command.type);
+      trackAIResponseReceived({
+        responseLength: message.length,
+        responseTimeMs: responseTime,
+        commandTypes,
+      });
 
-      // 프롬프트 개선을 위한 전체 세션 추적
       if (parsedCommands && executionResults) {
         trackPromptImprovementSession({
-          userInput: trimmedContent,
-          aiResponse: message,
-          parsedCommands,
-          executionResults,
-          responseTime,
+          userInputLength: trimmedContent.length,
+          aiResponseLength: message.length,
+          commandTypes,
+          executionResults: executionResults.map(result => ({
+            commandType: result.commandType,
+            success: result.success,
+          })),
+          responseTimeMs: responseTime,
         });
       }
     }
