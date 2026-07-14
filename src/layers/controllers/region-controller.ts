@@ -38,6 +38,13 @@ export class RegionController {
     console.log(`[RegionController] Removing region ${regionId} from track ${trackId}`);
 
     this.audioEngine.removeRegion(trackId, regionId);
+
+    const track = this.sessionStore.getState().tracks.get(trackId);
+    if (!track) return;
+
+    this.sessionStore.getState().updateTrack(trackId, {
+      regions: track.regions.filter(region => region.id !== regionId),
+    });
   }
 
   async splitRegion(trackId: string, splitTime: number): Promise<void> {
@@ -80,44 +87,7 @@ export class RegionController {
       status: [...regionToSplit.status],
     };
 
-    // 3. Update Audio Engine
-    // Engine might need to know about the split, or we just remove old and add new?
-    // define splitRegion in IAudioEngine? It exists.
-    // If Engine handles split internally, it might generate its own IDs or references.
-    // But usually Engine follows Controller's commands.
-    // Let's call splitRegion on engine.
-    // If engine's splitRegion returns new IDs, we should use them?
-    // Or we pass IDs?
-    // IAudioEngine.splitRegion(trackId, splitTime) signature doesn't take IDs.
-    // This implies Engine handles the logic and maybe returns the new regions?
-    // I need to check AudioEngine.splitRegion signature and return type.
-
-    await this.audioEngine.splitRegion(trackId, splitTime);
-
-    // 4. Update Session Store
-    // If Engine handles it, we should ideally sync from Engine or duplicate logic?
-    // "Single Source of Truth" is SessionStore (for UI) + Engine (for Audio).
-    // If I duplicate logic here, I mitigate dependency on Engine's internal state mechanism.
-    // But IDs must match.
-    // If Engine generates IDs, I must get them.
-    // Re-reading IAudioEngine.splitRegion return type: Promise<void>.
-    // It does NOT return new IDs.
-    // This suggests AudioEngine might be stateful and we might desync if we generate different IDs here.
-    // OR AudioEngine relies on us to reload the track/regions?
-    // But addRegion takes ID. splitRegion doesn't.
-    // This is a design flaw in IAudioEngine or implies IAudioEngine updates its own state and we assume it works?
-    // But UI needs the new IDs to render.
-    // If I generate IDs here, Engine doesn't know them unless I use remove/add instead of split.
-    // Calling removeRegion + addRegion(left) + addRegion(right) is safer for ID sync.
-    // I will implement it as remove + add + add in Controller to ensure ID consistency.
-
-    // IMPLEMENTATION CHANGE: Use atomic remove+add+add on Engine instead of splitRegion
-    // IF splitRegion doesn't allow ID control.
-    // OR check if AudioEngine.splitRegion allows passing IDs?
-    // IAudioEngine interface says `splitRegion(trackId: string, splitTime: number): Promise<void>`.
-    // So I cannot pass IDs.
-    // So I should replace splitRegion call with remove + add + add.
-
+    // Controller가 만든 ID를 Engine에도 전달해 Session 상태와 오디오 리소스 키를 일치시킨다.
     await this.audioEngine.removeRegion(trackId, regionToSplit.id);
     await this.audioEngine.addRegion(trackId, { ...leftRegion, url: leftRegion.audioFileUrl || '' });
     await this.audioEngine.addRegion(trackId, { ...rightRegion, url: rightRegion.audioFileUrl || '' });

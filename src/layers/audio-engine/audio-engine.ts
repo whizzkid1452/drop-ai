@@ -1,13 +1,15 @@
 import * as Tone from 'tone';
 import type { IAudioEngine, RegionData, ExportOptions } from './i-audio-engine';
-import type { SessionStore } from '../session/session';
+
+interface AudioEngineOptions {
+  initialTempo: number;
+}
 
 /**
  * AudioEngine - Tone.js 기반 오디오 엔진 구현
  *
  * 아키텍처 규칙:
  * - audio-engine만 Tone.js에 접근 가능
- * - SessionStore를 통해 상태 업데이트
  * - Controllers에서만 호출됨
  */
 export class AudioEngine implements IAudioEngine {
@@ -15,9 +17,9 @@ export class AudioEngine implements IAudioEngine {
   private channels: Map<string, Tone.Channel> = new Map();
   private players: Map<string, Map<string, Tone.Player>> = new Map();
 
-  constructor(private sessionStore: SessionStore) {
-    // Tone.js Transport 초기화
-    Tone.Transport.bpm.value = sessionStore.getState().tempo;
+  constructor(options: AudioEngineOptions = { initialTempo: 120 }) {
+    // 상태 저장소 대신 초기값만 받아 AudioEngine의 Session 의존을 막는다.
+    Tone.Transport.bpm.value = options.initialTempo;
   }
 
   // ===== Transport Control =====
@@ -27,23 +29,18 @@ export class AudioEngine implements IAudioEngine {
       await Tone.start();
     }
     await Tone.getTransport().start();
-    this.sessionStore.getState().setPlaying(true);
   }
 
   pause(): void {
     Tone.getTransport().pause();
-    this.sessionStore.getState().setPlaying(false);
   }
 
   stop(): void {
     Tone.getTransport().stop();
-    this.sessionStore.getState().setPlaying(false);
-    this.sessionStore.getState().setCurrentTime(0);
   }
 
   setTime(time: number): void {
     Tone.getTransport().seconds = time;
-    this.sessionStore.getState().setCurrentTime(time);
   }
 
   getCurrentTime(): number {
@@ -52,7 +49,6 @@ export class AudioEngine implements IAudioEngine {
 
   setTempo(tempo: number): void {
     Tone.Transport.bpm.value = tempo;
-    this.sessionStore.getState().setTempo(tempo);
   }
 
   // ===== Track Management =====
@@ -61,7 +57,6 @@ export class AudioEngine implements IAudioEngine {
     console.log(`[AudioEngine] Loading track ${id} from ${url}`);
     // 기본 트랙 채널 초기화
     this.getOrInitChannel(id);
-    // Track은 Controller에서 SessionStore에 추가함
   }
 
   private getOrInitChannel(trackId: string): Tone.Channel {
@@ -81,17 +76,11 @@ export class AudioEngine implements IAudioEngine {
     const channel = this.getOrInitChannel(trackId);
     const volumeInDb = Tone.gainToDb(volume);
     channel.volume.rampTo(volumeInDb, 0.1);
-
-    // SessionStore 업데이트
-    this.sessionStore.getState().updateTrack(trackId, { volume });
   }
 
   setTrackPan(trackId: string, pan: number): void {
     const channel = this.getOrInitChannel(trackId);
     channel.pan.rampTo(pan, 0.1);
-
-    // SessionStore 업데이트
-    this.sessionStore.getState().updateTrack(trackId, { pan });
   }
 
   getTrackParams(trackId: string): { volume: number; pan: number } | null {
@@ -124,26 +113,6 @@ export class AudioEngine implements IAudioEngine {
         onload: () => {
           console.log('[AudioEngine] Player loaded for region', regionData.id);
 
-          const duration = regionData.duration ?? player.buffer.duration;
-
-          // SessionStore의 해당 track regions 배열 업데이트
-          const track = this.sessionStore.getState().tracks.get(trackId);
-          if (track) {
-            const newRegion = {
-              id: `region-${Date.now()}`,
-              startTime: 0,
-              endTime: duration, // RegionState 타입 호환
-              sourceStartTime: regionData.sourceStartTime,
-              duration,
-              status: [], // RegionState 타입 호환
-              audioFileUrl: regionData.url,
-            };
-
-            this.sessionStore.getState().updateTrack(trackId, {
-              regions: [...track.regions, newRegion],
-            });
-          }
-
           // Tone.js Player 동기화
           player.sync().start(regionData.startTime, regionData.sourceStartTime);
 
@@ -170,56 +139,9 @@ export class AudioEngine implements IAudioEngine {
       player.dispose();
       trackPlayers?.delete(regionId);
     }
-
-    // SessionStore 업데이트
-    const track = this.sessionStore.getState().tracks.get(trackId);
-    if (track) {
-      const newRegions = track.regions.filter(r => r.id !== regionId);
-      this.sessionStore.getState().updateTrack(trackId, { regions: newRegions });
-    }
-  }
-
-  async splitRegion(trackId: string, splitTime: number): Promise<void> {
-    const track = this.sessionStore.getState().tracks.get(trackId);
-    if (!track) return;
-
-    // splitTime에 해당하는 region 찾기
-    const region = track.regions.find(r => splitTime > r.startTime && splitTime < r.startTime + r.duration);
-
-    if (!region) {
-      console.warn(`[AudioEngine] No region found at ${splitTime} on track ${trackId}`);
-      return;
-    }
-
-    // 기존 region 제거
-    this.removeRegion(trackId, region.id);
-
-    // 왼쪽 region
-    const leftDuration = splitTime - region.startTime;
-    await this.addRegion(trackId, {
-      id: `${region.id}-left`,
-      url: region.audioFileUrl!,
-      startTime: region.startTime,
-      sourceStartTime: region.sourceStartTime,
-      duration: leftDuration,
-    });
-
-    // 오른쪽 region
-    const rightDuration = region.duration - leftDuration;
-    await this.addRegion(trackId, {
-      id: `${region.id}-right`,
-      url: region.audioFileUrl!,
-      startTime: splitTime,
-      sourceStartTime: region.sourceStartTime + leftDuration,
-      duration: rightDuration,
-    });
   }
 
   // ===== Export =====
-
-  setExportRange(startTime: number | null, endTime: number | null): void {
-    this.sessionStore.getState().setExportRange(startTime, endTime);
-  }
 
   async exportProject(options?: ExportOptions): Promise<Blob> {
     console.log('[AudioEngine] exportProject called', options);
@@ -256,15 +178,5 @@ export class AudioEngine implements IAudioEngine {
     view.setUint32(40, numSamples * numChannels * 2, true);
 
     return new Blob([buffer], { type: 'audio/wav' });
-  }
-
-  // ===== Legacy (Compatibility) =====
-
-  setVolume(value: number): void {
-    this.sessionStore.getState().setMasterVolume(value);
-  }
-
-  seekTo(time: number): void {
-    this.setTime(time);
   }
 }

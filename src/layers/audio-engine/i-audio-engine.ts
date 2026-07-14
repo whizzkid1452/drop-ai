@@ -35,13 +35,7 @@ export interface IAudioEngine {
   // Region Management
   addRegion(trackId: string, regionData: RegionData): Promise<void>;
   removeRegion(trackId: string, regionId: string): void;
-  splitRegion(trackId: string, splitTime: number): Promise<void>;
 
   // Export
-  setExportRange(startTime: number | null, endTime: number | null): void;
   exportProject(options?: ExportOptions): Promise<Blob>;
-
-  // Legacy (keep for compatibility)
-  setVolume(value: number): void;
-  seekTo(time: number): void;
 }

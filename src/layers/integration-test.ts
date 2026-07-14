@@ -6,7 +6,7 @@ async function runIntegrationTest() {
 
   // 1. Setup with Mock Engine
   const mockEngine = new MockAudioEngine();
-  const { session, controller } = createApp(mockEngine);
+  const { session, controller } = createApp({ audioEngine: mockEngine });
 
   let notificationCount = 0;
   // Zustand vanilla store subscribe

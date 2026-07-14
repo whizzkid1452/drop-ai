@@ -5,7 +5,7 @@ import { createApp } from './apps/create-app';
 describe('Layers Integration', () => {
   function setup() {
     const mockEngine = new MockAudioEngine();
-    const { session, controller } = createApp(mockEngine);
+    const { session, controller } = createApp({ audioEngine: mockEngine });
     return { mockEngine, session, controller };
   }
 
@@ -21,10 +21,12 @@ describe('Layers Integration', () => {
     it('stop 시 isPlaying이 false가 된다', async () => {
       const { session, controller } = setup();
       await controller.playback.handlePlay();
+      controller.playback.handleSeek(5);
 
       controller.playback.handleStop();
 
       expect(session.getState().isPlaying).toBe(false);
+      expect(session.getState().currentTime).toBe(0);
     });
 
     it('pause 시 isPlaying이 false가 된다', async () => {

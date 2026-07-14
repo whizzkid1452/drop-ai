@@ -1,4 +1,5 @@
 import type { IAudioEngine } from '../audio-engine/i-audio-engine';
+import { AudioEngine } from '../audio-engine/audio-engine';
 import { createSessionStore, type SessionStore } from '../session/session';
 import { AppController } from '../controllers/app-controller';
 
@@ -7,11 +8,16 @@ export interface AppInstance {
   controller: AppController;
 }
 
+export interface CreateAppOptions {
+  audioEngine?: IAudioEngine;
+}
+
 /**
  * Core Application Factory
  */
-export function createApp(audioEngine: IAudioEngine): AppInstance {
+export function createApp(options: CreateAppOptions = {}): AppInstance {
   const session = createSessionStore();
+  const audioEngine = options.audioEngine ?? new AudioEngine({ initialTempo: session.getState().tempo });
   const controller = new AppController(session, audioEngine);
 
   return { session, controller };

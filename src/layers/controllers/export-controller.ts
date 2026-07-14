@@ -10,10 +10,6 @@ export class ExportController {
   setExportRange(startTime: number | null, endTime: number | null): void {
     console.log(`[ExportController] Setting export range: ${startTime} - ${endTime}`);
 
-    this.audioEngine.setExportRange(startTime, endTime);
-
-    // Update Session State (via injected store, assuming it's available or need to change constructor)
-    // Constructor has `_sessionStore`. I need to change it to `private sessionStore`.
     this.sessionStore.getState().setExportRange(startTime, endTime);
   }
 

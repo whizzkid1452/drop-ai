@@ -67,27 +67,9 @@ export class MockAudioEngine implements IAudioEngine {
     this.mockRegions.get(trackId)?.delete(regionId);
   }
 
-  async splitRegion(trackId: string, splitTime: number): Promise<void> {
-    console.log(`[MockAudioEngine] Splitting region at ${splitTime} on track ${trackId}`);
-  }
-
-  // Export
-  setExportRange(startTime: number | null, endTime: number | null): void {
-    console.log(`[MockAudioEngine] Export range set: ${startTime} - ${endTime}`);
-  }
-
   async exportProject(options?: ExportOptions): Promise<Blob> {
     console.log(`[MockAudioEngine] Exporting project`, options);
     // Return empty WAV blob for testing
     return new Blob(['mock-audio-data'], { type: 'audio/wav' });
-  }
-
-  // Legacy (Compatibility)
-  setVolume(value: number): void {
-    console.log(`[MockAudioEngine] Master volume set to: ${value}`);
-  }
-
-  seekTo(time: number): void {
-    this.setTime(time);
   }
 }
