@@ -83,16 +83,30 @@ describe('MockAudioEngine - Phase 2 검증', () => {
   });
 
   describe('Export', () => {
+    const exportRequest = {
+      tracks: [
+        {
+          id: 'track-1',
+          volume: 1,
+          pan: 0,
+          isMuted: false,
+          isSoloed: false,
+          regions: [{ id: 'region-1', url: 'test.mp3', startTime: 0, sourceStartTime: 0, duration: 10 }],
+        },
+      ],
+      masterVolume: 1,
+      range: { startTime: 0, endTime: 10 },
+      sampleRate: 44100,
+    };
+
     it('exportProject() Blob 반환', async () => {
-      const blob = await engine.exportProject();
+      const blob = await engine.exportProject(exportRequest);
       expect(blob).toBeInstanceOf(Blob);
       expect(blob.type).toBe('audio/wav');
     });
 
-    it('exportProject() options 전달 가능', async () => {
-      const blob = await engine.exportProject({
-        range: { startTime: 0, endTime: 10 },
-      });
+    it('exportProject() 요청 전달 가능', async () => {
+      const blob = await engine.exportProject(exportRequest);
       expect(blob).toBeInstanceOf(Blob);
     });
   });

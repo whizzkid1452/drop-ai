@@ -4,7 +4,7 @@ import type { MLCEngine } from '@/types/webllm.types';
 import { trackAudioCommandExecuted } from '@/utils/analytics';
 
 export interface AIResponseHandlerDependencies {
-  execute: (command: AudioCommand) => Promise<any>;
+  execute: (command: AudioCommand) => Promise<void>;
   engine: MLCEngine;
   tracks: {
     id: string;

@@ -7,12 +7,35 @@ export interface RegionData {
   audioFile?: { url: string; duration?: number };
 }
 
-export interface ExportOptions {
-  tracks?: any[];
-  range?: {
-    startTime: number;
-    endTime: number;
-  };
+export const DEFAULT_EXPORT_SAMPLE_RATE = 44100;
+
+export interface ExportRange {
+  startTime: number;
+  endTime: number;
+}
+
+export interface ExportRegion {
+  id: string;
+  url: string;
+  startTime: number;
+  sourceStartTime: number;
+  duration: number;
+}
+
+export interface ExportTrack {
+  id: string;
+  volume: number;
+  pan: number;
+  isMuted: boolean;
+  isSoloed: boolean;
+  regions: ExportRegion[];
+}
+
+export interface ExportRequest {
+  tracks: ExportTrack[];
+  masterVolume: number;
+  range: ExportRange;
+  sampleRate: number;
 }
 
 export interface IAudioEngine {
@@ -38,5 +61,5 @@ export interface IAudioEngine {
   removeRegion(trackId: string, regionId: string): void;
 
   // Export
-  exportProject(options?: ExportOptions): Promise<Blob>;
+  exportProject(request: ExportRequest): Promise<Blob>;
 }

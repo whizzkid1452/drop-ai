@@ -1,4 +1,4 @@
-import type { RegionState } from '@/layers/session/session';
+import type { ExportRange, ExportRegion } from '../i-audio-engine';
 
 /**
  * Region 렌더링 파라미터
@@ -14,14 +14,6 @@ export interface RegionRenderParams {
   startOffset: number;
   /** 재생 지속 시간 (초) */
   duration: number;
-}
-
-/**
- * Export 범위
- */
-export interface ExportRange {
-  startTime: number;
-  endTime: number;
 }
 
 /**
@@ -46,15 +38,12 @@ export class RegionRenderer {
    * @param region - 렌더링할 Region
    * @returns Tone.js Player에 전달할 파라미터
    */
-  static calculateRenderParams(region: RegionState): RegionRenderParams {
-    if (!region.audioFileUrl) {
-      throw new Error('Region audioFileUrl is required for rendering');
-    }
+  static calculateRenderParams(region: ExportRegion): RegionRenderParams {
     return {
-      url: region.audioFileUrl,
+      url: region.url,
       startTime: region.startTime,
       startOffset: region.sourceStartTime,
-      duration: region.endTime - region.startTime,
+      duration: region.duration,
     };
   }
 

@@ -135,13 +135,81 @@ describe('Controllers - Phase 3 검증', () => {
     });
 
     it('exportProject Blob 반환', async () => {
+      await controller.track.addTrack('test.mp3', 'track-1');
+      await controller.region.addRegion('track-1', {
+        id: 'region-1',
+        url: 'region.mp3',
+        startTime: 0,
+        sourceStartTime: 0,
+        duration: 10,
+      });
+      controller.export.setExportRange(2, 8);
+      const exportSpy = vi.spyOn(engine, 'exportProject');
+
       const blob = await controller.export.exportProject();
+
       expect(blob).toBeInstanceOf(Blob);
+      expect(exportSpy).toHaveBeenCalledWith(expect.objectContaining({ range: { startTime: 2, endTime: 8 } }));
     });
 
     it('exportRange Blob 반환', async () => {
-      const blob = await controller.export.exportRange(0, 10);
+      await controller.track.addTrack('test.mp3', 'track-1');
+      await controller.region.addRegion('track-1', {
+        id: 'region-1',
+        url: 'region.mp3',
+        startTime: 0,
+        sourceStartTime: 1,
+        duration: 10,
+      });
+      const exportSpy = vi.spyOn(engine, 'exportProject');
+
+      const blob = await controller.export.exportRange(2, 8);
+
       expect(blob).toBeInstanceOf(Blob);
+      expect(exportSpy).toHaveBeenCalledWith({
+        tracks: [
+          {
+            id: 'track-1',
+            volume: 1,
+            pan: 0,
+            isMuted: false,
+            isSoloed: false,
+            regions: [
+              {
+                id: 'region-1',
+                url: 'region.mp3',
+                startTime: 0,
+                sourceStartTime: 1,
+                duration: 10,
+              },
+            ],
+          },
+        ],
+        masterVolume: 1,
+        range: { startTime: 2, endTime: 8 },
+        sampleRate: 44100,
+      });
+    });
+
+    it('길이가 0인 Export 범위를 거부한다', async () => {
+      await controller.track.addTrack('test.mp3', 'track-1');
+      await controller.region.addRegion('track-1', {
+        id: 'region-1',
+        url: 'region.mp3',
+        startTime: 0,
+        sourceStartTime: 0,
+        duration: 10,
+      });
+
+      await expect(controller.export.exportRange(2, 2)).rejects.toMatchObject({
+        code: 'EXPORT_ZERO_DURATION',
+      });
+    });
+
+    it('Region이 없는 프로젝트 Export를 거부한다', async () => {
+      await expect(controller.export.exportProject()).rejects.toMatchObject({
+        code: 'EXPORT_NO_TRACKS',
+      });
     });
   });
 

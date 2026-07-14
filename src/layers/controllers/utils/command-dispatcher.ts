@@ -1,7 +1,6 @@
 import { AppController } from '../app-controller';
 import { type SessionState } from '../../session/session';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
-import { downloadBlob } from '@/layers/apps/web/components/Daw/components/ExportButton/utils/audioExport';
 
 /**
  * Get the first track ID from SessionState
@@ -47,11 +46,17 @@ const getFirstRegionUrl = (session: SessionState, trackId: string): string => {
   return url;
 };
 
-export async function executeAudioCommand(
-  controller: AppController,
-  session: SessionState,
-  command: AudioCommand
-): Promise<void> {
+interface ExecuteAudioCommandOptions {
+  controller: AppController;
+  session: SessionState;
+  command: AudioCommand;
+}
+
+export async function executeAudioCommand({
+  controller,
+  session,
+  command,
+}: ExecuteAudioCommandOptions): Promise<Blob | void> {
   console.log('[CommandDispatcher] Executing:', command);
 
   switch (command.type) {
@@ -130,12 +135,7 @@ export async function executeAudioCommand(
       break;
 
     case AudioCommandType.EXPORT_AUDIO: {
-      const blob = await controller.export.exportProject();
-      if (blob instanceof Blob) {
-        const filename = command.filename || 'export';
-        downloadBlob(blob, `${filename}.wav`);
-      }
-      break;
+      return controller.export.exportProject();
     }
 
     default:
