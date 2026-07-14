@@ -1,5 +1,6 @@
 import type { IAudioEngine, RegionData } from '../audio-engine/i-audio-engine';
 import { type SessionStore } from '../session/session';
+import { calculateSplitRegions } from './utils/split-region';
 
 export class RegionController {
   constructor(
@@ -65,27 +66,10 @@ export class RegionController {
       return;
     }
 
-    // 2. Calculate split logic (Logic moved from Region.ts)
-    const offsetFromStart = splitTime - regionToSplit.startTime;
+    const splitRegions = calculateSplitRegions({ region: regionToSplit, splitTime });
+    if (!splitRegions) return;
 
-    const leftRegion = {
-      ...regionToSplit,
-      id: crypto.randomUUID(),
-      duration: offsetFromStart,
-      endTime: regionToSplit.startTime + offsetFromStart,
-      status: [...regionToSplit.status], // shallow copy status
-      // sourceStartTime keeps same
-    };
-
-    const rightRegion = {
-      ...regionToSplit,
-      id: crypto.randomUUID(),
-      startTime: splitTime,
-      sourceStartTime: regionToSplit.sourceStartTime + offsetFromStart,
-      duration: regionToSplit.duration - offsetFromStart,
-      endTime: splitTime + (regionToSplit.duration - offsetFromStart),
-      status: [...regionToSplit.status],
-    };
+    const { left: leftRegion, right: rightRegion } = splitRegions;
 
     // Controller가 만든 ID를 Engine에도 전달해 Session 상태와 오디오 리소스 키를 일치시킨다.
     await this.audioEngine.removeRegion(trackId, regionToSplit.id);
