@@ -1,5 +1,6 @@
 import * as Tone from 'tone';
 import type { IAudioEngine, RegionData, ExportOptions } from './i-audio-engine';
+import { startPlayer } from './config/player-config';
 
 interface AudioEngineOptions {
   initialTempo: number;
@@ -114,7 +115,13 @@ export class AudioEngine implements IAudioEngine {
           console.log('[AudioEngine] Player loaded for region', regionData.id);
 
           // Tone.js Player 동기화
-          player.sync().start(regionData.startTime, regionData.sourceStartTime);
+          startPlayer({
+            player,
+            syncMode: true,
+            startTime: regionData.startTime,
+            startOffset: regionData.sourceStartTime,
+            duration: regionData.duration,
+          });
 
           resolve();
         },

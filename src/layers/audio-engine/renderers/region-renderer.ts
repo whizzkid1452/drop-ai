@@ -25,14 +25,6 @@ export interface ExportRange {
 }
 
 /**
- * Split된 두 Region
- */
-export interface SplitRegionResult {
-  left: RegionState;
-  right: RegionState;
-}
-
-/**
  * RegionRenderer
  *
  * 역할:
@@ -111,47 +103,6 @@ export class RegionRenderer {
       startTime: adjustedStartTime,
       startOffset,
       duration,
-    };
-  }
-
-  /**
-   * Region을 특정 시간에 두 개로 분할
-   *
-   * Split된 두 Region은 각각 올바른 sourceStartTime을 가지므로
-   * 재생 시 연속적으로 들립니다.
-   *
-   * @param region - 분할할 Region
-   * @param splitTime - 타임라인 상의 분할 시간 (초)
-   * @returns 분할된 두 Region (left, right) 또는 null (분할 불가능한 경우)
-   */
-  static calculateSplitRegion(region: RegionState, splitTime: number): SplitRegionResult | null {
-    // 1. 유효성 검사: 분할 시간이 Region 범위 내에 있어야 함 (양 끝점 제외)
-    if (splitTime <= region.startTime || splitTime >= region.endTime) {
-      return null;
-    }
-
-    const offsetAmount = splitTime - region.startTime;
-
-    // 2. 왼쪽 Region 생성
-    const leftRegion: RegionState = {
-      ...region,
-      id: crypto.randomUUID(),
-      endTime: splitTime,
-      duration: offsetAmount,
-    };
-
-    // 3. 오른쪽 Region 생성
-    const rightRegion: RegionState = {
-      ...region,
-      id: crypto.randomUUID(),
-      startTime: splitTime,
-      sourceStartTime: region.sourceStartTime + offsetAmount,
-      duration: region.duration - offsetAmount,
-    };
-
-    return {
-      left: leftRegion,
-      right: rightRegion,
     };
   }
 }
