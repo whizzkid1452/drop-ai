@@ -1,12 +1,5 @@
-import type { ExportProgress, ExportSettings } from '../types';
+const OBJECT_URL_REVOKE_DELAY_MS = 100;
 
-/**
- * Blob???�일�??�운로드?�는 ?�퍼 ?�수
- *
- * @param blob - ?�운로드??Blob
- * @param filename - ?�일�?(?�장???�함)
- * @throws {Error} ?�운로드 ?�패 ??
- */
 export function downloadBlob(blob: Blob, filename: string): void {
   try {
     const url = URL.createObjectURL(blob);
@@ -19,15 +12,10 @@ export function downloadBlob(blob: Blob, filename: string): void {
     anchor.click();
     document.body.removeChild(anchor);
 
-    // URL ?�리 (?�간??지?????�리?�여 ?�운로드가 ?�료?�도�???
-    setTimeout(() => {
-      URL.revokeObjectURL(url);
-    }, 100);
+    // 클릭 직후 URL을 해제하면 브라우저가 파일을 읽기 전에 다운로드가 취소될 수 있다.
+    setTimeout(() => URL.revokeObjectURL(url), OBJECT_URL_REVOKE_DELAY_MS);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     throw new Error(`Failed to download blob: ${errorMessage}`);
   }
 }
-
-// ?�???�export (기존 import 경로 ?��?)
-export type { ExportProgress, ExportSettings };

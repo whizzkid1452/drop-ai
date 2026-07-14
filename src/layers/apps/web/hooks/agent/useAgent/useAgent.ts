@@ -2,10 +2,11 @@ import { useState, useCallback, useMemo } from 'react';
 import type { Message, AgentStatus } from '@/types/agent';
 import { useWebLLM } from '@/layers/apps/web/hooks/agent/useWebLLM';
 import { useSession, useController, useSessionStore } from '@/layers/apps/web/context/LayerContext';
-import { executeAudioCommand } from '@/layers/controllers/utils/command-dispatcher';
+import { executeWebAudioCommand } from '@/layers/apps/web/utils/execute-web-audio-command';
 import { handleAIResponse } from '@/layers/apps/web/hooks/agent/useAgent/utils/aiResponseHandler';
 import { createUserMessage, createAssistantMessage } from '@/layers/apps/web/hooks/agent/useAgent/utils/messageHelpers';
 import { trackChatMessageSent } from '@/utils/analytics';
+import type { AudioCommand } from '@/types/audioCommand.schema';
 
 export function useAgent() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -31,10 +32,10 @@ export function useAgent() {
   );
 
   const execute = useCallback(
-    async (command: any) => {
+    async (command: AudioCommand) => {
       // Get current session state at the moment of execution
       const currentSession = sessionStore.getState();
-      await executeAudioCommand(controller, currentSession, command);
+      await executeWebAudioCommand({ controller, session: currentSession, command });
     },
     [controller, sessionStore]
   );

@@ -1,6 +1,9 @@
 import * as Tone from 'tone';
-import type { IAudioEngine, RegionData, ExportOptions } from './i-audio-engine';
+import type { ExportRequest, ExportTrack, IAudioEngine, RegionData } from './i-audio-engine';
 import { startPlayer } from './config/player-config';
+import { RegionRenderer, type RegionRenderParams } from './renderers/region-renderer';
+import { encodeAudioBufferToWav } from './encoders/wav-encoder';
+import { AudioEngineError, AudioEngineErrorCode, ERROR_MESSAGES } from './errors';
 
 interface AudioEngineOptions {
   initialTempo: number;
@@ -166,40 +169,64 @@ export class AudioEngine implements IAudioEngine {
 
   // ===== Export =====
 
-  async exportProject(options?: ExportOptions): Promise<Blob> {
-    console.log('[AudioEngine] exportProject called', options);
+  async exportProject(request: ExportRequest): Promise<Blob> {
+    const duration = request.range.endTime - request.range.startTime;
+    if (duration <= 0) {
+      throw new AudioEngineError(AudioEngineErrorCode.EXPORT_ZERO_DURATION, ERROR_MESSAGES.EXPORT_ZERO_DURATION);
+    }
+    if (request.tracks.length === 0) {
+      throw new AudioEngineError(AudioEngineErrorCode.EXPORT_NO_TRACKS, ERROR_MESSAGES.EXPORT_NO_TRACKS);
+    }
 
-    // TODO: 실제 export 구현
-    // 지금은 기본 WAV Blob 반환
-    const sampleRate = 44100;
-    const duration = 1; // 1초
-    const numChannels = 2;
-    const numSamples = sampleRate * duration;
-
-    const buffer = new ArrayBuffer(44 + numSamples * numChannels * 2);
-    const view = new DataView(buffer);
-
-    // WAV 헤더 작성 (간단한 예시)
-    const writeString = (offset: number, string: string) => {
-      for (let i = 0; i < string.length; i++) {
-        view.setUint8(offset + i, string.charCodeAt(i));
+    try {
+      const renderedBuffer = await Tone.Offline(
+        async () => this.scheduleExport(request),
+        duration,
+        2,
+        request.sampleRate
+      );
+      const audioBuffer = renderedBuffer.get();
+      if (!audioBuffer) {
+        throw new AudioEngineError(AudioEngineErrorCode.RENDER_FAILED, ERROR_MESSAGES.RENDER_FAILED);
       }
-    };
+      return encodeAudioBufferToWav(audioBuffer);
+    } catch (error) {
+      if (error instanceof AudioEngineError) {
+        throw error;
+      }
+      throw new AudioEngineError(AudioEngineErrorCode.EXPORT_FAILED, ERROR_MESSAGES.EXPORT_FAILED, {
+        cause: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 
-    writeString(0, 'RIFF');
-    view.setUint32(4, 36 + numSamples * numChannels * 2, true);
-    writeString(8, 'WAVE');
-    writeString(12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, numChannels, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * numChannels * 2, true);
-    view.setUint16(32, numChannels * 2, true);
-    view.setUint16(34, 16, true);
-    writeString(36, 'data');
-    view.setUint32(40, numSamples * numChannels * 2, true);
+  private async scheduleExport(request: ExportRequest): Promise<void> {
+    const scheduledPlayers: Array<{ player: Tone.Player; params: RegionRenderParams }> = [];
 
-    return new Blob([buffer], { type: 'audio/wav' });
+    for (const track of this.getAudibleTracks(request.tracks)) {
+      const channel = new Tone.Channel({
+        volume: Tone.gainToDb(track.volume * request.masterVolume),
+        pan: track.pan,
+      }).toDestination();
+
+      for (const region of track.regions) {
+        const params = RegionRenderer.adjustForExportRange(RegionRenderer.calculateRenderParams(region), request.range);
+        if (params.duration <= 0) continue;
+
+        scheduledPlayers.push({ player: new Tone.Player({ loop: false }).connect(channel), params });
+      }
+    }
+
+    await Promise.all(scheduledPlayers.map(({ player, params }) => player.load(params.url)));
+
+    // 모든 파일을 먼저 디코딩해야 OfflineAudioContext가 빈 버퍼를 렌더링하지 않는다.
+    scheduledPlayers.forEach(({ player, params }) => {
+      startPlayer({ player, syncMode: false, ...params });
+    });
+  }
+
+  private getAudibleTracks(tracks: ExportTrack[]): ExportTrack[] {
+    const hasSoloTrack = tracks.some(track => track.isSoloed);
+    return tracks.filter(track => !track.isMuted && (!hasSoloTrack || track.isSoloed));
   }
 }

@@ -1,4 +1,4 @@
-import type { IAudioEngine, RegionData, ExportOptions } from './i-audio-engine';
+import type { ExportRequest, IAudioEngine, RegionData } from './i-audio-engine';
 
 /**
  * Mock Audio Engine for testing and CLI environments.
@@ -6,7 +6,7 @@ import type { IAudioEngine, RegionData, ExportOptions } from './i-audio-engine';
  */
 export class MockAudioEngine implements IAudioEngine {
   private mockTime = 0;
-  private mockRegions: Map<string, Map<string, any>> = new Map();
+  private mockRegions: Map<string, Map<string, RegionData>> = new Map();
 
   // Transport Control
   async play(): Promise<void> {
@@ -72,8 +72,8 @@ export class MockAudioEngine implements IAudioEngine {
     this.mockRegions.get(trackId)?.delete(regionId);
   }
 
-  async exportProject(options?: ExportOptions): Promise<Blob> {
-    console.log(`[MockAudioEngine] Exporting project`, options);
+  async exportProject(request: ExportRequest): Promise<Blob> {
+    console.log(`[MockAudioEngine] Exporting project`, request);
     // Return empty WAV blob for testing
     return new Blob(['mock-audio-data'], { type: 'audio/wav' });
   }
