@@ -11,7 +11,7 @@ export class ExportController {
     console.log(`[ExportController] Setting export range: ${startTime} - ${endTime}`);
 
     this.audioEngine.setExportRange(startTime, endTime);
-    
+
     // Update Session State (via injected store, assuming it's available or need to change constructor)
     // Constructor has `_sessionStore`. I need to change it to `private sessionStore`.
     this.sessionStore.getState().setExportRange(startTime, endTime);
@@ -28,7 +28,7 @@ export class ExportController {
     console.log(`[ExportController] Exporting range: ${startTime} - ${endTime}`);
 
     const options: ExportOptions = {
-      range: { startTime, endTime }
+      range: { startTime, endTime },
     };
 
     const blob = await this.audioEngine.exportProject(options);

@@ -5,10 +5,7 @@ interface TrackVolumeControllerProps {
   volume: number;
 }
 
-export function TrackVolumeController({
-  onVolumeChange,
-  volume,
-}: TrackVolumeControllerProps) {
+export function TrackVolumeController({ onVolumeChange, volume }: TrackVolumeControllerProps) {
   const id = crypto.randomUUID();
   return (
     <div className={styles.controls}>

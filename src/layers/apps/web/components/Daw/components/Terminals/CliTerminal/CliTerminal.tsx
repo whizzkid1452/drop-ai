@@ -16,9 +16,9 @@ export function CliTerminal() {
   const [logs, setLogs] = useState<LogItem[]>([]);
   const controller = useController();
   const sessionStore = useSessionStore();
-  
+
   const execute = async (command: any) => {
-      await executeAudioCommand(controller, sessionStore.getState(), command);
+    await executeAudioCommand(controller, sessionStore.getState(), command);
   };
 
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -91,12 +91,9 @@ export function CliTerminal() {
         {logs.map(log => (
           <div
             key={log.id}
-            className={`${styles.logItem} ${log.type === 'error'
-              ? styles.logItemError
-              : log.type === 'success'
-                ? styles.logItemSuccess
-                : ''
-              }`}
+            className={`${styles.logItem} ${
+              log.type === 'error' ? styles.logItemError : log.type === 'success' ? styles.logItemSuccess : ''
+            }`}
           >
             {log.message}
           </div>

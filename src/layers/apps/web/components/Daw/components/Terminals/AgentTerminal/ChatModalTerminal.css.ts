@@ -7,8 +7,8 @@ export const abletonBorder = '#444444';
 export const backgroundDark = '#1a1a1a';
 
 const spin = keyframes({
-  'from': { transform: 'rotate(0deg)' },
-  'to': { transform: 'rotate(360deg)' },
+  from: { transform: 'rotate(0deg)' },
+  to: { transform: 'rotate(360deg)' },
 });
 
 const pulse = keyframes({

@@ -12,8 +12,7 @@ export const container = style({
   boxSizing: 'border-box',
   backgroundColor: '#1E1E1E', // ableton-bg-dark
   color: '#DCDCDC', // ableton-text-dark
-  fontFamily:
-    "'IBM Plex Mono', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  fontFamily: "'IBM Plex Mono', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
 });
 
 export const cardGroup = style({

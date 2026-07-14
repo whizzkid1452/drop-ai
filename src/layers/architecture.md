@@ -1,4 +1,5 @@
 # 규칙
+
 1. audio-engine은 controllers에서만 접근 가능하다
 2. session(Zustand Vanilla Store)은 controllers에서만 접근 가능하다
 3. apps는 controllers만 사용한다. 단, 최초 controllers 객체 생성시에만 session을 주입받는다.

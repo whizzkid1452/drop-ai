@@ -7,8 +7,7 @@ export const container = style({
   margin: 0,
   position: 'relative',
   display: 'flex',
-  fontFamily:
-    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   overflow: 'hidden',
 });
 
@@ -163,8 +162,7 @@ export const glowEffect = style({
   transform: 'translate(-50%, -50%)',
   width: '800px',
   height: '800px',
-  background:
-    'radial-gradient(circle, rgba(255, 255, 255, 0.02) 0%, transparent 70%)',
+  background: 'radial-gradient(circle, rgba(255, 255, 255, 0.02) 0%, transparent 70%)',
   borderRadius: '50%',
   pointerEvents: 'none',
   filter: 'blur(80px)',
@@ -177,8 +175,7 @@ export const waveAnimation = style({
   left: 0,
   width: '100%',
   height: '150px',
-  background:
-    'linear-gradient(to top, rgba(0, 0, 0, 0.3) 0%, transparent 100%)',
+  background: 'linear-gradient(to top, rgba(0, 0, 0, 0.3) 0%, transparent 100%)',
   pointerEvents: 'none',
   animation: `${wave} 4s ease-in-out infinite`,
   zIndex: 0,
@@ -209,8 +206,7 @@ export const primaryButton = style({
   color: '#ffffff',
   cursor: 'pointer',
   fontSize: '0.95rem',
-  transition:
-    'transform 0.1s ease, box-shadow 0.2s ease, border-color 0.2s ease',
+  transition: 'transform 0.1s ease, box-shadow 0.2s ease, border-color 0.2s ease',
   boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
   selectors: {
     '&:hover': {

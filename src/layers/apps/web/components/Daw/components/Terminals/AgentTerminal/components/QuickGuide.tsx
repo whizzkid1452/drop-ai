@@ -6,25 +6,16 @@ interface QuickGuideProps {
   onSuggestionClick: (command: string) => void;
 }
 
-export function QuickGuide({
-  isModelReady,
-  onSuggestionClick,
-}: QuickGuideProps) {
+export function QuickGuide({ isModelReady, onSuggestionClick }: QuickGuideProps) {
   return (
     <div className={styles.quickGuideBox}>
       <div className={styles.quickGuideHeader}>
-        <span
-          className="material-symbols-outlined"
-          style={{ fontSize: '14px', color: '#888' }}
-          aria-hidden
-        >
+        <span className="material-symbols-outlined" style={{ fontSize: '14px', color: '#888' }} aria-hidden>
           info
         </span>
         <h3 className={styles.quickGuideTitle}>Quick Guide</h3>
       </div>
-      <p className={styles.quickGuideDescription}>
-        Click a command below to fill the input, then press Enter to run.
-      </p>
+      <p className={styles.quickGuideDescription}>Click a command below to fill the input, then press Enter to run.</p>
       <div className={styles.quickGuideChips}>
         {QUICK_GUIDE_ITEMS.map(({ label, value }) => (
           <button

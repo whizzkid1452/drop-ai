@@ -15,10 +15,8 @@ export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProp
   const tracks = useSession(state => state.tracks);
   const trackArray = Array.from(tracks.values());
   const controller = useController();
-  
-  const [wavesurferInstances, setWavesurferInstances] = useState<
-    Map<string, WaveSurfer>
-  >(new Map());
+
+  const [wavesurferInstances, setWavesurferInstances] = useState<Map<string, WaveSurfer>>(new Map());
 
   const { showBoundary } = useErrorBoundary();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -32,10 +30,7 @@ export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProp
         e.preventDefault();
 
         const zoomFactor = 1.1;
-        const newPixelsPerSecond =
-          e.deltaY > 0
-            ? pixelsPerSecond / zoomFactor
-            : pixelsPerSecond * zoomFactor;
+        const newPixelsPerSecond = e.deltaY > 0 ? pixelsPerSecond / zoomFactor : pixelsPerSecond * zoomFactor;
 
         // Clamp
         const clamped = Math.max(1, Math.min(1000, newPixelsPerSecond));

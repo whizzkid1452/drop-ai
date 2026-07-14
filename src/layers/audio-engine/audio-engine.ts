@@ -4,7 +4,7 @@ import type { SessionStore } from '../session/session';
 
 /**
  * AudioEngine - Tone.js 기반 오디오 엔진 구현
- * 
+ *
  * 아키텍처 규칙:
  * - audio-engine만 Tone.js에 접근 가능
  * - SessionStore를 통해 상태 업데이트
@@ -14,7 +14,7 @@ export class AudioEngine implements IAudioEngine {
   // Tone.js Objects
   private channels: Map<string, Tone.Channel> = new Map();
   private players: Map<string, Map<string, Tone.Player>> = new Map();
-  
+
   constructor(private sessionStore: SessionStore) {
     // Tone.js Transport 초기화
     Tone.Transport.bpm.value = sessionStore.getState().tempo;
@@ -81,7 +81,7 @@ export class AudioEngine implements IAudioEngine {
     const channel = this.getOrInitChannel(trackId);
     const volumeInDb = Tone.gainToDb(volume);
     channel.volume.rampTo(volumeInDb, 0.1);
-    
+
     // SessionStore 업데이트
     this.sessionStore.getState().updateTrack(trackId, { volume });
   }
@@ -89,7 +89,7 @@ export class AudioEngine implements IAudioEngine {
   setTrackPan(trackId: string, pan: number): void {
     const channel = this.getOrInitChannel(trackId);
     channel.pan.rampTo(pan, 0.1);
-    
+
     // SessionStore 업데이트
     this.sessionStore.getState().updateTrack(trackId, { pan });
   }
@@ -97,10 +97,10 @@ export class AudioEngine implements IAudioEngine {
   getTrackParams(trackId: string): { volume: number; pan: number } | null {
     const channel = this.channels.get(trackId);
     if (!channel) return null;
-    
+
     return {
       volume: Tone.dbToGain(channel.volume.value),
-      pan: channel.pan.value
+      pan: channel.pan.value,
     };
   }
 
@@ -108,24 +108,24 @@ export class AudioEngine implements IAudioEngine {
 
   async addRegion(trackId: string, regionData: RegionData): Promise<void> {
     console.log('[AudioEngine] addRegion called', { trackId, regionData });
-    
+
     const channel = this.getOrInitChannel(trackId);
     const trackPlayers = this.players.get(trackId)!;
-    
+
     if (trackPlayers.has(regionData.id)) {
       console.log('[AudioEngine] Player already exists for region', regionData.id);
       return;
     }
-    
+
     return new Promise((resolve, reject) => {
       const player = new Tone.Player({
         url: regionData.url,
         loop: false,
         onload: () => {
           console.log('[AudioEngine] Player loaded for region', regionData.id);
-          
+
           const duration = regionData.duration ?? player.buffer.duration;
-          
+
           // SessionStore의 해당 track regions 배열 업데이트
           const track = this.sessionStore.getState().tracks.get(trackId);
           if (track) {
@@ -138,23 +138,23 @@ export class AudioEngine implements IAudioEngine {
               status: [], // RegionState 타입 호환
               audioFileUrl: regionData.url,
             };
-            
+
             this.sessionStore.getState().updateTrack(trackId, {
-              regions: [...track.regions, newRegion]
+              regions: [...track.regions, newRegion],
             });
           }
-          
+
           // Tone.js Player 동기화
           player.sync().start(regionData.startTime, regionData.sourceStartTime);
-          
+
           resolve();
         },
-        onerror: (e) => {
+        onerror: e => {
           console.error('[AudioEngine] Player load error', e);
           reject(e);
-        }
+        },
       }).connect(channel);
-      
+
       trackPlayers.set(regionData.id, player);
     });
   }
@@ -162,7 +162,7 @@ export class AudioEngine implements IAudioEngine {
   removeRegion(trackId: string, regionId: string): void {
     const trackPlayers = this.players.get(trackId);
     const player = trackPlayers?.get(regionId);
-    
+
     if (player) {
       player.unsync();
       player.stop();
@@ -170,7 +170,7 @@ export class AudioEngine implements IAudioEngine {
       player.dispose();
       trackPlayers?.delete(regionId);
     }
-    
+
     // SessionStore 업데이트
     const track = this.sessionStore.getState().tracks.get(trackId);
     if (track) {
@@ -182,20 +182,18 @@ export class AudioEngine implements IAudioEngine {
   async splitRegion(trackId: string, splitTime: number): Promise<void> {
     const track = this.sessionStore.getState().tracks.get(trackId);
     if (!track) return;
-    
+
     // splitTime에 해당하는 region 찾기
-    const region = track.regions.find(r =>
-      splitTime > r.startTime && splitTime < (r.startTime + r.duration)
-    );
-    
+    const region = track.regions.find(r => splitTime > r.startTime && splitTime < r.startTime + r.duration);
+
     if (!region) {
       console.warn(`[AudioEngine] No region found at ${splitTime} on track ${trackId}`);
       return;
     }
-    
+
     // 기존 region 제거
     this.removeRegion(trackId, region.id);
-    
+
     // 왼쪽 region
     const leftDuration = splitTime - region.startTime;
     await this.addRegion(trackId, {
@@ -205,7 +203,7 @@ export class AudioEngine implements IAudioEngine {
       sourceStartTime: region.sourceStartTime,
       duration: leftDuration,
     });
-    
+
     // 오른쪽 region
     const rightDuration = region.duration - leftDuration;
     await this.addRegion(trackId, {
@@ -225,24 +223,24 @@ export class AudioEngine implements IAudioEngine {
 
   async exportProject(options?: ExportOptions): Promise<Blob> {
     console.log('[AudioEngine] exportProject called', options);
-    
+
     // TODO: 실제 export 구현
     // 지금은 기본 WAV Blob 반환
     const sampleRate = 44100;
     const duration = 1; // 1초
     const numChannels = 2;
     const numSamples = sampleRate * duration;
-    
+
     const buffer = new ArrayBuffer(44 + numSamples * numChannels * 2);
     const view = new DataView(buffer);
-    
+
     // WAV 헤더 작성 (간단한 예시)
     const writeString = (offset: number, string: string) => {
       for (let i = 0; i < string.length; i++) {
         view.setUint8(offset + i, string.charCodeAt(i));
       }
     };
-    
+
     writeString(0, 'RIFF');
     view.setUint32(4, 36 + numSamples * numChannels * 2, true);
     writeString(8, 'WAVE');
@@ -256,7 +254,7 @@ export class AudioEngine implements IAudioEngine {
     view.setUint16(34, 16, true);
     writeString(36, 'data');
     view.setUint32(40, numSamples * numChannels * 2, true);
-    
+
     return new Blob([buffer], { type: 'audio/wav' });
   }
 

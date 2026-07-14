@@ -11,7 +11,7 @@ interface AudioFileDropProps {
 export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
   const addAudioFile = useSession(state => state.addAudioFile);
   const controller = useController();
-  
+
   const onFileDrop = useCallback(
     async (file: File) => {
       const audioFileData = await convertFileToAudioFile(file);
@@ -19,10 +19,10 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
         onAudioFileDrop?.(null);
         return null;
       }
-      
+
       // Update Session Store (Audio Files)
       addAudioFile(audioFileData.url, audioFileData.audioFile);
-      
+
       // We don't need getAudioFile because we just added it and have the data.
       const uploadedAudioFile = audioFileData.audioFile;
 
@@ -45,21 +45,21 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
       // addRegion logic in AudioEngine might be different.
       // Actually AudioService logic was complex.
       // I should probably add track first.
-      
+
       // However, current RegionController.addRegion does:
       // await this.audioEngine.addRegion(trackId, regionData);
       // And I don't see specific "create track" logic there.
       // So I should call addTrack first.
-      
+
       await controller.track.addTrack(uploadedAudioFile.url, trackId);
-      
+
       await controller.region.addRegion(trackId, {
         id: regionId,
         url: uploadedAudioFile.url,
         startTime: 0,
         sourceStartTime: 0,
         duration: duration,
-        audioFile: { url: uploadedAudioFile.url, duration }
+        audioFile: { url: uploadedAudioFile.url, duration },
       });
 
       // Simple callback

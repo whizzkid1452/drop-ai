@@ -12,9 +12,7 @@ import { CommandComposer } from './components/CommandComposer';
 export function AgentTerminal() {
   const [input, setInput] = useState('');
   const isModelReady = useSession(state => state.isModelReady);
-  const modelLoadingProgress = useSession(
-    state => state.modelLoadingProgress
-  );
+  const modelLoadingProgress = useSession(state => state.modelLoadingProgress);
   const modelLoadingText = useSession(state => state.modelLoadingText);
 
   const { sendMessage, messages, status } = useAgent();
@@ -54,19 +52,11 @@ export function AgentTerminal() {
     <div className={styles.container}>
       <AgentTerminalHeader onReset={handleReset} onPurgeCache={purgeCache} />
 
-      {!isModelReady && (
-        <ModelLoadingOverlay
-          progress={modelLoadingProgress}
-          loadingText={modelLoadingText}
-        />
-      )}
+      {!isModelReady && <ModelLoadingOverlay progress={modelLoadingProgress} loadingText={modelLoadingText} />}
 
       <div className={styles.terminalBody} ref={scrollRef}>
         <div className={styles.gridBackground} />
-        <QuickGuide
-          isModelReady={isModelReady}
-          onSuggestionClick={handleSuggestionClick}
-        />
+        <QuickGuide isModelReady={isModelReady} onSuggestionClick={handleSuggestionClick} />
         <MessageList messages={messages} isGenerating={isGenerating} />
       </div>
 

@@ -74,26 +74,42 @@ describe('Controllers - Phase 3 검증', () => {
           url: 'region.mp3',
           startTime: 0,
           sourceStartTime: 0,
-          duration: 10
+          duration: 10,
         })
       ).resolves.toBeUndefined();
     });
 
     it('removeRegion 호출 가능', async () => {
-      await controller.region.addRegion('track-1', { id: 'region-1', url: 'region.mp3', startTime: 0, sourceStartTime: 0, duration: 10 });
+      await controller.region.addRegion('track-1', {
+        id: 'region-1',
+        url: 'region.mp3',
+        startTime: 0,
+        sourceStartTime: 0,
+        duration: 10,
+      });
       expect(() => controller.region.removeRegion('track-1', 'region-1')).not.toThrow();
     });
 
     it('splitRegion 호출 가능', async () => {
-      await controller.region.addRegion('track-1', { id: 'region-1', url: 'region.mp3', startTime: 0, sourceStartTime: 0, duration: 10 });
-      await expect(
-        controller.region.splitRegion('track-1', 2.5)
-      ).resolves.toBeUndefined();
+      await controller.region.addRegion('track-1', {
+        id: 'region-1',
+        url: 'region.mp3',
+        startTime: 0,
+        sourceStartTime: 0,
+        duration: 10,
+      });
+      await expect(controller.region.splitRegion('track-1', 2.5)).resolves.toBeUndefined();
     });
 
     it('moveRegion 호출 가능', async () => {
-      await controller.region.addRegion('track-1', { id: 'region-1', url: 'region.mp3', startTime: 0, sourceStartTime: 0, duration: 10 });
-      
+      await controller.region.addRegion('track-1', {
+        id: 'region-1',
+        url: 'region.mp3',
+        startTime: 0,
+        sourceStartTime: 0,
+        duration: 10,
+      });
+
       // moveRegion은 SessionStore만 업데이트
       expect(() => controller.region.moveRegion('track-1', 'region-1', 5.0)).not.toThrow();
     });
@@ -154,7 +170,7 @@ describe('Controllers - Phase 3 검증', () => {
       // Play
       await controller.playback.handlePlay();
       // MockAudioEngine이 호출되었는지 확인 (console.log로)
-      
+
       // Seek
       controller.playback.handleSeek(10);
       expect(controller.playback.getCurrentTime()).toBe(10);

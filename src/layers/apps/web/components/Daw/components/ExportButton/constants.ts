@@ -1,7 +1,7 @@
 /** 기본 비트 깊이 */
 export const DEFAULT_BIT_DEPTH: 16 | 24 | 32 | 'float' = 16;
 
-/** WAV ?�일 ?�맷 ?�수 */
+/** WAV ?�일 ?�맷 ?�수 */
 export const WAV_CONSTANTS = {
   RIFF_HEADER_SIZE: 8,
   PCM_FMT_CHUNK_SIZE: 16,
@@ -14,14 +14,14 @@ export const WAV_CONSTANTS = {
   FLOAT_BYTES_PER_SAMPLE: 4,
 } as const;
 
-/** PCM 비트 깊이�?최�?�?*/
+/** PCM 비트 깊이�?최�?�?*/
 export const PCM_MAX_VALUES = {
   16: 32767,
   24: 8388607,
   32: 2147483647,
 } as const;
 
-/** 비트 깊이�?바이????*/
+/** 비트 깊이�?바이????*/
 export const BYTES_PER_SAMPLE: Record<16 | 24 | 32 | 'float', number> = {
   16: 2,
   24: 3,
@@ -29,6 +29,6 @@ export const BYTES_PER_SAMPLE: Record<16 | 24 | 32 | 'float', number> = {
   float: 4,
 };
 
-/** ?�디???�플 범위 ?�한 */
+/** ?�디???�플 범위 ?�한 */
 export const AUDIO_SAMPLE_MIN = -1;
 export const AUDIO_SAMPLE_MAX = 1;

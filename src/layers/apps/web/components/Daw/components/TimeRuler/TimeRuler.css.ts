@@ -67,12 +67,12 @@ export const exportRangeOverlay = style({
 });
 
 export const exportRangeLabel = style({
-    position: 'absolute',
-    top: 0,
-    left: '50%',
-    transform: 'translateX(-50%)',
-    fontSize: '10px',
-    color: '#0096ff',
-    whiteSpace: 'nowrap',
-    pointerEvents: 'none',
+  position: 'absolute',
+  top: 0,
+  left: '50%',
+  transform: 'translateX(-50%)',
+  fontSize: '10px',
+  color: '#0096ff',
+  whiteSpace: 'nowrap',
+  pointerEvents: 'none',
 });

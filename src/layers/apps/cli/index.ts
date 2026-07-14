@@ -22,7 +22,7 @@ export const createCliCommands = (
       fn: async () => {
         await controller.playback.handlePlay();
         return 'Playback started...';
-      }
+      },
     },
     stop: {
       description: 'Stop audio playback',
@@ -30,7 +30,7 @@ export const createCliCommands = (
       fn: () => {
         controller.playback.handleStop();
         return 'Playback stopped.';
-      }
+      },
     },
     pause: {
       description: 'Pause audio playback',
@@ -38,7 +38,7 @@ export const createCliCommands = (
       fn: () => {
         controller.playback.handlePause();
         return 'Playback paused.';
-      }
+      },
     },
     seek: {
       description: 'Seek to specific time',
@@ -49,7 +49,7 @@ export const createCliCommands = (
         if (isNaN(timeNum)) return 'Error: Invalid time value.';
         controller.playback.handleSeek(timeNum);
         return `Seeked to ${timeNum}s`;
-      }
+      },
     },
     tempo: {
       description: 'Set tempo (BPM)',
@@ -60,7 +60,7 @@ export const createCliCommands = (
         if (isNaN(bpmNum) || bpmNum <= 0) return 'Error: Invalid BPM value.';
         controller.playback.handleSetTempo(bpmNum);
         return `Tempo set to ${bpmNum} BPM`;
-      }
+      },
     },
 
     // ===== Track Management =====
@@ -78,7 +78,7 @@ export const createCliCommands = (
           return 'Track ' + id + ' removed.';
         }
         return 'Usage: track add <id> OR track remove <id>';
-      }
+      },
     },
     volume: {
       description: 'Set track volume',
@@ -89,7 +89,7 @@ export const createCliCommands = (
         if (isNaN(vol) || vol < 0 || vol > 1) return 'Error: Volume must be between 0.0 and 1.0';
         controller.track.setVolume(trackId, vol);
         return `Volume for ${trackId} set to ${vol}`;
-      }
+      },
     },
     pan: {
       description: 'Set track pan',
@@ -100,7 +100,7 @@ export const createCliCommands = (
         if (isNaN(panVal) || panVal < -1 || panVal > 1) return 'Error: Pan must be between -1.0 and 1.0';
         controller.track.setPan(trackId, panVal);
         return `Pan for ${trackId} set to ${panVal}`;
-      }
+      },
     },
     mute: {
       description: 'Mute a track',
@@ -109,7 +109,7 @@ export const createCliCommands = (
         if (!trackId) return 'Error: Track ID required.';
         controller.track.setMute(trackId, true);
         return `Track ${trackId} muted`;
-      }
+      },
     },
     unmute: {
       description: 'Unmute a track',
@@ -118,7 +118,7 @@ export const createCliCommands = (
         if (!trackId) return 'Error: Track ID required.';
         controller.track.setMute(trackId, false);
         return `Track ${trackId} unmuted`;
-      }
+      },
     },
     solo: {
       description: 'Solo a track',
@@ -127,7 +127,7 @@ export const createCliCommands = (
         if (!trackId) return 'Error: Track ID required.';
         controller.track.setSolo(trackId, true);
         return `Track ${trackId} soloed`;
-      }
+      },
     },
     unsolo: {
       description: 'Unsolo a track',
@@ -136,7 +136,7 @@ export const createCliCommands = (
         if (!trackId) return 'Error: Track ID required.';
         controller.track.setSolo(trackId, false);
         return `Track ${trackId} unsoloed`;
-      }
+      },
     },
 
     // ===== Region Management =====
@@ -156,7 +156,7 @@ export const createCliCommands = (
           return `Region ${arg} removed from track ${trackId}`;
         }
         return 'Usage: region split <trackId> <time> OR region remove <trackId> <regionId>';
-      }
+      },
     },
 
     // ===== Export =====
@@ -176,7 +176,7 @@ export const createCliCommands = (
           return `Project exported (${startTime}s - ${endTime}s)`;
         }
         return 'Usage: export all OR export range <start> <end>';
-      }
+      },
     },
 
     // ===== Info Commands =====
@@ -186,7 +186,7 @@ export const createCliCommands = (
       fn: () => {
         const statusText = state.isPlaying ? 'Playing' : 'Stopped';
         return `Status: ${statusText}\nTracks: ${state.trackCount}\nTime: ${state.currentTime.toFixed(2)}s\nTempo: ${state.tempo} BPM`;
-      }
+      },
     },
     list: {
       description: 'List all tracks',
@@ -194,7 +194,7 @@ export const createCliCommands = (
       fn: () => {
         // tracks 정보를 가져오려면 session state를 직접 접근해야 할 수도 있음
         return 'Track list (use status for count)';
-      }
+      },
     },
     help: {
       description: 'Show available commands',
@@ -204,8 +204,8 @@ export const createCliCommands = (
           .map(([name, cmd]) => `  ${name.padEnd(12)} - ${cmd.description}`)
           .join('\n');
         return 'Available commands:\n' + list + '\n\nType "<command> --help" for usage details.';
-      }
-    }
+      },
+    },
   };
   return commands;
 };
@@ -216,11 +216,11 @@ export const useCliApp = () => {
   const trackCount = useSession(state => state.tracks.size);
   const currentTime = useSession(state => state.currentTime);
   const tempo = useSession(state => state.tempo);
-  
+
   const commands = useMemo(
     () => createCliCommands(controller, { isPlaying, trackCount, currentTime, tempo }),
     [controller, isPlaying, trackCount, currentTime, tempo]
   );
-  
+
   return { isPlaying, trackCount, currentTime, tempo, commands };
 };

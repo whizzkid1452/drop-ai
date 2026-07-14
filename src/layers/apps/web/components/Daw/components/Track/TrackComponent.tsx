@@ -7,7 +7,7 @@ import { TrackPanController } from './components/TrackPanController';
 import { TrackVolumeController } from './components/TrackVolumeController';
 import { RegionComponent } from './RegionComponent';
 
-export const TrackComponent = memo(({
+export const TrackComponent = memo(function TrackComponent({
   mediaElement,
   track,
   pixelsPerSecond,
@@ -21,7 +21,7 @@ export const TrackComponent = memo(({
   onReady: (trackId: string, ws: WaveSurfer) => void;
   onVolumeChange: (trackId: string, volume: number) => void;
   onPanChange: (trackId: string, pan: number) => void;
-}) => {
+}) {
   const { splitRegion } = useTrackActions();
   const currentTime = useSession(state => state.currentTime);
 
@@ -33,7 +33,7 @@ export const TrackComponent = memo(({
             key={region.id}
             region={region}
             pixelsPerSecond={pixelsPerSecond}
-            onReady={(ws) => onReady(track.id, ws)}
+            onReady={ws => onReady(track.id, ws)}
           />
         ))}
       </div>
@@ -41,11 +41,8 @@ export const TrackComponent = memo(({
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '8px' }}>
         {mediaElement ? (
           <>
-            <TrackVolumeController
-              volume={track.volume ?? 1}
-              onVolumeChange={(val) => onVolumeChange(track.id, val)}
-            />
-            <TrackPanController pan={track.pan ?? 0} onPanChange={(val) => onPanChange(track.id, val)} />
+            <TrackVolumeController volume={track.volume ?? 1} onVolumeChange={val => onVolumeChange(track.id, val)} />
+            <TrackPanController pan={track.pan ?? 0} onPanChange={val => onPanChange(track.id, val)} />
             <button
               onClick={() => {
                 splitRegion(track.id, currentTime);
@@ -68,6 +65,3 @@ export const TrackComponent = memo(({
     </>
   );
 });
-
-
-
