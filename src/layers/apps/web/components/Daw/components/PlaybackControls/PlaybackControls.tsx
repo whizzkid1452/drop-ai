@@ -3,11 +3,20 @@ import * as styles from './PlaybackControls.css.ts';
 import { AudioEngineError, getUserFriendlyMessage } from '@/layers/audio-engine/errors';
 import { useController, useSession } from '@/layers/apps/web/context/LayerContext';
 
-function PlaybackErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
+type PlaybackControlsLayout = 'floating' | 'inline';
+
+interface PlaybackErrorFallbackProps extends FallbackProps {
+  layout: PlaybackControlsLayout;
+}
+
+function PlaybackErrorFallback({ error, resetErrorBoundary, layout }: PlaybackErrorFallbackProps) {
   const message = error instanceof AudioEngineError ? getUserFriendlyMessage(error) : 'Playback Error';
 
   return (
-    <div className={styles.container} style={{ borderColor: '#ff4444' }}>
+    <div
+      className={`${styles.container} ${layout === 'inline' ? styles.inlineContainer : ''}`}
+      style={{ borderColor: '#ff4444' }}
+    >
       <button className={styles.button} onClick={resetErrorBoundary} title="Retry">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="#ff4444">
           <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z" />
@@ -18,7 +27,11 @@ function PlaybackErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   );
 }
 
-function PlaybackControlsContent() {
+interface PlaybackControlsContentProps {
+  layout: PlaybackControlsLayout;
+}
+
+function PlaybackControlsContent({ layout }: PlaybackControlsContentProps) {
   const controller = useController();
   const isPlaying = useSession(state => state.isPlaying);
   const { showBoundary } = useErrorBoundary();
@@ -48,7 +61,7 @@ function PlaybackControlsContent() {
   };
 
   return (
-    <div className={styles.container}>
+    <div className={`${styles.container} ${layout === 'inline' ? styles.inlineContainer : ''}`}>
       <button className={styles.button} onClick={handleStop} title="Stop">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
           <rect x="4" y="4" width="16" height="16" rx="2" />
@@ -72,10 +85,14 @@ function PlaybackControlsContent() {
   );
 }
 
-export function PlaybackControls() {
+interface PlaybackControlsProps {
+  layout?: PlaybackControlsLayout;
+}
+
+export function PlaybackControls({ layout = 'floating' }: PlaybackControlsProps) {
   return (
-    <ErrorBoundary FallbackComponent={PlaybackErrorFallback}>
-      <PlaybackControlsContent />
+    <ErrorBoundary fallbackRender={fallbackProps => <PlaybackErrorFallback {...fallbackProps} layout={layout} />}>
+      <PlaybackControlsContent layout={layout} />
     </ErrorBoundary>
   );
 }

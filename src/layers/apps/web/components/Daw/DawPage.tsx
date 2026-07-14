@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { AudioFileDrop } from '../common/FileDrop/AudioFileDrop';
 import { DawHeader } from './components/DawHeader/DawHeader';
 import { TrackList } from './components/TrackList/TrackList';
 import { Terminal } from './components/Terminals/Terminal';
@@ -15,7 +14,6 @@ const CHAT_PANEL_DEFAULT_WIDTH = 350;
 
 export function DawPage() {
   const trackCount = useSession(state => state.tracks.size);
-  const hasTracks = trackCount > 0;
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
   const [chatPanelWidth, setChatPanelWidth] = useState(CHAT_PANEL_DEFAULT_WIDTH);
@@ -91,29 +89,10 @@ export function DawPage() {
         <div className={styles.glowEffect} />
         <div className={styles.waveAnimation} />
 
-        {hasTracks ? (
-          <>
-            <DawHeader trackCount={trackCount} />
-            <TimeRuler pixelsPerSecond={pixelsPerSecond} />
-            <TrackList pixelsPerSecond={pixelsPerSecond} setPixelsPerSecond={setPixelsPerSecond} />
-            <PlaybackControls />
-            <AudioFileDrop
-              onAudioFileDrop={() => {
-                // @todo: 추가시 트랙에 자동 추가 기능 추가 예정
-              }}
-            />
-          </>
-        ) : (
-          <div className={styles.modalOverlay}>
-            <div>
-              <AudioFileDrop
-                onAudioFileDrop={() => {
-                  // @todo: 추가시 트랙에 자동 추가 기능 추가 예정
-                }}
-              />
-            </div>
-          </div>
-        )}
+        <DawHeader trackCount={trackCount} />
+        <TimeRuler pixelsPerSecond={pixelsPerSecond} />
+        <TrackList pixelsPerSecond={pixelsPerSecond} setPixelsPerSecond={setPixelsPerSecond} />
+        <PlaybackControls />
       </div>
       <div
         className={`${styles.cliPanel} ${!isTerminalOpen ? styles.cliPanelCollapsed : ''} ${isResizing ? styles.cliPanelResizing : ''}`}
