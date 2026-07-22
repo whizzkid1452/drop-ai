@@ -3,10 +3,12 @@ import { useStore } from 'zustand';
 import type { AppInstance } from '../../create-app';
 import { AppController } from '../../../controllers/app-controller';
 import { type SessionStore, type SessionState } from '../../../session/session';
+import type { CommandExecutor } from '../../../commands/command-executor';
 
 interface LayerContextValue {
   session: SessionStore;
   controller: AppController;
+  commandExecutor: CommandExecutor;
 }
 
 const LayerContext = createContext<LayerContextValue | null>(null);
@@ -36,6 +38,13 @@ function useLayer() {
  */
 export function useController(): AppController {
   return useLayer().controller;
+}
+
+/**
+ * UI와 Agent가 같은 명령 실행 경로를 사용하도록 조립된 실행기를 반환한다.
+ */
+export function useCommandExecutor(): CommandExecutor {
+  return useLayer().commandExecutor;
 }
 
 /**

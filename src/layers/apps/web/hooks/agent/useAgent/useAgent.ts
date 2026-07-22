@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import type { Message } from '@/types/agent';
 import { useWebLLM } from '@/layers/apps/web/hooks/agent/useWebLLM';
-import { useSession, useController, useSessionStore } from '@/layers/apps/web/context/LayerContext';
+import { useCommandExecutor, useSession } from '@/layers/apps/web/context/LayerContext';
 import { executeWebAudioCommand } from '@/layers/apps/web/utils/execute-web-audio-command';
 import { handleAIResponse } from '@/layers/apps/web/hooks/agent/useAgent/utils/aiResponseHandler';
 import { createUserMessage, createAssistantMessage } from '@/layers/apps/web/hooks/agent/useAgent/utils/messageHelpers';
@@ -19,8 +19,7 @@ export function useAgent() {
   const setAgentStatus = useSession(state => state.setAgentStatus);
   const setAgentRunStatus = useSession(state => state.setAgentRunStatus);
   const markAgentResultSuccessful = useSession(state => state.markAgentResultSuccessful);
-  const sessionStore = useSessionStore();
-  const controller = useController();
+  const commandExecutor = useCommandExecutor();
 
   const tracks = useMemo(
     () =>
@@ -38,11 +37,9 @@ export function useAgent() {
 
   const execute = useCallback(
     async (command: AudioCommand) => {
-      // Get current session state at the moment of execution
-      const currentSession = sessionStore.getState();
-      await executeWebAudioCommand({ controller, session: currentSession, command });
+      await executeWebAudioCommand({ commandExecutor, command });
     },
-    [controller, sessionStore]
+    [commandExecutor]
   );
 
   const addMessage = useCallback(

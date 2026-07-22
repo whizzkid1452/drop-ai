@@ -1,6 +1,6 @@
 import { useState, useRef, type KeyboardEvent, useEffect } from 'react';
 import * as styles from './CliTerminal.css.ts';
-import { useController, useSessionStore } from '@/layers/apps/web/context/LayerContext';
+import { useCommandExecutor } from '@/layers/apps/web/context/LayerContext';
 import { executeWebAudioCommand } from '@/layers/apps/web/utils/execute-web-audio-command';
 import { parseAudioCommandString, type AudioCommand } from '@/types/audioCommand.schema';
 
@@ -14,11 +14,10 @@ interface LogItem {
 export function CliTerminal() {
   const [input, setInput] = useState('');
   const [logs, setLogs] = useState<LogItem[]>([]);
-  const controller = useController();
-  const sessionStore = useSessionStore();
+  const commandExecutor = useCommandExecutor();
 
   const execute = async (command: AudioCommand) => {
-    await executeWebAudioCommand({ controller, session: sessionStore.getState(), command });
+    await executeWebAudioCommand({ commandExecutor, command });
   };
 
   const logEndRef = useRef<HTMLDivElement>(null);
