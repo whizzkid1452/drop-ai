@@ -488,6 +488,21 @@ describe('CommandExecutor', () => {
     expect(session.getState().exportEndTime).toBe(4);
   });
 
+  it('SET_EXPORT_RANGE 명령은 끝이 시작보다 이르면 Session을 변경하지 않는다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    session.getState().setExportRange(1, 4);
+
+    await expect(
+      commandExecutor.execute({
+        type: AudioCommandType.SET_EXPORT_RANGE,
+        startTime: 8,
+        endTime: 2,
+      })
+    ).rejects.toThrow('End time must be greater than or equal to start time');
+
+    expect(session.getState()).toMatchObject({ exportStartTime: 1, exportEndTime: 4 });
+  });
+
   it('CLEAR_EXPORT_RANGE 명령으로 내보내기 범위를 해제한다', async () => {
     const { commandExecutor, session } = createTestContext();
     session.getState().setExportRange(1, 4);

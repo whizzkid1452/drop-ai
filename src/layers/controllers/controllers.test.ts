@@ -1218,6 +1218,27 @@ describe('Controllers - Phase 3 검증', () => {
       expect(() => controller.export.setExportRange(null, null)).not.toThrow();
     });
 
+    it('setExportRange는 길이 0인 드래그 시작 범위를 허용한다', () => {
+      expect(() => controller.export.setExportRange(2, 2)).not.toThrow();
+      expect(session.getState()).toMatchObject({ exportStartTime: 2, exportEndTime: 2 });
+    });
+
+    it.each([
+      [8, 2],
+      [-1, 2],
+      [0, Number.POSITIVE_INFINITY],
+      [null, 2],
+      [2, null],
+    ] as Array<[number | null, number | null]>)(
+      'setExportRange는 저장할 수 없는 범위(%s, %s)를 거부한다',
+      (startTime, endTime) => {
+        controller.export.setExportRange(1, 4);
+
+        expectProjectStateError(() => controller.export.setExportRange(startTime, endTime), 'INVALID_EXPORT_RANGE');
+        expect(session.getState()).toMatchObject({ exportStartTime: 1, exportEndTime: 4 });
+      }
+    );
+
     it('exportProject Blob 반환', async () => {
       await controller.track.addTrack('track-1');
       stageSource(audioSourceRegistry);

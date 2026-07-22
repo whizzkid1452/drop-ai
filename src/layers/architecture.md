@@ -7,6 +7,9 @@
 5. Apps는 Session을 구독해 화면을 갱신한다.
 6. Tone.js와 Web Audio API는 AudioEngine에서만 접근한다.
 
+`SET_EXPORT_RANGE`는 `0 <= startTime <= endTime`만 허용하며, `ExportController`도 Session 변경 전에 같은 조건을
+검증한다. 실제 오디오 내보내기는 별도로 `startTime < endTime`을 요구한다.
+
 재생 중 현재 시각처럼 Session 구독만으로 갱신되지 않는 값은 읽기 전용 Query로 조회한다. Apps에는 Controller나
 AudioEngine 객체를 노출하지 않는다. 현재 `PlaybackClockQuery`는 `PlaybackController.getCurrentTime()`만 노출한다.
 

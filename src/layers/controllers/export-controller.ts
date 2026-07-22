@@ -16,6 +16,11 @@ interface ExportControllerDependencies {
   audioSourceResolver: IAudioSourceResolver;
 }
 
+interface StoredExportRange {
+  readonly startTime: number | null;
+  readonly endTime: number | null;
+}
+
 export class ExportController {
   private readonly sessionStore: SessionStore;
   private readonly audioEngine: IAudioEngine;
@@ -29,6 +34,14 @@ export class ExportController {
 
   setExportRange(startTime: number | null, endTime: number | null): void {
     console.log(`[ExportController] Setting export range: ${startTime} - ${endTime}`);
+
+    if (!this.isValidStoredExportRange({ startTime, endTime })) {
+      throw new ProjectStateError(
+        ProjectStateErrorCode.INVALID_EXPORT_RANGE,
+        'Export 범위는 함께 비우거나 0 <= 시작 <= 끝 조건을 만족해야 합니다.',
+        { startTime, endTime }
+      );
+    }
 
     this.sessionStore.getState().setExportRange(startTime, endTime);
   }
@@ -72,6 +85,14 @@ export class ExportController {
       range,
       sampleRate: DEFAULT_EXPORT_SAMPLE_RATE,
     };
+  }
+
+  private isValidStoredExportRange({ startTime, endTime }: StoredExportRange): boolean {
+    if (startTime === null || endTime === null) {
+      return startTime === null && endTime === null;
+    }
+
+    return Number.isFinite(startTime) && Number.isFinite(endTime) && startTime >= 0 && endTime >= startTime;
   }
 
   private getProjectEndTime(): number {

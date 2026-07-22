@@ -248,10 +248,13 @@ describe('내부 CLI 명령 변환', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it('끝이 시작보다 작거나 같은 export range를 거부한다', async () => {
+  it.each([
+    ['8', '2'],
+    ['2', '2'],
+  ])('끝이 시작보다 작거나 같은 export range(%s, %s)를 거부한다', async (startTime, endTime) => {
     const commands = createCliCommands(commandExecutor, defaultState);
 
-    const result = await commands.export.fn('range', '8', '2');
+    const result = await commands.export.fn('range', startTime, endTime);
 
     expect(result).toBe('Error: Export range must satisfy 0 <= start < end.');
     expect(executeMany).not.toHaveBeenCalled();

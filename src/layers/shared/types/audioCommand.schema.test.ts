@@ -261,6 +261,22 @@ describe('AudioCommandSchema 프로젝트 변경 명령', () => {
   });
 });
 
+describe('SET_EXPORT_RANGE 계약', () => {
+  it('드래그 시작 상태인 길이 0 범위를 허용한다', () => {
+    const command = { type: AudioCommandType.SET_EXPORT_RANGE, startTime: 2, endTime: 2 };
+
+    expect(AudioCommandSchema.safeParse(command).success).toBe(true);
+    expect(StrictAudioCommandSchema.safeParse(command).success).toBe(true);
+  });
+
+  it('끝이 시작보다 이른 범위를 일반·Agent Schema에서 거부한다', () => {
+    const command = { type: AudioCommandType.SET_EXPORT_RANGE, startTime: 8, endTime: 2 };
+
+    expect(AudioCommandSchema.safeParse(command).success).toBe(false);
+    expect(StrictAudioCommandSchema.safeParse(command).success).toBe(false);
+  });
+});
+
 describe('Agent AudioCommand 묶음 파싱', () => {
   it('유효한 JSON 배열의 명령 순서를 보존한다', () => {
     const result = parseAgentAudioCommandBatch({

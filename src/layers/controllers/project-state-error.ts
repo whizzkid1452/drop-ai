@@ -9,6 +9,7 @@ export const ProjectStateErrorCode = {
   REGION_SOURCE_MISSING: 'REGION_SOURCE_MISSING',
   REGION_SOURCE_RANGE_EXCEEDED: 'REGION_SOURCE_RANGE_EXCEEDED',
   REGION_DURATION_REQUIRED: 'REGION_DURATION_REQUIRED',
+  INVALID_EXPORT_RANGE: 'INVALID_EXPORT_RANGE',
 } as const;
 
 export type ProjectStateErrorCode = (typeof ProjectStateErrorCode)[keyof typeof ProjectStateErrorCode];

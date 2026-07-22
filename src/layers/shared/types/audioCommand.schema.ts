@@ -26,6 +26,17 @@ function isAudioCommandType(value: unknown): value is AudioCommandType {
   return typeof value === 'string' && Object.values(AudioCommandType).some(commandType => commandType === value);
 }
 
+const SetExportRangeCommandSchema = z
+  .strictObject({
+    type: z.literal(AudioCommandType.SET_EXPORT_RANGE),
+    startTime: z.number().min(0, 'Start time must be >= 0'),
+    endTime: z.number().min(0, 'End time must be >= 0'),
+  })
+  .refine(command => command.endTime >= command.startTime, {
+    message: 'End time must be greater than or equal to start time',
+    path: ['endTime'],
+  });
+
 /**
  * Zod Schema for AI-generated Audio Commands
  *
@@ -109,11 +120,7 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
     type: z.literal(AudioCommandType.SET_CURRENT_TIME),
     time: z.number().min(0, 'Time must be >= 0'),
   }),
-  z.strictObject({
-    type: z.literal(AudioCommandType.SET_EXPORT_RANGE),
-    startTime: z.number().min(0, 'Start time must be >= 0'),
-    endTime: z.number().min(0, 'End time must be >= 0'),
-  }),
+  SetExportRangeCommandSchema,
   z.strictObject({
     type: z.literal(AudioCommandType.CLEAR_EXPORT_RANGE),
   }),

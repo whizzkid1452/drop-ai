@@ -294,6 +294,10 @@ v1뿐이다. v0은 유효하지 않은 버전으로, v2 이상은 `UNSUPPORTED_S
 v1은 이 상태를 손실 없이 저장하기 위해 길이 0과 `startTimeSeconds === endTimeSeconds`를 허용한다. 실제 재생·Export
 가능 여부는 해당 Command와 Controller가 별도로 검증한다.
 
+`SET_EXPORT_RANGE`는 `0 <= startTime <= endTime`만 허용한다. `ExportController`도 같은 조건을 다시 확인한 뒤 Session을
+변경한다. 두 값은 함께 `null`일 수 있지만 한쪽만 `null`인 상태는 거부한다. 실제 오디오 내보내기는 길이가 필요하므로
+`startTime < endTime`을 별도로 요구한다.
+
 다음 런타임 값은 저장하지 않는다.
 
 - `File`, `Blob`, Object URL, AudioBuffer, 정리 함수
