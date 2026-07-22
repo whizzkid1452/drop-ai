@@ -1,7 +1,28 @@
 import type { IAudioEngine, RegionData } from '../audio-engine/i-audio-engine';
+import type { IAudioSourceRegistry, RuntimeAudioSource } from '../audio-source-registry/i-audio-source-registry';
 import type { RegionState, SessionStore, TrackState } from '../session/session';
+import { isRegionSourceRangeWithinDuration } from '../shared/audio-source-range';
+import { ProjectMutationCompensationError } from './project-mutation-compensation-error';
 import { ProjectStateError, ProjectStateErrorCode } from './project-state-error';
 import { calculateSplitRegions } from './utils/split-region';
+
+interface RegionPlacementFields {
+  id: string;
+  startTime: number;
+  sourceStartTime: number;
+  duration?: number;
+}
+
+type RegionSourceSelection =
+  | { sourceId: string; url?: never }
+  | { sourceId?: never; url: string }
+  | { sourceId?: undefined; url?: undefined };
+
+export type AddRegionData = RegionPlacementFields & RegionSourceSelection;
+
+type PreparedRegionSource =
+  | { kind: 'legacy'; url: string }
+  | { kind: 'registered'; sourceId: string; url: string; wasCommitted: boolean; duration: number };
 
 interface SplitRegionByIdOptions {
   trackId: string;
@@ -15,42 +36,100 @@ interface MoveRegionOptions {
   newStartTime: number;
 }
 
+interface RegionControllerDependencies {
+  sessionStore: SessionStore;
+  audioEngine: IAudioEngine;
+  audioSourceRegistry: IAudioSourceRegistry;
+}
+
 export class RegionController {
-  constructor(
-    private sessionStore: SessionStore,
-    private audioEngine: IAudioEngine
-  ) {}
+  private readonly sessionStore: SessionStore;
+  private readonly audioEngine: IAudioEngine;
+  private readonly audioSourceRegistry: IAudioSourceRegistry;
 
-  async addRegion(trackId: string, regionData: RegionData): Promise<void> {
-    console.log(`[RegionController] Adding region to track: ${trackId}`, regionData);
+  constructor({ sessionStore, audioEngine, audioSourceRegistry }: RegionControllerDependencies) {
+    this.sessionStore = sessionStore;
+    this.audioEngine = audioEngine;
+    this.audioSourceRegistry = audioSourceRegistry;
+  }
 
-    const track = this.getTrackOrThrow(trackId);
-    this.throwIfRegionExists(track, regionData.id);
-    await this.audioEngine.addRegion(trackId, regionData);
+  async addRegion(requestedTrackId: string | undefined, regionData: AddRegionData): Promise<void> {
+    console.log(`[RegionController] Adding region to track: ${String(requestedTrackId)}`, regionData);
 
-    const latestTrack = this.getTrackOrThrow(trackId);
-    this.throwIfRegionExists(latestTrack, regionData.id);
+    let track: TrackState;
+    try {
+      track = this.resolveAddRegionTrack(requestedTrackId);
+      this.throwIfRegionExists(track, regionData.id);
+    } catch (cause) {
+      this.cleanupExplicitPendingSourceAfterPreflightFailure({ regionData, cause });
+      throw cause;
+    }
 
-    const newRegion = {
-      id: regionData.id,
-      startTime: regionData.startTime,
-      endTime: regionData.startTime + (regionData.duration || 0),
-      sourceStartTime: regionData.sourceStartTime || 0,
-      duration: regionData.duration || 0,
-      status: [],
-      audioFileUrl: regionData.url,
-    };
+    const trackId = track.id;
+    const source = this.prepareAddSource(track, regionData);
+    if (source.kind === 'registered') {
+      this.attachAddedSource({ source, regionId: regionData.id });
+    }
 
-    const updatedRegions = [...latestTrack.regions, newRegion];
-    this.sessionStore.getState().updateTrack(trackId, { regions: updatedRegions });
+    let isEngineRegionAdded = false;
+    try {
+      await this.audioEngine.addRegion(trackId, this.toEngineRegionData(regionData, source));
+      isEngineRegionAdded = true;
+
+      const latestTrack = this.getTrackOrThrow(trackId);
+      this.throwIfRegionExists(latestTrack, regionData.id);
+      const newRegion = this.createSessionRegion(regionData, source);
+      this.sessionStore.getState().updateTrack(trackId, { regions: [...latestTrack.regions, newRegion] });
+    } catch (cause) {
+      if (isEngineRegionAdded) {
+        try {
+          this.audioEngine.removeRegion(trackId, regionData.id);
+        } catch (compensationCause) {
+          throw new ProjectMutationCompensationError({
+            operation: 'add-region',
+            failedPhase: 'AudioEngine 추가 취소',
+            cause,
+            compensationFailures: [{ step: 'AudioEngine Region 제거', cause: compensationCause }],
+          });
+        }
+      }
+
+      if (source.kind === 'registered') {
+        this.rollbackAddedSource({ source, regionId: regionData.id, cause });
+      }
+      throw cause;
+    }
   }
 
   removeRegion(trackId: string, regionId: string): void {
     console.log(`[RegionController] Removing region ${regionId} from track ${trackId}`);
 
     const track = this.getTrackOrThrow(trackId);
-    this.getRegionOrThrow(track, regionId);
-    this.audioEngine.removeRegion(trackId, regionId);
+    const region = this.getRegionOrThrow(track, regionId);
+    const attachment = typeof region.sourceId === 'string' ? { sourceId: region.sourceId, regionId: region.id } : null;
+    if (attachment) {
+      this.assertRegisteredSource({ sourceId: attachment.sourceId, regionId: attachment.regionId });
+      this.audioSourceRegistry.detach(attachment);
+    }
+
+    try {
+      this.audioEngine.removeRegion(trackId, regionId);
+    } catch (cause) {
+      if (attachment) {
+        try {
+          this.audioSourceRegistry.attach(attachment);
+        } catch (compensationCause) {
+          throw new ProjectMutationCompensationError({
+            operation: 'remove-region',
+            failedPhase: 'Source 연결 복원',
+            cause,
+            compensationFailures: [{ step: `Source 연결 복원: ${regionId}`, cause: compensationCause }],
+          });
+        }
+      }
+      throw cause;
+    }
+
     this.sessionStore.getState().updateTrack(trackId, {
       regions: track.regions.filter(region => region.id !== regionId),
     });
@@ -97,14 +176,7 @@ export class RegionController {
       );
     }
 
-    const sourceUrl = regionToSplit.audioFileUrl;
-    if (!sourceUrl) {
-      throw new ProjectStateError(
-        ProjectStateErrorCode.REGION_SOURCE_MISSING,
-        `Region의 오디오 소스를 찾을 수 없습니다: ${regionId}`,
-        { trackId, regionId }
-      );
-    }
+    const sourceUrl = this.resolveRegionSourceUrl(regionToSplit);
 
     const splitRegions = calculateSplitRegions({ region: regionToSplit, splitTime });
     if (!splitRegions) {
@@ -117,14 +189,67 @@ export class RegionController {
 
     const { left: leftRegion, right: rightRegion } = splitRegions;
 
-    await this.audioEngine.replaceRegion({
-      trackId,
-      regionId,
-      replacements: [this.toRegionData(leftRegion, sourceUrl), this.toRegionData(rightRegion, sourceUrl)],
-    });
+    if (typeof regionToSplit.sourceId === 'string') {
+      this.prepareSplitSourceAttachments({
+        sourceId: regionToSplit.sourceId,
+        original: regionToSplit,
+        leftRegion,
+        rightRegion,
+      });
+    }
 
-    const latestTrack = this.getTrackOrThrow(trackId);
-    this.getRegionOrThrow(latestTrack, regionId);
+    try {
+      await this.audioEngine.replaceRegion({
+        trackId,
+        regionId,
+        replacements: [this.toRegionData(leftRegion, sourceUrl), this.toRegionData(rightRegion, sourceUrl)],
+      });
+    } catch (cause) {
+      if (typeof regionToSplit.sourceId === 'string') {
+        this.rollbackPreparedSplitSourceAttachments({
+          sourceId: regionToSplit.sourceId,
+          leftRegion,
+          rightRegion,
+          cause,
+        });
+      }
+      throw cause;
+    }
+
+    let latestTrack: TrackState;
+    try {
+      latestTrack = this.getTrackOrThrow(trackId);
+      this.getRegionOrThrow(latestTrack, regionId);
+    } catch (cause) {
+      this.rollbackCommittedSplit({
+        trackId,
+        original: regionToSplit,
+        leftRegion,
+        rightRegion,
+        sourceId: regionToSplit.sourceId,
+        cause,
+      });
+      throw cause;
+    }
+
+    if (typeof regionToSplit.sourceId === 'string') {
+      try {
+        this.assertRegisteredSource({ sourceId: regionToSplit.sourceId, regionId: regionToSplit.id });
+        this.audioSourceRegistry.detach({ sourceId: regionToSplit.sourceId, regionId: regionToSplit.id });
+      } catch (cause) {
+        await this.rollbackSplitToOriginal({
+          trackId,
+          original: regionToSplit,
+          leftRegion,
+          rightRegion,
+          sourceId: regionToSplit.sourceId,
+          sourceUrl,
+          cause,
+        });
+        throw cause;
+      }
+    }
+
     const regions = latestTrack.regions.flatMap(region =>
       region.id === regionId ? [leftRegion, rightRegion] : [region]
     );
@@ -162,6 +287,19 @@ export class RegionController {
     });
   }
 
+  private resolveAddRegionTrack(requestedTrackId?: string): TrackState {
+    if (requestedTrackId) {
+      return this.getTrackOrThrow(requestedTrackId);
+    }
+
+    const firstTrack = this.sessionStore.getState().tracks.values().next().value;
+    if (firstTrack) {
+      return firstTrack;
+    }
+
+    throw new ProjectStateError(ProjectStateErrorCode.TRACK_NOT_FOUND, 'Region을 추가할 Track이 없습니다.');
+  }
+
   private getRegionOrThrow(track: TrackState, regionId: string): RegionState {
     const region = track.regions.find(candidate => candidate.id === regionId);
     if (region) {
@@ -184,6 +322,476 @@ export class RegionController {
       `이미 사용 중인 Region ID입니다: ${regionId}`,
       { trackId: track.id, regionId }
     );
+  }
+
+  private prepareAddSource(track: TrackState, regionData: AddRegionData): PreparedRegionSource {
+    if (typeof regionData.sourceId === 'string') {
+      return this.prepareRegisteredSource({ sourceId: regionData.sourceId, regionData });
+    }
+
+    if (typeof regionData.url === 'string') {
+      return { kind: 'legacy', url: regionData.url };
+    }
+
+    const firstRegion = track.regions[0];
+    if (!firstRegion) {
+      throw new ProjectStateError(
+        ProjectStateErrorCode.REGION_SOURCE_MISSING,
+        `재사용할 Region 소스를 찾을 수 없습니다: ${track.id}`,
+        { trackId: track.id }
+      );
+    }
+
+    if (typeof firstRegion.sourceId === 'string') {
+      return this.prepareRegisteredSource({
+        sourceId: firstRegion.sourceId,
+        attachedRegionId: firstRegion.id,
+        regionData,
+      });
+    }
+
+    if (firstRegion.audioFileUrl) {
+      return { kind: 'legacy', url: firstRegion.audioFileUrl };
+    }
+
+    throw new ProjectStateError(
+      ProjectStateErrorCode.REGION_SOURCE_MISSING,
+      `재사용할 Region 소스를 찾을 수 없습니다: ${firstRegion.id}`,
+      { regionId: firstRegion.id, trackId: track.id }
+    );
+  }
+
+  private assertRegisteredSource({ sourceId, regionId }: { sourceId: string; regionId?: string }): RuntimeAudioSource {
+    const source = this.audioSourceRegistry.resolve(sourceId);
+    if (source && (regionId === undefined || source.regionIds.includes(regionId))) {
+      return source;
+    }
+
+    throw new ProjectStateError(
+      ProjectStateErrorCode.REGION_SOURCE_MISSING,
+      `Region의 오디오 Source를 찾을 수 없습니다: ${sourceId}`,
+      { regionId, sourceId }
+    );
+  }
+
+  private createSessionRegion(regionData: RegionPlacementFields, source: PreparedRegionSource): RegionState {
+    const duration = source.kind === 'registered' ? source.duration : (regionData.duration ?? 0);
+    const commonRegion = {
+      id: regionData.id,
+      startTime: regionData.startTime,
+      endTime: regionData.startTime + duration,
+      sourceStartTime: regionData.sourceStartTime,
+      duration,
+      status: [],
+    };
+
+    return source.kind === 'registered'
+      ? { ...commonRegion, sourceId: source.sourceId }
+      : { ...commonRegion, audioFileUrl: source.url };
+  }
+
+  private prepareRegisteredSource({
+    sourceId,
+    attachedRegionId,
+    regionData,
+  }: {
+    sourceId: string;
+    attachedRegionId?: string;
+    regionData: RegionPlacementFields;
+  }): Extract<PreparedRegionSource, { kind: 'registered' }> {
+    const source = this.assertRegisteredSource({ sourceId, regionId: attachedRegionId });
+
+    try {
+      return {
+        kind: 'registered',
+        sourceId,
+        url: source.objectUrl,
+        wasCommitted: source.isCommitted,
+        duration: this.resolveRegisteredRegionDuration({ source, regionData }),
+      };
+    } catch (cause) {
+      this.cleanupPendingSourceAfterPreparationFailure({ source, cause });
+      throw cause;
+    }
+  }
+
+  private resolveRegisteredRegionDuration({
+    source,
+    regionData,
+  }: {
+    source: RuntimeAudioSource;
+    regionData: RegionPlacementFields;
+  }): number {
+    const sourceDurationSeconds = source.metadata.durationSeconds;
+    if (sourceDurationSeconds === null) {
+      if (regionData.duration !== undefined) {
+        return regionData.duration;
+      }
+
+      throw new ProjectStateError(
+        ProjectStateErrorCode.REGION_DURATION_REQUIRED,
+        `길이를 알 수 없는 Source에는 Region 길이가 필요합니다: ${source.metadata.id}`,
+        { sourceId: source.metadata.id, sourceStartTime: regionData.sourceStartTime }
+      );
+    }
+
+    const duration = regionData.duration ?? Math.max(0, sourceDurationSeconds - regionData.sourceStartTime);
+    if (
+      isRegionSourceRangeWithinDuration({
+        sourceDurationSeconds,
+        sourceStartTimeSeconds: regionData.sourceStartTime,
+        regionDurationSeconds: duration,
+      })
+    ) {
+      return duration;
+    }
+
+    throw new ProjectStateError(
+      ProjectStateErrorCode.REGION_SOURCE_RANGE_EXCEEDED,
+      `Region이 Source 길이를 넘습니다: ${source.metadata.id}`,
+      {
+        duration,
+        sourceDurationSeconds,
+        sourceId: source.metadata.id,
+        sourceStartTime: regionData.sourceStartTime,
+      }
+    );
+  }
+
+  private cleanupPendingSourceAfterPreparationFailure({
+    source,
+    cause,
+  }: {
+    source: RuntimeAudioSource;
+    cause: unknown;
+  }): void {
+    if (source.isCommitted) {
+      return;
+    }
+
+    try {
+      this.audioSourceRegistry.discardPending(source.metadata.id);
+    } catch (compensationCause) {
+      throw new ProjectMutationCompensationError({
+        operation: 'add-region',
+        failedPhase: 'Source 검증 실패 후 pending Source 정리',
+        cause,
+        compensationFailures: [{ step: `pending Source 정리: ${source.metadata.id}`, cause: compensationCause }],
+      });
+    }
+  }
+
+  private cleanupExplicitPendingSourceAfterPreflightFailure({
+    regionData,
+    cause,
+  }: {
+    regionData: AddRegionData;
+    cause: unknown;
+  }): void {
+    if (typeof regionData.sourceId !== 'string') {
+      return;
+    }
+
+    try {
+      const source = this.audioSourceRegistry.resolve(regionData.sourceId);
+      if (!source || source.isCommitted) {
+        return;
+      }
+
+      this.audioSourceRegistry.discardPending(regionData.sourceId);
+    } catch (compensationCause) {
+      throw new ProjectMutationCompensationError({
+        operation: 'add-region',
+        failedPhase: 'Region 추가 사전 검증 후 pending Source 정리',
+        cause,
+        compensationFailures: [{ step: `pending Source 정리: ${regionData.sourceId}`, cause: compensationCause }],
+      });
+    }
+  }
+
+  private attachAddedSource({
+    source,
+    regionId,
+  }: {
+    source: Extract<PreparedRegionSource, { kind: 'registered' }>;
+    regionId: string;
+  }): void {
+    try {
+      this.audioSourceRegistry.attach({ sourceId: source.sourceId, regionId });
+    } catch (cause) {
+      if (source.wasCommitted) {
+        throw cause;
+      }
+
+      try {
+        this.audioSourceRegistry.discardPending(source.sourceId);
+      } catch (compensationCause) {
+        throw new ProjectMutationCompensationError({
+          operation: 'add-region',
+          failedPhase: 'Source 연결 준비',
+          cause,
+          compensationFailures: [{ step: `pending Source 정리: ${source.sourceId}`, cause: compensationCause }],
+        });
+      }
+      throw cause;
+    }
+  }
+
+  private toEngineRegionData(regionData: RegionPlacementFields, source: PreparedRegionSource): RegionData {
+    return {
+      id: regionData.id,
+      url: source.url,
+      startTime: regionData.startTime,
+      sourceStartTime: regionData.sourceStartTime,
+      duration: source.kind === 'registered' ? source.duration : regionData.duration,
+    };
+  }
+
+  private rollbackAddedSource({
+    source,
+    regionId,
+    cause,
+  }: {
+    source: Extract<PreparedRegionSource, { kind: 'registered' }>;
+    regionId: string;
+    cause: unknown;
+  }): void {
+    const compensationFailures: Array<{ step: string; cause: unknown }> = [];
+    let isDetached = false;
+
+    try {
+      this.audioSourceRegistry.detach({ sourceId: source.sourceId, regionId });
+      isDetached = true;
+    } catch (compensationCause) {
+      compensationFailures.push({ step: `Source 연결 해제: ${regionId}`, cause: compensationCause });
+    }
+
+    if (isDetached && !source.wasCommitted) {
+      try {
+        this.audioSourceRegistry.purgeUnused(source.sourceId);
+      } catch (compensationCause) {
+        compensationFailures.push({ step: `pending Source 정리: ${source.sourceId}`, cause: compensationCause });
+      }
+    }
+
+    if (compensationFailures.length > 0) {
+      throw new ProjectMutationCompensationError({
+        operation: 'add-region',
+        failedPhase: 'Source 연결 취소',
+        cause,
+        compensationFailures,
+      });
+    }
+  }
+
+  private resolveRegionSourceUrl(region: RegionState): string {
+    if (typeof region.sourceId === 'string') {
+      return this.assertRegisteredSource({ sourceId: region.sourceId, regionId: region.id }).objectUrl;
+    }
+
+    if (region.audioFileUrl) {
+      return region.audioFileUrl;
+    }
+
+    throw new ProjectStateError(
+      ProjectStateErrorCode.REGION_SOURCE_MISSING,
+      `Region의 오디오 소스를 찾을 수 없습니다: ${region.id}`,
+      { regionId: region.id }
+    );
+  }
+
+  private prepareSplitSourceAttachments({
+    sourceId,
+    original,
+    leftRegion,
+    rightRegion,
+  }: {
+    sourceId: string;
+    original: RegionState;
+    leftRegion: RegionState;
+    rightRegion: RegionState;
+  }): void {
+    this.assertRegisteredSource({ sourceId, regionId: original.id });
+    const attachedRegionIds: string[] = [];
+
+    try {
+      [leftRegion.id, rightRegion.id].forEach(regionId => {
+        this.audioSourceRegistry.attach({ sourceId, regionId });
+        attachedRegionIds.push(regionId);
+      });
+    } catch (cause) {
+      const compensationFailures = [...attachedRegionIds].reverse().flatMap(regionId => {
+        try {
+          this.audioSourceRegistry.detach({ sourceId, regionId });
+          return [];
+        } catch (compensationCause) {
+          return [{ step: `분할 Source 연결 취소: ${regionId}`, cause: compensationCause }];
+        }
+      });
+
+      if (compensationFailures.length > 0) {
+        throw new ProjectMutationCompensationError({
+          operation: 'split-region',
+          failedPhase: 'Source 연결 준비',
+          cause,
+          compensationFailures,
+        });
+      }
+      throw cause;
+    }
+  }
+
+  private rollbackPreparedSplitSourceAttachments({
+    sourceId,
+    leftRegion,
+    rightRegion,
+    cause,
+  }: {
+    sourceId: string;
+    leftRegion: RegionState;
+    rightRegion: RegionState;
+    cause: unknown;
+  }): void {
+    const compensationFailures: Array<{ step: string; cause: unknown }> = [];
+
+    [rightRegion.id, leftRegion.id].forEach(regionId => {
+      try {
+        this.audioSourceRegistry.detach({ sourceId, regionId });
+      } catch (compensationCause) {
+        compensationFailures.push({ step: `분할 Source 연결 해제: ${regionId}`, cause: compensationCause });
+      }
+    });
+
+    if (compensationFailures.length > 0) {
+      throw new ProjectMutationCompensationError({
+        operation: 'split-region',
+        failedPhase: '분할 Source 준비 취소',
+        cause,
+        compensationFailures,
+      });
+    }
+  }
+
+  private rollbackCommittedSplit({
+    trackId,
+    original,
+    leftRegion,
+    rightRegion,
+    sourceId,
+    cause,
+  }: {
+    trackId: string;
+    original: RegionState;
+    leftRegion: RegionState;
+    rightRegion: RegionState;
+    sourceId?: string;
+    cause: unknown;
+  }): void {
+    const compensationFailures: Array<{ step: string; cause: unknown }> = [];
+
+    [rightRegion, leftRegion].forEach(region => {
+      let isEngineRegionRemoved = false;
+      try {
+        this.audioEngine.removeRegion(trackId, region.id);
+        isEngineRegionRemoved = true;
+      } catch (compensationCause) {
+        compensationFailures.push({ step: `AudioEngine 분할 Region 제거: ${region.id}`, cause: compensationCause });
+      }
+
+      if (!isEngineRegionRemoved || typeof sourceId !== 'string') {
+        return;
+      }
+
+      try {
+        this.audioSourceRegistry.detach({ sourceId, regionId: region.id });
+      } catch (compensationCause) {
+        compensationFailures.push({ step: `분할 Source 연결 해제: ${region.id}`, cause: compensationCause });
+      }
+    });
+
+    if (typeof sourceId === 'string') {
+      const source = this.audioSourceRegistry.resolve(sourceId);
+      if (source?.regionIds.includes(original.id)) {
+        try {
+          this.audioSourceRegistry.detach({ sourceId, regionId: original.id });
+        } catch (compensationCause) {
+          compensationFailures.push({ step: `기존 Source 연결 해제: ${original.id}`, cause: compensationCause });
+        }
+      }
+    }
+
+    if (compensationFailures.length > 0) {
+      throw new ProjectMutationCompensationError({
+        operation: 'split-region',
+        failedPhase: 'Session 재검증 실패 후 분할 취소',
+        cause,
+        compensationFailures,
+      });
+    }
+  }
+
+  private async rollbackSplitToOriginal({
+    trackId,
+    original,
+    leftRegion,
+    rightRegion,
+    sourceId,
+    sourceUrl,
+    cause,
+  }: {
+    trackId: string;
+    original: RegionState;
+    leftRegion: RegionState;
+    rightRegion: RegionState;
+    sourceId: string;
+    sourceUrl: string;
+    cause: unknown;
+  }): Promise<void> {
+    const compensationFailures: Array<{ step: string; cause: unknown }> = [];
+
+    [rightRegion, leftRegion].forEach(region => {
+      let isEngineRegionRemoved = false;
+      try {
+        this.audioEngine.removeRegion(trackId, region.id);
+        isEngineRegionRemoved = true;
+      } catch (compensationCause) {
+        compensationFailures.push({ step: `AudioEngine 분할 Region 제거: ${region.id}`, cause: compensationCause });
+      }
+
+      if (!isEngineRegionRemoved) {
+        return;
+      }
+
+      try {
+        this.audioSourceRegistry.detach({ sourceId, regionId: region.id });
+      } catch (compensationCause) {
+        compensationFailures.push({ step: `분할 Source 연결 해제: ${region.id}`, cause: compensationCause });
+      }
+    });
+
+    try {
+      await this.audioEngine.addRegion(trackId, this.toRegionData(original, sourceUrl));
+    } catch (compensationCause) {
+      compensationFailures.push({ step: `AudioEngine 기존 Region 복원: ${original.id}`, cause: compensationCause });
+    }
+
+    const source = this.audioSourceRegistry.resolve(sourceId);
+    if (!source?.regionIds.includes(original.id)) {
+      try {
+        this.audioSourceRegistry.attach({ sourceId, regionId: original.id });
+      } catch (compensationCause) {
+        compensationFailures.push({ step: `기존 Source 연결 복원: ${original.id}`, cause: compensationCause });
+      }
+    }
+
+    if (compensationFailures.length > 0) {
+      throw new ProjectMutationCompensationError({
+        operation: 'split-region',
+        failedPhase: 'Source 전환 실패 후 기존 Region 복원',
+        cause,
+        compensationFailures,
+      });
+    }
   }
 
   private toRegionData(region: RegionState, url: string): RegionData {

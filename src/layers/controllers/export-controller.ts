@@ -1,17 +1,31 @@
 import {
   DEFAULT_EXPORT_SAMPLE_RATE,
   type ExportRange,
+  type ExportRegion,
   type ExportRequest,
   type IAudioEngine,
 } from '../audio-engine/i-audio-engine';
 import { AudioEngineError, AudioEngineErrorCode, ERROR_MESSAGES } from '../audio-engine/errors';
-import { type SessionStore } from '../session/session';
+import type { IAudioSourceResolver } from '../audio-source-registry/i-audio-source-registry';
+import { type RegionState, type SessionStore } from '../session/session';
+import { ProjectStateError, ProjectStateErrorCode } from './project-state-error';
+
+interface ExportControllerDependencies {
+  sessionStore: SessionStore;
+  audioEngine: IAudioEngine;
+  audioSourceResolver: IAudioSourceResolver;
+}
 
 export class ExportController {
-  constructor(
-    private sessionStore: SessionStore,
-    private audioEngine: IAudioEngine
-  ) {}
+  private readonly sessionStore: SessionStore;
+  private readonly audioEngine: IAudioEngine;
+  private readonly audioSourceResolver: IAudioSourceResolver;
+
+  constructor({ sessionStore, audioEngine, audioSourceResolver }: ExportControllerDependencies) {
+    this.sessionStore = sessionStore;
+    this.audioEngine = audioEngine;
+    this.audioSourceResolver = audioSourceResolver;
+  }
 
   setExportRange(startTime: number | null, endTime: number | null): void {
     console.log(`[ExportController] Setting export range: ${startTime} - ${endTime}`);
@@ -39,19 +53,18 @@ export class ExportController {
       pan: track.pan,
       isMuted: track.isMuted,
       isSoloed: track.isSoloed,
-      regions: track.regions.flatMap(region =>
-        region.audioFileUrl && region.duration > 0
-          ? [
-              {
-                id: region.id,
-                url: region.audioFileUrl,
-                startTime: region.startTime,
-                sourceStartTime: region.sourceStartTime,
-                duration: region.duration,
-              },
-            ]
-          : []
-      ),
+      regions: track.regions.flatMap(region => {
+        if (typeof region.sourceId === 'string') {
+          const url = this.resolveRegionSourceUrl(region);
+          return region.duration <= 0 ? [] : [this.createExportRegion(region, url)];
+        }
+
+        if (region.duration <= 0 || region.audioFileUrl.length === 0) {
+          return [];
+        }
+
+        return [this.createExportRegion(region, region.audioFileUrl)];
+      }),
     }));
 
     if (tracks.length === 0 || tracks.every(track => track.regions.length === 0)) {
@@ -82,5 +95,40 @@ export class ExportController {
       return { startTime: exportStartTime, endTime: exportEndTime };
     }
     return { startTime: 0, endTime: this.getProjectEndTime() };
+  }
+
+  private resolveRegionSourceUrl(region: RegionState): string {
+    if (typeof region.sourceId === 'string') {
+      const source = this.audioSourceResolver.resolve(region.sourceId);
+      if (source?.regionIds.includes(region.id)) {
+        return source.objectUrl;
+      }
+
+      throw new ProjectStateError(
+        ProjectStateErrorCode.REGION_SOURCE_MISSING,
+        `Export할 Region의 Source 연결을 찾을 수 없습니다: ${region.id}`,
+        { regionId: region.id, sourceId: region.sourceId }
+      );
+    }
+
+    if (region.audioFileUrl) {
+      return region.audioFileUrl;
+    }
+
+    throw new ProjectStateError(
+      ProjectStateErrorCode.REGION_SOURCE_MISSING,
+      `Export할 Region의 오디오 소스를 찾을 수 없습니다: ${region.id}`,
+      { regionId: region.id }
+    );
+  }
+
+  private createExportRegion(region: RegionState, url: string): ExportRegion {
+    return {
+      id: region.id,
+      url,
+      startTime: region.startTime,
+      sourceStartTime: region.sourceStartTime,
+      duration: region.duration,
+    };
   }
 }

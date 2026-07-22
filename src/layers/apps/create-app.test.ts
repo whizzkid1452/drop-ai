@@ -39,6 +39,91 @@ describe('createApp', () => {
     expect('stage' in app.audioSourceResolver).toBe(false);
   });
 
+  it('등록 capability와 Command Controller가 같은 Source Registry를 공유한다', async () => {
+    const sourceId = '11111111-1111-4111-8111-111111111111';
+    const trackId = '22222222-2222-4222-8222-222222222222';
+    const regionId = '33333333-3333-4333-8333-333333333333';
+    const objectUrlAdapter: IObjectUrlAdapter = {
+      createObjectUrl: vi.fn(() => 'blob:shared-source'),
+      revokeObjectUrl: vi.fn(),
+    };
+    const audioSourceRegistry = new AudioSourceRegistry(objectUrlAdapter);
+    const app = createApp({ audioEngine: new MockAudioEngine(), audioSourceRegistry });
+
+    app.audioSourceStager.stage({
+      metadata: {
+        id: sourceId,
+        fileName: 'source.wav',
+        mimeType: 'audio/wav',
+        byteLength: 4,
+        durationSeconds: 1,
+      },
+      blob: new Blob(['test'], { type: 'audio/wav' }),
+    });
+    await app.commandExecutor.execute({
+      type: AudioCommandType.ADD_TRACK,
+      trackId,
+      url: 'https://example.com/empty-track.wav',
+    });
+    await app.commandExecutor.execute({
+      type: AudioCommandType.LOAD_REGION,
+      trackId,
+      regionId,
+      sourceId,
+      startTime: 0,
+      duration: 1,
+    });
+
+    expect(app.audioSourceResolver.resolve(sourceId)).toMatchObject({
+      isCommitted: true,
+      objectUrl: 'blob:shared-source',
+      regionIds: [regionId],
+    });
+    expect(app.session.getState().tracks.get(trackId)?.regions).toEqual([
+      expect.objectContaining({ id: regionId, sourceId }),
+    ]);
+    expect(app.session.getState().tracks.get(trackId)?.regions[0]).not.toHaveProperty('audioFileUrl');
+  });
+
+  it.each([
+    ['명시한 대상 Track을 찾지 못하면', '22222222-2222-4222-8222-222222222222'],
+    ['Track을 생략했고 Session이 비어 있으면', undefined],
+  ] as const)('Command에서 %s staged Source를 정리한다', async (_scenario, requestedTrackId) => {
+    const sourceId = '11111111-1111-4111-8111-111111111111';
+    const regionId = '33333333-3333-4333-8333-333333333333';
+    const revokeObjectUrl = vi.fn();
+    const audioSourceRegistry = new AudioSourceRegistry({
+      createObjectUrl: () => 'blob:pending-source',
+      revokeObjectUrl,
+    });
+    const app = createApp({ audioEngine: new MockAudioEngine(), audioSourceRegistry });
+
+    app.audioSourceStager.stage({
+      metadata: {
+        id: sourceId,
+        fileName: 'source.wav',
+        mimeType: 'audio/wav',
+        byteLength: 4,
+        durationSeconds: 1,
+      },
+      blob: new Blob(['test'], { type: 'audio/wav' }),
+    });
+
+    await expect(
+      app.commandExecutor.execute({
+        type: AudioCommandType.LOAD_REGION,
+        ...(requestedTrackId ? { trackId: requestedTrackId } : {}),
+        regionId,
+        sourceId,
+        startTime: 0,
+        duration: 1,
+      })
+    ).rejects.toMatchObject({ code: 'TRACK_NOT_FOUND' });
+
+    expect(app.audioSourceResolver.resolve(sourceId)).toBeNull();
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:pending-source');
+  });
+
   it('기본 Source Registry 조립만으로 Object URL을 만들지 않는다', () => {
     const createObjectUrl = vi.spyOn(globalThis.URL, 'createObjectURL');
 

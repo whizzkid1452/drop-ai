@@ -9,6 +9,59 @@ import {
 
 const TRACK_ID = '550e8400-e29b-41d4-a716-446655440000';
 const REGION_ID = '6ba7b810-9dad-41d1-80b4-00c04fd430c8';
+const SOURCE_ID = '11111111-1111-4111-8111-111111111111';
+
+describe('LOAD_REGION 오디오 식별자 계약', () => {
+  it('sourceId를 보존한다', () => {
+    const command = {
+      type: AudioCommandType.LOAD_REGION,
+      trackId: TRACK_ID,
+      regionId: REGION_ID,
+      sourceId: SOURCE_ID,
+      startTime: 0,
+    };
+
+    expect(AudioCommandSchema.parse(command)).toEqual(command);
+    expect(StrictAudioCommandSchema.parse(command)).toEqual(command);
+  });
+
+  it('기존 clone 명령을 위해 url과 sourceId가 모두 없는 값을 허용한다', () => {
+    const command = {
+      type: AudioCommandType.LOAD_REGION,
+      trackId: TRACK_ID,
+      regionId: REGION_ID,
+      startTime: 0,
+    };
+
+    expect(AudioCommandSchema.safeParse(command).success).toBe(true);
+    expect(StrictAudioCommandSchema.safeParse(command).success).toBe(true);
+  });
+
+  it('url과 sourceId를 함께 전달하면 거부한다', () => {
+    const command = {
+      type: AudioCommandType.LOAD_REGION,
+      trackId: TRACK_ID,
+      regionId: REGION_ID,
+      url: 'blob:test-audio',
+      sourceId: SOURCE_ID,
+      startTime: 0,
+    };
+
+    expect(AudioCommandSchema.safeParse(command).success).toBe(false);
+    expect(StrictAudioCommandSchema.safeParse(command).success).toBe(false);
+  });
+
+  it('잘못된 sourceId를 거부한다', () => {
+    const command = {
+      type: AudioCommandType.LOAD_REGION,
+      sourceId: 'source-1',
+      startTime: 0,
+    };
+
+    expect(AudioCommandSchema.safeParse(command).success).toBe(false);
+    expect(StrictAudioCommandSchema.safeParse(command).success).toBe(false);
+  });
+});
 
 describe('AudioCommandSchema 프로젝트 변경 명령', () => {
   it.each([

@@ -3,11 +3,23 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { RuntimeAudioSource } from '@/layers/audio-source-registry/i-audio-source-registry';
 import type { RegionState } from '@/layers/session/session';
 import { RegionComponent } from './RegionComponent';
 
+const { resolveAudioSource } = vi.hoisted(() => ({
+  resolveAudioSource: vi.fn<(sourceId: string) => RuntimeAudioSource | null>(),
+}));
+
 vi.mock('@wavesurfer/react', () => ({
-  default: () => null,
+  default: ({ url }: { url: string }) => createElement('div', { 'data-audio-url': url }),
+}));
+
+vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
+  useAudioSourceResolver: () => ({
+    resolve: resolveAudioSource,
+    listCommittedMetadata: () => [],
+  }),
 }));
 
 vi.mock('./RegionComponent.css.ts', () => ({
@@ -24,6 +36,7 @@ interface Deferred<T> {
 interface RenderRegionOptions {
   onMove: (newStartTime: number) => Promise<void>;
   onRemove?: () => void;
+  region?: RegionState;
 }
 
 interface PointerOptions {
@@ -34,7 +47,7 @@ interface PointerOptions {
 }
 
 const mountedRoots: Root[] = [];
-const region: RegionState = {
+const legacyRegion: RegionState = {
   id: 'region-1',
   startTime: 2,
   endTime: 5,
@@ -43,6 +56,7 @@ const region: RegionState = {
   status: [],
   audioFileUrl: 'region.wav',
 };
+const sourceId = '41e673bf-5467-4d36-a716-2d80a76ac82f';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -57,7 +71,19 @@ function createDeferred<T>(): Deferred<T> {
   return { promise, resolve, reject };
 }
 
-function renderRegion({ onMove, onRemove }: RenderRegionOptions) {
+function createSourceBackedRegion(): RegionState {
+  return {
+    id: legacyRegion.id,
+    startTime: legacyRegion.startTime,
+    endTime: legacyRegion.endTime,
+    sourceStartTime: legacyRegion.sourceStartTime,
+    duration: legacyRegion.duration,
+    status: legacyRegion.status,
+    sourceId,
+  };
+}
+
+function renderRegion({ onMove, onRemove, region = legacyRegion }: RenderRegionOptions) {
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
@@ -110,6 +136,71 @@ afterEach(() => {
     mountedRoots.splice(0).forEach(root => root.unmount());
   });
   document.body.replaceChildren();
+  resolveAudioSource.mockReset();
+});
+
+describe('RegionComponent 오디오 소스', () => {
+  it('기존 URL Region의 URL을 WaveSurfer에 전달한다', () => {
+    const { host } = renderRegion({ onMove: vi.fn().mockResolvedValue(undefined) });
+
+    expect(host.querySelector('[data-audio-url="region.wav"]')).not.toBeNull();
+    expect(resolveAudioSource).not.toHaveBeenCalled();
+  });
+
+  it('sourceId Region이 실제 Region에 연결되어 있으면 Object URL을 WaveSurfer에 전달한다', () => {
+    const sourceBackedRegion = createSourceBackedRegion();
+    resolveAudioSource.mockReturnValue({
+      metadata: {
+        id: sourceId,
+        fileName: 'source.wav',
+        mimeType: 'audio/wav',
+        byteLength: 100,
+        durationSeconds: 3,
+      },
+      objectUrl: 'blob:source',
+      isCommitted: true,
+      regionIds: [sourceBackedRegion.id],
+    });
+
+    const { host } = renderRegion({
+      region: sourceBackedRegion,
+      onMove: vi.fn().mockResolvedValue(undefined),
+    });
+
+    expect(resolveAudioSource).toHaveBeenCalledWith(sourceBackedRegion.sourceId);
+    expect(host.querySelector('[data-audio-url="blob:source"]')).not.toBeNull();
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it.each([
+    { label: '등록된 소스가 없을 때', resolvedSource: null },
+    {
+      label: '소스와 Region 연결이 일치하지 않을 때',
+      resolvedSource: {
+        metadata: {
+          id: sourceId,
+          fileName: 'source.wav',
+          mimeType: 'audio/wav',
+          byteLength: 100,
+          durationSeconds: 3,
+        },
+        objectUrl: 'blob:source',
+        isCommitted: true,
+        regionIds: ['another-region'],
+      },
+    },
+  ])('$label 접근 가능한 오류를 표시한다', ({ resolvedSource }) => {
+    const sourceBackedRegion = createSourceBackedRegion();
+    resolveAudioSource.mockReturnValue(resolvedSource);
+
+    const { host } = renderRegion({
+      region: sourceBackedRegion,
+      onMove: vi.fn().mockResolvedValue(undefined),
+    });
+
+    expect(host.querySelector('[data-audio-url]')).toBeNull();
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe('오디오 소스를 찾을 수 없습니다.');
+  });
 });
 
 describe('RegionComponent 드래그 이동', () => {

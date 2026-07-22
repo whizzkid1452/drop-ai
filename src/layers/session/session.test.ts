@@ -1,8 +1,41 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createSessionStore, type SessionStore } from './session';
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { createSessionStore, type RegionState, type SessionStore } from './session';
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
 const INITIAL_PROJECT_METADATA = { id: PROJECT_ID, name: '새 프로젝트', revision: 0 };
+
+describe('RegionState 오디오 식별자 계약', () => {
+  it('sourceId 방식의 오디오 소스를 가진다', () => {
+    const region: RegionState = {
+      id: 'region-1',
+      startTime: 0,
+      endTime: 5,
+      sourceStartTime: 0,
+      duration: 5,
+      status: [],
+      sourceId: '11111111-1111-4111-8111-111111111111',
+    };
+
+    expect(region.sourceId).toBe('11111111-1111-4111-8111-111111111111');
+    expect(region.audioFileUrl).toBeUndefined();
+  });
+
+  it('audioFileUrl 또는 sourceId 중 정확히 하나만 허용한다', () => {
+    type RegionCommonFields = {
+      id: string;
+      startTime: number;
+      endTime: number;
+      sourceStartTime: number;
+      duration: number;
+      status: [];
+    };
+
+    expectTypeOf<RegionCommonFields & { audioFileUrl: string }>().toExtend<RegionState>();
+    expectTypeOf<RegionCommonFields & { sourceId: string }>().toExtend<RegionState>();
+    expectTypeOf<RegionCommonFields>().not.toExtend<RegionState>();
+    expectTypeOf<RegionCommonFields & { audioFileUrl: string; sourceId: string }>().not.toExtend<RegionState>();
+  });
+});
 
 describe('Session Store - Phase 1 검증', () => {
   let store: SessionStore;

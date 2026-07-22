@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
+import { AudioSourceRegistry } from '../audio-source-registry/audio-source-registry';
+import type { IAudioSourceRegistry } from '../audio-source-registry/i-audio-source-registry';
 import { AppController } from '../controllers/app-controller';
 import { createSessionStore } from '../session/session';
 import { AudioCommandType, type AudioCommand } from '../shared/types/audioCommand.schema';
@@ -9,6 +11,8 @@ const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
 const SECOND_REGION_ID = '33333333-3333-4333-8333-333333333333';
 const AUDIO_URL = 'https://example.com/audio.wav';
+const SOURCE_ID = '55555555-5555-4555-8555-555555555555';
+const SOURCE_OBJECT_URL = 'blob:command-source';
 const INITIAL_PROJECT_METADATA = {
   id: '44444444-4444-4444-8444-444444444444',
   name: '테스트 프로젝트',
@@ -17,10 +21,31 @@ const INITIAL_PROJECT_METADATA = {
 
 function createTestContext() {
   const session = createSessionStore({ initialProjectMetadata: INITIAL_PROJECT_METADATA });
-  const controller = new AppController(session, new MockAudioEngine());
+  const audioSourceRegistry = new AudioSourceRegistry({
+    createObjectUrl: () => SOURCE_OBJECT_URL,
+    revokeObjectUrl: vi.fn(),
+  });
+  const controller = new AppController({
+    sessionStore: session,
+    audioEngine: new MockAudioEngine(),
+    audioSourceRegistry,
+  });
   const commandExecutor = new CommandExecutor(session, controller);
 
-  return { commandExecutor, controller, session };
+  return { audioSourceRegistry, commandExecutor, controller, session };
+}
+
+function stageSource(audioSourceRegistry: IAudioSourceRegistry): void {
+  audioSourceRegistry.stage({
+    metadata: {
+      id: SOURCE_ID,
+      fileName: 'source.wav',
+      mimeType: 'audio/wav',
+      byteLength: 4,
+      durationSeconds: 5,
+    },
+    blob: new Blob(['test'], { type: 'audio/wav' }),
+  });
 }
 
 function createDeferredVoid(): { promise: Promise<void>; resolve: () => void } {
@@ -102,6 +127,93 @@ describe('CommandExecutor', () => {
 
     expect(session.getState().tracks.get(TRACK_ID)?.regions).toHaveLength(1);
     expect(session.getState().tracks.get(TRACK_ID)?.regions[0]?.id).toBe(REGION_ID);
+  });
+
+  it('LOAD_REGION의 sourceId를 Registry 기반 Region으로 전달한다', async () => {
+    const { audioSourceRegistry, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    stageSource(audioSourceRegistry);
+
+    await commandExecutor.execute({
+      type: AudioCommandType.LOAD_REGION,
+      trackId: TRACK_ID,
+      regionId: REGION_ID,
+      sourceId: SOURCE_ID,
+      startTime: 0,
+      duration: 5,
+    });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.regions[0]).toMatchObject({
+      id: REGION_ID,
+      sourceId: SOURCE_ID,
+    });
+  });
+
+  it('LOAD_REGION의 trackId를 생략하면 Controller가 첫 Track을 선택한다', async () => {
+    const { audioSourceRegistry, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    stageSource(audioSourceRegistry);
+
+    await commandExecutor.execute({
+      type: AudioCommandType.LOAD_REGION,
+      regionId: REGION_ID,
+      sourceId: SOURCE_ID,
+      startTime: 0,
+      duration: 5,
+    });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.regions[0]).toMatchObject({
+      id: REGION_ID,
+      sourceId: SOURCE_ID,
+    });
+  });
+
+  it('LOAD_REGION이 등록 Source 길이를 넘으면 Session과 Registry를 변경하지 않는다', async () => {
+    const { audioSourceRegistry, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    stageSource(audioSourceRegistry);
+
+    await expect(
+      commandExecutor.execute({
+        type: AudioCommandType.LOAD_REGION,
+        trackId: TRACK_ID,
+        regionId: REGION_ID,
+        sourceId: SOURCE_ID,
+        startTime: 0,
+        startOffset: 1,
+        duration: 5,
+      })
+    ).rejects.toMatchObject({ code: 'REGION_SOURCE_RANGE_EXCEEDED' });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.regions).toEqual([]);
+    expect(audioSourceRegistry.resolve(SOURCE_ID)).toBeNull();
+  });
+
+  it('LOAD_REGION의 Source를 생략하면 첫 Region의 sourceId를 재사용한다', async () => {
+    const { audioSourceRegistry, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    stageSource(audioSourceRegistry);
+    await commandExecutor.execute({
+      type: AudioCommandType.LOAD_REGION,
+      trackId: TRACK_ID,
+      regionId: REGION_ID,
+      sourceId: SOURCE_ID,
+      startTime: 0,
+      duration: 5,
+    });
+
+    await commandExecutor.execute({
+      type: AudioCommandType.LOAD_REGION,
+      trackId: TRACK_ID,
+      regionId: SECOND_REGION_ID,
+      startTime: 5,
+      duration: 5,
+    });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.regions[1]).toMatchObject({
+      id: SECOND_REGION_ID,
+      sourceId: SOURCE_ID,
+    });
   });
 
   it('UNLOAD_REGION에서 ID를 생략하면 첫 번째 Region을 제거한다', async () => {

@@ -9,6 +9,7 @@ import { createCliCommands } from './index';
 
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
+const SOURCE_ID = '33333333-3333-4333-8333-333333333333';
 const AUDIO_URL = 'https://example.com/audio.wav';
 
 type CliCommandExecutor = Pick<CommandExecutor, 'execute' | 'executeMany'>;
@@ -143,6 +144,22 @@ describe('내부 CLI 명령 변환', () => {
     });
   });
 
+  it('region add-source 인자를 sourceId 기반 LOAD_REGION 명령으로 변환한다', async () => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    await commands.region.fn('add-source', TRACK_ID, REGION_ID, SOURCE_ID, '3', '5', '1');
+
+    expect(execute).toHaveBeenCalledWith({
+      type: AudioCommandType.LOAD_REGION,
+      trackId: TRACK_ID,
+      regionId: REGION_ID,
+      sourceId: SOURCE_ID,
+      startTime: 3,
+      duration: 5,
+      startOffset: 1,
+    });
+  });
+
   it('region remove 인자를 UNLOAD_REGION 명령으로 변환한다', async () => {
     const commands = createCliCommands(commandExecutor, defaultState);
 
@@ -270,6 +287,7 @@ describe('내부 CLI 명령 변환', () => {
     const result = await commands.help.fn();
 
     expect(result).toContain('track add <trackId> <url>');
+    expect(result).toContain('region add-source <trackId> <regionId> <sourceId>');
     expect(result).toContain('region split <trackId> <regionId> <time>');
     expect(result).not.toContain('--help');
   });

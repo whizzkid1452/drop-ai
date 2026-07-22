@@ -1,12 +1,10 @@
 import { z } from 'zod';
+import { isRegionSourceRangeWithinDuration } from '../audio-source-range';
 
 export const PROJECT_DOCUMENT_SCHEMA_VERSION = 1 as const;
 
 const MAX_NAME_LENGTH = 255;
 const MAX_MIME_TYPE_LENGTH = 255;
-// 초 단위 두 값을 더할 때 생기는 IEEE-754 반올림 오차만 허용한다.
-const SOURCE_RANGE_TOLERANCE_SECONDS = 1e-9;
-
 const nonBlankNameSchema = z.string().trim().min(1).max(MAX_NAME_LENGTH);
 const normalizedAudioValueSchema = z.number().min(0).max(1);
 
@@ -125,8 +123,13 @@ export const ProjectDocumentSchema = ProjectDocumentV1BaseSchema.superRefine((do
         return;
       }
 
-      const sourceEndTimeSeconds = region.sourceStartTimeSeconds + region.durationSeconds;
-      if (sourceEndTimeSeconds - source.durationSeconds <= SOURCE_RANGE_TOLERANCE_SECONDS) {
+      if (
+        isRegionSourceRangeWithinDuration({
+          sourceDurationSeconds: source.durationSeconds,
+          sourceStartTimeSeconds: region.sourceStartTimeSeconds,
+          regionDurationSeconds: region.durationSeconds,
+        })
+      ) {
         return;
       }
 

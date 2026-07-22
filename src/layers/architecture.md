@@ -24,8 +24,9 @@ Agent 응답은 JSON 배열 전체를 엄격하게 검증한다. 빈 배열은 �
 Agent Prompt는 현재 AudioCommand 전체의 필드와 범위를 설명하고 실제 Track·Region ID, 시간 범위, 오디오 소스
 사용 가능 여부를 전달한다. 예시 출력은 엄격한 Agent Schema로 테스트한다. 앱이 예약한 새 ID와 허용 파일 목록이
 아직 없으므로 Agent는 `ADD_TRACK`을 만들지 않는다. `LOAD_REGION`은 기존 Track의 첫 Region 소스를 재사용할 수
-있을 때만 ID 생성과 기존 URL 선택을 실행기에 맡겨 제한적으로 사용한다. 프로젝트 컨텍스트는 모델 입력 한도를
-넘길 위험을 줄이도록 길이를 제한하고 잘림 여부를 표시한다.
+있을 때만 제한적으로 사용한다. 등록 Source Region은 목록의 실제 `sourceId`를 사용하고, 기존 URL Region은 Source
+선택을 Controller에 맡긴다. Agent는 URL과 `sourceId`를 만들거나 추측하지 않는다. 프로젝트 컨텍스트는 모델 입력
+한도를 넘길 위험을 줄이도록 길이를 제한하고 잘림 여부를 표시한다.
 
 현재 Region의 `startTime`과 `endTime`은 절대 초 단위다. 음악 시간(musical time) 모델을 도입하기 전까지 Session의
 tempo 변경은 AudioEngine의 Transport BPM과 Region 예약을 변경하지 않는다.
@@ -66,12 +67,40 @@ committed Source와 URL은 Undo와 미디어 재사용을 위해 유지한다. p
 Source는 포함한다.
 URL 해제가 실패하면 해당 Source를 Registry에 남겨 다음 정리 호출에서 다시 시도할 수 있게 한다.
 
+Session의 Region은 전환 기간에 두 형식 중 정확히 하나를 가진다. 새 경로는 `sourceId`, 기존 호환 경로는
+`audioFileUrl`을 가진다. `LOAD_REGION`은 `sourceId`와 `url`을 동시에 받지 않는다. 둘 다 생략하면 Controller가 같은
+Track의 첫 Region 소스를 재사용한다. `trackId`도 생략하면 Controller가 첫 Track을 선택한다. 유효한 `LOAD_REGION`이
+Controller에 전달된 뒤 Track 선택이나 검증이 실패하면 명시된 pending Source도 Controller가 정리한다. 등록 Source
+경로에서는 Controller가 연결을 확인하고 Object URL을 AudioEngine에만 전달하며, Session에는 `sourceId`만 저장한다. Web
+파형·Agent context·Export도 조회용 Resolver로 Source와 Region 연결을 확인한다. 등록 Source 연결이 없으면 Web 파형은
+오류를 표시하고, Agent context는 `unavailable`로 표시해 복제 대상으로
+쓰지 않으며, Export는 typed 오류를 반환한다. URL을 추측하거나 Export에서 Region을 조용히 제외하지 않는다. 빈 기존
+URL Region을 Export에서 제외하는 동작은 호환 경로가 제거될 때까지 유지한다.
+
+등록 Source 길이를 알면 Controller는 Region의 원본 범위를 연결 전에 검증한다. `duration` 생략 시 Source의 남은
+길이로 정규화하고, Source 길이가 `null`이면 `duration`을 요구한다. ProjectDocument와 같은 1e-9초 부동소수점
+허용오차를 사용한다.
+
+등록 Source를 사용하는 Region 추가·삭제·분할과 Track 삭제는 Registry 변경, AudioEngine 호출, Session 반영 순서로
+실행하고 Controller 진입 뒤 실패 시 완료한 Registry 변경을 역순으로 보상한다. 처음 연결된 pending Source의 추가가
+실패하면 URL까지 정리하고, 이미 committed였던 Source는 Undo와 재사용을 위해 유지한다. `stage` 뒤 Command 검증이나
+dispatch 전에 실패하면 stage 호출자가 `discardPending`을 실행한다. 보상도 실패하면 원래 오류와 실패한 보상 단계를
+`ProjectMutationCompensationError`에 함께 보존한다. 이 절차는 여러 객체의 원자적 transaction은 아니다. 일반 진입점은
+CommandExecutor 대기열로 동시 변경을 막지만, 향후 AudioEngine 교체와 프로젝트 불러오기는 별도의 원자적 교체 계약이
+필요하다.
+
+등록 Source Region 분할은 새 연결을 예약한 뒤에도 기존 연결을 AudioEngine 교체 완료까지 유지한다. 성공 후 기존
+연결과 Session을 바꾼다. 재검증 시 Session 대상이 사라졌다면 새 Engine Region과 남은 Source 연결을 제거하고,
+Source 전환만 실패했다면 Engine과 Registry를 기존 Region 상태로 되돌린다.
+
 단건 `restoreCommitted`는 원자적인 프로젝트 불러오기 API가 아니다. 후속 불러오기 구현은 새 Registry에 모든 Blob을
 복원하고 AudioEngine 준비까지 성공한 뒤 기존 프로젝트와 교체해야 한다. Registry는 영구 저장소가 아니므로 실제 다시
 열기는 Source UUID를 키로 원본 바이트를 보존하는 OPFS Adapter를 추가한 뒤 연결한다. `createApp`은 Registry 구현을 한 번
 조립하되 Apps에는 등록용 `IAudioSourceStager`와 조회용 `IAudioSourceResolver`만 노출한다. 전체
-`IAudioSourceRegistry`와 구체 구현은 Composition Root 밖에 노출하지 않는다. 기존 업로드와 Controller 연결은 후속
-소비자 마이그레이션에서 추가한다.
+`IAudioSourceRegistry`와 구체 구현은 Composition Root 밖에 노출하지 않는다. Track·Region Controller에는 같은
+Registry의 전체 계약을 주입하고, 조회만 필요한 Export에는 `IAudioSourceResolver`를 주입한다. 기존 업로드가 Blob을
+stage하고 `sourceId` 명령을 만드는 전환은 후속 소비자 마이그레이션에서 추가한다.
+ProjectDocument Mapper와 저장·불러오기는 기존 URL Region 제거와 OPFS 원본 저장소를 완료한 뒤 연결한다.
 
 Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을 때 그 ID로 `SPLIT_REGION`을 실행한다. Region
 삭제도 사용자가 확인한 정확한 ID로 `UNLOAD_REGION`을 실행한다. 내부 CLI의 변경 작업은 CommandExecutor를
@@ -106,13 +135,14 @@ graph TD
     Apps -->|Stage / Resolve only| AudioSourceRegistry
 
     Controllers -->|Use| AudioEngine
+    Controllers -->|Attach / Detach / Resolve| AudioSourceRegistry
     Controllers -->|Update| Session
     Queries -->|Read Only| Controllers
 
     AudioEngine -->|Wrap / Use| ToneJS
 
     CreateApp -->|Create| AudioEngine
-    CreateApp -->|Create narrow contracts| AudioSourceRegistry
+    CreateApp -->|Create private registry and narrow contracts| AudioSourceRegistry
     CreateApp -->|Create| Session
     CreateApp -->|Create & Inject Deps| Controllers
     CreateApp -->|Create & Inject Deps| Commands

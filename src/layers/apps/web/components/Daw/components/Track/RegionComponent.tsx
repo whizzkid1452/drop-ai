@@ -2,8 +2,12 @@ import WavesurferPlayer from '@wavesurfer/react';
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
 import * as styles from './RegionComponent.css.ts';
+import type { IAudioSourceResolver } from '@/layers/audio-source-registry/i-audio-source-registry';
+import { useAudioSourceResolver } from '@/layers/apps/web/context/layer-hooks';
 import type { RegionState } from '@/layers/session/session';
 import { calculateRegionDragStartTime } from '@/layers/apps/web/hooks/calculate-region-drag-start-time';
+
+const MISSING_AUDIO_SOURCE_MESSAGE = '오디오 소스를 찾을 수 없습니다.';
 
 interface RegionDragSession {
   pointerId: number;
@@ -19,6 +23,19 @@ interface RegionComponentProps {
   onRemove?: () => void;
 }
 
+function resolveRegionAudioFileUrl(region: RegionState, audioSourceResolver: IAudioSourceResolver): string | null {
+  if (region.sourceId === undefined) {
+    return region.audioFileUrl ?? null;
+  }
+
+  const audioSource = audioSourceResolver.resolve(region.sourceId);
+  if (!audioSource || !audioSource.regionIds.includes(region.id)) {
+    return null;
+  }
+
+  return audioSource.objectUrl;
+}
+
 export const RegionComponent = ({
   region,
   pixelsPerSecond,
@@ -26,12 +43,14 @@ export const RegionComponent = ({
   onMove,
   onRemove,
 }: RegionComponentProps) => {
+  const audioSourceResolver = useAudioSourceResolver();
   const dragSession = useRef<RegionDragSession | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [previewStartTime, setPreviewStartTime] = useState<number | null>(null);
   const displayedStartTime = previewStartTime ?? region.startTime;
   const left = displayedStartTime * pixelsPerSecond;
   const width = region.duration * pixelsPerSecond;
+  const audioFileUrl = resolveRegionAudioFileUrl(region, audioSourceResolver);
 
   const calculateStartTime = (pointerX: number, session: RegionDragSession) =>
     calculateRegionDragStartTime({
@@ -173,16 +192,20 @@ export const RegionComponent = ({
           height: '100%',
         }}
       >
-        <WavesurferPlayer
-          height={100}
-          waveColor="#555"
-          progressColor="#555"
-          url={region.audioFileUrl}
-          onReady={onReady}
-          interact={false}
-          cursorWidth={0}
-          autoScroll={false}
-        />
+        {audioFileUrl === null ? (
+          <div role="alert">{MISSING_AUDIO_SOURCE_MESSAGE}</div>
+        ) : (
+          <WavesurferPlayer
+            height={100}
+            waveColor="#555"
+            progressColor="#555"
+            url={audioFileUrl}
+            onReady={onReady}
+            interact={false}
+            cursorWidth={0}
+            autoScroll={false}
+          />
+        )}
       </div>
     </div>
   );

@@ -4,15 +4,26 @@ import type { AudioFile } from '@/types/audioFile';
 import type { AgentRunStatus, AgentStatus, Message } from '@/types/agent';
 import type { ProjectMetadata } from '../shared/types/project-document.schema';
 
-export interface RegionState {
+interface RegionCommonState {
   id: string;
   startTime: number;
   endTime: number;
   sourceStartTime: number;
   duration: number;
   status: RegionStatus[]; // types/track.ts와 통일
-  audioFileUrl?: string;
 }
+
+interface LegacyUrlRegionSource {
+  audioFileUrl: string;
+  sourceId?: never;
+}
+
+interface RegisteredRegionSource {
+  sourceId: string;
+  audioFileUrl?: never;
+}
+
+export type RegionState = RegionCommonState & (LegacyUrlRegionSource | RegisteredRegionSource);
 
 export interface TrackState {
   id: string;

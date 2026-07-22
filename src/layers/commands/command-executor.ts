@@ -127,12 +127,16 @@ export class CommandExecutor {
         return;
 
       case AudioCommandType.LOAD_REGION: {
-        const trackId = this.resolveTrackId(session, validatedCommand.trackId);
-        const url = validatedCommand.url ?? this.getFirstRegionUrl(session, trackId);
+        const source = validatedCommand.sourceId
+          ? { sourceId: validatedCommand.sourceId }
+          : validatedCommand.url
+            ? { url: validatedCommand.url }
+            : {};
 
-        await this.controller.region.addRegion(trackId, {
+        // Track 선택과 검증은 pending Source 수명까지 관리하는 Controller가 맡는다.
+        await this.controller.region.addRegion(validatedCommand.trackId, {
           id: validatedCommand.regionId ?? crypto.randomUUID(),
-          url,
+          ...source,
           startTime: validatedCommand.startTime,
           sourceStartTime: validatedCommand.startOffset ?? 0,
           duration: validatedCommand.duration,
@@ -207,15 +211,6 @@ export class CommandExecutor {
       throw new Error(`No regions available in track ${trackId}. Please add a region first.`);
     }
     return firstRegion.id;
-  }
-
-  private getFirstRegionUrl(session: SessionState, trackId: string): string {
-    const track = this.getTrack(session, trackId);
-    const firstRegionUrl = track.regions[0]?.audioFileUrl;
-    if (!firstRegionUrl) {
-      throw new Error(`No URL available in track ${trackId}. Please add a region first.`);
-    }
-    return firstRegionUrl;
   }
 
   private getTrack(session: SessionState, trackId: string) {

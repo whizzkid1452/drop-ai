@@ -84,7 +84,8 @@ Agent 응답은 JSON 배열 전체를 엄격하게 검증한다. 빈 배열은 �
 Agent Prompt는 AudioCommand 전체의 정확한 필드와 범위를 안내한다. 현재 Session의 실제 Track·Region ID, 시간
 범위, 오디오 소스 사용 가능 여부도 함께 전달하며, Prompt 예시는 엄격한 Agent Schema를 통과해야 한다. 아직 앱이
 예약한 새 ID와 허용 파일 목록을 제공하지 않으므로 Agent의 `ADD_TRACK` 생성은 막는다. `LOAD_REGION`은 기존
-Track의 첫 Region 소스를 재사용하는 경우에만 제한적으로 허용한다.
+Track의 첫 Region 소스를 재사용하는 경우에만 제한적으로 허용한다. 등록 Source Region은 목록의 실제 `sourceId`만
+사용하고, 기존 URL Region은 Source 선택을 Controller에 맡긴다. Agent에는 Object URL을 노출하지 않는다.
 프로젝트 컨텍스트는 모델 입력 한도를 넘길 위험을 줄이도록 길이를 제한하고 잘림 여부를 표시한다.
 
 ```mermaid
@@ -139,7 +140,8 @@ Session의 프로젝트 값이며, AudioEngine의 Transport BPM이나 Region 예
 **PlaybackClockQuery**를 한 번 조립한다.
 AppController 자체는 Apps에 노출하지 않는다. CommandExecutor에는 AppController를, PlaybackClockQuery에는
 PlaybackController의 읽기 전용 계약을 주입한다. AudioSourceRegistry는 전체 변경 계약을 노출하지 않고 등록용
-`IAudioSourceStager`와 조회용 `IAudioSourceResolver`로 나눠 노출한다.
+`IAudioSourceStager`와 조회용 `IAudioSourceResolver`로 나눠 노출한다. 같은 Registry의 전체 계약은 Source 연결 수명을
+관리하는 Controller에만 주입한다.
 
 ```mermaid
 flowchart TB
@@ -150,23 +152,26 @@ flowchart TB
 
     subgraph asm["조립 (한 곳)"]
         CA["createApp(options)"]
+        REG["IAudioSourceRegistry\n(full, private)"]
     end
 
     subgraph out["결과"]
         SS["session\n(createSessionStore)"]
-        AC["AppController\n(session, audioEngine)"]
+        AC["AppController\n(session, audioEngine, audioSourceRegistry)"]
         CE["CommandExecutor\n(session, controller)"]
         Q["PlaybackClockQuery\n(playback controller read-only)"]
-        SR["AudioSourceRegistry\n(stager / resolver only)"]
+        SR["Audio Source capabilities\n(stager / resolver only)"]
     end
 
     IN --> CA
     SRIN --> CA
+    CA --> REG
     CA --> SS
     CA --> AC
     CA --> CE
     CA --> Q
-    CA --> SR
+    REG -.->|"같은 인스턴스 주입"| AC
+    REG -.->|"좁은 계약으로 감쌈"| SR
     SS -.->|"같은 인스턴스 주입"| AC
     SS -.->|"같은 인스턴스 주입"| CE
     AC -.->|"같은 인스턴스 주입"| CE
@@ -347,8 +352,9 @@ Session의 프로젝트 metadata 전체 교체는 후속 Project Controller만 �
 ## 11. Runtime Audio Source Registry
 
 Source UUID는 ProjectDocument에 저장하는 고정 식별자다. Object URL은 브라우저가 현재 실행 중에만 제공하는 임시 값이므로
-문서와 Session의 영구 식별자로 사용하지 않는다. `AudioSourceRegistry`가 **재생 Source용 Object URL**의 생성과 해제를
-전담한다. 오디오 길이 판독용 임시 URL과 Export 다운로드 URL은 별도 수명이라 이 Registry의 소유 범위가 아니다.
+ProjectDocument의 식별자로 사용하지 않는다. 새 Session Region도 Source UUID를 저장한다. 기존 `audioFileUrl` Region은
+소비자 전환이 끝날 때까지만 호환한다. `AudioSourceRegistry`가 **재생 Source용 Object URL**의 생성과 해제를 전담한다.
+오디오 길이 판독용 임시 URL과 Export 다운로드 URL은 별도 수명이라 이 Registry의 소유 범위가 아니다.
 
 | 상태·작업             | 규칙                                                                     |
 | --------------------- | ------------------------------------------------------------------------ |
@@ -365,6 +371,53 @@ ID를 다시 연결할 수 있기 때문이다. 조회 결과와 metadata 목록
 Object URL 생성·해제 실패는 typed Registry 오류로 구분한다.
 URL 해제가 실패한 Source는 Registry에 남겨 다음 정리 호출에서 다시 시도하고, 이미 해제한 Source는 다시 해제하지 않는다.
 
+### 11.1. Region 호환 경로
+
+Session Region은 다음 두 형식 중 정확히 하나다.
+
+| 형식        | Session 저장값 | AudioEngine 입력                            |
+| ----------- | -------------- | ------------------------------------------- |
+| 등록 Source | `sourceId`     | Controller가 Registry에서 확인한 Object URL |
+| 기존 호환   | `audioFileUrl` | 기존 URL                                    |
+
+`LOAD_REGION`은 `sourceId`와 `url`을 동시에 허용하지 않는다. 둘 다 생략하면 Controller가 같은 Track의 첫 Region 소스를
+재사용한다. `trackId`도 생략하면 Controller가 첫 Track을 선택한다. 유효한 `LOAD_REGION`이 Controller에 전달된 뒤 Track
+선택이나 존재 검증이 실패하면 명시된 pending Source도 Controller가 정리한다. 등록 Source의 URL은 Session과 Agent
+Prompt에 넣지 않는다. Web 파형, Agent context, Export는 Resolver가 반환한 Source에 해당 Region ID가 실제로 연결됐는지
+확인한다. 등록 Source나 연결이 없으면 Web 파형은 오류를 표시하고, Agent
+context는 `unavailable`로 표시해 복제 대상으로 쓰지 않으며, Export는 typed 오류를 반환한다. 다른 URL을 추측하거나
+Export에서 조용히 제외하지 않는다. 빈 기존 URL Region을 Export에서 제외하는 동작은 호환 경로가 제거될 때까지 유지한다.
+
+등록 Source 길이를 알면 Controller는 `sourceStartTime + duration`이 Source 길이를 넘지 않는지 연결 전에 검증한다.
+`duration`을 생략하면 Source의 남은 길이로 정규화해 AudioEngine과 Session에 같은 값을 전달한다. Source 길이가
+`null`이면 남은 길이를 계산할 수 없으므로 `duration`을 명시해야 한다. 이 규칙은 ProjectDocument 검증과 같은 1e-9초
+부동소수점 허용오차를 사용한다.
+
+### 11.2. 실패 보상
+
+등록 Source Region의 Controller 변경은 한 저장소 transaction이 아니라 다음 작업을 순서대로 조정하는 절차다.
+
+1. Registry 연결을 준비한다.
+2. AudioEngine을 변경한다.
+3. Session을 반영한다.
+
+Controller 진입 뒤 중간 실패 시 완료한 Registry 변경을 역순으로 되돌린다. 처음 연결된 pending Source의 추가가 실패하면
+Object URL도 정리한다. 이미 committed인 Source는 Region 연결만 되돌리고 Undo와 재사용을 위해 유지한다. 원래 작업과
+보상 작업이 모두 실패하면 `ProjectMutationCompensationError`가 원래 원인과 각 보상 실패를 함께 보존한다. `stage` 뒤
+Command Schema 검증이나 dispatch 전에 실패한 경우는 Controller가 Source를 볼 수 없으므로 stage 호출자가
+`discardPending`을 실행해야 한다.
+
+등록 Source Region을 분할할 때는 새 Region 연결을 먼저 예약하되 기존 Region 연결을 AudioEngine 교체가 끝날 때까지
+유지한다. 따라서 비동기 교체 중에도 Session에 남은 기존 Region의 파형 조회가 유효하다. 교체 성공 뒤 기존 연결을
+끊고 Session을 바꾼다. 재검증 시 Session에서 대상이 이미 사라졌다면 Engine의 새 Region과 남은 Source 연결을 제거해
+최신 Session에 맞춘다. Session 대상은 남아 있지만 Source 전환이 실패하면 Engine과 Registry를 기존 Region 상태로
+되돌린다.
+
+이 보상 절차는 원자적 transaction을 보장하지 않는다. 일반 Web·CLI·Agent 변경은 CommandExecutor의 단일 대기열을
+통과하므로 서로 끼어들지 않지만, AudioEngine API가 부분 성공한 뒤 실패하는 구현이나 외부에서 Session을 직접 변경하는
+경우까지 복구한다고 결론낼 수 없다. 후속 프로젝트 불러오기와 오디오 그래프 교체에는 준비된 전체 상태를 한 번에
+교체하는 별도 계약이 필요하다.
+
 `restoreCommitted`는 Blob 하나를 committed 상태로 복원하는 동작일 뿐 프로젝트 전체를 원자적으로 불러오는 API가 아니다.
 후속 불러오기 Controller는 새 Registry에서 모든 Source 복원과 AudioEngine 준비를 끝낸 뒤 기존 프로젝트를 교체해야 한다.
 중간 실패 시 새 Registry를 `clear`하고 기존 Session과 Registry를 유지한다.
@@ -372,7 +425,12 @@ URL 해제가 실패한 Source는 Registry에 남겨 다음 정리 호출에서 
 Registry는 영구 저장소가 아니다. 새로고침 후 프로젝트를 다시 열려면 Source UUID를 키로 원본 바이트를 보존하는 OPFS
 Adapter가 먼저 필요하다. 현재 단계에서는 Registry 계약·브라우저 URL Adapter·메모리 구현을 Composition Root에서 한 번
 조립한다. Apps에는 `IAudioSourceStager`와 `IAudioSourceResolver`만 제공하며, 전체 Registry 변경 계약과 구체 구현은
-노출하지 않는다. 기존 업로드 흐름과 Controller 연결은 후속 소비자 마이그레이션에서 추가한다.
+노출하지 않는다. 연결 수명을 바꾸는 Track·Region Controller만 전체 Registry 계약을 받고, 조회만 하는 Export는
+`IAudioSourceResolver`를 받는다. ProjectDocument Mapper와 저장·불러오기는 기존 URL Region 제거와 OPFS 원본 저장소를
+완료한 뒤 연결한다.
+
+현재 production Web 파일 가져오기는 아직 Blob을 `stage`하지 않고 기존 Object URL 명령을 만든다. Web 업로드를
+`sourceId` 명령으로 전환하는 작업은 다음 소비자 마이그레이션 단계다.
 
 ---
 

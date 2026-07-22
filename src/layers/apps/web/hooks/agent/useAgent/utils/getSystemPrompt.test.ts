@@ -9,6 +9,7 @@ import {
 
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
+const SOURCE_ID = '33333333-3333-4333-8333-333333333333';
 const tracks: AgentPromptTrack[] = [
   {
     id: TRACK_ID,
@@ -21,6 +22,7 @@ const tracks: AgentPromptTrack[] = [
         sourceStartTime: 2,
         duration: 3.5,
         hasAudioSource: true,
+        sourceId: SOURCE_ID,
       },
     ],
   },
@@ -35,12 +37,13 @@ describe('Agent 시스템 Prompt', () => {
     }
   });
 
-  it('트랙과 Region의 실제 식별자, 시간, 소스 사용 가능 여부를 전달한다', () => {
+  it('트랙과 Region의 실제 식별자, 시간, Source ID, 소스 사용 가능 여부를 전달한다', () => {
     const prompt = getSystemPrompt({ tracks });
 
     expect(prompt).toContain(`Track 1: id=${TRACK_ID}`);
     expect(prompt).toContain(
-      `Region 1: id=${REGION_ID}, startTime=1, endTime=4.5, sourceStartTime=2, duration=3.5, source=available`
+      `Region 1: id=${REGION_ID}, startTime=1, endTime=4.5, sourceStartTime=2, duration=3.5, ` +
+        `sourceId=${SOURCE_ID}, source=available`
     );
   });
 
@@ -73,6 +76,24 @@ describe('Agent 시스템 Prompt', () => {
     const prompt = getSystemPrompt({ tracks });
 
     expect(prompt).toContain('"startOffset":2,"duration":3.5');
+    expect(prompt).toContain(`"sourceId":"${SOURCE_ID}"`);
+  });
+
+  it('기존 URL Region 복제 예시는 sourceId를 추측하지 않는다', () => {
+    const legacyTracks: AgentPromptTrack[] = [
+      {
+        ...tracks[0],
+        regions: [{ ...tracks[0].regions[0], sourceId: undefined }],
+      },
+    ];
+    const prompt = getSystemPrompt({ tracks: legacyTracks });
+    const cloneExample = prompt
+      .split('# 예시\n')[1]
+      .split('\n')
+      .find(line => line.includes('첫 번째 Region 소스'));
+
+    expect(cloneExample).toBeDefined();
+    expect(cloneExample).not.toContain('sourceId');
   });
 
   it('한국어와 영어 요청 예시를 모두 제공한다', () => {
@@ -80,12 +101,15 @@ describe('Agent 시스템 Prompt', () => {
     expect(AGENT_PROMPT_EXAMPLES.some(example => /^[A-Za-z0-9 .!?-]+$/.test(example.request))).toBe(true);
   });
 
-  it('출력 형식과 식별자, URL 안전 규칙을 명시한다', () => {
+  it('출력 형식과 식별자, URL과 Source ID 안전 규칙을 명시한다', () => {
     const prompt = getSystemPrompt({ tracks });
 
     expect(prompt).toContain('JSON 배열만 반환');
     expect(prompt).toContain('기존 Track과 Region의 ID는 위 목록의 값만 사용');
     expect(prompt).toContain('URL을 추측하거나 만들어내지 않음');
+    expect(prompt).toContain('sourceId를 임의로 만들지 않는다');
+    expect(prompt).toContain('위 목록에 표시된 sourceId만 사용한다');
+    expect(prompt).toContain('url과 sourceId를 동시에 넣지 않는다');
     expect(prompt).toContain('정보가 부족하면 []');
     expect(prompt).toContain('ADD_TRACK은 현재 Agent에서 사용하지 않는다');
     expect(prompt).toContain('regionId와 url은 생략');

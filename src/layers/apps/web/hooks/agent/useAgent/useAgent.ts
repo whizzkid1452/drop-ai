@@ -1,16 +1,48 @@
 import { useCallback, useMemo } from 'react';
 import type { Message } from '@/types/agent';
 import { useWebLLM } from '@/layers/apps/web/hooks/agent/useWebLLM';
-import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
+import { useAudioSourceResolver, useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
 import { downloadWebAudioCommandResults } from '@/layers/apps/web/utils/execute-web-audio-command';
 import { handleAIResponse } from '@/layers/apps/web/hooks/agent/useAgent/utils/aiResponseHandler';
 import { createUserMessage, createAssistantMessage } from '@/layers/apps/web/hooks/agent/useAgent/utils/messageHelpers';
 import { trackAIResponseReceived, trackChatMessageSent, trackPromptImprovementSession } from '@/utils/analytics';
 import type { AudioCommand } from '@/types/audioCommand.schema';
+import type { IAudioSourceResolver } from '@/layers/audio-source-registry/i-audio-source-registry';
+import type { RegionState, TrackState } from '@/layers/session/session';
+import type { AgentPromptTrack } from './utils/getSystemPrompt';
 import { resolveAgentRunStatus } from './utils/resolve-agent-run-status';
+
+function hasAvailableAudioSource(region: RegionState, audioSourceResolver: IAudioSourceResolver): boolean {
+  if (!region.sourceId) {
+    return Boolean(region.audioFileUrl);
+  }
+
+  const audioSource = audioSourceResolver.resolve(region.sourceId);
+  return audioSource?.regionIds.includes(region.id) ?? false;
+}
+
+export function createAgentPromptTracks(
+  trackMap: ReadonlyMap<string, TrackState>,
+  audioSourceResolver: IAudioSourceResolver
+): AgentPromptTrack[] {
+  return Array.from(trackMap.values()).map((track, index) => ({
+    id: track.id,
+    index,
+    regions: track.regions.map(region => ({
+      id: region.id,
+      startTime: region.startTime,
+      endTime: region.endTime,
+      sourceStartTime: region.sourceStartTime,
+      duration: region.duration,
+      sourceId: region.sourceId,
+      hasAudioSource: hasAvailableAudioSource(region, audioSourceResolver),
+    })),
+  }));
+}
 
 export function useAgent() {
   const { engine } = useWebLLM();
+  const audioSourceResolver = useAudioSourceResolver();
   const trackMap = useSession(state => state.tracks);
   const messages = useSession(state => state.agentMessages);
   const status = useSession(state => state.agentStatus);
@@ -21,22 +53,7 @@ export function useAgent() {
   const markAgentResultSuccessful = useSession(state => state.markAgentResultSuccessful);
   const commandExecutor = useCommandExecutor();
 
-  const tracks = useMemo(
-    () =>
-      Array.from(trackMap.values()).map((track, index) => ({
-        id: track.id,
-        index,
-        regions: track.regions.map(r => ({
-          id: r.id,
-          startTime: r.startTime,
-          endTime: r.endTime,
-          sourceStartTime: r.sourceStartTime,
-          duration: r.duration,
-          hasAudioSource: Boolean(r.audioFileUrl),
-        })),
-      })),
-    [trackMap]
-  );
+  const tracks = useMemo(() => createAgentPromptTracks(trackMap, audioSourceResolver), [audioSourceResolver, trackMap]);
 
   const executeMany = useCallback(
     (commands: readonly AudioCommand[]) => commandExecutor.executeMany(commands),
