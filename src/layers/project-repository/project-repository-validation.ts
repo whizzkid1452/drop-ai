@@ -1,4 +1,9 @@
 import { ProjectDocumentSchema, type ProjectDocument } from '../shared/types/project-document.schema';
+import {
+  ProjectDocumentReadError,
+  ProjectDocumentReadErrorCode,
+  readProjectDocument,
+} from '../shared/types/project-document-reader';
 import { ProjectRepositoryError, ProjectRepositoryErrorCode } from './errors';
 
 interface RevisionConflictContext {
@@ -16,6 +21,11 @@ interface ValidateDocumentOptions {
   readonly message: string;
 }
 
+interface ReadStoredProjectDocumentOptions {
+  readonly document: unknown;
+  readonly projectId: string;
+}
+
 export function cloneAndValidateProjectDocument(document: ProjectDocument): ProjectDocument {
   return validateDocument({
     document,
@@ -24,11 +34,34 @@ export function cloneAndValidateProjectDocument(document: ProjectDocument): Proj
   });
 }
 
-export function cloneAndValidateStoredProjectDocument(document: ProjectDocument): ProjectDocument {
-  return validateDocument({
-    document,
-    errorCode: ProjectRepositoryErrorCode.INVALID_STORED_DATA,
-    message: '저장된 ProjectDocument가 유효하지 않습니다.',
+export function readStoredProjectDocument({ document, projectId }: ReadStoredProjectDocumentOptions): ProjectDocument {
+  try {
+    return readProjectDocument(document);
+  } catch (cause) {
+    throwStoredProjectDocumentReadError(cause, projectId);
+  }
+}
+
+export function throwStoredProjectDocumentReadError(cause: unknown, projectId: string): never {
+  const readError = getProjectDocumentReadError(cause);
+  if (!readError) {
+    throw cause;
+  }
+
+  if (readError.code === ProjectDocumentReadErrorCode.UNSUPPORTED_SCHEMA_VERSION) {
+    throw new ProjectRepositoryError({
+      code: ProjectRepositoryErrorCode.UNSUPPORTED_STORED_DOCUMENT_SCHEMA_VERSION,
+      message: `현재 앱에서 지원하지 않는 저장 문서 schemaVersion입니다: ${projectId}`,
+      details: { projectId, schemaVersion: readError.details?.schemaVersion },
+      cause,
+    });
+  }
+
+  throw new ProjectRepositoryError({
+    code: ProjectRepositoryErrorCode.INVALID_STORED_DATA,
+    message: `저장된 프로젝트 문서가 유효하지 않습니다: ${projectId}`,
+    details: { projectId },
+    cause,
   });
 }
 
@@ -98,4 +131,12 @@ function validateDocument({ document, errorCode, message }: ValidateDocumentOpti
     message,
     cause: result.error,
   });
+}
+
+function getProjectDocumentReadError(cause: unknown): ProjectDocumentReadError | undefined {
+  try {
+    return cause instanceof ProjectDocumentReadError ? cause : undefined;
+  } catch {
+    return undefined;
+  }
 }

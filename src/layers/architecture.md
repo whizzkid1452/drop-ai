@@ -46,7 +46,9 @@ v1뿐이며, 정의되지 않은 버전을 임의 변환하지 않는다.
 `IProjectRepository`는 ProjectDocument snapshot 저장 계약이다. Repository 계층은 Shared만 참조하며, 구체 구현은
 Composition Root에서만 조립한다. 저장과 삭제는 expected revision 비교로 오래된 탭의 덮어쓰기와 삭제를 거부한다.
 `InMemoryProjectRepository`는 계약 검증용 구현이다. `IndexedDbProjectRepository`는 문서와 목록 요약을 별도 Store에 두되,
-두 값을 하나의 transaction으로 갱신한다. 아직 Composition Root와 사용자 진입점에는 연결하지 않는다.
+두 값을 하나의 transaction으로 갱신한다. IndexedDB에서 읽은 문서 본문은 `readProjectDocument`로 판독하고, 손상된
+데이터와 현재 앱보다 새로운 문서 버전을 서로 다른 Repository 오류로 분류한다. 아직 Composition Root와 사용자
+진입점에는 연결하지 않는다.
 
 Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을 때 그 ID로 `SPLIT_REGION`을 실행한다. Region
 삭제도 사용자가 확인한 정확한 ID로 `UNLOAD_REGION`을 실행한다. 내부 CLI의 변경 작업은 CommandExecutor를

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ProjectDocumentSchema, type ProjectDocument } from '../shared/types/project-document.schema';
+import type { ProjectDocument } from '../shared/types/project-document.schema';
 import { ProjectRepositoryError, ProjectRepositoryErrorCode } from './errors';
 import type {
   DeleteProjectRequest,
@@ -9,7 +9,7 @@ import type {
 } from './i-project-repository';
 import {
   cloneAndValidateProjectDocument,
-  cloneAndValidateStoredProjectDocument,
+  readStoredProjectDocument,
   throwIfRevisionConflict,
   validateExpectedRevision,
   validateInitialRevision,
@@ -22,14 +22,12 @@ const PROJECT_DOCUMENT_STORE_NAME = 'project-documents';
 const PROJECT_SUMMARY_STORE_NAME = 'project-summaries';
 const PROJECT_STORE_NAMES = [PROJECT_DOCUMENT_STORE_NAME, PROJECT_SUMMARY_STORE_NAME];
 
-const StoredProjectDocumentSchema = z
-  .strictObject({
-    projectId: z.uuid(),
-    document: ProjectDocumentSchema,
-  })
-  .refine(record => record.projectId === record.document.project.id, {
-    message: '저장 키와 ProjectDocument ID가 일치하지 않습니다.',
-  });
+const StoredProjectDocumentEnvelopeSchema = z.strictObject({
+  projectId: z.uuid(),
+  document: z.unknown().refine(document => document !== undefined, {
+    message: '저장 record의 document 필드가 필요합니다.',
+  }),
+});
 
 const StoredProjectSummarySchema = z.strictObject({
   projectId: z.uuid(),
@@ -398,17 +396,29 @@ export class IndexedDbProjectRepository implements IProjectRepository {
   }
 
   private parseStoredProjectDocument(value: unknown, expectedProjectId: string): ProjectDocument {
-    const result = StoredProjectDocumentSchema.safeParse(value);
-    if (!result.success || result.data.projectId !== expectedProjectId) {
+    const envelopeResult = StoredProjectDocumentEnvelopeSchema.safeParse(value);
+    if (!envelopeResult.success || envelopeResult.data.projectId !== expectedProjectId) {
       throw new ProjectRepositoryError({
         code: ProjectRepositoryErrorCode.INVALID_STORED_DATA,
         message: `저장된 프로젝트 문서가 유효하지 않습니다: ${expectedProjectId}`,
         details: { projectId: expectedProjectId },
-        cause: result.success ? undefined : result.error,
+        cause: envelopeResult.success ? undefined : envelopeResult.error,
       });
     }
 
-    return cloneAndValidateStoredProjectDocument(result.data.document);
+    const document = readStoredProjectDocument({
+      document: envelopeResult.data.document,
+      projectId: expectedProjectId,
+    });
+    if (document.project.id !== expectedProjectId) {
+      throw new ProjectRepositoryError({
+        code: ProjectRepositoryErrorCode.INVALID_STORED_DATA,
+        message: `저장 키와 ProjectDocument ID가 일치하지 않습니다: ${expectedProjectId}`,
+        details: { documentProjectId: document.project.id, projectId: expectedProjectId },
+      });
+    }
+
+    return document;
   }
 
   private parseStoredProjectSummary(value: unknown): ProjectSummary {

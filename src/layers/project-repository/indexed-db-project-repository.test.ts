@@ -44,6 +44,30 @@ async function openRawDatabase(indexedDb: IDBFactory): Promise<IDBDatabase> {
   return waitForRequest(indexedDb.open(DATABASE_NAME));
 }
 
+async function putRawProjectDocumentRecord(indexedDb: IDBFactory, record: unknown): Promise<void> {
+  const database = await openRawDatabase(indexedDb);
+  try {
+    const transaction = database.transaction(PROJECT_DOCUMENT_STORE_NAME, 'readwrite');
+    transaction.objectStore(PROJECT_DOCUMENT_STORE_NAME).put(record);
+    await waitForTransaction(transaction);
+  } finally {
+    database.close();
+  }
+}
+
+async function getRawProjectDocumentRecord(indexedDb: IDBFactory, projectId: string): Promise<unknown> {
+  const database = await openRawDatabase(indexedDb);
+  try {
+    const transaction = database.transaction(PROJECT_DOCUMENT_STORE_NAME, 'readonly');
+    const completion = waitForTransaction(transaction);
+    const record = await waitForRequest(transaction.objectStore(PROJECT_DOCUMENT_STORE_NAME).get(projectId));
+    await completion;
+    return record;
+  } finally {
+    database.close();
+  }
+}
+
 function captureNextOpenedDatabase(indexedDb: IDBFactory): Promise<IDBDatabase> {
   const open = indexedDb.open.bind(indexedDb);
 
@@ -180,14 +204,74 @@ describe('IndexedDbProjectRepository', () => {
   it('저장소 안의 잘못된 문서를 별도 오류로 분류한다', async () => {
     const repository = createRepository();
     await repository.load(PROJECT_ID);
-    const database = await openRawDatabase(indexedDb);
-    const transaction = database.transaction(PROJECT_DOCUMENT_STORE_NAME, 'readwrite');
-    transaction.objectStore(PROJECT_DOCUMENT_STORE_NAME).put({ projectId: PROJECT_ID, document: {} });
-    await waitForTransaction(transaction);
-    database.close();
+    await putRawProjectDocumentRecord(indexedDb, { projectId: PROJECT_ID, document: {} });
 
     await expect(repository.load(PROJECT_ID)).rejects.toMatchObject({
       code: ProjectRepositoryErrorCode.INVALID_STORED_DATA,
+      cause: {
+        name: 'ProjectDocumentReadError',
+        code: 'INVALID_DOCUMENT_HEADER',
+      },
+    });
+  });
+
+  it('저장소 안의 미래 문서 버전을 손상된 데이터와 구분한다', async () => {
+    const repository = createRepository();
+    await repository.load(PROJECT_ID);
+    await putRawProjectDocumentRecord(indexedDb, {
+      projectId: PROJECT_ID,
+      document: { ...createProjectDocument(), schemaVersion: 2 },
+    });
+
+    await expect(repository.load(PROJECT_ID)).rejects.toMatchObject({
+      code: ProjectRepositoryErrorCode.UNSUPPORTED_STORED_DOCUMENT_SCHEMA_VERSION,
+      details: { projectId: PROJECT_ID, schemaVersion: 2 },
+      cause: {
+        name: 'ProjectDocumentReadError',
+        code: 'UNSUPPORTED_SCHEMA_VERSION',
+      },
+    });
+  });
+
+  it('document 필드가 없는 저장 record를 envelope 손상으로 분류한다', async () => {
+    const repository = createRepository();
+    await repository.load(PROJECT_ID);
+    await putRawProjectDocumentRecord(indexedDb, { projectId: PROJECT_ID });
+
+    await expect(repository.load(PROJECT_ID)).rejects.toMatchObject({
+      code: ProjectRepositoryErrorCode.INVALID_STORED_DATA,
+      cause: { name: 'ZodError' },
+    });
+  });
+
+  it('저장 키와 문서 안의 프로젝트 ID가 다르면 손상된 데이터로 분류한다', async () => {
+    const repository = createRepository();
+    await repository.load(PROJECT_ID);
+    const document = createProjectDocument();
+    document.project.id = '77777777-7777-4777-8777-777777777777';
+    await putRawProjectDocumentRecord(indexedDb, { projectId: PROJECT_ID, document });
+
+    await expect(repository.load(PROJECT_ID)).rejects.toMatchObject({
+      code: ProjectRepositoryErrorCode.INVALID_STORED_DATA,
+      details: {
+        documentProjectId: '77777777-7777-4777-8777-777777777777',
+        projectId: PROJECT_ID,
+      },
+    });
+  });
+
+  it('미래 문서 버전을 save로 덮어쓰지 않는다', async () => {
+    const repository = createRepository();
+    await repository.load(PROJECT_ID);
+    const futureDocument = { ...createProjectDocument(), schemaVersion: 2 };
+    await putRawProjectDocumentRecord(indexedDb, { projectId: PROJECT_ID, document: futureDocument });
+
+    await expect(repository.save({ document: createProjectDocument(), expectedRevision: 0 })).rejects.toMatchObject({
+      code: ProjectRepositoryErrorCode.UNSUPPORTED_STORED_DOCUMENT_SCHEMA_VERSION,
+    });
+    await expect(getRawProjectDocumentRecord(indexedDb, PROJECT_ID)).resolves.toEqual({
+      projectId: PROJECT_ID,
+      document: futureDocument,
     });
   });
 

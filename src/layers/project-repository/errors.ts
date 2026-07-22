@@ -8,6 +8,7 @@ export const ProjectRepositoryErrorCode = {
   REVISION_CONFLICT: 'REVISION_CONFLICT',
   STORAGE_OPERATION_FAILED: 'STORAGE_OPERATION_FAILED',
   STORAGE_UNAVAILABLE: 'STORAGE_UNAVAILABLE',
+  UNSUPPORTED_STORED_DOCUMENT_SCHEMA_VERSION: 'UNSUPPORTED_STORED_DOCUMENT_SCHEMA_VERSION',
 } as const;
 
 export type ProjectRepositoryErrorCode = (typeof ProjectRepositoryErrorCode)[keyof typeof ProjectRepositoryErrorCode];
