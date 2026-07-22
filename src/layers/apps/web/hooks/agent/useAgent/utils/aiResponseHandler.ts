@@ -1,17 +1,14 @@
 import { CommandBatchExecutionError, type CommandBatchExecutionResult } from '@/layers/commands/command-executor';
 import { parseAgentAudioCommandBatch, type AudioCommand } from '@/types/audioCommand.schema';
 import { queryToLLM as queryToLLM } from './queryToLLM';
+import type { AgentPromptTrack } from './getSystemPrompt';
 import type { MLCEngine } from '@/types/webllm.types';
 import { trackAudioCommandExecuted } from '@/utils/analytics';
 
 export interface AIResponseHandlerDependencies {
   executeMany: (commands: readonly AudioCommand[]) => Promise<CommandBatchExecutionResult>;
   engine: MLCEngine;
-  tracks: {
-    id: string;
-    index: number;
-    regions: { id: string; startTime: number; endTime: number }[];
-  }[];
+  tracks: readonly AgentPromptTrack[];
   userInput: string;
 }
 

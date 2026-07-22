@@ -72,6 +72,12 @@ Agent 응답은 JSON 배열 전체를 엄격하게 검증한다. 빈 배열은 �
 실행 단계에서 추가하지 않는다. 검증된 배열은 `executeMany` 한 번으로 실행하며, 중간 실패 뒤 남은 명령은
 실행하지 않는다.
 
+Agent Prompt는 AudioCommand 전체의 정확한 필드와 범위를 안내한다. 현재 Session의 실제 Track·Region ID, 시간
+범위, 오디오 소스 사용 가능 여부도 함께 전달하며, Prompt 예시는 엄격한 Agent Schema를 통과해야 한다. 아직 앱이
+예약한 새 ID와 허용 파일 목록을 제공하지 않으므로 Agent의 `ADD_TRACK` 생성은 막는다. `LOAD_REGION`은 기존
+Track의 첫 Region 소스를 재사용하는 경우에만 제한적으로 허용한다.
+프로젝트 컨텍스트는 모델 입력 한도를 넘길 위험을 줄이도록 길이를 제한하고 잘림 여부를 표시한다.
+
 ```mermaid
 flowchart LR
     subgraph UI["Apps (UI)"]

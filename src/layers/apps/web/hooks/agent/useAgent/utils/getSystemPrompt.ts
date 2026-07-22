@@ -1,46 +1,232 @@
-export const getSystemPrompt = ({
-  tracks = [],
-}: {
-  tracks?: {
-    id: string;
-    index: number;
-    regions: { id: string; startTime: number; endTime: number }[];
-  }[];
-}) => {
-  const trackListInfo = (tracks || []).map(t => `Track ${t.index + 1}: id=${t.id}`).join('\n');
+import {
+  AudioCommandType,
+  type AudioCommand,
+  type AudioCommandType as AudioCommandName,
+} from '@/types/audioCommand.schema';
 
-  return `# Role
-DAW 오디오 명령 파서. 사용자 요청을 JSON 배열로 변환. JSON만 반환.
+export interface AgentPromptRegion {
+  id: string;
+  startTime: number;
+  endTime: number;
+  sourceStartTime: number;
+  duration: number;
+  hasAudioSource: boolean;
+}
 
-# Tracks
-${trackListInfo || '(No tracks)'}
+export interface AgentPromptTrack {
+  id: string;
+  index: number;
+  regions: readonly AgentPromptRegion[];
+}
 
-# 변환 규칙
-- % → 소수: 80%→0.8, -50%→-0.5
-- X-Y → 초: "10-20"→startTime:10,endTime:20
-- MM:SS → 초: "1:30"→90 (분×60+초)
-- 숫자 필드는 number 타입
+interface AgentPromptExample {
+  request: string;
+  commands: readonly AudioCommand[];
+}
 
-# Commands
-PLAY, PAUSE, STOP | SET_CURRENT_TIME(time) | SET_TRACK_VOLUME(trackId?,volume) | SET_TRACK_PAN(trackId?,pan) | SET_EXPORT_RANGE(startTime,endTime) | EXPORT_AUDIO(filename?)
+interface AgentProjectContext {
+  text: string;
+  visibleTracks: readonly AgentPromptTrack[];
+}
 
-# 규칙
-1. **export + X-Y = 실제 내보내기 실행.** SET_EXPORT_RANGE만 넣으면 안 됨. 반드시 [SET_EXPORT_RANGE, EXPORT_AUDIO] 두 개.
-2. export=EXPORT_AUDIO, play=PLAY (혼동 금지)
-3. 명령별 객체 분리. EXPORT_AUDIO는 마지막.
-4. trackId: Current Track List의 실제 UUID 또는 생략(가짜 UUID 금지)
-5. 오디오 요청 시 [] 반환 금지
+export const AGENT_PROJECT_CONTEXT_MAX_CHARACTERS = 1600;
 
-# Examples
-"export 3-10" → [{"type":"SET_EXPORT_RANGE","startTime":3,"endTime":10},{"type":"EXPORT_AUDIO"}]
-"export 10-20" → [{"type":"SET_EXPORT_RANGE","startTime":10,"endTime":20},{"type":"EXPORT_AUDIO"}]
-"export 0:00 to 1:30" → [{"type":"SET_EXPORT_RANGE","startTime":0,"endTime":90},{"type":"EXPORT_AUDIO"}]
-"set volume 80%" → [{"type":"SET_TRACK_VOLUME","volume":0.8}]
-"set pan -50%" → [{"type":"SET_TRACK_PAN","pan":-0.5}]
-"play" → [{"type":"PLAY"}]
-"내보내기" → [{"type":"EXPORT_AUDIO"}]
-"재생" → [{"type":"PLAY"}]
-"볼륨 50% 팬 오른쪽 내보내기" → [{"type":"SET_TRACK_VOLUME","volume":0.5},{"type":"SET_TRACK_PAN","pan":1},{"type":"EXPORT_AUDIO"}]
-"안녕" → []
+const COMMAND_REFERENCE = {
+  [AudioCommandType.ADD_TRACK]:
+    '{"type":"ADD_TRACK","trackId":"<new UUID>","url":"<known URL>"} - 빈 Track 추가. 현재 Agent 생성은 금지',
+  [AudioCommandType.REMOVE_TRACK]:
+    '{"type":"REMOVE_TRACK","trackId":"<existing Track UUID>"} - Track과 포함된 Region을 제거',
+  [AudioCommandType.PLAY]: '{"type":"PLAY"} - 재생',
+  [AudioCommandType.PAUSE]: '{"type":"PAUSE"} - 현재 위치에서 일시정지',
+  [AudioCommandType.STOP]: '{"type":"STOP"} - 정지하고 0초로 이동',
+  [AudioCommandType.SET_TEMPO]: '{"type":"SET_TEMPO","tempo":<number greater than 0>} - 프로젝트 tempo 메타데이터 변경',
+  [AudioCommandType.SET_TRACK_VOLUME]:
+    '{"type":"SET_TRACK_VOLUME","trackId":"<existing Track UUID>","volume":<0..1>} - Track 볼륨 변경',
+  [AudioCommandType.SET_TRACK_PAN]:
+    '{"type":"SET_TRACK_PAN","trackId":"<existing Track UUID>","pan":<-1..1>} - Track 좌우 위치 변경',
+  [AudioCommandType.SET_TRACK_MUTE]:
+    '{"type":"SET_TRACK_MUTE","trackId":"<existing Track UUID>","muted":<boolean>} - Track 음소거 변경',
+  [AudioCommandType.SET_TRACK_SOLO]:
+    '{"type":"SET_TRACK_SOLO","trackId":"<existing Track UUID>","soloed":<boolean>} - Track solo 변경',
+  [AudioCommandType.LOAD_REGION]:
+    '{"type":"LOAD_REGION","trackId":"<existing Track UUID>","regionId":"<new UUID optional>","url":"<known URL optional>","startTime":<seconds >= 0>,"startOffset":<seconds >= 0 optional>,"duration":<seconds >= 0 optional>} - Region 추가. Agent 복제에서는 duration > 0',
+  [AudioCommandType.UNLOAD_REGION]:
+    '{"type":"UNLOAD_REGION","trackId":"<existing Track UUID>","regionId":"<existing Region UUID>"} - Region 제거',
+  [AudioCommandType.SPLIT_REGION]:
+    '{"type":"SPLIT_REGION","trackId":"<existing Track UUID>","regionId":"<existing Region UUID>","splitTime":<absolute seconds >= 0>} - Region 내부를 분할',
+  [AudioCommandType.MOVE_REGION]:
+    '{"type":"MOVE_REGION","trackId":"<existing Track UUID>","regionId":"<existing Region UUID>","newStartTime":<seconds >= 0>} - Region 시작 위치 변경',
+  [AudioCommandType.SET_CURRENT_TIME]: '{"type":"SET_CURRENT_TIME","time":<seconds >= 0>} - 재생 위치 변경',
+  [AudioCommandType.SET_EXPORT_RANGE]:
+    '{"type":"SET_EXPORT_RANGE","startTime":<seconds >= 0>,"endTime":<seconds >= 0>} - 내보내기 범위 선택. endTime > startTime',
+  [AudioCommandType.CLEAR_EXPORT_RANGE]: '{"type":"CLEAR_EXPORT_RANGE"} - 내보내기 범위 해제',
+  [AudioCommandType.EXPORT_AUDIO]:
+    '{"type":"EXPORT_AUDIO","filename":"<optional filename>"} - 현재 선택 범위 또는 전체를 WAV로 내보내기',
+} satisfies Record<AudioCommandName, string>;
+
+export const AGENT_PROMPT_EXAMPLES = [
+  {
+    request: 'play',
+    commands: [{ type: AudioCommandType.PLAY }],
+  },
+  {
+    request: '템포를 128로 설정해줘',
+    commands: [{ type: AudioCommandType.SET_TEMPO, tempo: 128 }],
+  },
+  {
+    request: '3초부터 10초까지 WAV로 내보내줘',
+    commands: [
+      { type: AudioCommandType.SET_EXPORT_RANGE, startTime: 3, endTime: 10 },
+      { type: AudioCommandType.EXPORT_AUDIO },
+    ],
+  },
+  {
+    request: '안녕',
+    commands: [],
+  },
+] satisfies readonly AgentPromptExample[];
+
+function createProjectContext(tracks: readonly AgentPromptTrack[]): AgentProjectContext {
+  if (tracks.length === 0) {
+    return { text: '(No tracks)', visibleTracks: [] };
+  }
+
+  const lines: string[] = [];
+  const visibleTracks: AgentPromptTrack[] = [];
+  let characterCount = 0;
+  let visibleRegionCount = 0;
+  const totalRegionCount = tracks.reduce((count, track) => count + track.regions.length, 0);
+
+  const tryAddLine = (line: string) => {
+    const separatorLength = lines.length === 0 ? 0 : 1;
+    if (characterCount + separatorLength + line.length > AGENT_PROJECT_CONTEXT_MAX_CHARACTERS) {
+      return false;
+    }
+
+    lines.push(line);
+    characterCount += separatorLength + line.length;
+    return true;
+  };
+
+  for (const track of tracks) {
+    if (!tryAddLine(`Track ${track.index + 1}: id=${track.id}`)) {
+      break;
+    }
+
+    const visibleRegions: AgentPromptRegion[] = [];
+    for (const [index, region] of track.regions.entries()) {
+      const regionLine =
+        `  Region ${index + 1}: id=${region.id}, startTime=${region.startTime}, endTime=${region.endTime}, ` +
+        `sourceStartTime=${region.sourceStartTime}, duration=${region.duration}, ` +
+        `source=${region.hasAudioSource ? 'available' : 'unavailable'}`;
+      if (!tryAddLine(regionLine)) {
+        break;
+      }
+
+      visibleRegions.push(region);
+      visibleRegionCount += 1;
+    }
+    visibleTracks.push({ ...track, regions: visibleRegions });
+
+    if (visibleRegions.length < track.regions.length) {
+      break;
+    }
+  }
+
+  if (visibleTracks.length < tracks.length || visibleRegionCount < totalRegionCount) {
+    lines.push(
+      `(Project context truncated: shown ${visibleTracks.length}/${tracks.length} Tracks, ` +
+        `${visibleRegionCount}/${totalRegionCount} Regions)`
+    );
+  }
+
+  return { text: lines.join('\n'), visibleTracks };
+}
+
+function renderCommandReference(): string {
+  return Object.values(AudioCommandType)
+    .map(commandType => `- ${commandType}: ${COMMAND_REFERENCE[commandType]}`)
+    .join('\n');
+}
+
+function createTargetExamples(tracks: readonly AgentPromptTrack[]): AgentPromptExample[] {
+  const firstTrack = tracks[0];
+  if (!firstTrack) {
+    return [];
+  }
+
+  const examples: AgentPromptExample[] = [
+    {
+      request: '첫 번째 트랙을 음소거해줘',
+      commands: [{ type: AudioCommandType.SET_TRACK_MUTE, trackId: firstTrack.id, muted: true }],
+    },
+  ];
+  const firstRegion = firstTrack.regions[0];
+  if (!firstRegion || firstRegion.endTime <= firstRegion.startTime) {
+    return examples;
+  }
+
+  const splitTime = (firstRegion.startTime + firstRegion.endTime) / 2;
+  examples.push({
+    request: `split the first region at ${splitTime} seconds`,
+    commands: [
+      {
+        type: AudioCommandType.SPLIT_REGION,
+        trackId: firstTrack.id,
+        regionId: firstRegion.id,
+        splitTime,
+      },
+    ],
+  });
+  if (firstRegion.hasAudioSource && firstRegion.duration > 0) {
+    examples.push({
+      request: `첫 번째 Region 소스를 ${firstRegion.endTime}초 위치에 복제해줘`,
+      commands: [
+        {
+          type: AudioCommandType.LOAD_REGION,
+          trackId: firstTrack.id,
+          startTime: firstRegion.endTime,
+          startOffset: firstRegion.sourceStartTime,
+          duration: firstRegion.duration,
+        },
+      ],
+    });
+  }
+  return examples;
+}
+
+function renderExamples(tracks: readonly AgentPromptTrack[]): string {
+  return [...AGENT_PROMPT_EXAMPLES, ...createTargetExamples(tracks)]
+    .map(example => `"${example.request}" → ${JSON.stringify(example.commands)}`)
+    .join('\n');
+}
+
+export function getSystemPrompt({ tracks = [] }: { tracks?: readonly AgentPromptTrack[] }) {
+  const projectContext = createProjectContext(tracks);
+
+  return `# 역할
+사용자 요청을 DAW AudioCommand JSON 배열로 변환한다.
+
+# 현재 Track과 Region
+${projectContext.text}
+
+# 지원 명령
+${renderCommandReference()}
+
+# 출력과 안전 규칙
+1. 설명, Markdown, 코드 블록 없이 JSON 배열만 반환한다. 각 객체에는 명령 정의에 있는 필드만 넣는다.
+2. 기존 Track과 Region의 ID는 위 목록의 값만 사용한다. 이름이나 순번은 목록의 실제 ID로 바꾼다.
+3. 앱이 예약한 새 ID가 없으므로 새 UUID를 만들지 않는다. LOAD_REGION의 regionId는 생략해 실행기가 생성하게 한다.
+4. URL을 추측하거나 만들어내지 않음: Agent 명령에는 url 필드를 넣지 않는다.
+5. ADD_TRACK은 현재 Agent에서 사용하지 않는다. 새 파일이나 새 Track이 필요한 요청은 []를 반환한다.
+6. LOAD_REGION은 사용자가 첫 Region 소스 복제를 명시했고 그 source가 available일 때만 사용한다. 첫 Region의 sourceStartTime과 duration을 그대로 쓰고 regionId와 url은 생략한다. 두 번째 이후 Region의 소스 복제에는 사용하지 않는다.
+7. Region 제거, 분할, 이동 명령은 trackId와 regionId를 생략하지 않는다.
+8. 숫자는 문자열이 아닌 number로 쓴다. 시간은 절대 초다. 백분율은 100으로 나눠 volume 0..1, pan -1..1로 바꾼다. boolean은 true 또는 false다.
+9. 범위를 실제로 내보내려면 SET_EXPORT_RANGE 다음에 EXPORT_AUDIO를 둔다. endTime은 startTime보다 커야 한다.
+10. 입력 의존 순서를 유지한다. EXPORT_AUDIO는 해당 묶음의 마지막에 둔다.
+11. 요청을 안전하게 실행할 정보가 부족하면 []를 반환한다. 지원하지 않는 요청도 []를 반환한다.
+
+# 예시
+${renderExamples(projectContext.visibleTracks)}
 `;
-};
+}

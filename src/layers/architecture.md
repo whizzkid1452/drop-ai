@@ -18,6 +18,12 @@ Agent 응답은 JSON 배열 전체를 엄격하게 검증한다. 빈 배열은 �
 실행 단계에서 추가하지 않는다. 검증된 배열은 `executeMany` 한 번으로 실행하며, 중간 실패 뒤 남은 명령은
 실행하지 않는다.
 
+Agent Prompt는 현재 AudioCommand 전체의 필드와 범위를 설명하고 실제 Track·Region ID, 시간 범위, 오디오 소스
+사용 가능 여부를 전달한다. 예시 출력은 엄격한 Agent Schema로 테스트한다. 앱이 예약한 새 ID와 허용 파일 목록이
+아직 없으므로 Agent는 `ADD_TRACK`을 만들지 않는다. `LOAD_REGION`은 기존 Track의 첫 Region 소스를 재사용할 수
+있을 때만 ID 생성과 기존 URL 선택을 실행기에 맡겨 제한적으로 사용한다. 프로젝트 컨텍스트는 모델 입력 한도를
+넘길 위험을 줄이도록 길이를 제한하고 잘림 여부를 표시한다.
+
 현재 Region의 `startTime`과 `endTime`은 절대 초 단위다. 음악 시간(musical time) 모델을 도입하기 전까지 Session의
 tempo 변경은 AudioEngine의 Transport BPM과 Region 예약을 변경하지 않는다.
 

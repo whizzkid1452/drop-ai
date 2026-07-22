@@ -30,6 +30,9 @@ export function useAgent() {
           id: r.id,
           startTime: r.startTime,
           endTime: r.endTime,
+          sourceStartTime: r.sourceStartTime,
+          duration: r.duration,
+          hasAudioSource: Boolean(r.audioFileUrl),
         })),
       })),
     [trackMap]
