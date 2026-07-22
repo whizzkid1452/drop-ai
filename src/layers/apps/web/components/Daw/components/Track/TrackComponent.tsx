@@ -1,6 +1,7 @@
 import type WaveSurfer from 'wavesurfer.js';
 import { memo, useState } from 'react';
 import { useSession } from '@/layers/apps/web/context/LayerContext';
+import type { TrackToggleResult } from '@/layers/apps/web/hooks/track-mute-solo-commands';
 import type { TrackRemovalResult } from '@/layers/apps/web/hooks/track-action-commands';
 import type { TrackState } from '@/layers/session/session';
 import { useTrackActions } from '@/layers/apps/web/hooks/useTrackActions';
@@ -16,6 +17,8 @@ export const TrackComponent = memo(function TrackComponent({
   onReady,
   onVolumeChange,
   onPanChange,
+  onMuteChange,
+  onSoloChange,
   onRemoveTrack,
 }: {
   mediaElement: HTMLMediaElement | null;
@@ -24,9 +27,13 @@ export const TrackComponent = memo(function TrackComponent({
   onReady: (trackId: string, ws: WaveSurfer) => void;
   onVolumeChange: (trackId: string, volume: number) => void;
   onPanChange: (trackId: string, pan: number) => void;
+  onMuteChange: (muted: boolean) => Promise<TrackToggleResult>;
+  onSoloChange: (soloed: boolean) => Promise<TrackToggleResult>;
   onRemoveTrack: () => Promise<TrackRemovalResult>;
 }) {
   const { moveRegion, removeRegion, splitRegion } = useTrackActions();
+  const [isMutePending, setIsMutePending] = useState(false);
+  const [isSoloPending, setIsSoloPending] = useState(false);
   const [isRemovingTrack, setIsRemovingTrack] = useState(false);
   const currentTime = useSession(state => state.currentTime);
   const splitRegionId = resolveSplitRegionId({ regions: track.regions, splitTime: currentTime });
@@ -59,6 +66,32 @@ export const TrackComponent = memo(function TrackComponent({
       await onRemoveTrack();
     } finally {
       setIsRemovingTrack(false);
+    }
+  };
+
+  const handleMuteChange = async () => {
+    if (isMutePending || isRemovingTrack) {
+      return;
+    }
+
+    setIsMutePending(true);
+    try {
+      await onMuteChange(!track.isMuted);
+    } finally {
+      setIsMutePending(false);
+    }
+  };
+
+  const handleSoloChange = async () => {
+    if (isSoloPending || isRemovingTrack) {
+      return;
+    }
+
+    setIsSoloPending(true);
+    try {
+      await onSoloChange(!track.isSoloed);
+    } finally {
+      setIsSoloPending(false);
     }
   };
 
@@ -100,6 +133,44 @@ export const TrackComponent = memo(function TrackComponent({
             </button>
           </>
         ) : null}
+        <button
+          type="button"
+          aria-label="Track Mute"
+          aria-pressed={track.isMuted}
+          disabled={isMutePending || isRemovingTrack}
+          onClick={() => void handleMuteChange()}
+          style={{
+            padding: '4px 8px',
+            fontSize: '12px',
+            backgroundColor: track.isMuted ? '#8a3b3b' : '#333',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: isMutePending || isRemovingTrack ? 'wait' : 'pointer',
+            opacity: isMutePending || isRemovingTrack ? 0.5 : 1,
+          }}
+        >
+          Mute
+        </button>
+        <button
+          type="button"
+          aria-label="Track Solo"
+          aria-pressed={track.isSoloed}
+          disabled={isSoloPending || isRemovingTrack}
+          onClick={() => void handleSoloChange()}
+          style={{
+            padding: '4px 8px',
+            fontSize: '12px',
+            backgroundColor: track.isSoloed ? '#8a6d1b' : '#333',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: isSoloPending || isRemovingTrack ? 'wait' : 'pointer',
+            opacity: isSoloPending || isRemovingTrack ? 0.5 : 1,
+          }}
+        >
+          Solo
+        </button>
         <button
           type="button"
           aria-label="Track 삭제"

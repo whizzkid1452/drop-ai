@@ -31,8 +31,9 @@ Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을
 삭제도 사용자가 확인한 정확한 ID로 `UNLOAD_REGION`을 실행한다. 내부 CLI의 변경 작업은 CommandExecutor를
 사용한다. Region 이동은 드래그 중 로컬 미리보기만 갱신하고 포인터를 놓을 때 정확한 ID로 `MOVE_REGION`을 한 번
 실행한다. Track 삭제는 사용자가 확인한 정확한 ID로 `REMOVE_TRACK`을 한 번 실행하고 처리 중 중복 입력을 막는다. Web
-파일 가져오기는 Track 생성과 Region 등록을 `executeMany` 한 번으로 실행한다. Web JSON CLI도 파싱된 명령 배열을
-`executeMany` 한 번으로 실행하고, 중간 실패 전 결과만 후처리한다.
+UI의 Mute·Solo는 Session 상태의 반대 값을 정확한 Track ID와 함께 `SET_TRACK_MUTE`·`SET_TRACK_SOLO`로 실행한다.
+Web 파일 가져오기는 Track 생성과 Region 등록을 `executeMany` 한 번으로 실행한다. Web JSON CLI도 파싱된 명령
+배열을 `executeMany` 한 번으로 실행하고, 중간 실패 전 결과만 후처리한다.
 
 ## Architecture (Layers)
 

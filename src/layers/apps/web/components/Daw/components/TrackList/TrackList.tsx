@@ -7,6 +7,7 @@ import * as styles from './TrackList.css.ts';
 import { Cursor } from '@/layers/apps/web/components/Cursor/Cursor';
 import { useCommandExecutor, useSession } from '@/layers/apps/web/context/LayerContext';
 import { executeConfirmedTrackRemoval } from '@/layers/apps/web/hooks/track-action-commands';
+import { executeTrackMuteChange, executeTrackSoloChange } from '@/layers/apps/web/hooks/track-mute-solo-commands';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 
 interface TrackListProps {
@@ -110,6 +111,30 @@ export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProp
     [commandExecutor]
   );
 
+  const handleMuteChange = useCallback(
+    async (trackId: string, muted: boolean) => {
+      return executeTrackMuteChange({
+        trackId,
+        muted,
+        executeCommand: command => commandExecutor.execute(command),
+        notifyFailure: message => window.alert(message),
+      });
+    },
+    [commandExecutor]
+  );
+
+  const handleSoloChange = useCallback(
+    async (trackId: string, soloed: boolean) => {
+      return executeTrackSoloChange({
+        trackId,
+        soloed,
+        executeCommand: command => commandExecutor.execute(command),
+        notifyFailure: message => window.alert(message),
+      });
+    },
+    [commandExecutor]
+  );
+
   return (
     <div className={styles.trackList}>
       {/* @todo: 異뷀썑 ?붿옄???섏젙 ?덉젙 */}
@@ -128,6 +153,8 @@ export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProp
               onReady={handleReady}
               onVolumeChange={handleVolumeChange}
               onPanChange={handlePanChange}
+              onMuteChange={muted => handleMuteChange(track.id, muted)}
+              onSoloChange={soloed => handleSoloChange(track.id, soloed)}
               onRemoveTrack={() => handleRemoveTrack(track.id)}
             />
           );
