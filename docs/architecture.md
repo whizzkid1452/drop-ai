@@ -187,7 +187,7 @@ sequenceDiagram
 
 ## 참고
 
-- Web UI의 Region 분할은 실행 경로 이전이 끝나지 않아 Controller를 직접 호출한다.
+- Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을 때 해당 ID로 `SPLIT_REGION`을 실행한다.
 - 내부 CLI의 변경 작업은 CommandExecutor를 사용한다.
 - Web 파일 가져오기는 Track 생성과 Region 등록을 하나의 `executeMany` 호출로 전달한다.
 - Web JSON CLI는 파싱된 명령 배열을 하나의 `executeMany` 호출로 전달하고, 중간 실패 전 결과만 후처리한다.
