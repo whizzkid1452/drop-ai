@@ -285,8 +285,9 @@ Policy(CSP), 모듈 URL, 장치 상태를 포함한 실제 실행 검증은 Audi
 | Region        | UUID, Source UUID, Timeline 시작, 원본 시작 offset, 길이  |
 
 Region의 끝 시각은 `startTimeSeconds + durationSeconds`로 계산하므로 따로 저장하지 않는다. 두 값과 계산 결과가 모두
-유한한 0 이상 숫자일 때만 문서를 허용한다. 모든 ID는 종류별로 중복될 수 없고, Region은 문서 안에 존재하는 Source만
-참조한다. Source 길이를 알면 Region의 원본 범위가 그 길이를 넘을 수 없다.
+유한한 0 이상 숫자일 때만 문서를 허용한다. 원본 범위도 `sourceStartTimeSeconds + durationSeconds`가 유한해야 한다.
+모든 ID는 종류별로 중복될 수 없고, Region은 문서 안에 존재하는 Source만 참조한다. Source 길이를 알면 원본 끝 시각이
+그 길이를 넘을 수 없다. Source 길이가 `null`이면 실제 파일 경계 안인지 결론낼 수 없고, 계산 가능한 범위인지만 보장한다.
 `schemaVersion`은 문서 구조 버전이고 `project.revision`은 같은 프로젝트 내용의 저장 revision이다. 새 문서는 revision
 0에서 시작하고, 후속 저장소는 교체 저장에 성공할 때 1씩 증가시킨다. 이 값은 편집 횟수, Undo 번호, 저장되지 않은 변경
 여부가 아니다. 일반 편집과 Undo에서는 유지하고, 저장 성공 후 Repository가 반환한 값으로만 교체한다.
@@ -414,10 +415,12 @@ Object URL만 AudioEngine에 전달한다. 등록 Source의 URL은 Session과 Ag
 context, Export도 같은 등록·연결 조건을 사용한다. 연결이 없으면 Web 파형은 오류를 표시하고 Agent context는
 `unavailable`, Export는 typed 오류를 반환한다. 다른 URL을 추측하거나 Region을 조용히 제외하지 않는다.
 
-등록 Source 길이를 알면 Controller는 `sourceStartTime + duration`이 Source 길이를 넘지 않는지 연결 전에 검증한다.
-`duration`을 생략하면 Source의 남은 길이로 정규화해 AudioEngine과 Session에 같은 값을 전달한다. Source 길이가
-`null`이면 남은 길이를 계산할 수 없으므로 `duration`을 명시해야 한다. 이 규칙은 ProjectDocument 검증과 같은 1e-9초
-부동소수점 허용오차를 사용한다.
+Controller는 Source 길이와 무관하게 `sourceStartTime`과 `duration`이 유한한 0 이상 숫자이고 합도 유한한지 연결 전에
+검증한다. Source 길이를 알면 계산한 원본 끝 시각이 그 길이를 넘지 않는지도 확인한다. `duration`을 생략하면 Source의
+남은 길이로 정규화해 AudioEngine과 Session에 같은 값을 전달한다. Source 길이가 `null`이면 실제 파일 끝을 계산할 수
+없으므로 `duration`을 명시해야 한다. 끝 시각 비교는 절대 오차 `1e-9`초와
+`Number.EPSILON * magnitude * 4` 중 큰 값을 허용한다. Region 분할도 기존 Region과 두 결과 Region의 원본 범위를 Source
+연결과 AudioEngine 교체 전에 같은 규칙으로 검증한다.
 
 ### 11.2. 실패 보상
 

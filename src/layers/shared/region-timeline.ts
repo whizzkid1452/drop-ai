@@ -1,5 +1,4 @@
-const REGION_END_TIME_TOLERANCE_SECONDS = 1e-9;
-const REGION_END_TIME_ULP_FACTOR = 4;
+import { calculateTimeComparisonTolerance } from './time-tolerance';
 
 interface RegionTimelineRange {
   startTime: number;
@@ -25,9 +24,7 @@ export function isRegionEndTimeConsistent({ startTime, duration, endTime }: Regi
     return false;
   }
 
-  const magnitudeAdjustedTolerance =
-    Number.EPSILON * Math.max(Math.abs(endTime), Math.abs(calculatedEndTime)) * REGION_END_TIME_ULP_FACTOR;
-  const allowedDifference = Math.max(REGION_END_TIME_TOLERANCE_SECONDS, magnitudeAdjustedTolerance);
+  const allowedDifference = calculateTimeComparisonTolerance({ firstTime: endTime, secondTime: calculatedEndTime });
 
   return Math.abs(endTime - calculatedEndTime) <= allowedDifference;
 }

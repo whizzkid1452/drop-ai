@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { calculateFiniteRegionSourceEndTime } from '../audio-source-range';
 import { calculateFiniteRegionEndTime } from '../region-timeline';
 
 export const AudioCommandType = {
@@ -56,6 +57,18 @@ const LoadRegionCommandSchema = z
       calculateFiniteRegionEndTime({ startTime: command.startTime, duration: command.duration }) !== null,
     {
       message: 'Region end time must be finite',
+      path: ['duration'],
+    }
+  )
+  .refine(
+    command =>
+      command.duration === undefined ||
+      calculateFiniteRegionSourceEndTime({
+        sourceStartTimeSeconds: command.startOffset ?? 0,
+        regionDurationSeconds: command.duration,
+      }) !== null,
+    {
+      message: 'Region Source end time must be finite',
       path: ['duration'],
     }
   );

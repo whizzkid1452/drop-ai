@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isRegionSourceRangeWithinDuration } from '../audio-source-range';
+import { calculateFiniteRegionSourceEndTime, isRegionSourceRangeWithinDuration } from '../audio-source-range';
 import { calculateFiniteRegionEndTime } from '../region-timeline';
 
 export const PROJECT_DOCUMENT_SCHEMA_VERSION = 1 as const;
@@ -33,6 +33,17 @@ export const ProjectRegionSchema = z
       }) !== null,
     {
       message: 'Region end time must be finite',
+      path: ['durationSeconds'],
+    }
+  )
+  .refine(
+    region =>
+      calculateFiniteRegionSourceEndTime({
+        sourceStartTimeSeconds: region.sourceStartTimeSeconds,
+        regionDurationSeconds: region.durationSeconds,
+      }) !== null,
+    {
+      message: 'Region Source end time must be finite',
       path: ['durationSeconds'],
     }
   );

@@ -1,10 +1,29 @@
-// 초 단위 두 값을 더할 때 생기는 IEEE-754 반올림 오차만 허용한다.
-const SOURCE_RANGE_TOLERANCE_SECONDS = 1e-9;
+import { calculateTimeComparisonTolerance } from './time-tolerance';
 
-interface RegionSourceRange {
-  sourceDurationSeconds: number;
+interface RegionSourceSpan {
   sourceStartTimeSeconds: number;
   regionDurationSeconds: number;
+}
+
+interface RegionSourceRange extends RegionSourceSpan {
+  sourceDurationSeconds: number;
+}
+
+export function calculateFiniteRegionSourceEndTime({
+  sourceStartTimeSeconds,
+  regionDurationSeconds,
+}: RegionSourceSpan): number | null {
+  if (
+    !Number.isFinite(sourceStartTimeSeconds) ||
+    !Number.isFinite(regionDurationSeconds) ||
+    sourceStartTimeSeconds < 0 ||
+    regionDurationSeconds < 0
+  ) {
+    return null;
+  }
+
+  const sourceEndTimeSeconds = sourceStartTimeSeconds + regionDurationSeconds;
+  return Number.isFinite(sourceEndTimeSeconds) ? sourceEndTimeSeconds : null;
 }
 
 export function isRegionSourceRangeWithinDuration({
@@ -12,6 +31,21 @@ export function isRegionSourceRangeWithinDuration({
   sourceStartTimeSeconds,
   regionDurationSeconds,
 }: RegionSourceRange): boolean {
-  const sourceEndTimeSeconds = sourceStartTimeSeconds + regionDurationSeconds;
-  return sourceEndTimeSeconds - sourceDurationSeconds <= SOURCE_RANGE_TOLERANCE_SECONDS;
+  if (!Number.isFinite(sourceDurationSeconds) || sourceDurationSeconds < 0) {
+    return false;
+  }
+
+  const sourceEndTimeSeconds = calculateFiniteRegionSourceEndTime({
+    sourceStartTimeSeconds,
+    regionDurationSeconds,
+  });
+  if (sourceEndTimeSeconds === null) {
+    return false;
+  }
+
+  const allowedDifference = calculateTimeComparisonTolerance({
+    firstTime: sourceEndTimeSeconds,
+    secondTime: sourceDurationSeconds,
+  });
+  return sourceEndTimeSeconds - sourceDurationSeconds <= allowedDifference;
 }

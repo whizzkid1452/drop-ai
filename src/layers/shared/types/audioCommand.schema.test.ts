@@ -119,6 +119,19 @@ describe('LOAD_REGION 오디오 식별자 계약', () => {
     expect(AudioCommandSchema.safeParse(command).success).toBe(false);
     expect(StrictAudioCommandSchema.safeParse(command).success).toBe(false);
   });
+
+  it('원본 시작과 길이의 합이 유한수가 아닌 명령을 거부한다', () => {
+    const command = {
+      type: AudioCommandType.LOAD_REGION,
+      sourceId: SOURCE_ID,
+      startTime: 0,
+      startOffset: Number.MAX_VALUE,
+      duration: Number.MAX_VALUE,
+    };
+
+    expect(AudioCommandSchema.safeParse(command).success).toBe(false);
+    expect(StrictAudioCommandSchema.safeParse(command).success).toBe(false);
+  });
 });
 
 describe('AudioCommandSchema 프로젝트 변경 명령', () => {

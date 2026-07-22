@@ -1,7 +1,7 @@
 import type { IAudioEngine, RegionData } from '../audio-engine/i-audio-engine';
 import type { IAudioSourceRegistry, RuntimeAudioSource } from '../audio-source-registry/i-audio-source-registry';
 import type { RegionState, SessionStore, TrackState } from '../session/session';
-import { isRegionSourceRangeWithinDuration } from '../shared/audio-source-range';
+import { calculateFiniteRegionSourceEndTime, isRegionSourceRangeWithinDuration } from '../shared/audio-source-range';
 import { calculateFiniteRegionEndTime, isRegionEndTimeConsistent } from '../shared/region-timeline';
 import { ProjectMutationCompensationError } from './project-mutation-compensation-error';
 import { ProjectStateError, ProjectStateErrorCode } from './project-state-error';
@@ -35,6 +35,12 @@ interface PreparedRegionAddition {
 interface RegionTimelineFields {
   regionId: string;
   startTime: number;
+  duration: number;
+}
+
+interface RegionSourceRangeFields {
+  id: string;
+  sourceStartTime: number;
   duration: number;
 }
 
@@ -185,6 +191,9 @@ export class RegionController {
     }
 
     const canonicalRegion = { ...regionToSplit, endTime: calculatedEndTime };
+    const source = this.assertRegisteredSource({ sourceId: regionToSplit.sourceId, regionId: regionToSplit.id });
+    this.assertRegionSourceRange({ source, region: regionToSplit });
+
     const splitRegions = calculateSplitRegions({ region: canonicalRegion, splitTime });
     if (!splitRegions) {
       throw new ProjectStateError(
@@ -197,8 +206,10 @@ export class RegionController {
     const { left: leftRegion, right: rightRegion } = splitRegions;
     this.getConsistentRegionEndTimeOrThrow(leftRegion);
     this.getConsistentRegionEndTimeOrThrow(rightRegion);
+    this.assertRegionSourceRange({ source, region: leftRegion });
+    this.assertRegionSourceRange({ source, region: rightRegion });
 
-    const sourceUrl = this.resolveRegionSourceUrl(regionToSplit);
+    const sourceUrl = source.objectUrl;
 
     this.prepareSplitSourceAttachments({
       sourceId: regionToSplit.sourceId,
@@ -440,39 +451,31 @@ export class RegionController {
     regionData: RegionPlacementFields;
   }): number {
     const sourceDurationSeconds = source.metadata.durationSeconds;
+    let duration: number;
+
     if (sourceDurationSeconds === null) {
-      if (regionData.duration !== undefined) {
-        return regionData.duration;
+      if (regionData.duration === undefined) {
+        throw new ProjectStateError(
+          ProjectStateErrorCode.REGION_DURATION_REQUIRED,
+          `길이를 알 수 없는 Source에는 Region 길이가 필요합니다: ${source.metadata.id}`,
+          { sourceId: source.metadata.id, sourceStartTime: regionData.sourceStartTime }
+        );
       }
 
-      throw new ProjectStateError(
-        ProjectStateErrorCode.REGION_DURATION_REQUIRED,
-        `길이를 알 수 없는 Source에는 Region 길이가 필요합니다: ${source.metadata.id}`,
-        { sourceId: source.metadata.id, sourceStartTime: regionData.sourceStartTime }
-      );
+      duration = regionData.duration;
+    } else {
+      duration = regionData.duration ?? Math.max(0, sourceDurationSeconds - regionData.sourceStartTime);
     }
 
-    const duration = regionData.duration ?? Math.max(0, sourceDurationSeconds - regionData.sourceStartTime);
-    if (
-      isRegionSourceRangeWithinDuration({
-        sourceDurationSeconds,
-        sourceStartTimeSeconds: regionData.sourceStartTime,
-        regionDurationSeconds: duration,
-      })
-    ) {
-      return duration;
-    }
-
-    throw new ProjectStateError(
-      ProjectStateErrorCode.REGION_SOURCE_RANGE_EXCEEDED,
-      `Region이 Source 길이를 넘습니다: ${source.metadata.id}`,
-      {
-        duration,
-        sourceDurationSeconds,
-        sourceId: source.metadata.id,
+    this.assertRegionSourceRange({
+      source,
+      region: {
+        id: regionData.id,
         sourceStartTime: regionData.sourceStartTime,
-      }
-    );
+        duration,
+      },
+    });
+    return duration;
   }
 
   private cleanupPendingSourceAfterFailure({
@@ -542,6 +545,56 @@ export class RegionController {
         endTime: region.endTime,
         reason: 'REGION_END_TIME_MISMATCH',
         regionId: region.id,
+      }
+    );
+  }
+
+  private assertRegionSourceRange({
+    source,
+    region,
+  }: {
+    source: RuntimeAudioSource;
+    region: RegionSourceRangeFields;
+  }): void {
+    const sourceEndTime = calculateFiniteRegionSourceEndTime({
+      sourceStartTimeSeconds: region.sourceStartTime,
+      regionDurationSeconds: region.duration,
+    });
+    if (sourceEndTime === null) {
+      throw new ProjectStateError(
+        ProjectStateErrorCode.INVALID_REGION_SOURCE_RANGE,
+        `Region 원본 시작 시각과 길이로 유한한 끝 시각을 계산할 수 없습니다: ${region.id}`,
+        {
+          duration: region.duration,
+          reason: 'REGION_SOURCE_RANGE_NOT_FINITE',
+          regionId: region.id,
+          sourceId: source.metadata.id,
+          sourceStartTime: region.sourceStartTime,
+        }
+      );
+    }
+
+    const sourceDurationSeconds = source.metadata.durationSeconds;
+    if (
+      sourceDurationSeconds === null ||
+      isRegionSourceRangeWithinDuration({
+        sourceDurationSeconds,
+        sourceStartTimeSeconds: region.sourceStartTime,
+        regionDurationSeconds: region.duration,
+      })
+    ) {
+      return;
+    }
+
+    throw new ProjectStateError(
+      ProjectStateErrorCode.REGION_SOURCE_RANGE_EXCEEDED,
+      `Region이 Source 길이를 넘습니다: ${source.metadata.id}`,
+      {
+        duration: region.duration,
+        sourceDurationSeconds,
+        sourceEndTime,
+        sourceId: source.metadata.id,
+        sourceStartTime: region.sourceStartTime,
       }
     );
   }
@@ -641,10 +694,6 @@ export class RegionController {
         compensationFailures,
       });
     }
-  }
-
-  private resolveRegionSourceUrl(region: RegionState): string {
-    return this.assertRegisteredSource({ sourceId: region.sourceId, regionId: region.id }).objectUrl;
   }
 
   private prepareSplitSourceAttachments({

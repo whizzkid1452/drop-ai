@@ -90,9 +90,11 @@ Object URL만 AudioEngine에 전달한다. Web 파형, Agent context, Export도 
 Web 파형은 오류를 표시하고 Agent context는 `unavailable`, Export는 typed 오류를 반환한다. URL을 추측하거나 Region을
 조용히 제외하지 않는다.
 
-등록 Source 길이를 알면 Controller는 Region의 원본 범위를 연결 전에 검증한다. `duration` 생략 시 Source의 남은
-길이로 정규화하고, Source 길이가 `null`이면 `duration`을 요구한다. ProjectDocument와 같은 1e-9초 부동소수점
-허용오차를 사용한다.
+Controller는 Source 길이를 알지 못해도 `sourceStartTime`과 `duration`이 유한한 0 이상 숫자이고 두 값의 합도 유한한지
+연결 전에 검증한다. Source 길이를 알면 계산한 원본 끝 시각이 그 길이를 넘지 않는지도 확인한다. `duration` 생략 시
+Source의 남은 길이로 정규화하고, Source 길이가 `null`이면 실제 파일 경계를 계산할 수 없으므로 `duration`을 요구한다.
+끝 시각 비교는 타임라인과 같은 절대 오차 `1e-9`초와 `Number.EPSILON * magnitude * 4` 중 큰 값을 사용한다. Region
+분할도 기존 Region과 두 결과 Region의 원본 범위를 Source 연결과 AudioEngine 교체 전에 같은 규칙으로 검증한다.
 
 등록 Source를 사용하는 Region 추가·삭제·분할과 Track 삭제는 Registry 변경, AudioEngine 호출, Session 반영 순서로
 실행하고 Controller 진입 뒤 실패 시 완료한 Registry 변경을 역순으로 보상한다. 처음 연결된 pending Source의 추가가

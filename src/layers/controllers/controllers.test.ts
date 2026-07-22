@@ -538,6 +538,49 @@ describe('Controllers - Phase 3 검증', () => {
       ).resolves.toBeUndefined();
     });
 
+    it('addRegion은 길이를 모르는 Source의 원본 끝 시각 overflow를 Engine 전에 거부하고 정리한다', async () => {
+      stageSource(audioSourceRegistry, null);
+      const addRegionSpy = vi.spyOn(engine, 'addRegion');
+
+      await expect(
+        controller.region.addRegion('track-1', {
+          id: SOURCE_REGION_ID,
+          sourceId: SOURCE_ID,
+          startTime: 0,
+          sourceStartTime: Number.MAX_VALUE,
+          duration: Number.MAX_VALUE,
+        })
+      ).rejects.toMatchObject({ code: 'INVALID_REGION_SOURCE_RANGE' });
+
+      expect(addRegionSpy).not.toHaveBeenCalled();
+      expect(audioSourceRegistry.resolve(SOURCE_ID)).toBeNull();
+      expect(revokeObjectUrl).toHaveBeenCalledWith(SOURCE_OBJECT_URL);
+      expect(session.getState().tracks.get('track-1')?.regions).toEqual([]);
+    });
+
+    it('addRegion의 원본 범위 검증 실패는 committed Source를 유지한다', async () => {
+      stageSource(audioSourceRegistry, null);
+      audioSourceRegistry.attach({ sourceId: SOURCE_ID, regionId: SECOND_SOURCE_REGION_ID });
+      const addRegionSpy = vi.spyOn(engine, 'addRegion');
+
+      await expect(
+        controller.region.addRegion('track-1', {
+          id: SOURCE_REGION_ID,
+          sourceId: SOURCE_ID,
+          startTime: 0,
+          sourceStartTime: Number.MAX_VALUE,
+          duration: Number.MAX_VALUE,
+        })
+      ).rejects.toMatchObject({ code: 'INVALID_REGION_SOURCE_RANGE' });
+
+      expect(addRegionSpy).not.toHaveBeenCalled();
+      expect(audioSourceRegistry.resolve(SOURCE_ID)).toMatchObject({
+        isCommitted: true,
+        regionIds: [SECOND_SOURCE_REGION_ID],
+      });
+      expect(revokeObjectUrl).not.toHaveBeenCalled();
+    });
+
     it('addRegion은 타임라인 끝 시각 overflow를 Engine 호출 전에 거부하고 pending Source를 정리한다', async () => {
       stageSource(audioSourceRegistry, null);
       const addRegionSpy = vi.spyOn(engine, 'addRegion');
@@ -1131,6 +1174,72 @@ describe('Controllers - Phase 3 검증', () => {
         controller.region.splitRegionById({ trackId: 'track-1', regionId: SOURCE_REGION_ID, splitTime: 12 })
       ).rejects.toMatchObject({ code: 'INVALID_REGION_TIMELINE_RANGE' });
 
+      expect(replaceRegionSpy).not.toHaveBeenCalled();
+      expect(audioSourceRegistry.resolve(SOURCE_ID)).toEqual(sourceBefore);
+      expect(session.getState().tracks.get('track-1')?.regions).toBe(regionsBefore);
+    });
+
+    it('splitRegionById는 길이를 모르는 Source의 기존 원본 범위 overflow를 부작용 전에 거부한다', async () => {
+      stageSource(audioSourceRegistry, null);
+      audioSourceRegistry.attach({ sourceId: SOURCE_ID, regionId: SOURCE_REGION_ID });
+      session.getState().updateTrack('track-1', {
+        regions: [
+          {
+            id: SOURCE_REGION_ID,
+            sourceId: SOURCE_ID,
+            startTime: 0,
+            endTime: Number.MAX_VALUE,
+            sourceStartTime: Number.MAX_VALUE,
+            duration: Number.MAX_VALUE,
+            status: [],
+          },
+        ],
+      });
+      const attachSpy = vi.spyOn(audioSourceRegistry, 'attach');
+      const replaceRegionSpy = vi.spyOn(engine, 'replaceRegion');
+      const sourceBefore = audioSourceRegistry.resolve(SOURCE_ID);
+      const regionsBefore = session.getState().tracks.get('track-1')?.regions;
+
+      await expect(
+        controller.region.splitRegionById({
+          trackId: 'track-1',
+          regionId: SOURCE_REGION_ID,
+          splitTime: Number.MAX_VALUE / 2,
+        })
+      ).rejects.toMatchObject({ code: 'INVALID_REGION_SOURCE_RANGE' });
+
+      expect(attachSpy).not.toHaveBeenCalled();
+      expect(replaceRegionSpy).not.toHaveBeenCalled();
+      expect(audioSourceRegistry.resolve(SOURCE_ID)).toEqual(sourceBefore);
+      expect(session.getState().tracks.get('track-1')?.regions).toBe(regionsBefore);
+    });
+
+    it('splitRegionById는 알려진 Source 길이를 넘는 기존 원본 범위를 부작용 전에 거부한다', async () => {
+      stageSource(audioSourceRegistry, 10);
+      audioSourceRegistry.attach({ sourceId: SOURCE_ID, regionId: SOURCE_REGION_ID });
+      session.getState().updateTrack('track-1', {
+        regions: [
+          {
+            id: SOURCE_REGION_ID,
+            sourceId: SOURCE_ID,
+            startTime: 0,
+            endTime: 5,
+            sourceStartTime: 8,
+            duration: 5,
+            status: [],
+          },
+        ],
+      });
+      const attachSpy = vi.spyOn(audioSourceRegistry, 'attach');
+      const replaceRegionSpy = vi.spyOn(engine, 'replaceRegion');
+      const sourceBefore = audioSourceRegistry.resolve(SOURCE_ID);
+      const regionsBefore = session.getState().tracks.get('track-1')?.regions;
+
+      await expect(
+        controller.region.splitRegionById({ trackId: 'track-1', regionId: SOURCE_REGION_ID, splitTime: 2 })
+      ).rejects.toMatchObject({ code: 'REGION_SOURCE_RANGE_EXCEEDED' });
+
+      expect(attachSpy).not.toHaveBeenCalled();
       expect(replaceRegionSpy).not.toHaveBeenCalled();
       expect(audioSourceRegistry.resolve(SOURCE_ID)).toEqual(sourceBefore);
       expect(session.getState().tracks.get('track-1')?.regions).toBe(regionsBefore);
