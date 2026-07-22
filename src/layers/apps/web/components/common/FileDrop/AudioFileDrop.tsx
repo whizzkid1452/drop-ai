@@ -3,7 +3,7 @@ import { convertFileToAudioFile } from '@/utils/audio/convert-file-to-audio-file
 import { useCommandExecutor, useSession } from '@/layers/apps/web/context/LayerContext';
 import { useCallback } from 'react';
 import { BasicFileDrop } from './BasicFileDrop';
-import { AudioCommandType } from '@/types/audioCommand.schema';
+import { createAudioImportCommands } from './audio-import-commands';
 
 interface AudioFileDropProps {
   onAudioFileDrop?: (audioFile: AudioFile | null) => Promise<void> | void;
@@ -28,21 +28,15 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
       const regionId = crypto.randomUUID();
       const duration = uploadedAudioFile.duration ?? 0;
 
-      // Track을 먼저 만든 뒤 Region을 등록해야 AudioEngine 채널과 Session 상태가 같은 ID를 공유한다.
-      await commandExecutor.execute({
-        type: AudioCommandType.ADD_TRACK,
-        trackId,
-        url: uploadedAudioFile.url,
-      });
-      await commandExecutor.execute({
-        type: AudioCommandType.LOAD_REGION,
-        trackId,
-        regionId,
-        url: uploadedAudioFile.url,
-        startTime: 0,
-        startOffset: 0,
-        duration,
-      });
+      // Track 생성이 Region 등록보다 먼저 끝나야 하므로 한 묶음의 입력 순서로 실행한다.
+      await commandExecutor.executeMany(
+        createAudioImportCommands({
+          trackId,
+          regionId,
+          url: uploadedAudioFile.url,
+          duration,
+        })
+      );
 
       onAudioFileDrop?.(uploadedAudioFile);
 
