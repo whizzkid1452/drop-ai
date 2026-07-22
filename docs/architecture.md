@@ -131,6 +131,12 @@ flowchart LR
 현재 Region의 시작·끝 위치는 **절대 초**로 저장한다. 음악 시간(musical time) 모델을 도입하기 전까지 tempo는
 Session의 프로젝트 값이며, AudioEngine의 Transport BPM이나 Region 예약 시각을 변경하지 않는다.
 
+Region 타임라인은 `startTime >= 0`, `duration >= 0`, `endTime = startTime + duration` 규칙을 사용한다. 세 값은 모두
+유한수여야 한다. Session의 `endTime` 비교에는 절대 오차 `1e-9`초와
+`Number.EPSILON * magnitude * 4` 중 큰 값을 허용한다. Command와 ProjectDocument Schema가 입력을 검증하고,
+Region Controller도 추가·이동·분할의 Source 연결, AudioEngine 호출, Session 변경 전에 같은 규칙을 확인한다. 분할은
+저장된 끝 시각을 그대로 신뢰하지 않고 검증 후 계산한 끝 시각을 경계로 사용한다.
+
 ---
 
 ## 3. 조립: `createApp`
@@ -278,8 +284,9 @@ Policy(CSP), 모듈 URL, 장치 상태를 포함한 실제 실행 검증은 Audi
 | Track         | 배열 순서, UUID, 이름, volume, pan, mute, solo            |
 | Region        | UUID, Source UUID, Timeline 시작, 원본 시작 offset, 길이  |
 
-Region의 끝 시각은 `startTimeSeconds + durationSeconds`로 계산하므로 따로 저장하지 않는다. 모든 ID는 종류별로 중복될
-수 없고, Region은 문서 안에 존재하는 Source만 참조한다. Source 길이를 알면 Region의 원본 범위가 그 길이를 넘을 수 없다.
+Region의 끝 시각은 `startTimeSeconds + durationSeconds`로 계산하므로 따로 저장하지 않는다. 두 값과 계산 결과가 모두
+유한한 0 이상 숫자일 때만 문서를 허용한다. 모든 ID는 종류별로 중복될 수 없고, Region은 문서 안에 존재하는 Source만
+참조한다. Source 길이를 알면 Region의 원본 범위가 그 길이를 넘을 수 없다.
 `schemaVersion`은 문서 구조 버전이고 `project.revision`은 같은 프로젝트 내용의 저장 revision이다. 새 문서는 revision
 0에서 시작하고, 후속 저장소는 교체 저장에 성공할 때 1씩 증가시킨다. 이 값은 편집 횟수, Undo 번호, 저장되지 않은 변경
 여부가 아니다. 일반 편집과 Undo에서는 유지하고, 저장 성공 후 Repository가 반환한 값으로만 교체한다.
@@ -317,8 +324,8 @@ metadata, tempo, master volume, Export 범위, Track·Region과 호출자가 전
 유지하고 임의 정렬하지 않는다. Region `endTime`은 `startTime + duration`으로 다시 계산하며 Track·Region status는 빈
 배열로 초기화한다. 재생 여부, playhead, Agent 상태는 Mapper 결과에 포함하지 않고 후속 Controller가 교체 정책을 정한다.
 
-Mapper는 Export 범위의 부분 `null`, Track Map key와 Track ID 불일치, 허용 오차를 초과한 Region 끝 시각 불일치를
-거부한다. 끝 시각 비교는 절대 오차 `1e-9`초와 숫자 크기에 비례한 `Number.EPSILON * magnitude * 4` 중 큰 값을 허용한다.
+Mapper는 Export 범위의 부분 `null`, Track Map key와 Track ID 불일치, 유한한 끝 시각을 만들 수 없는 Region, 허용 오차를
+초과한 Region 끝 시각 불일치를 거부한다. 끝 시각 비교는 위 공통 Region 타임라인 규칙을 사용한다.
 최종 문서는 기존 `ProjectDocumentSchema`로 검증하고, 역변환 입력은 `readProjectDocument`로 다시 검증·복제한다. 현재
 화면의 저장·불러오기 기능과 Session 전체 교체 Action은 아직 없다. Undo 이력도 snapshot 문서에 넣지 않고 후속 Undo
 Journal에서 별도로 관리한다.

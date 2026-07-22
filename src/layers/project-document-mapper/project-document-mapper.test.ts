@@ -455,7 +455,7 @@ describe('ProjectDocument mapper', () => {
     });
   });
 
-  it('복원 시 계산한 Region endTime이 유한수가 아니면 거부한다', () => {
+  it('복원 시 Region 끝 시각이 overflow되는 문서를 Reader 경계에서 거부한다', () => {
     const document = createProjectDocument();
     const overflowDocument = {
       ...document,
@@ -478,7 +478,9 @@ describe('ProjectDocument mapper', () => {
       () => createProjectRestoreSnapshotFromDocument(overflowDocument),
       ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT
     );
-    expect(error.details).toMatchObject({ reason: 'REGION_END_TIME_NOT_FINITE', regionId: REGION_ID });
+    expect(error.details).toMatchObject({ reason: 'PROJECT_DOCUMENT_READ_FAILED' });
+    expect(error.cause).toBeInstanceOf(ProjectDocumentReadError);
+    expect(error.cause).toMatchObject({ code: ProjectDocumentReadErrorCode.INVALID_DOCUMENT });
   });
 
   it('양방향 변환 결과는 입력 객체와 참조를 공유하지 않는다', () => {

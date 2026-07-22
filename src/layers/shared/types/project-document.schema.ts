@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isRegionSourceRangeWithinDuration } from '../audio-source-range';
+import { calculateFiniteRegionEndTime } from '../region-timeline';
 
 export const PROJECT_DOCUMENT_SCHEMA_VERSION = 1 as const;
 
@@ -16,13 +17,25 @@ export const ProjectAudioSourceSchema = z.strictObject({
   durationSeconds: z.number().nonnegative().nullable(),
 });
 
-export const ProjectRegionSchema = z.strictObject({
-  id: z.uuid('Invalid Region ID format'),
-  sourceId: z.uuid('Invalid Source ID format'),
-  startTimeSeconds: z.number().nonnegative(),
-  sourceStartTimeSeconds: z.number().nonnegative(),
-  durationSeconds: z.number().nonnegative(),
-});
+export const ProjectRegionSchema = z
+  .strictObject({
+    id: z.uuid('Invalid Region ID format'),
+    sourceId: z.uuid('Invalid Source ID format'),
+    startTimeSeconds: z.number().nonnegative(),
+    sourceStartTimeSeconds: z.number().nonnegative(),
+    durationSeconds: z.number().nonnegative(),
+  })
+  .refine(
+    region =>
+      calculateFiniteRegionEndTime({
+        startTime: region.startTimeSeconds,
+        duration: region.durationSeconds,
+      }) !== null,
+    {
+      message: 'Region end time must be finite',
+      path: ['durationSeconds'],
+    }
+  );
 
 export const ProjectTrackSchema = z.strictObject({
   id: z.uuid('Invalid Track ID format'),

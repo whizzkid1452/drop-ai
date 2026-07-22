@@ -1,4 +1,5 @@
 import type { RegionState, SessionState, TrackState } from '../session/session';
+import { calculateFiniteRegionEndTime, isRegionEndTimeConsistent } from '../shared/region-timeline';
 import { readProjectDocument } from '../shared/types/project-document-reader';
 import {
   PROJECT_DOCUMENT_SCHEMA_VERSION,
@@ -9,9 +10,6 @@ import {
   type ProjectTrack,
 } from '../shared/types/project-document.schema';
 import { ProjectDocumentMappingError, ProjectDocumentMappingErrorCode } from './errors';
-
-const REGION_END_TIME_TOLERANCE_SECONDS = 1e-9;
-const REGION_END_TIME_ULP_FACTOR = 4;
 
 export type SessionProjectSnapshot = Readonly<
   Pick<SessionState, 'project' | 'tempo' | 'masterVolume' | 'exportStartTime' | 'exportEndTime' | 'tracks'>
@@ -137,8 +135,11 @@ function createProjectRegion(region: RegionState): ProjectRegion {
 }
 
 function assertSessionRegionEndTime(region: RegionState): void {
-  const calculatedEndTime = region.startTime + region.duration;
-  if (!Number.isFinite(calculatedEndTime) || !Number.isFinite(region.endTime)) {
+  const calculatedEndTime = calculateFiniteRegionEndTime({
+    startTime: region.startTime,
+    duration: region.duration,
+  });
+  if (calculatedEndTime === null || !Number.isFinite(region.endTime)) {
     throw new ProjectDocumentMappingError({
       code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
       message: `Region 끝 시각은 유한수여야 합니다: ${region.id}`,
@@ -151,7 +152,13 @@ function assertSessionRegionEndTime(region: RegionState): void {
     });
   }
 
-  if (isRegionEndTimeConsistent(region.endTime, calculatedEndTime)) {
+  if (
+    isRegionEndTimeConsistent({
+      startTime: region.startTime,
+      duration: region.duration,
+      endTime: region.endTime,
+    })
+  ) {
     return;
   }
 
@@ -165,14 +172,6 @@ function assertSessionRegionEndTime(region: RegionState): void {
       regionId: region.id,
     },
   });
-}
-
-function isRegionEndTimeConsistent(endTime: number, calculatedEndTime: number): boolean {
-  const magnitudeAdjustedTolerance =
-    Number.EPSILON * Math.max(Math.abs(endTime), Math.abs(calculatedEndTime)) * REGION_END_TIME_ULP_FACTOR;
-  const allowedDifference = Math.max(REGION_END_TIME_TOLERANCE_SECONDS, magnitudeAdjustedTolerance);
-
-  return Math.abs(endTime - calculatedEndTime) <= allowedDifference;
 }
 
 function parseSessionDocumentCandidate(documentCandidate: unknown): ProjectDocument {
@@ -232,8 +231,11 @@ function createSessionTrack(track: ProjectTrack): TrackState {
 }
 
 function createSessionRegion(region: ProjectRegion): RegionState {
-  const endTime = region.startTimeSeconds + region.durationSeconds;
-  if (!Number.isFinite(endTime)) {
+  const endTime = calculateFiniteRegionEndTime({
+    startTime: region.startTimeSeconds,
+    duration: region.durationSeconds,
+  });
+  if (endTime === null) {
     throw new ProjectDocumentMappingError({
       code: ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT,
       message: `ProjectDocument Region의 끝 시각을 계산할 수 없습니다: ${region.id}`,

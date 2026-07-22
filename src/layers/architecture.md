@@ -34,6 +34,12 @@ Agent Prompt는 현재 AudioCommand 전체의 필드와 범위를 설명하고 �
 현재 Region의 `startTime`과 `endTime`은 절대 초 단위다. 음악 시간(musical time) 모델을 도입하기 전까지 Session의
 tempo 변경은 AudioEngine의 Transport BPM과 Region 예약을 변경하지 않는다.
 
+Region 타임라인 범위는 `startTime`과 `duration`이 유한한 0 이상 숫자이고, 두 값의 합인 `endTime`도 유한해야 한다.
+Session에 저장된 `endTime`은 이 합과 일치해야 하며, 비교할 때는 절대 오차 `1e-9`초와
+`Number.EPSILON * magnitude * 4` 중 큰 값을 허용한다. Command와 ProjectDocument Schema가 계산 가능한 입력을 먼저
+검증하고, Region Controller도 추가·이동·분할의 Registry·AudioEngine·Session 변경 전에 같은 규칙을 다시 검증한다.
+분할 경계는 저장된 `endTime`이 아니라 검증 후 다시 계산한 끝 시각을 사용한다.
+
 브라우저 오디오 API 노출 여부는 AudioEngine 계층에서만 읽고, 순수한 전제조건 판정은 Shared에서 수행한다.
 `createApp`은 판정 결과를 한 번 조립해 Apps에 읽기 전용 값으로 노출한다. 프로젝트나 오디오 상태를 변경하지 않으므로
 Session과 AudioCommand에는 저장하지 않는다. API 존재 확인은 실제 AudioWorklet 모듈 로딩이나 WebAssembly 컴파일
@@ -44,11 +50,10 @@ Session과 AudioCommand에는 저장하지 않는다. API 존재 확인은 실�
 AudioBuffer, 함수, 재생 중 상태, Agent·UI 상태는 ProjectDocument에 넣지 않는다. `ProjectDocumentMapper`는 Store나
 Repository를 호출하지 않고 Session의 저장 대상 snapshot과 committed Source metadata를 ProjectDocument로 변환한다.
 역변환은 Session용 snapshot과 Source metadata를 분리해 반환한다. Track은 Map 삽입 순서, Region과 Source는 입력 배열
-순서를 유지한다. Region `endTime`은 저장하지 않고 `startTime + duration`으로 복원하며, Track·Region status는 빈 배열로
-초기화한다. Export 범위의 한쪽만 `null`인 상태, Track Map key와 Track ID 불일치, 허용 오차를 초과한 Region 끝 시각
-불일치는 손실을 숨기지 않고 오류로 거부한다. Region 끝 시각 비교는 절대 오차 `1e-9`초와 숫자 크기에 비례한
-`Number.EPSILON * magnitude * 4` 중 큰 값을 허용한다. Mapper는 Session과 Shared만 의존하며 Controllers 밖의
-production 계층에서 직접 사용하지 않는다.
+순서를 유지한다. Region `endTime`은 저장하지 않고 검증된 `startTime + duration`으로 복원하며, Track·Region status는 빈
+배열로 초기화한다. Export 범위의 한쪽만 `null`인 상태, Track Map key와 Track ID 불일치, 유한한 `endTime`을 만들 수 없는
+Region, 허용 오차를 초과한 Region 끝 시각 불일치는 손실을 숨기지 않고 오류로 거부한다. Mapper는 Session과 Shared만
+의존하며 Controllers 밖의 production 계층에서 직접 사용하지 않는다.
 
 `createApp`은 새 프로젝트의 UUID·이름·revision 0을 만들거나 검증을 마친 기존 metadata를 Session에 주입한다.
 `project.revision`은 편집 횟수나 저장 여부가 아니라 마지막 성공 저장 snapshot의 동시성 제어 값이다. 일반 편집과

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { calculateFiniteRegionEndTime } from '../region-timeline';
 
 export const AudioCommandType = {
   ADD_TRACK: 'ADD_TRACK',
@@ -36,6 +37,28 @@ const SetExportRangeCommandSchema = z
     message: 'End time must be greater than or equal to start time',
     path: ['endTime'],
   });
+
+const LoadRegionCommandSchema = z
+  .strictObject({
+    type: z.literal(AudioCommandType.LOAD_REGION),
+    trackId: z.uuid('Invalid track ID format').optional(),
+    regionId: z.uuid('Invalid region ID format').optional(),
+    // 호환 파서가 제거하지 못하게 폐기된 필드를 명시적으로 거부한다.
+    url: z.never().optional(),
+    sourceId: z.uuid('Invalid source ID format').optional(),
+    startTime: z.number().min(0, 'Start time must be >= 0'),
+    startOffset: z.number().min(0, 'Start offset must be >= 0').optional(),
+    duration: z.number().min(0, 'Duration must be >= 0').optional(),
+  })
+  .refine(
+    command =>
+      command.duration === undefined ||
+      calculateFiniteRegionEndTime({ startTime: command.startTime, duration: command.duration }) !== null,
+    {
+      message: 'Region end time must be finite',
+      path: ['duration'],
+    }
+  );
 
 /**
  * Zod Schema for AI-generated Audio Commands
@@ -88,17 +111,7 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
     trackId: z.uuid('Invalid track ID format'),
     soloed: z.boolean(),
   }),
-  z.strictObject({
-    type: z.literal(AudioCommandType.LOAD_REGION),
-    trackId: z.uuid('Invalid track ID format').optional(),
-    regionId: z.uuid('Invalid region ID format').optional(),
-    // 호환 파서가 제거하지 못하게 폐기된 필드를 명시적으로 거부한다.
-    url: z.never().optional(),
-    sourceId: z.uuid('Invalid source ID format').optional(),
-    startTime: z.number().min(0, 'Start time must be >= 0'),
-    startOffset: z.number().min(0, 'Start offset must be >= 0').optional(),
-    duration: z.number().min(0, 'Duration must be >= 0').optional(),
-  }),
+  LoadRegionCommandSchema,
   z.strictObject({
     type: z.literal(AudioCommandType.UNLOAD_REGION),
     trackId: z.uuid('Invalid track ID format').optional(),

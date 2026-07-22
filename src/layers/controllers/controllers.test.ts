@@ -538,6 +538,97 @@ describe('Controllers - Phase 3 검증', () => {
       ).resolves.toBeUndefined();
     });
 
+    it('addRegion은 타임라인 끝 시각 overflow를 Engine 호출 전에 거부하고 pending Source를 정리한다', async () => {
+      stageSource(audioSourceRegistry, null);
+      const addRegionSpy = vi.spyOn(engine, 'addRegion');
+
+      await expect(
+        controller.region.addRegion('track-1', {
+          id: SOURCE_REGION_ID,
+          sourceId: SOURCE_ID,
+          startTime: Number.MAX_VALUE,
+          sourceStartTime: 0,
+          duration: Number.MAX_VALUE,
+        })
+      ).rejects.toMatchObject({ code: 'INVALID_REGION_TIMELINE_RANGE' });
+
+      expect(addRegionSpy).not.toHaveBeenCalled();
+      expect(audioSourceRegistry.resolve(SOURCE_ID)).toBeNull();
+      expect(revokeObjectUrl).toHaveBeenCalledWith(SOURCE_OBJECT_URL);
+      expect(session.getState().tracks.get('track-1')?.regions).toEqual([]);
+    });
+
+    it('addRegion은 duration 생략 후 Source 길이로 계산된 타임라인 overflow도 거부한다', async () => {
+      stageSource(audioSourceRegistry, Number.MAX_VALUE);
+      const addRegionSpy = vi.spyOn(engine, 'addRegion');
+
+      await expect(
+        controller.region.addRegion('track-1', {
+          id: SOURCE_REGION_ID,
+          sourceId: SOURCE_ID,
+          startTime: Number.MAX_VALUE,
+          sourceStartTime: 0,
+        })
+      ).rejects.toMatchObject({ code: 'INVALID_REGION_TIMELINE_RANGE' });
+
+      expect(addRegionSpy).not.toHaveBeenCalled();
+      expect(audioSourceRegistry.resolve(SOURCE_ID)).toBeNull();
+      expect(revokeObjectUrl).toHaveBeenCalledWith(SOURCE_OBJECT_URL);
+      expect(session.getState().tracks.get('track-1')?.regions).toEqual([]);
+    });
+
+    it('타임라인 검증과 pending Source 정리가 모두 실패하면 두 오류를 보존한다', async () => {
+      stageSource(audioSourceRegistry, null);
+      vi.mocked(revokeObjectUrl).mockImplementationOnce(() => {
+        throw new Error('revoke failed');
+      });
+
+      let thrownError: unknown;
+      try {
+        await controller.region.addRegion('track-1', {
+          id: SOURCE_REGION_ID,
+          sourceId: SOURCE_ID,
+          startTime: Number.MAX_VALUE,
+          sourceStartTime: 0,
+          duration: Number.MAX_VALUE,
+        });
+      } catch (error) {
+        thrownError = error;
+      }
+
+      expect(thrownError).toBeInstanceOf(ProjectMutationCompensationError);
+      expect(thrownError).toMatchObject({
+        operation: 'add-region',
+        failedPhase: 'Source 검증 실패 후 pending Source 정리',
+        cause: expect.objectContaining({ code: 'INVALID_REGION_TIMELINE_RANGE' }),
+        compensationFailures: [expect.objectContaining({ step: `pending Source 정리: ${SOURCE_ID}` })],
+      });
+      expect(audioSourceRegistry.resolve(SOURCE_ID)).toMatchObject({ isCommitted: false, regionIds: [] });
+    });
+
+    it('addRegion의 타임라인 끝 시각 검증 실패는 committed Source를 유지한다', async () => {
+      stageSource(audioSourceRegistry, null);
+      audioSourceRegistry.attach({ sourceId: SOURCE_ID, regionId: SECOND_SOURCE_REGION_ID });
+      const addRegionSpy = vi.spyOn(engine, 'addRegion');
+
+      await expect(
+        controller.region.addRegion('track-1', {
+          id: SOURCE_REGION_ID,
+          sourceId: SOURCE_ID,
+          startTime: Number.MAX_VALUE,
+          sourceStartTime: 0,
+          duration: Number.MAX_VALUE,
+        })
+      ).rejects.toMatchObject({ code: 'INVALID_REGION_TIMELINE_RANGE' });
+
+      expect(addRegionSpy).not.toHaveBeenCalled();
+      expect(audioSourceRegistry.resolve(SOURCE_ID)).toMatchObject({
+        isCommitted: true,
+        regionIds: [SECOND_SOURCE_REGION_ID],
+      });
+      expect(revokeObjectUrl).not.toHaveBeenCalled();
+    });
+
     it('길이를 모르는 pending Source에서 Region duration을 생략하면 Source를 정리한다', async () => {
       stageSource(audioSourceRegistry, null);
       const addRegionSpy = vi.spyOn(engine, 'addRegion');
@@ -1016,6 +1107,64 @@ describe('Controllers - Phase 3 검증', () => {
       expect(regions?.[2]).toMatchObject({ startTime: 4, endTime: 10, duration: 6 });
     });
 
+    it('splitRegionById는 기존 Region의 끝 시각이 길이와 다르면 부작용 전에 거부한다', async () => {
+      stageSource(audioSourceRegistry, null);
+      audioSourceRegistry.attach({ sourceId: SOURCE_ID, regionId: SOURCE_REGION_ID });
+      session.getState().updateTrack('track-1', {
+        regions: [
+          {
+            id: SOURCE_REGION_ID,
+            sourceId: SOURCE_ID,
+            startTime: 0,
+            endTime: 15,
+            sourceStartTime: 0,
+            duration: 10,
+            status: [],
+          },
+        ],
+      });
+      const replaceRegionSpy = vi.spyOn(engine, 'replaceRegion');
+      const sourceBefore = audioSourceRegistry.resolve(SOURCE_ID);
+      const regionsBefore = session.getState().tracks.get('track-1')?.regions;
+
+      await expect(
+        controller.region.splitRegionById({ trackId: 'track-1', regionId: SOURCE_REGION_ID, splitTime: 12 })
+      ).rejects.toMatchObject({ code: 'INVALID_REGION_TIMELINE_RANGE' });
+
+      expect(replaceRegionSpy).not.toHaveBeenCalled();
+      expect(audioSourceRegistry.resolve(SOURCE_ID)).toEqual(sourceBefore);
+      expect(session.getState().tracks.get('track-1')?.regions).toBe(regionsBefore);
+    });
+
+    it('splitRegionById는 계산한 Region 끝을 넘는 분할 위치를 거부한다', async () => {
+      stageSource(audioSourceRegistry, null);
+      audioSourceRegistry.attach({ sourceId: SOURCE_ID, regionId: SOURCE_REGION_ID });
+      session.getState().updateTrack('track-1', {
+        regions: [
+          {
+            id: SOURCE_REGION_ID,
+            sourceId: SOURCE_ID,
+            startTime: 0,
+            endTime: 10 + 0.5e-9,
+            sourceStartTime: 0,
+            duration: 10,
+            status: [],
+          },
+        ],
+      });
+      const replaceRegionSpy = vi.spyOn(engine, 'replaceRegion');
+
+      await expect(
+        controller.region.splitRegionById({
+          trackId: 'track-1',
+          regionId: SOURCE_REGION_ID,
+          splitTime: 10 + 0.25e-9,
+        })
+      ).rejects.toMatchObject({ code: 'INVALID_SPLIT_POSITION' });
+
+      expect(replaceRegionSpy).not.toHaveBeenCalled();
+    });
+
     it.each([0, 10])('splitRegionById는 Region 경계 %s에서 분할을 거부한다', async splitTime => {
       await addRegisteredTestRegion();
 
@@ -1188,6 +1337,37 @@ describe('Controllers - Phase 3 검증', () => {
       expectProjectStateError(
         () => controller.region.moveRegion({ trackId: 'track-1', regionId: SOURCE_REGION_ID, newStartTime: -0.1 }),
         'INVALID_REGION_POSITION'
+      );
+
+      expect(rescheduleRegionSpy).not.toHaveBeenCalled();
+      expect(session.getState().tracks.get('track-1')?.regions).toBe(regionsBefore);
+    });
+
+    it('moveRegion은 새 끝 시각 overflow를 AudioEngine 호출 전에 거부한다', () => {
+      session.getState().updateTrack('track-1', {
+        regions: [
+          {
+            id: SOURCE_REGION_ID,
+            sourceId: SOURCE_ID,
+            startTime: 0,
+            endTime: Number.MAX_VALUE,
+            sourceStartTime: 0,
+            duration: Number.MAX_VALUE,
+            status: [],
+          },
+        ],
+      });
+      const rescheduleRegionSpy = vi.spyOn(engine, 'rescheduleRegion');
+      const regionsBefore = session.getState().tracks.get('track-1')?.regions;
+
+      expectProjectStateError(
+        () =>
+          controller.region.moveRegion({
+            trackId: 'track-1',
+            regionId: SOURCE_REGION_ID,
+            newStartTime: Number.MAX_VALUE,
+          }),
+        'INVALID_REGION_TIMELINE_RANGE'
       );
 
       expect(rescheduleRegionSpy).not.toHaveBeenCalled();

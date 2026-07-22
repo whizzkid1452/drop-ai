@@ -207,6 +207,28 @@ describe('ProjectDocumentSchema', () => {
     expect(ProjectDocumentSchema.safeParse(zeroLengthStateDocument).success).toBe(true);
   });
 
+  it('Region의 타임라인 끝 시각을 유한수로 계산할 수 없는 문서를 거부한다', () => {
+    const document = createValidProjectDocument();
+    const overflowDocument = {
+      ...document,
+      audioSources: [{ ...document.audioSources[0], durationSeconds: null }],
+      tracks: [
+        {
+          ...document.tracks[0],
+          regions: [
+            {
+              ...document.tracks[0].regions[0],
+              startTimeSeconds: Number.MAX_VALUE,
+              durationSeconds: Number.MAX_VALUE,
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(getValidationIssuePaths(overflowDocument)).toContain('tracks.0.regions.0.durationSeconds');
+  });
+
   it('문서 식별자, 버전, 시간 단위와 수치 범위를 엄격하게 검증한다', () => {
     const invalidDocuments = [
       { ...createValidProjectDocument(), documentType: 'other-project' },
