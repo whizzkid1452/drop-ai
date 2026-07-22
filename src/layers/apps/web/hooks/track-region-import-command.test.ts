@@ -1,43 +1,67 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AudioFile } from '@/types/audioFile';
+import { AudioImportCompensationError, AudioImportPostCommitError } from '@/layers/apps/web/audio-import-errors';
+import type { AudioFileMetadata } from '@/utils/audio/convert-file-to-audio-file';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
-import {
-  createTrackRegionImportCommand,
-  executeTrackRegionImport,
-  type ConvertedAudioFile,
-} from './track-region-import-command';
+import type { StagedWebAudioSource } from './stage-web-audio-source';
+import { createTrackRegionImportCommand, executeTrackRegionImport } from './track-region-import-command';
 
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
-const AUDIO_URL = 'blob:https://example.com/33333333-3333-4333-8333-333333333333';
+const SOURCE_ID = '33333333-3333-4333-8333-333333333333';
+const AUDIO_URL = 'blob:https://example.com/44444444-4444-4444-8444-444444444444';
 
-function createAudioFile(): AudioFile {
+function createAudioFileMetadata(duration: number | undefined = 3.5): AudioFileMetadata {
+  const file = new File(['audio'], 'voice.wav', { type: 'audio/wav' });
+
   return {
-    file: new File(['audio'], 'voice.wav', { type: 'audio/wav' }),
-    name: 'voice.wav',
-    size: 5,
+    file,
+    name: file.name,
+    size: file.size,
     formattedSize: '5 B',
-    type: 'audio/wav',
-    duration: 3.5,
-    formattedDuration: '0:04',
-    url: AUDIO_URL,
+    type: file.type,
+    duration,
+    formattedDuration: duration === undefined ? undefined : '0:04',
+    volume: 1,
   };
 }
 
-function createConvertedAudioFile(): ConvertedAudioFile {
+function createStagedAudioSource(audioFileMetadata = createAudioFileMetadata()): StagedWebAudioSource {
   return {
-    audioFile: createAudioFile(),
-    url: AUDIO_URL,
+    sourceId: SOURCE_ID,
+    objectUrl: AUDIO_URL,
+    audioFile: {
+      ...audioFileMetadata,
+      url: AUDIO_URL,
+    },
+  };
+}
+
+function createExecutionOptions(overrides: Record<string, unknown> = {}) {
+  const audioFileMetadata = createAudioFileMetadata();
+  const stagedAudioSource = createStagedAudioSource(audioFileMetadata);
+
+  return {
+    file: audioFileMetadata.file,
+    trackId: TRACK_ID,
+    startTime: 12.25,
+    createRegionId: () => REGION_ID,
+    convertAudioFile: vi.fn().mockResolvedValue(audioFileMetadata),
+    stageAudioSource: vi.fn().mockReturnValue(stagedAudioSource),
+    discardPendingSource: vi.fn(),
+    executeCommand: vi.fn<(command: AudioCommand) => Promise<unknown>>().mockResolvedValue(undefined),
+    registerAudioFile: vi.fn(),
+    notifyFailure: vi.fn(),
+    ...overrides,
   };
 }
 
 describe('기존 Track Region 가져오기 명령', () => {
-  it('선택한 Track과 현재 시각으로 정확한 LOAD_REGION 명령을 만든다', () => {
+  it('선택한 Track과 현재 시각을 sourceId 기반 LOAD_REGION 명령으로 만든다', () => {
     expect(
       createTrackRegionImportCommand({
         trackId: TRACK_ID,
         regionId: REGION_ID,
-        url: AUDIO_URL,
+        sourceId: SOURCE_ID,
         startTime: 12.25,
         duration: 3.5,
       })
@@ -45,114 +69,169 @@ describe('기존 Track Region 가져오기 명령', () => {
       type: AudioCommandType.LOAD_REGION,
       trackId: TRACK_ID,
       regionId: REGION_ID,
-      url: AUDIO_URL,
+      sourceId: SOURCE_ID,
       startTime: 12.25,
       startOffset: 0,
       duration: 3.5,
     });
   });
 
-  it('Region 등록 성공 뒤에 오디오 파일을 Session에 보관한다', async () => {
-    const convertedAudioFile = createConvertedAudioFile();
-    const executeCommand = vi.fn<(command: AudioCommand) => Promise<unknown>>().mockResolvedValue(undefined);
-    const registerAudioFile = vi.fn();
+  it('길이 검증 후 Source를 stage하고 Region 등록 성공 뒤 호환 audioFiles를 등록한다', async () => {
+    const options = createExecutionOptions();
 
-    const result = await executeTrackRegionImport({
-      file: convertedAudioFile.audioFile.file,
-      trackId: TRACK_ID,
-      startTime: 12.25,
-      createRegionId: () => REGION_ID,
-      convertAudioFile: vi.fn().mockResolvedValue(convertedAudioFile),
-      executeCommand,
-      registerAudioFile,
-      releaseAudioUrl: vi.fn(),
-      notifyFailure: vi.fn(),
-    });
+    const result = await executeTrackRegionImport(options);
 
     expect(result).toBe('imported');
-    expect(executeCommand).toHaveBeenCalledTimes(1);
-    expect(executeCommand).toHaveBeenCalledWith(
+    expect(options.stageAudioSource).toHaveBeenCalledWith(await options.convertAudioFile.mock.results[0].value);
+    expect(options.executeCommand).toHaveBeenCalledWith(
       createTrackRegionImportCommand({
         trackId: TRACK_ID,
         regionId: REGION_ID,
-        url: AUDIO_URL,
+        sourceId: SOURCE_ID,
         startTime: 12.25,
         duration: 3.5,
       })
     );
-    expect(registerAudioFile).toHaveBeenCalledWith(AUDIO_URL, convertedAudioFile.audioFile);
-    expect(executeCommand.mock.invocationCallOrder[0]).toBeLessThan(registerAudioFile.mock.invocationCallOrder[0]);
+    expect(options.registerAudioFile).toHaveBeenCalledWith(AUDIO_URL, expect.objectContaining({ url: AUDIO_URL }));
+    expect(options.discardPendingSource).not.toHaveBeenCalled();
+    expect(options.stageAudioSource.mock.invocationCallOrder[0]).toBeLessThan(
+      options.executeCommand.mock.invocationCallOrder[0]
+    );
+    expect(options.executeCommand.mock.invocationCallOrder[0]).toBeLessThan(
+      options.registerAudioFile.mock.invocationCallOrder[0]
+    );
   });
 
-  it('파일 변환 결과가 없으면 명령을 실행하지 않는다', async () => {
-    const executeCommand = vi.fn();
-    const registerAudioFile = vi.fn();
-    const notifyFailure = vi.fn();
+  it('파일 변환 결과가 없으면 Source를 stage하지 않는다', async () => {
+    const options = createExecutionOptions({ convertAudioFile: vi.fn().mockResolvedValue(null) });
 
-    const result = await executeTrackRegionImport({
-      file: createAudioFile().file,
-      trackId: TRACK_ID,
-      startTime: 0,
-      createRegionId: () => REGION_ID,
-      convertAudioFile: vi.fn().mockResolvedValue(null),
-      executeCommand,
-      registerAudioFile,
-      releaseAudioUrl: vi.fn(),
-      notifyFailure,
-    });
+    const result = await executeTrackRegionImport(options);
 
     expect(result).toBe('invalid-file');
-    expect(executeCommand).not.toHaveBeenCalled();
-    expect(registerAudioFile).not.toHaveBeenCalled();
-    expect(notifyFailure).toHaveBeenCalledWith('오디오 파일을 읽지 못했습니다.');
+    expect(options.stageAudioSource).not.toHaveBeenCalled();
+    expect(options.executeCommand).not.toHaveBeenCalled();
+    expect(options.notifyFailure).toHaveBeenCalledWith('오디오 파일을 읽지 못했습니다.');
   });
 
-  it('길이를 확인할 수 없는 파일은 Region으로 등록하지 않고 Blob URL을 해제한다', async () => {
-    const convertedAudioFile = createConvertedAudioFile();
-    convertedAudioFile.audioFile.duration = undefined;
-    const executeCommand = vi.fn();
-    const releaseAudioUrl = vi.fn();
-    const notifyFailure = vi.fn();
+  it.each([undefined, 0, -1, Number.POSITIVE_INFINITY])(
+    '길이가 %s이면 Source를 stage하기 전에 거부한다',
+    async duration => {
+      const audioFileMetadata = createAudioFileMetadata();
+      audioFileMetadata.duration = duration;
+      const options = createExecutionOptions({
+        file: audioFileMetadata.file,
+        convertAudioFile: vi.fn().mockResolvedValue(audioFileMetadata),
+      });
 
-    const result = await executeTrackRegionImport({
-      file: convertedAudioFile.audioFile.file,
-      trackId: TRACK_ID,
-      startTime: 0,
-      createRegionId: () => REGION_ID,
-      convertAudioFile: vi.fn().mockResolvedValue(convertedAudioFile),
-      executeCommand,
-      registerAudioFile: vi.fn(),
-      releaseAudioUrl,
-      notifyFailure,
+      const result = await executeTrackRegionImport(options);
+
+      expect(result).toBe('invalid-file');
+      expect(options.stageAudioSource).not.toHaveBeenCalled();
+      expect(options.executeCommand).not.toHaveBeenCalled();
+      expect(options.discardPendingSource).not.toHaveBeenCalled();
+      expect(options.notifyFailure).toHaveBeenCalledWith('오디오 길이를 확인하지 못했습니다.');
+    }
+  );
+
+  it('Source stage가 실패하면 존재 여부가 불명확한 Source를 discard하지 않는다', async () => {
+    const stageFailure = new Error('Source 준비 오류');
+    const options = createExecutionOptions({
+      stageAudioSource: vi.fn(() => {
+        throw stageFailure;
+      }),
     });
 
-    expect(result).toBe('invalid-file');
-    expect(executeCommand).not.toHaveBeenCalled();
-    expect(releaseAudioUrl).toHaveBeenCalledWith(AUDIO_URL);
-    expect(notifyFailure).toHaveBeenCalledWith('오디오 길이를 확인하지 못했습니다.');
-  });
-
-  it('명령 실행 실패 시 사용하지 못한 Blob URL을 해제하고 원인을 알린다', async () => {
-    const convertedAudioFile = createConvertedAudioFile();
-    const releaseAudioUrl = vi.fn();
-    const registerAudioFile = vi.fn();
-    const notifyFailure = vi.fn();
-
-    const result = await executeTrackRegionImport({
-      file: convertedAudioFile.audioFile.file,
-      trackId: TRACK_ID,
-      startTime: 0,
-      createRegionId: () => REGION_ID,
-      convertAudioFile: vi.fn().mockResolvedValue(convertedAudioFile),
-      executeCommand: vi.fn().mockRejectedValue(new Error('디코딩 오류')),
-      registerAudioFile,
-      releaseAudioUrl,
-      notifyFailure,
-    });
+    const result = await executeTrackRegionImport(options);
 
     expect(result).toBe('failed');
-    expect(registerAudioFile).not.toHaveBeenCalled();
-    expect(releaseAudioUrl).toHaveBeenCalledWith(AUDIO_URL);
-    expect(notifyFailure).toHaveBeenCalledWith('Region을 추가하지 못했습니다: 디코딩 오류');
+    expect(options.executeCommand).not.toHaveBeenCalled();
+    expect(options.discardPendingSource).not.toHaveBeenCalled();
+    expect(options.notifyFailure).toHaveBeenCalledWith(
+      '오디오 Source를 준비하지 못했습니다. Source 준비 오류',
+      stageFailure
+    );
+  });
+
+  it('stage 뒤 명령 생성이 실패하면 pending Source를 discard한다', async () => {
+    const commandCreationFailure = new Error('Region ID 생성 오류');
+    const options = createExecutionOptions({
+      createRegionId: () => {
+        throw commandCreationFailure;
+      },
+    });
+
+    const result = await executeTrackRegionImport(options);
+
+    expect(result).toBe('failed');
+    expect(options.executeCommand).not.toHaveBeenCalled();
+    expect(options.discardPendingSource).toHaveBeenCalledWith(SOURCE_ID);
+    expect(options.registerAudioFile).not.toHaveBeenCalled();
+    expect(options.notifyFailure).toHaveBeenCalledWith(
+      'Region을 추가하지 못했습니다. Region ID 생성 오류',
+      commandCreationFailure
+    );
+  });
+
+  it('명령 실행이 실패하면 Controller 정리 여부와 무관하게 discardPending을 호출한다', async () => {
+    const commandFailure = new Error('디코더 오류');
+    const options = createExecutionOptions({ executeCommand: vi.fn().mockRejectedValue(commandFailure) });
+
+    const result = await executeTrackRegionImport(options);
+
+    expect(result).toBe('failed');
+    expect(options.registerAudioFile).not.toHaveBeenCalled();
+    expect(options.discardPendingSource).toHaveBeenCalledWith(SOURCE_ID);
+    expect(options.notifyFailure).toHaveBeenCalledWith('Region을 추가하지 못했습니다. 디코더 오류', commandFailure);
+  });
+
+  it('명령 성공 후 호환 audioFiles 등록이 실패하면 committed Source를 discard하지 않는다', async () => {
+    const registrationFailure = new Error('Session 등록 오류');
+    const options = createExecutionOptions({
+      registerAudioFile: vi.fn(() => {
+        throw registrationFailure;
+      }),
+    });
+
+    const execution = executeTrackRegionImport(options);
+
+    await expect(execution).rejects.toMatchObject({
+      operation: 'track-region-import',
+      failedStep: 'Session 호환 파일 목록 갱신',
+      cause: registrationFailure,
+    });
+    await expect(execution).rejects.toBeInstanceOf(AudioImportPostCommitError);
+
+    expect(options.executeCommand).toHaveBeenCalledTimes(1);
+    expect(options.discardPendingSource).not.toHaveBeenCalled();
+  });
+
+  it('명령 오류와 pending Source discard 오류를 구조화된 오류에 함께 보존한다', async () => {
+    const commandFailure = new Error('명령 오류');
+    const discardFailure = new Error('Source 정리 오류');
+    const notifyFailure = vi.fn();
+    const options = createExecutionOptions({
+      executeCommand: vi.fn().mockRejectedValue(commandFailure),
+      discardPendingSource: vi.fn(() => {
+        throw discardFailure;
+      }),
+      notifyFailure,
+    });
+
+    const result = await executeTrackRegionImport(options);
+
+    expect(result).toBe('failed');
+    expect(notifyFailure).toHaveBeenCalledTimes(1);
+    const [, notifiedError] = notifyFailure.mock.calls[0];
+    expect(notifiedError).toBeInstanceOf(AudioImportCompensationError);
+    expect(notifiedError).toMatchObject({
+      operation: 'track-region-import',
+      failedPhase: 'LOAD_REGION 실행',
+      cause: commandFailure,
+      compensationFailures: [{ step: 'pending Source 정리', cause: discardFailure }],
+    });
+    expect(notifyFailure).toHaveBeenCalledWith(
+      'Region을 추가하지 못했습니다. 명령 오류 pending Source 정리도 실패했습니다: Source 정리 오류',
+      notifiedError
+    );
   });
 });

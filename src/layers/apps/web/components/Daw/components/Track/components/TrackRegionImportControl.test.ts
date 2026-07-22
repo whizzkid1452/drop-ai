@@ -3,18 +3,23 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { IAudioSourceStager } from '@/layers/audio-source-registry/i-audio-source-registry';
 import type { AudioFile } from '@/types/audioFile';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
+import type { AudioFileMetadata } from '@/utils/audio/convert-file-to-audio-file';
 import { MAX_FILE_SIZE } from '@/layers/apps/web/components/common/FileDrop/constants/audioConstants';
 import { TrackRegionImportControl } from './TrackRegionImportControl';
 
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
+const SOURCE_ID = '33333333-3333-4333-8333-333333333333';
 const AUDIO_URL = 'blob:https://example.com/33333333-3333-4333-8333-333333333333';
 
 const layerMocks = vi.hoisted(() => ({
   currentTime: 8.25,
   addAudioFile: vi.fn(),
+  stage: vi.fn<IAudioSourceStager['stage']>(),
+  discardPending: vi.fn<IAudioSourceStager['discardPending']>(),
   execute: vi.fn<(command: AudioCommand) => Promise<unknown>>(),
 }));
 
@@ -23,6 +28,10 @@ const conversionMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
+  useAudioSourceStager: () => ({
+    stage: layerMocks.stage,
+    discardPending: layerMocks.discardPending,
+  }),
   useCommandExecutor: () => ({ execute: layerMocks.execute }),
   useSession: (selector: (state: { currentTime: number; addAudioFile: typeof layerMocks.addAudioFile }) => unknown) =>
     selector({ currentTime: layerMocks.currentTime, addAudioFile: layerMocks.addAudioFile }),
@@ -46,7 +55,7 @@ const mountedRoots: Root[] = [];
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function createAudioFile(file: File): AudioFile {
+function createAudioFileMetadata(file: File): AudioFileMetadata {
   return {
     file,
     name: file.name,
@@ -55,8 +64,18 @@ function createAudioFile(file: File): AudioFile {
     type: file.type,
     duration: 4.5,
     formattedDuration: '0:05',
-    url: AUDIO_URL,
   };
+}
+
+function stageAudioFile(audioFileMetadata: AudioFileMetadata): AudioFile {
+  layerMocks.stage.mockImplementationOnce(registration => ({
+    metadata: registration.metadata,
+    objectUrl: AUDIO_URL,
+    isCommitted: false,
+    regionIds: [],
+  }));
+
+  return { ...audioFileMetadata, url: AUDIO_URL };
 }
 
 function createDeferred<T>(): Deferred<T> {
@@ -102,6 +121,8 @@ afterEach(() => {
   document.body.replaceChildren();
   layerMocks.currentTime = 8.25;
   layerMocks.addAudioFile.mockReset();
+  layerMocks.stage.mockReset();
+  layerMocks.discardPending.mockReset();
   layerMocks.execute.mockReset();
   conversionMocks.convertFileToAudioFile.mockReset();
   vi.restoreAllMocks();
@@ -111,10 +132,11 @@ afterEach(() => {
 describe('TrackRegionImportControl', () => {
   it('선택한 파일을 현재 시각의 LOAD_REGION 명령으로 실행한다', async () => {
     const file = new File(['audio'], 'voice.wav', { type: 'audio/wav' });
-    const audioFile = createAudioFile(file);
-    conversionMocks.convertFileToAudioFile.mockResolvedValue({ audioFile, url: AUDIO_URL });
+    const audioFileMetadata = createAudioFileMetadata(file);
+    const audioFile = stageAudioFile(audioFileMetadata);
+    conversionMocks.convertFileToAudioFile.mockResolvedValue(audioFileMetadata);
     layerMocks.execute.mockResolvedValue(undefined);
-    vi.spyOn(crypto, 'randomUUID').mockReturnValue(REGION_ID);
+    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce(SOURCE_ID).mockReturnValueOnce(REGION_ID);
     const { input, onPendingChange } = renderControl();
 
     selectFile(input, file);
@@ -125,10 +147,20 @@ describe('TrackRegionImportControl', () => {
       type: AudioCommandType.LOAD_REGION,
       trackId: TRACK_ID,
       regionId: REGION_ID,
-      url: AUDIO_URL,
+      sourceId: SOURCE_ID,
       startTime: 8.25,
       startOffset: 0,
       duration: 4.5,
+    });
+    expect(layerMocks.stage).toHaveBeenCalledWith({
+      blob: file,
+      metadata: {
+        id: SOURCE_ID,
+        fileName: file.name,
+        mimeType: file.type,
+        byteLength: file.size,
+        durationSeconds: 4.5,
+      },
     });
     expect(layerMocks.addAudioFile).toHaveBeenCalledWith(AUDIO_URL, audioFile);
     expect(onPendingChange).toHaveBeenNthCalledWith(1, true);
@@ -145,9 +177,11 @@ describe('TrackRegionImportControl', () => {
   it('처리 중에는 중복 파일 선택을 막는다', async () => {
     const file = new File(['audio'], 'voice.wav', { type: 'audio/wav' });
     const execution = createDeferred<unknown>();
-    conversionMocks.convertFileToAudioFile.mockResolvedValue({ audioFile: createAudioFile(file), url: AUDIO_URL });
+    const audioFileMetadata = createAudioFileMetadata(file);
+    stageAudioFile(audioFileMetadata);
+    conversionMocks.convertFileToAudioFile.mockResolvedValue(audioFileMetadata);
     layerMocks.execute.mockReturnValue(execution.promise);
-    vi.spyOn(crypto, 'randomUUID').mockReturnValue(REGION_ID);
+    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce(SOURCE_ID).mockReturnValueOnce(REGION_ID);
     const { button, input } = renderControl();
 
     selectFile(input, file);
@@ -165,11 +199,14 @@ describe('TrackRegionImportControl', () => {
 
   it('명령 실패 시 원인을 알리고 Session에 파일을 보관하지 않는다', async () => {
     const file = new File(['audio'], 'voice.wav', { type: 'audio/wav' });
-    conversionMocks.convertFileToAudioFile.mockResolvedValue({ audioFile: createAudioFile(file), url: AUDIO_URL });
+    const audioFileMetadata = createAudioFileMetadata(file);
+    stageAudioFile(audioFileMetadata);
+    conversionMocks.convertFileToAudioFile.mockResolvedValue(audioFileMetadata);
     layerMocks.execute.mockRejectedValue(new Error('디코딩 오류'));
-    vi.spyOn(crypto, 'randomUUID').mockReturnValue(REGION_ID);
+    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce(SOURCE_ID).mockReturnValueOnce(REGION_ID);
     const alert = vi.fn();
     const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(vi.fn());
+    vi.spyOn(console, 'error').mockImplementation(vi.fn());
     vi.stubGlobal('alert', alert);
     const { input } = renderControl();
 
@@ -177,8 +214,34 @@ describe('TrackRegionImportControl', () => {
     await flushAsyncWork();
 
     expect(layerMocks.addAudioFile).not.toHaveBeenCalled();
-    expect(revokeObjectUrl).toHaveBeenCalledWith(AUDIO_URL);
-    expect(alert).toHaveBeenCalledWith('Region을 추가하지 못했습니다: 디코딩 오류');
+    expect(layerMocks.discardPending).toHaveBeenCalledWith(SOURCE_ID);
+    expect(revokeObjectUrl).not.toHaveBeenCalled();
+    expect(alert).toHaveBeenCalledWith('Region을 추가하지 못했습니다. 디코딩 오류');
+  });
+
+  it('명령 성공 후 Session 호환 등록 실패를 알리고 committed Source를 정리하지 않는다', async () => {
+    const file = new File(['audio'], 'voice.wav', { type: 'audio/wav' });
+    const audioFileMetadata = createAudioFileMetadata(file);
+    stageAudioFile(audioFileMetadata);
+    conversionMocks.convertFileToAudioFile.mockResolvedValue(audioFileMetadata);
+    layerMocks.execute.mockResolvedValue(undefined);
+    layerMocks.addAudioFile.mockImplementation(() => {
+      throw new Error('Session 등록 오류');
+    });
+    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce(SOURCE_ID).mockReturnValueOnce(REGION_ID);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const alert = vi.fn();
+    vi.stubGlobal('alert', alert);
+    const { input } = renderControl();
+
+    selectFile(input, file);
+    await flushAsyncWork();
+
+    expect(layerMocks.execute).toHaveBeenCalledTimes(1);
+    expect(layerMocks.discardPending).not.toHaveBeenCalled();
+    expect(alert).toHaveBeenCalledWith(
+      'Region 추가는 완료됐지만 호환 파일 목록을 갱신하지 못했습니다: Session 등록 오류'
+    );
   });
 
   it('지원하지 않는 파일 형식은 변환하지 않는다', () => {

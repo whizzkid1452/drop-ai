@@ -1,48 +1,82 @@
 import type { AudioFile } from '@/types/audioFile';
 import { convertFileToAudioFile } from '@/utils/audio/convert-file-to-audio-file';
-import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
+import { AudioImportPostCommitError } from '@/layers/apps/web/audio-import-errors';
+import { useAudioSourceStager, useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
+import { stageWebAudioSource, type StagedWebAudioSource } from '@/layers/apps/web/hooks/stage-web-audio-source';
 import { useCallback } from 'react';
 import { BasicFileDrop } from './BasicFileDrop';
-import { createAudioImportCommands } from './audio-import-commands';
+import { executeAudioFileImport } from './execute-audio-file-import';
 
 interface AudioFileDropProps {
   onAudioFileDrop?: (audioFile: AudioFile | null) => Promise<void> | void;
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function reportFileDropFailure(message: string, error: unknown): void {
+  console.error(error);
+  window.alert(`${message}: ${getErrorMessage(error)}`);
+}
+
 export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
   const addAudioFile = useSession(state => state.addAudioFile);
   const commandExecutor = useCommandExecutor();
+  const audioSourceStager = useAudioSourceStager();
 
   const onFileDrop = useCallback(
     async (file: File) => {
-      const audioFileData = await convertFileToAudioFile(file);
-      if (audioFileData == null) {
-        onAudioFileDrop?.(null);
+      let audioFileMetadata;
+      try {
+        audioFileMetadata = await convertFileToAudioFile(file);
+      } catch (error) {
+        reportFileDropFailure('오디오 파일을 읽지 못했습니다', error);
         return null;
       }
 
-      addAudioFile(audioFileData.url, audioFileData.audioFile);
-      const uploadedAudioFile = audioFileData.audioFile;
+      if (audioFileMetadata == null) {
+        try {
+          await onAudioFileDrop?.(null);
+        } catch (error) {
+          reportFileDropFailure('파일 오류 상태를 화면에 반영하지 못했습니다', error);
+        }
+        return null;
+      }
 
       const trackId = crypto.randomUUID();
       const regionId = crypto.randomUUID();
-      const duration = uploadedAudioFile.duration ?? 0;
-
-      // Track 생성이 Region 등록보다 먼저 끝나야 하므로 한 묶음의 입력 순서로 실행한다.
-      await commandExecutor.executeMany(
-        createAudioImportCommands({
+      let stagedSource: StagedWebAudioSource | null = null;
+      let uploadedAudioFile: AudioFile;
+      try {
+        stagedSource = stageWebAudioSource({ audioSourceStager, audioFileMetadata });
+        uploadedAudioFile = await executeAudioFileImport({
+          commandExecutor,
+          audioSourceStager,
+          addAudioFile,
+          stagedSource,
           trackId,
           regionId,
-          url: uploadedAudioFile.url,
-          duration,
-        })
-      );
+        });
+      } catch (error) {
+        if (error instanceof AudioImportPostCommitError && stagedSource !== null) {
+          reportFileDropFailure('오디오 파일 가져오기는 완료됐지만 호환 파일 목록을 갱신하지 못했습니다', error.cause);
+          uploadedAudioFile = stagedSource.audioFile;
+        } else {
+          reportFileDropFailure('오디오 파일을 가져오지 못했습니다', error);
+          return null;
+        }
+      }
 
-      onAudioFileDrop?.(uploadedAudioFile);
+      try {
+        await onAudioFileDrop?.(uploadedAudioFile);
+      } catch (error) {
+        reportFileDropFailure('오디오 파일 가져오기는 완료됐지만 화면을 갱신하지 못했습니다', error);
+      }
 
       return uploadedAudioFile;
     },
-    [addAudioFile, commandExecutor, onAudioFileDrop]
+    [addAudioFile, audioSourceStager, commandExecutor, onAudioFileDrop]
   );
 
   return (

@@ -1,5 +1,5 @@
 import { useStore } from 'zustand';
-import type { IAudioSourceResolver } from '../../../audio-source-registry/i-audio-source-registry';
+import type { IAudioSourceResolver, IAudioSourceStager } from '../../../audio-source-registry/i-audio-source-registry';
 import type { CommandExecutor } from '../../../commands/command-executor';
 import type { IPlaybackClockQuery } from '../../../queries/playback-clock-query';
 import type { SessionState } from '../../../session/session';
@@ -12,6 +12,10 @@ export function useAudioRuntimeCapabilities(): AudioRuntimeCapabilities {
 
 export function useAudioSourceResolver(): IAudioSourceResolver {
   return useLayer().audioSourceResolver;
+}
+
+export function useAudioSourceStager(): IAudioSourceStager {
+  return useLayer().audioSourceStager;
 }
 
 export function useCommandExecutor(): CommandExecutor {

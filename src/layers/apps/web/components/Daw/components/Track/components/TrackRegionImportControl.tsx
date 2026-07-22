@@ -1,6 +1,8 @@
 import { useRef, useState, type ChangeEvent } from 'react';
-import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
+import { AudioImportPostCommitError } from '@/layers/apps/web/audio-import-errors';
+import { useAudioSourceStager, useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
 import { executeTrackRegionImport } from '@/layers/apps/web/hooks/track-region-import-command';
+import { stageWebAudioSource } from '@/layers/apps/web/hooks/stage-web-audio-source';
 import { convertFileToAudioFile } from '@/utils/audio/convert-file-to-audio-file';
 import {
   ACCEPTED_AUDIO_TYPES,
@@ -23,12 +25,17 @@ function getFileValidationMessage(file: File): string | null {
   return file.size > MAX_FILE_SIZE ? `파일 크기는 ${MAX_FILE_SIZE_MB}MB 이하여야 합니다.` : null;
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export function TrackRegionImportControl({
   trackId,
   disabled = false,
   onPendingChange,
 }: TrackRegionImportControlProps) {
   const commandExecutor = useCommandExecutor();
+  const audioSourceStager = useAudioSourceStager();
   const currentTime = useSession(state => state.currentTime);
   const addAudioFile = useSession(state => state.addAudioFile);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -63,11 +70,25 @@ export function TrackRegionImportControl({
         startTime: currentTime,
         createRegionId: () => crypto.randomUUID(),
         convertAudioFile: convertFileToAudioFile,
+        stageAudioSource: audioFileMetadata => stageWebAudioSource({ audioSourceStager, audioFileMetadata }),
+        discardPendingSource: sourceId => audioSourceStager.discardPending(sourceId),
         executeCommand: command => commandExecutor.execute(command),
         registerAudioFile: addAudioFile,
-        releaseAudioUrl: url => URL.revokeObjectURL(url),
-        notifyFailure: message => window.alert(message),
+        notifyFailure: (message, error) => {
+          if (error !== undefined) {
+            console.error(error);
+          }
+          window.alert(message);
+        },
       });
+    } catch (error) {
+      console.error(error);
+      if (error instanceof AudioImportPostCommitError) {
+        window.alert(`Region 추가는 완료됐지만 호환 파일 목록을 갱신하지 못했습니다: ${getErrorMessage(error.cause)}`);
+        return;
+      }
+
+      window.alert(`Region 파일 처리를 완료하지 못했습니다: ${getErrorMessage(error)}`);
     } finally {
       input.value = '';
       updatePending(false);

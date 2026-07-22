@@ -1,32 +1,31 @@
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
+import type { StagedWebAudioSource } from '@/layers/apps/web/hooks/stage-web-audio-source';
 
 interface CreateAudioImportCommandsOptions {
   trackId: string;
   regionId: string;
-  url: string;
-  duration: number;
+  stagedSource: StagedWebAudioSource;
 }
 
 export function createAudioImportCommands({
   trackId,
   regionId,
-  url,
-  duration,
+  stagedSource,
 }: CreateAudioImportCommandsOptions): readonly AudioCommand[] {
   return [
     {
       type: AudioCommandType.ADD_TRACK,
       trackId,
-      url,
+      url: stagedSource.objectUrl,
     },
     {
       type: AudioCommandType.LOAD_REGION,
       trackId,
       regionId,
-      url,
+      sourceId: stagedSource.sourceId,
       startTime: 0,
       startOffset: 0,
-      duration,
+      duration: stagedSource.audioFile.duration ?? 0,
     },
   ];
 }

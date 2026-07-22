@@ -99,7 +99,8 @@ Source 전환만 실패했다면 Engine과 Registry를 기존 Region 상태로 �
 조립하되 Apps에는 등록용 `IAudioSourceStager`와 조회용 `IAudioSourceResolver`만 노출한다. 전체
 `IAudioSourceRegistry`와 구체 구현은 Composition Root 밖에 노출하지 않는다. Track·Region Controller에는 같은
 Registry의 전체 계약을 주입하고, 조회만 필요한 Export에는 `IAudioSourceResolver`를 주입한다. 기존 업로드가 Blob을
-stage하고 `sourceId` 명령을 만드는 전환은 후속 소비자 마이그레이션에서 추가한다.
+stage하는 Web Adapter는 등록용 계약만 사용한다. 파일 metadata 변환은 재생용 URL을 만들지 않으며, Registry가 반환한
+Object URL과 Source UUID로 호환 `AudioFile`과 `sourceId` 명령을 만든다.
 ProjectDocument Mapper와 저장·불러오기는 기존 URL Region 제거와 OPFS 원본 저장소를 완료한 뒤 연결한다.
 
 Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을 때 그 ID로 `SPLIT_REGION`을 실행한다. Region
@@ -108,9 +109,16 @@ Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을
 실행한다. Track 삭제는 사용자가 확인한 정확한 ID로 `REMOVE_TRACK`을 한 번 실행하고 처리 중 중복 입력을 막는다. Web
 UI의 Mute·Solo는 Session 상태의 반대 값을 정확한 Track ID와 함께 `SET_TRACK_MUTE`·`SET_TRACK_SOLO`로 실행한다.
 Web UI의 Tempo 입력은 `SET_TEMPO`로 Session 메타데이터만 변경한다. Web 파일 가져오기는 Track 생성과 Region 등록을
-`executeMany` 한 번으로 실행한다. Web JSON CLI도 파싱된 명령 배열을 `executeMany` 한 번으로 실행하고, 중간 실패 전
-결과만 후처리한다. 기존 Track의 `Region 추가`는 브라우저가 파일을 검증·변환한 뒤 선택한 Track ID와 현재 시각으로
-`LOAD_REGION`을 한 번 실행한다. 성공한 파일만 Session에 보관하고 실패한 Blob URL은 해제한다.
+`executeMany` 한 번으로 실행한다. `ADD_TRACK`은 아직 호환용 Registry Object URL을 사용하고 `LOAD_REGION`은
+`sourceId`만 사용한다. 첫 명령이 실패하면 pending Source를 정리한다. 두 번째 명령이 실패하면 `REMOVE_TRACK`을
+CommandExecutor로 실행한 뒤 pending Source 정리를 시도한다. 보상도 실패하면 Web workflow 전용
+`AudioImportCompensationError`에 원래 오류와 각 보상 오류를 함께 보존한다.
+Web JSON CLI도 파싱된 명령 배열을 `executeMany` 한 번으로 실행하고, 중간 실패 전 결과만 후처리한다. 기존 Track의
+`Region 추가`는 길이를 확인한 뒤 Blob을 stage하고 선택한 Track ID와 현재 시각으로 `sourceId` 기반 `LOAD_REGION`을 한 번
+실행한다. Command가 실패하면 stage 호출자가 `discardPending`을 실행한다. 성공한 파일만 URL 기반 Session 호환 상태에
+보관하며, Web UI는 Registry가 소유한 재생 URL을 직접 해제하지 않는다. Command 성공 뒤 Session 호환 등록만 실패하면
+`AudioImportPostCommitError`로 구분해 가져오기가 이미 완료됐음을 사용자에게 알린다. 새 프로젝트 화면 callback은 계속
+실행하고 Source를 정리하지 않는다.
 
 ## Architecture (Layers)
 

@@ -429,8 +429,22 @@ Adapter가 먼저 필요하다. 현재 단계에서는 Registry 계약·브라�
 `IAudioSourceResolver`를 받는다. ProjectDocument Mapper와 저장·불러오기는 기존 URL Region 제거와 OPFS 원본 저장소를
 완료한 뒤 연결한다.
 
-현재 production Web 파일 가져오기는 아직 Blob을 `stage`하지 않고 기존 Object URL 명령을 만든다. Web 업로드를
-`sourceId` 명령으로 전환하는 작업은 다음 소비자 마이그레이션 단계다.
+production Web 파일 가져오기는 파일 metadata를 만든 뒤 Blob을 Registry에 `stage`한다. metadata 변환 단계는 재생용
+Object URL을 만들지 않는다. Web Adapter가 Source UUID를 만들고, Registry가 이를 검증·등록하면서 Object URL을 만든다.
+Region 명령은 `sourceId`를 사용한다. 새 Track 가져오기의 `ADD_TRACK.url`과 Session `audioFiles`의 URL key는 기존 소비자
+호환을 위해 Registry URL을 임시로 사용한다.
+Web UI는 이 재생 URL을 직접 해제하지 않는다. 길이 판독용 임시 URL과 Export 다운로드 URL은 각 기능이 계속 소유한다.
+
+새 Track 가져오기는 stage 성공 뒤 `ADD_TRACK`, `LOAD_REGION`을 하나의 `executeMany`에 전달한다. 첫 명령이 실패하면
+pending Source만 정리한다. 두 번째 명령이 실패하면 별도 `REMOVE_TRACK` 명령을 시도한 뒤 pending Source도 정리한다. 두
+보상은 가능한 범위에서 모두 시도하며, 실패하면 원래 오류와 보상 오류를 Web workflow 전용
+`AudioImportCompensationError`에 보존한다.
+기존 Track의 Region 가져오기는 유효한 길이를 stage 전에 확인한다. stage 뒤 `LOAD_REGION`이 실패하면 호출자가
+`discardPending`을 실행한다. Controller가 이미 정리한 Source라면 이 호출은 아무 작업도 하지 않는다. stage 자체가
+실패한 경우에는 같은 ID의 기존 Source를 잘못 제거할 수 있으므로 `discardPending`을 호출하지 않는다. Command 성공 뒤
+Session 호환 등록이 실패하면 `AudioImportPostCommitError`로 구분하고, UI는 가져오기가 이미 완료됐음을 알린다. 화면
+callback은 계속 실행해 완료된 프로젝트 화면으로 이동한다. callback 자체가 실패한 경우도 이미 committed인 Source는
+pending 정리하지 않는다. 이 보상은 여러 저장소를 묶는 원자적 transaction이 아니다.
 
 ---
 
@@ -442,7 +456,8 @@ Adapter가 먼저 필요하다. 현재 단계에서는 Registry 계약·브라�
 - Web UI의 Track 삭제는 사용자 확인 후 정확한 Track ID로 `REMOVE_TRACK`을 한 번 실행하고 처리 중 중복 입력을 막는다.
 - Web UI의 Mute·Solo는 정확한 Track ID로 `SET_TRACK_MUTE`·`SET_TRACK_SOLO`를 실행한다.
 - Web UI의 Tempo 입력은 `SET_TEMPO`로 Session 메타데이터만 바꾸며 오디오 속도와 Region 예약은 바꾸지 않는다.
-- Web UI의 `Region 추가`는 파일 검증 후 선택한 Track ID와 현재 시각으로 `LOAD_REGION`을 한 번 실행한다.
+- Web UI의 `Region 추가`는 파일 검증·Source staging 후 선택한 Track ID와 현재 시각으로 sourceId 기반 `LOAD_REGION`을 한
+  번 실행한다.
 - 내부 CLI의 변경 작업은 CommandExecutor를 사용한다.
-- Web 파일 가져오기는 Track 생성과 Region 등록을 하나의 `executeMany` 호출로 전달한다.
+- Web 파일 가져오기는 Track 생성과 sourceId 기반 Region 등록을 하나의 `executeMany` 호출로 전달한다.
 - Web JSON CLI는 파싱된 명령 배열을 하나의 `executeMany` 호출로 전달하고, 중간 실패 전 결과만 후처리한다.
