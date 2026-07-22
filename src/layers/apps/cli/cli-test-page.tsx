@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
-import { LayerProvider } from '../web/context/LayerContext';
+import { LayerProvider } from '../web/context/layer-provider';
 import { createCliTestApp } from '../create-app';
 import { useCliApp } from './index';
 

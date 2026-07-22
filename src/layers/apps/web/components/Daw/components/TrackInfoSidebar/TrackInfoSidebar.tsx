@@ -1,5 +1,5 @@
 import * as styles from './TrackInfoSidebar.css.ts';
-import { useSession } from '@/layers/apps/web/context/LayerContext';
+import { useSession } from '@/layers/apps/web/context/layer-hooks';
 
 /** @description For Debugging */
 export function TrackInfoSidebar() {

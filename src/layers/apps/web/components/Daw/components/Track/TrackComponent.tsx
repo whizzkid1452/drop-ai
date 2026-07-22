@@ -1,6 +1,6 @@
 import type WaveSurfer from 'wavesurfer.js';
 import { memo, useState } from 'react';
-import { useSession } from '@/layers/apps/web/context/LayerContext';
+import { useSession } from '@/layers/apps/web/context/layer-hooks';
 import type { TrackToggleResult } from '@/layers/apps/web/hooks/track-mute-solo-commands';
 import type { TrackRemovalResult } from '@/layers/apps/web/hooks/track-action-commands';
 import type { TrackState } from '@/layers/session/session';

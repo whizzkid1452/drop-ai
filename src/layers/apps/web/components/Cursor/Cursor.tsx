@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { usePlaybackClock, useSession } from '@/layers/apps/web/context/LayerContext';
+import { usePlaybackClock, useSession } from '@/layers/apps/web/context/layer-hooks';
 import * as styles from './Cursor.css.ts';
 
 interface CursorProps {

@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import type { Message } from '@/types/agent';
 import { useWebLLM } from '@/layers/apps/web/hooks/agent/useWebLLM';
-import { useCommandExecutor, useSession } from '@/layers/apps/web/context/LayerContext';
+import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
 import { downloadWebAudioCommandResults } from '@/layers/apps/web/utils/execute-web-audio-command';
 import { handleAIResponse } from '@/layers/apps/web/hooks/agent/useAgent/utils/aiResponseHandler';
 import { createUserMessage, createAssistantMessage } from '@/layers/apps/web/hooks/agent/useAgent/utils/messageHelpers';

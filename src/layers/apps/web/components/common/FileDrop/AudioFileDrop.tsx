@@ -1,6 +1,6 @@
 import type { AudioFile } from '@/types/audioFile';
 import { convertFileToAudioFile } from '@/utils/audio/convert-file-to-audio-file';
-import { useCommandExecutor, useSession } from '@/layers/apps/web/context/LayerContext';
+import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
 import { useCallback } from 'react';
 import { BasicFileDrop } from './BasicFileDrop';
 import { createAudioImportCommands } from './audio-import-commands';

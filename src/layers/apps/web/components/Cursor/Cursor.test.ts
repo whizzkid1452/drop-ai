@@ -11,7 +11,7 @@ const layerMocks = vi.hoisted(() => ({
   getCurrentTime: vi.fn().mockReturnValue(3),
 }));
 
-vi.mock('@/layers/apps/web/context/LayerContext', () => ({
+vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
   usePlaybackClock: () => ({ getCurrentTime: layerMocks.getCurrentTime }),
   useSession: (selector: (state: { isPlaying: boolean; currentTime: number }) => unknown) =>
     selector({ isPlaying: layerMocks.isPlaying, currentTime: layerMocks.currentTime }),

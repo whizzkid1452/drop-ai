@@ -1,6 +1,6 @@
 import { useState, useRef, type KeyboardEvent, useEffect } from 'react';
 import * as styles from './CliTerminal.css.ts';
-import { useCommandExecutor } from '@/layers/apps/web/context/LayerContext';
+import { useCommandExecutor } from '@/layers/apps/web/context/layer-hooks';
 import { parseAudioCommandString } from '@/types/audioCommand.schema';
 import { executeJsonCliCommandBatch } from './execute-json-cli-command-batch';
 

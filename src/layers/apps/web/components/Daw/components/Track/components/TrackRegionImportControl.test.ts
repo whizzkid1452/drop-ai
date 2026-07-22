@@ -22,7 +22,7 @@ const conversionMocks = vi.hoisted(() => ({
   convertFileToAudioFile: vi.fn(),
 }));
 
-vi.mock('@/layers/apps/web/context/LayerContext', () => ({
+vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
   useCommandExecutor: () => ({ execute: layerMocks.execute }),
   useSession: (selector: (state: { currentTime: number; addAudioFile: typeof layerMocks.addAudioFile }) => unknown) =>
     selector({ currentTime: layerMocks.currentTime, addAudioFile: layerMocks.addAudioFile }),

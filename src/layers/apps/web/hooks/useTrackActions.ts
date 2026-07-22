@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useCommandExecutor } from '@/layers/apps/web/context/LayerContext';
+import { useCommandExecutor } from '@/layers/apps/web/context/layer-hooks';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import { executeConfirmedRegionRemoval, executeRegionMove } from './region-action-commands';
 

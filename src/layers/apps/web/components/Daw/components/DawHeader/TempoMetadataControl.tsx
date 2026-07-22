@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import * as styles from './TempoMetadataControl.css.ts';
-import { useCommandExecutor, useSession } from '@/layers/apps/web/context/LayerContext';
+import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
 import { executeTempoMetadataChange, parseTempoInput } from '@/layers/apps/web/hooks/tempo-metadata-command';
 
 const TEMPO_HINT_ID = 'tempo-metadata-hint';

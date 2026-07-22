@@ -11,7 +11,7 @@ const layerMocks = vi.hoisted(() => ({
   execute: vi.fn<(command: AudioCommand) => Promise<unknown>>(),
 }));
 
-vi.mock('@/layers/apps/web/context/LayerContext', () => ({
+vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
   useCommandExecutor: () => ({ execute: layerMocks.execute }),
   useSession: (selector: (state: { tempo: number }) => unknown) => selector({ tempo: layerMocks.tempo }),
 }));

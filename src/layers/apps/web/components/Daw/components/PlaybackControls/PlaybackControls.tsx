@@ -1,7 +1,7 @@
 import { ErrorBoundary, useErrorBoundary, type FallbackProps } from 'react-error-boundary';
 import * as styles from './PlaybackControls.css.ts';
 import { AudioEngineError, getUserFriendlyMessage } from '@/layers/audio-engine/errors';
-import { useCommandExecutor, useSession } from '@/layers/apps/web/context/LayerContext';
+import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 
 type PlaybackControlsLayout = 'floating' | 'inline';

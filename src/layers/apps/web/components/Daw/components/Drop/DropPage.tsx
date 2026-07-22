@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { AudioFile } from '@/types/audioFile';
 import { AudioFileDrop } from '@/layers/apps/web/components/common/FileDrop/AudioFileDrop';
 import * as styles from './DropPage.css.ts';
-import { useSession } from '@/layers/apps/web/context/LayerContext';
+import { useSession } from '@/layers/apps/web/context/layer-hooks';
 
 export function DropPage() {
   const navigate = useNavigate();

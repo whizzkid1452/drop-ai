@@ -9,7 +9,7 @@ import {
 } from './prune-wave-surfer-instances';
 import * as styles from './TrackList.css.ts';
 import { Cursor } from '@/layers/apps/web/components/Cursor/Cursor';
-import { useCommandExecutor, useSession } from '@/layers/apps/web/context/LayerContext';
+import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
 import { executeConfirmedTrackRemoval } from '@/layers/apps/web/hooks/track-action-commands';
 import { executeTrackMuteChange, executeTrackSoloChange } from '@/layers/apps/web/hooks/track-mute-solo-commands';
 import { AudioCommandType } from '@/types/audioCommand.schema';

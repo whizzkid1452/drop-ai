@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useSession } from '@/layers/apps/web/context/LayerContext';
+import { useSession } from '@/layers/apps/web/context/layer-hooks';
 import { AgentTerminal } from '@/layers/apps/web/components/Daw/components/Terminals/AgentTerminal/AgentTerminal';
 import { PreviewActionBar } from './PreviewActionBar';
 import * as styles from './AgentPreviewPage.css';

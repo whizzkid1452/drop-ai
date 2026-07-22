@@ -1,7 +1,7 @@
 import { memo, useMemo, useRef, useState, useEffect } from 'react';
 import * as styles from './TimeRuler.css.ts';
 import type { Track } from '@/types/track';
-import { useCommandExecutor, useSession } from '@/layers/apps/web/context/LayerContext';
+import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
 import { useErrorBoundary } from 'react-error-boundary';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 

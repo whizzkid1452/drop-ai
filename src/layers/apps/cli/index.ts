@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { CommandExecutor } from '../../commands/command-executor';
 import { AudioCommandType } from '../../shared/types/audioCommand.schema';
-import { useCommandExecutor, useSession } from '../web/context/LayerContext';
+import { useCommandExecutor, useSession } from '../web/context/layer-hooks';
 
 export interface CliCommand {
   description: string;

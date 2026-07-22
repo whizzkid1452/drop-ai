@@ -8,7 +8,7 @@ import type { TrackToggleResult } from '@/layers/apps/web/hooks/track-mute-solo-
 import type { TrackRemovalResult } from '@/layers/apps/web/hooks/track-action-commands';
 import { TrackComponent } from './TrackComponent';
 
-vi.mock('@/layers/apps/web/context/LayerContext', () => ({
+vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
   useSession: (selector: (state: { currentTime: number }) => unknown) => selector({ currentTime: 0 }),
 }));
 
