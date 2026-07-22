@@ -251,6 +251,42 @@ Policy(CSP), 모듈 URL, 장치 상태를 포함한 실제 실행 검증은 Audi
 
 ---
 
+## 9. ProjectDocument v1
+
+`ProjectDocumentSchema`는 프로젝트를 JSON으로 저장하기 위한 엄격한 v1 계약이다. `documentType`과 `schemaVersion`으로
+파일 종류와 형식을 구분하며, 알 수 없는 필드는 거부한다.
+
+| 저장하는 값   | 규칙                                                      |
+| ------------- | --------------------------------------------------------- |
+| 프로젝트      | 안정적인 UUID, 이름, 0 이상의 revision                    |
+| Timeline      | 절대 초 단위, 단일 tempo 메타데이터, 선택적인 Export 범위 |
+| 오디오 Source | 안정적인 UUID, 파일 메타데이터, 알고 있는 경우 원본 길이  |
+| Track         | 배열 순서, UUID, 이름, volume, pan, mute, solo            |
+| Region        | UUID, Source UUID, Timeline 시작, 원본 시작 offset, 길이  |
+
+Region의 끝 시각은 `startTimeSeconds + durationSeconds`로 계산하므로 따로 저장하지 않는다. 모든 ID는 종류별로 중복될
+수 없고, Region은 문서 안에 존재하는 Source만 참조한다. Source 길이를 알면 Region의 원본 범위가 그 길이를 넘을 수 없다.
+`schemaVersion`은 문서 구조 버전이고 `project.revision`은 같은 프로젝트 내용의 저장 revision이다. 새 문서는 revision
+0에서 시작하고, 후속 저장소는 교체 저장에 성공할 때 1씩 증가시킨다.
+
+현재 Session은 파일 길이를 아직 확인하지 못한 길이 0 Region과 드래그 시작 시점의 빈 Export 범위를 잠시 가질 수 있다.
+v1은 이 상태를 손실 없이 저장하기 위해 길이 0과 `startTimeSeconds === endTimeSeconds`를 허용한다. 실제 재생·Export
+가능 여부는 해당 Command와 Controller가 별도로 검증한다.
+
+다음 런타임 값은 저장하지 않는다.
+
+- `File`, `Blob`, Object URL, AudioBuffer, 정리 함수
+- Zustand의 `Map`과 Action
+- 재생 여부와 현재 playhead
+- 선택·드래그 상태
+- Agent 대화, 모델 로딩, 모달과 zoom 같은 앱 상태
+
+원본 오디오 바이트는 Source UUID를 키로 사용하는 별도 저장소에 둔다. 프로젝트를 다시 열 때 새 Object URL을 만들고
+런타임 Source Registry에서 관리한다. 현재 변경은 문서 계약만 정의하며, Session 변환·저장·불러오기 기능은 아직 없다.
+Undo 이력도 snapshot 문서에 넣지 않고 후속 Undo Journal에서 별도로 관리한다.
+
+---
+
 ## 참고
 
 - Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을 때 해당 ID로 `SPLIT_REGION`을 실행한다.
