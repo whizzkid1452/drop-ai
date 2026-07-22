@@ -10,7 +10,6 @@ import { createCliCommands } from './index';
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
 const SOURCE_ID = '33333333-3333-4333-8333-333333333333';
-const AUDIO_URL = 'https://example.com/audio.wav';
 
 type CliCommandExecutor = Pick<CommandExecutor, 'execute' | 'executeMany'>;
 
@@ -128,20 +127,13 @@ describe('내부 CLI 명령 변환', () => {
     expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.SET_TRACK_SOLO, trackId: TRACK_ID, soloed });
   });
 
-  it('region add 인자를 LOAD_REGION 명령으로 변환한다', async () => {
+  it('기존 URL 기반 region add를 실행하지 않는다', async () => {
     const commands = createCliCommands(commandExecutor, defaultState);
 
-    await commands.region.fn('add', TRACK_ID, REGION_ID, AUDIO_URL, '3', '5', '1');
+    const result = await commands.region.fn('add', TRACK_ID, REGION_ID, 'https://example.com/audio.wav', '3', '5', '1');
 
-    expect(execute).toHaveBeenCalledWith({
-      type: AudioCommandType.LOAD_REGION,
-      trackId: TRACK_ID,
-      regionId: REGION_ID,
-      url: AUDIO_URL,
-      startTime: 3,
-      duration: 5,
-      startOffset: 1,
-    });
+    expect(result).toContain('region add-source');
+    expect(execute).not.toHaveBeenCalled();
   });
 
   it('region add-source 인자를 sourceId 기반 LOAD_REGION 명령으로 변환한다', async () => {
@@ -238,10 +230,10 @@ describe('내부 CLI 명령 변환', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it('길이가 0인 region add를 거부한다', async () => {
+  it('길이가 0인 region add-source를 거부한다', async () => {
     const commands = createCliCommands(commandExecutor, defaultState);
 
-    const result = await commands.region.fn('add', TRACK_ID, REGION_ID, AUDIO_URL, '0', '0');
+    const result = await commands.region.fn('add-source', TRACK_ID, REGION_ID, SOURCE_ID, '0', '0');
 
     expect(result).toBe('Error: Region times must use finite numbers with duration greater than 0.');
     expect(execute).not.toHaveBeenCalled();
@@ -289,6 +281,7 @@ describe('내부 CLI 명령 변환', () => {
     expect(result).toContain('track add <trackId>');
     expect(result).not.toContain('track add <trackId> <url>');
     expect(result).toContain('region add-source <trackId> <regionId> <sourceId>');
+    expect(result).not.toContain('region add <trackId> <regionId> <url>');
     expect(result).toContain('region split <trackId> <regionId> <time>');
     expect(result).not.toContain('--help');
   });

@@ -12,7 +12,6 @@ export interface CliCommand {
 export type CliCommands = Record<string, CliCommand>;
 type CliCommandExecutor = Pick<CommandExecutor, 'execute' | 'executeMany'>;
 
-const REGION_ADD_URL_USAGE = 'region add <trackId> <regionId> <url> <startTime> <duration> [startOffset]';
 const REGION_ADD_SOURCE_USAGE =
   'region add-source <trackId> <regionId> <sourceId> <startTime> <duration> [startOffset]';
 
@@ -52,11 +51,10 @@ async function executeTrackCommand(commandExecutor: CliCommandExecutor, args: st
 
 async function executeRegionCommand(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
   const [subcommand, trackId, regionId, value, startTimeValue, durationValue, startOffsetValue] = args;
-  const isSourceIdRegion = subcommand === 'add-source';
 
-  if (subcommand === 'add' || isSourceIdRegion) {
+  if (subcommand === 'add-source') {
     if (!trackId || !regionId || !value || !startTimeValue || !durationValue) {
-      return `Error: Usage: ${isSourceIdRegion ? REGION_ADD_SOURCE_USAGE : REGION_ADD_URL_USAGE}`;
+      return `Error: Usage: ${REGION_ADD_SOURCE_USAGE}`;
     }
 
     const startTime = parseFiniteNumber(startTimeValue);
@@ -77,7 +75,7 @@ async function executeRegionCommand(commandExecutor: CliCommandExecutor, args: s
       type: AudioCommandType.LOAD_REGION,
       trackId,
       regionId,
-      ...(isSourceIdRegion ? { sourceId: value } : { url: value }),
+      sourceId: value,
       startTime,
       duration,
       startOffset,
@@ -119,7 +117,6 @@ async function executeRegionCommand(commandExecutor: CliCommandExecutor, args: s
 
   return [
     'Usage:',
-    REGION_ADD_URL_USAGE,
     REGION_ADD_SOURCE_USAGE,
     'region remove <trackId> <regionId>',
     'region split <trackId> <regionId> <time>',
@@ -298,7 +295,6 @@ export const createCliCommands = (commandExecutor: CliCommandExecutor, state: Cl
     region: {
       description: 'Region management',
       usage: [
-        REGION_ADD_URL_USAGE,
         REGION_ADD_SOURCE_USAGE,
         'region remove <trackId> <regionId>',
         'region split <trackId> <regionId> <time>',
