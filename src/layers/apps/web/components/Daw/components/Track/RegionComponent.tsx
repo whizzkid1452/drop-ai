@@ -1,25 +1,26 @@
-// import { useRef } from 'react';
 import WavesurferPlayer from '@wavesurfer/react';
+import type WaveSurfer from 'wavesurfer.js';
 import * as styles from './RegionComponent.css.ts';
 import type { RegionState } from '@/layers/session/session';
 
 interface RegionComponentProps {
   region: RegionState;
   pixelsPerSecond: number;
-  onReady?: (ws: any) => void;
+  onReady?: (ws: WaveSurfer) => void;
+  onRemove?: () => void;
 }
 
-export const RegionComponent = ({ region, pixelsPerSecond, onReady: onReadyProp }: RegionComponentProps) => {
+export const RegionComponent = ({ region, pixelsPerSecond, onReady: onReadyProp, onRemove }: RegionComponentProps) => {
   const left = region.startTime * pixelsPerSecond;
   const width = region.duration * pixelsPerSecond;
 
-  const onReady = (ws: any) => {
+  const onReady = (ws: WaveSurfer) => {
     ws.setVolume(0);
     ws.zoom(pixelsPerSecond);
 
-    // Shadow DOM style injection to hide scrollbars
-    if (ws.renderer?.container?.shadowRoot) {
-      const shadowRoot = ws.renderer.container.shadowRoot;
+    const rootNode = ws.getWrapper().getRootNode();
+    if (rootNode instanceof ShadowRoot) {
+      const shadowRoot = rootNode;
       const styleId = 'wavesurfer-style-overrides';
       if (!shadowRoot.getElementById(styleId)) {
         const style = document.createElement('style');
@@ -54,6 +55,17 @@ export const RegionComponent = ({ region, pixelsPerSecond, onReady: onReadyProp 
         overflow: 'hidden',
       }}
     >
+      {onRemove ? (
+        <button
+          type="button"
+          className={styles.removeButton}
+          aria-label="Region 삭제"
+          title="Region 삭제"
+          onClick={onRemove}
+        >
+          ×
+        </button>
+      ) : null}
       <div
         style={{
           marginLeft: `-${region.sourceStartTime * pixelsPerSecond}px`,

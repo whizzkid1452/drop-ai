@@ -23,7 +23,7 @@ export const TrackComponent = memo(function TrackComponent({
   onVolumeChange: (trackId: string, volume: number) => void;
   onPanChange: (trackId: string, pan: number) => void;
 }) {
-  const { splitRegion } = useTrackActions();
+  const { removeRegion, splitRegion } = useTrackActions();
   const currentTime = useSession(state => state.currentTime);
   const splitRegionId = resolveSplitRegionId({ regions: track.regions, splitTime: currentTime });
 
@@ -37,6 +37,10 @@ export const TrackComponent = memo(function TrackComponent({
     });
   };
 
+  const handleRemoveRegion = (regionId: string) => {
+    void removeRegion({ trackId: track.id, regionId });
+  };
+
   return (
     <>
       <div style={{ position: 'relative', height: '128px', width: '100%' }}>
@@ -46,6 +50,7 @@ export const TrackComponent = memo(function TrackComponent({
             region={region}
             pixelsPerSecond={pixelsPerSecond}
             onReady={ws => onReady(track.id, ws)}
+            onRemove={() => handleRemoveRegion(region.id)}
           />
         ))}
       </div>

@@ -27,9 +27,10 @@ Agent Prompt는 현재 AudioCommand 전체의 필드와 범위를 설명하고 �
 현재 Region의 `startTime`과 `endTime`은 절대 초 단위다. 음악 시간(musical time) 모델을 도입하기 전까지 Session의
 tempo 변경은 AudioEngine의 Transport BPM과 Region 예약을 변경하지 않는다.
 
-Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을 때 그 ID로 `SPLIT_REGION`을 실행한다. 내부 CLI의
-변경 작업은 CommandExecutor를 사용한다. Web 파일 가져오기는 Track 생성과 Region 등록을 `executeMany` 한 번으로
-실행한다. Web JSON CLI도 파싱된 명령 배열을 `executeMany` 한 번으로 실행하고, 중간 실패 전 결과만 후처리한다.
+Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을 때 그 ID로 `SPLIT_REGION`을 실행한다. Region
+삭제도 사용자가 확인한 정확한 ID로 `UNLOAD_REGION`을 실행한다. 내부 CLI의 변경 작업은 CommandExecutor를
+사용한다. Web 파일 가져오기는 Track 생성과 Region 등록을 `executeMany` 한 번으로 실행한다. Web JSON CLI도
+파싱된 명령 배열을 `executeMany` 한 번으로 실행하고, 중간 실패 전 결과만 후처리한다.
 
 ## Architecture (Layers)
 
