@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react';
 import type { Message } from '@/types/agent';
 import { useWebLLM } from '@/layers/apps/web/hooks/agent/useWebLLM';
 import { useCommandExecutor, useSession } from '@/layers/apps/web/context/LayerContext';
-import { executeWebAudioCommand } from '@/layers/apps/web/utils/execute-web-audio-command';
+import { downloadWebAudioCommandResults } from '@/layers/apps/web/utils/execute-web-audio-command';
 import { handleAIResponse } from '@/layers/apps/web/hooks/agent/useAgent/utils/aiResponseHandler';
 import { createUserMessage, createAssistantMessage } from '@/layers/apps/web/hooks/agent/useAgent/utils/messageHelpers';
 import { trackAIResponseReceived, trackChatMessageSent, trackPromptImprovementSession } from '@/utils/analytics';
@@ -35,10 +35,8 @@ export function useAgent() {
     [trackMap]
   );
 
-  const execute = useCallback(
-    async (command: AudioCommand) => {
-      await executeWebAudioCommand({ commandExecutor, command });
-    },
+  const executeMany = useCallback(
+    (commands: readonly AudioCommand[]) => commandExecutor.executeMany(commands),
     [commandExecutor]
   );
 
@@ -88,11 +86,12 @@ export function useAgent() {
         status: newStatus,
         parsedCommands,
         executionResults,
+        commandOutputs,
       } = await handleAIResponse({
         engine,
         tracks,
         userInput: trimmedContent,
-        execute,
+        executeMany,
       });
       const responseTime = Date.now() - startTime;
       const commandTypes = (parsedCommands ?? []).map(command => command.type);
@@ -114,6 +113,10 @@ export function useAgent() {
           })),
           responseTimeMs: responseTime,
         });
+      }
+
+      if (parsedCommands && commandOutputs) {
+        downloadWebAudioCommandResults({ commands: parsedCommands, results: commandOutputs });
       }
 
       updateMessage(assistantMsg.id, message);

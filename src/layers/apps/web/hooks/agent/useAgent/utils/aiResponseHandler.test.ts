@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { CommandBatchExecutionError, type CommandBatchExecutionResult } from '@/layers/commands/command-executor';
 import type { MLCEngine } from '@/types/webllm.types';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
 import { handleAIResponse } from './aiResponseHandler';
@@ -14,13 +15,13 @@ vi.mock('@/utils/analytics', () => ({
 }));
 
 const engine = {} as MLCEngine;
-const execute = vi.fn(async (command: AudioCommand): Promise<void> => {
-  void command;
-});
+const executeMany = vi.fn(
+  async (commands: readonly AudioCommand[]): Promise<CommandBatchExecutionResult> => commands.map(() => undefined)
+);
 
 function handleResponse(fullResponse: string) {
   mocks.queryToLLM.mockResolvedValueOnce({ fullResponse, error: null });
-  return handleAIResponse({ engine, tracks: [], userInput: '요청', execute });
+  return handleAIResponse({ engine, tracks: [], userInput: '요청', executeMany });
 }
 
 describe('Agent 응답 명령 검증', () => {
@@ -31,7 +32,7 @@ describe('Agent 응답 명령 검증', () => {
   it('유효하지 않은 명령이 섞이면 명령을 하나도 실행하지 않는다', async () => {
     const result = await handleResponse('[{"type":"PLAY"},{"type":"SET_TEMPO","tempo":0}]');
 
-    expect(execute).not.toHaveBeenCalled();
+    expect(executeMany).not.toHaveBeenCalled();
     expect(result.status).toBe('error');
     expect(result.parsedCommands).toBeNull();
   });
@@ -39,31 +40,100 @@ describe('Agent 응답 명령 검증', () => {
   it('추가 필드가 있는 명령을 실행하지 않는다', async () => {
     const result = await handleResponse('[{"type":"EXPORT_AUDIO","startTime":1}]');
 
-    expect(execute).not.toHaveBeenCalled();
+    expect(executeMany).not.toHaveBeenCalled();
     expect(result.status).toBe('error');
   });
 
   it('빈 배열은 오류가 아닌 명령 없음으로 처리한다', async () => {
     const result = await handleResponse('[]');
 
-    expect(execute).not.toHaveBeenCalled();
+    expect(executeMany).not.toHaveBeenCalled();
     expect(result.status).toBe('idle');
     expect(result.parsedCommands).toEqual([]);
   });
 
-  it('유효한 명령 배열은 입력 순서대로 실행한다', async () => {
+  it('유효한 명령 배열을 입력 순서 그대로 한 번 실행한다', async () => {
     const result = await handleResponse('[{"type":"SET_TEMPO","tempo":140},{"type":"PLAY"}]');
 
-    expect(execute).toHaveBeenNthCalledWith(1, { type: AudioCommandType.SET_TEMPO, tempo: 140 });
-    expect(execute).toHaveBeenNthCalledWith(2, { type: AudioCommandType.PLAY });
+    expect(executeMany).toHaveBeenCalledTimes(1);
+    expect(executeMany).toHaveBeenCalledWith([
+      { type: AudioCommandType.SET_TEMPO, tempo: 140 },
+      { type: AudioCommandType.PLAY },
+    ]);
+    expect(result.executionResults).toEqual([
+      { commandType: AudioCommandType.SET_TEMPO, success: true },
+      { commandType: AudioCommandType.PLAY, success: true },
+    ]);
+    expect(mocks.trackAudioCommandExecuted).toHaveBeenCalledTimes(2);
     expect(result.status).toBe('idle');
   });
 
   it('SET_EXPORT_RANGE만 응답하면 EXPORT_AUDIO를 임의로 추가하지 않는다', async () => {
     const result = await handleResponse('[{"type":"SET_EXPORT_RANGE","startTime":2,"endTime":8}]');
 
-    expect(execute).toHaveBeenCalledTimes(1);
-    expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.SET_EXPORT_RANGE, startTime: 2, endTime: 8 });
+    expect(executeMany).toHaveBeenCalledTimes(1);
+    expect(executeMany).toHaveBeenCalledWith([{ type: AudioCommandType.SET_EXPORT_RANGE, startTime: 2, endTime: 8 }]);
     expect(result.parsedCommands).toEqual([{ type: AudioCommandType.SET_EXPORT_RANGE, startTime: 2, endTime: 8 }]);
+  });
+
+  it('중간 명령이 실패하면 앞선 성공과 실패 명령만 기록한다', async () => {
+    const commands: AudioCommand[] = [
+      { type: AudioCommandType.PLAY },
+      { type: AudioCommandType.PAUSE },
+      { type: AudioCommandType.STOP },
+    ];
+    executeMany.mockRejectedValueOnce(
+      new CommandBatchExecutionError({
+        failedIndex: 1,
+        failedCommand: commands[1],
+        completedResults: [undefined],
+        cause: new Error('일시정지 실패'),
+      })
+    );
+
+    const result = await handleResponse(JSON.stringify(commands));
+
+    expect(result.executionResults).toEqual([
+      { commandType: AudioCommandType.PLAY, success: true },
+      { commandType: AudioCommandType.PAUSE, success: false },
+    ]);
+    expect(mocks.trackAudioCommandExecuted).toHaveBeenNthCalledWith(1, {
+      commandType: AudioCommandType.PLAY,
+      success: true,
+    });
+    expect(mocks.trackAudioCommandExecuted).toHaveBeenNthCalledWith(2, {
+      commandType: AudioCommandType.PAUSE,
+      success: false,
+    });
+    expect(mocks.trackAudioCommandExecuted).toHaveBeenCalledTimes(2);
+    expect(result.commandOutputs).toEqual([undefined]);
+  });
+
+  it('오류 전에 생성한 Blob 결과를 반환한다', async () => {
+    const exportedAudio = new Blob(['wav'], { type: 'audio/wav' });
+    const commands: AudioCommand[] = [
+      { type: AudioCommandType.EXPORT_AUDIO, filename: 'first' },
+      { type: AudioCommandType.PAUSE },
+    ];
+    executeMany.mockRejectedValueOnce(
+      new CommandBatchExecutionError({
+        failedIndex: 1,
+        failedCommand: commands[1],
+        completedResults: [exportedAudio],
+        cause: new Error('일시정지 실패'),
+      })
+    );
+
+    const result = await handleResponse(JSON.stringify(commands));
+
+    expect(result.commandOutputs?.[0]).toBe(exportedAudio);
+  });
+
+  it('실패 위치를 알 수 없는 실행 오류는 호출자에게 전달한다', async () => {
+    const executionError = new Error('알 수 없는 실행 오류');
+    executeMany.mockRejectedValueOnce(executionError);
+
+    await expect(handleResponse('[{"type":"PLAY"}]')).rejects.toBe(executionError);
+    expect(mocks.trackAudioCommandExecuted).not.toHaveBeenCalled();
   });
 });

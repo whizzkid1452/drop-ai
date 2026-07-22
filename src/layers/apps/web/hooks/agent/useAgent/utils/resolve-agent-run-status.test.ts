@@ -22,6 +22,16 @@ describe('resolveAgentRunStatus', () => {
     ).toBe('failed');
   });
 
+  it('중간 실패 뒤 실행되지 않은 명령이 결과에서 빠져도 failed를 반환한다', () => {
+    expect(
+      resolveAgentRunStatus({
+        responseStatus: 'idle',
+        commandCount: 3,
+        executionResults: [{ success: true }, { success: false }],
+      })
+    ).toBe('failed');
+  });
+
   it('실행할 명령이 없으면 failed를 반환한다', () => {
     expect(
       resolveAgentRunStatus({

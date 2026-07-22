@@ -1,10 +1,26 @@
-import type { CommandExecutor } from '../../../commands/command-executor';
+import type { CommandBatchExecutionResult, CommandExecutor } from '../../../commands/command-executor';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
 import { downloadBlob } from '../components/Daw/components/ExportButton/utils/audioExport';
 
 interface ExecuteWebAudioCommandOptions {
-  commandExecutor: CommandExecutor;
+  commandExecutor: Pick<CommandExecutor, 'execute'>;
   command: AudioCommand;
+}
+
+interface DownloadWebAudioCommandResultsOptions {
+  commands: readonly AudioCommand[];
+  results: CommandBatchExecutionResult;
+}
+
+export function downloadWebAudioCommandResults({ commands, results }: DownloadWebAudioCommandResultsOptions): void {
+  for (const [index, result] of results.entries()) {
+    const command = commands[index];
+    if (!(result instanceof Blob) || command?.type !== AudioCommandType.EXPORT_AUDIO) {
+      continue;
+    }
+
+    downloadBlob(result, `${command.filename || 'export'}.wav`);
+  }
 }
 
 export async function executeWebAudioCommand({
@@ -12,8 +28,5 @@ export async function executeWebAudioCommand({
   command,
 }: ExecuteWebAudioCommandOptions): Promise<void> {
   const result = await commandExecutor.execute(command);
-  if (!(result instanceof Blob)) return;
-
-  const filename = command.type === AudioCommandType.EXPORT_AUDIO ? command.filename || 'export' : 'export';
-  downloadBlob(result, `${filename}.wav`);
+  downloadWebAudioCommandResults({ commands: [command], results: [result] });
 }
