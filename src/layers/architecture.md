@@ -38,7 +38,11 @@ Session과 AudioCommand에는 저장하지 않는다. API 존재 확인은 실�
 영구 저장 형식은 Shared의 `ProjectDocumentSchema`로 검증한다. v1은 Track·Region과 오디오 Source 메타데이터를
 절대 초 단위로 저장하고, Region은 임시 URL이 아닌 안정적인 Source ID를 참조한다. `File`, `Blob`, Object URL,
 AudioBuffer, 함수, 재생 중 상태, Agent·UI 상태는 ProjectDocument에 넣지 않는다. 현재는 문서 계약만 있으며
-Session 변환, 저장소, 마이그레이션, Undo는 각각 후속 목적 단위에서 추가한다.
+Session 변환, 영구 저장 Adapter, 마이그레이션, Undo는 각각 후속 목적 단위에서 추가한다.
+
+`IProjectRepository`는 ProjectDocument snapshot 저장 계약이다. Repository 계층은 Shared만 참조하며, 구체 구현은
+Composition Root에서만 조립한다. 저장과 삭제는 expected revision 비교로 오래된 탭의 덮어쓰기와 삭제를 거부한다.
+현재 `InMemoryProjectRepository`는 계약 검증용 구현이며 새로고침 뒤에도 남는 영구 저장소가 아니다.
 
 Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을 때 그 ID로 `SPLIT_REGION`을 실행한다. Region
 삭제도 사용자가 확인한 정확한 ID로 `UNLOAD_REGION`을 실행한다. 내부 CLI의 변경 작업은 CommandExecutor를
@@ -90,6 +94,7 @@ graph TD
 - Apps는 Composition Root 밖에서 Controller를 import하지 않는다.
 - Command와 Query는 AudioEngine 계층을 import하지 않는다.
 - Controllers는 `IAudioEngine` 계약과 오류 타입만 import한다.
+- ProjectRepository는 Shared 외 다른 계층을 import하지 않는다.
 - 하위 계층은 상위 계층을 역참조하지 않는다.
 - Tone.js import와 대표 Web Audio 생성자·팩토리의 직접 호출은 AudioEngine 계층에서만 수행한다.
 
