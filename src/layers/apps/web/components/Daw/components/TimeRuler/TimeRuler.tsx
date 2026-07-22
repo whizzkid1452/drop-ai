@@ -1,9 +1,9 @@
 import { memo, useMemo, useRef, useState, useEffect } from 'react';
 import * as styles from './TimeRuler.css.ts';
-import type { Track } from '@/types/track';
 import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
 import { useErrorBoundary } from 'react-error-boundary';
 import { AudioCommandType } from '@/types/audioCommand.schema';
+import { getMaxDuration } from './get-max-duration';
 
 // ...
 
@@ -18,7 +18,7 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
 
   const commandExecutor = useCommandExecutor();
 
-  const trackArray = Array.from(tracks.values()) as unknown as Track[];
+  const trackArray = Array.from(tracks.values());
 
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -187,18 +187,4 @@ function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-function getMaxDuration(tracks: Track[]) {
-  let max = 0;
-  tracks.forEach(track => {
-    track.regions.forEach(region => {
-      // AudioFile property mismatch handling if needed
-      // Snapshot region has audioFile which has duration
-      const duration = region.audioFile?.duration ?? region.duration ?? 0;
-      const endTime = region.startTime + duration;
-      if (endTime > max) max = endTime;
-    });
-  });
-  return max;
 }

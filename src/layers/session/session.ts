@@ -9,7 +9,7 @@ interface RegionCommonState {
   endTime: number;
   sourceStartTime: number;
   duration: number;
-  status: RegionStatus[]; // types/track.ts와 통일
+  status: RegionStatus[];
 }
 
 interface LegacyUrlRegionSource {
@@ -31,7 +31,7 @@ export interface TrackState {
   pan: number;
   isMuted: boolean;
   isSoloed: boolean;
-  status: TrackStatus[]; // types/track.ts와 통일
+  status: TrackStatus[];
   regions: RegionState[];
 }
 
