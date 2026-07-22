@@ -4,7 +4,6 @@ export interface RegionData {
   startTime: number;
   sourceStartTime: number;
   duration?: number;
-  audioFile?: { url: string; duration?: number };
 }
 
 export const DEFAULT_EXPORT_SAMPLE_RATE = 44100;

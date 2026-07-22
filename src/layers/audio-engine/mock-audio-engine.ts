@@ -178,9 +178,6 @@ export class MockAudioEngine implements IAudioEngine {
   }
 
   private cloneRegionData(regionData: RegionData): RegionData {
-    return {
-      ...regionData,
-      audioFile: regionData.audioFile ? { ...regionData.audioFile } : undefined,
-    };
+    return { ...regionData };
   }
 }

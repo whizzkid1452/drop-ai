@@ -355,10 +355,7 @@ export class AudioEngine implements IAudioEngine {
   }
 
   private cloneRegionData(regionData: RegionData): RegionData {
-    return {
-      ...regionData,
-      audioFile: regionData.audioFile ? { ...regionData.audioFile } : undefined,
-    };
+    return { ...regionData };
   }
 
   private cleanupRegionEntries(entries: RegionPlayerEntry[]): void {

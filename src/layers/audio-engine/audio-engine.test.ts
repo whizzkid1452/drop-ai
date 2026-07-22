@@ -1,8 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, expectTypeOf, it } from 'vitest';
 import { MockAudioEngine } from './mock-audio-engine';
 import type { RegionData } from './i-audio-engine';
 
 describe('MockAudioEngine - Phase 2 검증', () => {
+  it('RegionData는 중첩 audioFile 계약을 포함하지 않는다', () => {
+    expectTypeOf<RegionData>().not.toHaveProperty('audioFile');
+  });
+
   let engine: MockAudioEngine;
 
   beforeEach(() => {
