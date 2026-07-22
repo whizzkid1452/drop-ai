@@ -7,6 +7,7 @@ import type { TrackState } from '@/layers/session/session';
 import { useTrackActions } from '@/layers/apps/web/hooks/useTrackActions';
 import { resolveSplitRegionId } from '@/layers/apps/web/hooks/resolve-split-region-id';
 import { TrackPanController } from './components/TrackPanController';
+import { TrackRegionImportControl } from './components/TrackRegionImportControl';
 import { TrackVolumeController } from './components/TrackVolumeController';
 import { RegionComponent } from './RegionComponent';
 
@@ -35,6 +36,7 @@ export const TrackComponent = memo(function TrackComponent({
   const [isMutePending, setIsMutePending] = useState(false);
   const [isSoloPending, setIsSoloPending] = useState(false);
   const [isRemovingTrack, setIsRemovingTrack] = useState(false);
+  const [isImportingRegion, setIsImportingRegion] = useState(false);
   const currentTime = useSession(state => state.currentTime);
   const splitRegionId = resolveSplitRegionId({ regions: track.regions, splitTime: currentTime });
 
@@ -57,7 +59,7 @@ export const TrackComponent = memo(function TrackComponent({
   };
 
   const handleRemoveTrack = async () => {
-    if (isRemovingTrack) {
+    if (isRemovingTrack || isImportingRegion) {
       return;
     }
 
@@ -70,7 +72,7 @@ export const TrackComponent = memo(function TrackComponent({
   };
 
   const handleMuteChange = async () => {
-    if (isMutePending || isRemovingTrack) {
+    if (isMutePending || isRemovingTrack || isImportingRegion) {
       return;
     }
 
@@ -83,7 +85,7 @@ export const TrackComponent = memo(function TrackComponent({
   };
 
   const handleSoloChange = async () => {
-    if (isSoloPending || isRemovingTrack) {
+    if (isSoloPending || isRemovingTrack || isImportingRegion) {
       return;
     }
 
@@ -133,11 +135,16 @@ export const TrackComponent = memo(function TrackComponent({
             </button>
           </>
         ) : null}
+        <TrackRegionImportControl
+          trackId={track.id}
+          disabled={isRemovingTrack}
+          onPendingChange={setIsImportingRegion}
+        />
         <button
           type="button"
           aria-label="Track Mute"
           aria-pressed={track.isMuted}
-          disabled={isMutePending || isRemovingTrack}
+          disabled={isMutePending || isRemovingTrack || isImportingRegion}
           onClick={() => void handleMuteChange()}
           style={{
             padding: '4px 8px',
@@ -146,8 +153,8 @@ export const TrackComponent = memo(function TrackComponent({
             color: 'white',
             border: 'none',
             borderRadius: '4px',
-            cursor: isMutePending || isRemovingTrack ? 'wait' : 'pointer',
-            opacity: isMutePending || isRemovingTrack ? 0.5 : 1,
+            cursor: isMutePending || isRemovingTrack || isImportingRegion ? 'wait' : 'pointer',
+            opacity: isMutePending || isRemovingTrack || isImportingRegion ? 0.5 : 1,
           }}
         >
           Mute
@@ -156,7 +163,7 @@ export const TrackComponent = memo(function TrackComponent({
           type="button"
           aria-label="Track Solo"
           aria-pressed={track.isSoloed}
-          disabled={isSoloPending || isRemovingTrack}
+          disabled={isSoloPending || isRemovingTrack || isImportingRegion}
           onClick={() => void handleSoloChange()}
           style={{
             padding: '4px 8px',
@@ -165,8 +172,8 @@ export const TrackComponent = memo(function TrackComponent({
             color: 'white',
             border: 'none',
             borderRadius: '4px',
-            cursor: isSoloPending || isRemovingTrack ? 'wait' : 'pointer',
-            opacity: isSoloPending || isRemovingTrack ? 0.5 : 1,
+            cursor: isSoloPending || isRemovingTrack || isImportingRegion ? 'wait' : 'pointer',
+            opacity: isSoloPending || isRemovingTrack || isImportingRegion ? 0.5 : 1,
           }}
         >
           Solo
@@ -175,7 +182,7 @@ export const TrackComponent = memo(function TrackComponent({
           type="button"
           aria-label="Track 삭제"
           aria-busy={isRemovingTrack}
-          disabled={isRemovingTrack}
+          disabled={isRemovingTrack || isImportingRegion}
           onClick={() => void handleRemoveTrack()}
           style={{
             padding: '4px 8px',
@@ -184,8 +191,8 @@ export const TrackComponent = memo(function TrackComponent({
             color: 'white',
             border: 'none',
             borderRadius: '4px',
-            cursor: isRemovingTrack ? 'wait' : 'pointer',
-            opacity: isRemovingTrack ? 0.5 : 1,
+            cursor: isRemovingTrack || isImportingRegion ? 'wait' : 'pointer',
+            opacity: isRemovingTrack || isImportingRegion ? 0.5 : 1,
           }}
         >
           {isRemovingTrack ? '삭제 중…' : 'Track 삭제'}

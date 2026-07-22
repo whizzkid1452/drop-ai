@@ -34,7 +34,8 @@ Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을
 UI의 Mute·Solo는 Session 상태의 반대 값을 정확한 Track ID와 함께 `SET_TRACK_MUTE`·`SET_TRACK_SOLO`로 실행한다.
 Web UI의 Tempo 입력은 `SET_TEMPO`로 Session 메타데이터만 변경한다. Web 파일 가져오기는 Track 생성과 Region 등록을
 `executeMany` 한 번으로 실행한다. Web JSON CLI도 파싱된 명령 배열을 `executeMany` 한 번으로 실행하고, 중간 실패 전
-결과만 후처리한다.
+결과만 후처리한다. 기존 Track의 `Region 추가`는 브라우저가 파일을 검증·변환한 뒤 선택한 Track ID와 현재 시각으로
+`LOAD_REGION`을 한 번 실행한다. 성공한 파일만 Session에 보관하고 실패한 Blob URL은 해제한다.
 
 ## Architecture (Layers)
 

@@ -32,6 +32,22 @@ vi.mock('./components/TrackVolumeController', () => ({
   TrackVolumeController: () => null,
 }));
 
+vi.mock('./components/TrackRegionImportControl', async () => {
+  const { createElement: createMockElement } = await import('react');
+
+  return {
+    TrackRegionImportControl: ({ onPendingChange }: { onPendingChange?: (isPending: boolean) => void }) =>
+      createMockElement(
+        'button',
+        {
+          'aria-label': 'Region 가져오기 시작',
+          onClick: () => onPendingChange?.(true),
+        },
+        'Region 가져오기 시작'
+      ),
+  };
+});
+
 interface Deferred<T> {
   promise: Promise<T>;
   resolve: (value: T) => void;
@@ -238,5 +254,42 @@ describe('TrackComponent 제어', () => {
 
     expect(soloButton.disabled).toBe(false);
     expect(soloButton.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('Region 가져오기 중에는 같은 Track의 Mute·Solo와 삭제를 막는다', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    mountedRoots.push(root);
+
+    act(() => {
+      root.render(
+        createElement(TrackComponent, {
+          mediaElement: null,
+          track,
+          pixelsPerSecond: 100,
+          onReady: vi.fn(),
+          onVolumeChange: vi.fn(),
+          onPanChange: vi.fn(),
+          onMuteChange: vi.fn().mockResolvedValue('updated'),
+          onSoloChange: vi.fn().mockResolvedValue('updated'),
+          onRemoveTrack: vi.fn().mockResolvedValue('removed'),
+        })
+      );
+    });
+
+    const importButton = host.querySelector<HTMLButtonElement>('button[aria-label="Region 가져오기 시작"]');
+    const muteButton = host.querySelector<HTMLButtonElement>('button[aria-label="Track Mute"]');
+    const soloButton = host.querySelector<HTMLButtonElement>('button[aria-label="Track Solo"]');
+    const removeButton = host.querySelector<HTMLButtonElement>('button[aria-label="Track 삭제"]');
+    if (!importButton || !muteButton || !soloButton || !removeButton) {
+      throw new Error('Track 제어 버튼을 찾지 못했습니다.');
+    }
+
+    act(() => importButton.click());
+
+    expect(muteButton.disabled).toBe(true);
+    expect(soloButton.disabled).toBe(true);
+    expect(removeButton.disabled).toBe(true);
   });
 });
