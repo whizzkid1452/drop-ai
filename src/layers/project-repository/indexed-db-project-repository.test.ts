@@ -99,6 +99,14 @@ describe('IndexedDbProjectRepository', () => {
     return repository;
   }
 
+  it('IndexedDB가 없어도 조립은 허용하고 실제 작업에서 사용 불가 오류를 반환한다', async () => {
+    const repository = new IndexedDbProjectRepository({ indexedDb: undefined });
+
+    await expect(repository.load(PROJECT_ID)).rejects.toMatchObject({
+      code: ProjectRepositoryErrorCode.STORAGE_UNAVAILABLE,
+    });
+  });
+
   it('새 Repository 인스턴스에서도 생성한 프로젝트를 불러오고 목록에서 조회한다', async () => {
     const document = createProjectDocument();
     await createRepository().create(document);

@@ -183,6 +183,14 @@ export const createCliCommands = (commandExecutor: CliCommandExecutor, state: Cl
         return 'Playback paused.';
       },
     },
+    save: {
+      description: 'Save current project',
+      usage: 'save',
+      fn: async () => {
+        await commandExecutor.execute({ type: AudioCommandType.SAVE_PROJECT });
+        return 'Project saved.';
+      },
+    },
     seek: {
       description: 'Seek to specific time',
       usage: 'seek <time>',

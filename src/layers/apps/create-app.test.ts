@@ -1,11 +1,29 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AudioSourceRegistry } from '../audio-source-registry/audio-source-registry';
 import type { IObjectUrlAdapter } from '../audio-source-registry/i-object-url-adapter';
+import type { IAudioSourceRepository } from '../audio-source-repository/i-audio-source-repository';
 import { CommandExecutor } from '../commands/command-executor';
 import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { PlaybackClockQuery } from '../queries/playback-clock-query';
+import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import { AudioCommandType } from '../shared/types/audioCommand.schema';
-import { createApp, createCliTestApp } from './create-app';
+import { createApp, createCliTestApp, type CreateAppOptions } from './create-app';
+
+function createTestAudioSourceRepository(): IAudioSourceRepository {
+  return {
+    create: vi.fn().mockResolvedValue(undefined),
+    load: vi.fn().mockResolvedValue(null),
+    delete: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
+function createTestApp(options: CreateAppOptions = {}) {
+  return createApp({
+    audioSourceRepository: createTestAudioSourceRepository(),
+    projectRepository: new InMemoryProjectRepository(),
+    ...options,
+  });
+}
 
 describe('createApp', () => {
   afterEach(() => {
@@ -19,7 +37,7 @@ describe('createApp', () => {
     };
     const audioSourceRegistry = new AudioSourceRegistry(objectUrlAdapter);
 
-    const app = createApp({ audioEngine: new MockAudioEngine(), audioSourceRegistry });
+    const app = createTestApp({ audioEngine: new MockAudioEngine(), audioSourceRegistry });
 
     const registration = {
       metadata: {
@@ -37,6 +55,7 @@ describe('createApp', () => {
     expect('audioSourceRegistry' in app).toBe(false);
     expect('attach' in app.audioSourceStager).toBe(false);
     expect('stage' in app.audioSourceResolver).toBe(false);
+    expect('listCommittedRegistrations' in app.audioSourceResolver).toBe(false);
   });
 
   it('등록 capability와 Command Controller가 같은 Source Registry를 공유한다', async () => {
@@ -48,7 +67,7 @@ describe('createApp', () => {
       revokeObjectUrl: vi.fn(),
     };
     const audioSourceRegistry = new AudioSourceRegistry(objectUrlAdapter);
-    const app = createApp({ audioEngine: new MockAudioEngine(), audioSourceRegistry });
+    const app = createTestApp({ audioEngine: new MockAudioEngine(), audioSourceRegistry });
 
     app.audioSourceStager.stage({
       metadata: {
@@ -84,6 +103,60 @@ describe('createApp', () => {
     expect(app.session.getState().tracks.get(trackId)?.regions[0]).not.toHaveProperty('audioFileUrl');
   });
 
+  it('SAVE_PROJECT가 주입한 Source·Project Repository를 같은 저장 절차에서 사용한다', async () => {
+    const sourceId = '11111111-1111-4111-8111-111111111111';
+    const trackId = '22222222-2222-4222-8222-222222222222';
+    const regionId = '33333333-3333-4333-8333-333333333333';
+    const initialProjectMetadata = {
+      id: '44444444-4444-4444-8444-444444444444',
+      name: '저장 통합 테스트',
+      revision: 0,
+    };
+    const audioSourceRegistry = new AudioSourceRegistry({
+      createObjectUrl: () => 'blob:save-source',
+      revokeObjectUrl: vi.fn(),
+    });
+    const audioSourceRepository = createTestAudioSourceRepository();
+    const projectRepository = new InMemoryProjectRepository();
+    const app = createTestApp({
+      audioEngine: new MockAudioEngine(),
+      audioSourceRegistry,
+      audioSourceRepository,
+      projectRepository,
+      initialProjectMetadata,
+    });
+    const registration = {
+      metadata: {
+        id: sourceId,
+        fileName: 'source.wav',
+        mimeType: 'audio/wav',
+        byteLength: 4,
+        durationSeconds: 1,
+      },
+      blob: new Blob(['test'], { type: 'audio/wav' }),
+    };
+    app.audioSourceStager.stage(registration);
+    await app.commandExecutor.execute({ type: AudioCommandType.ADD_TRACK, trackId });
+    await app.commandExecutor.execute({
+      type: AudioCommandType.LOAD_REGION,
+      trackId,
+      regionId,
+      sourceId,
+      startTime: 0,
+      duration: 1,
+    });
+
+    await app.commandExecutor.execute({ type: AudioCommandType.SAVE_PROJECT });
+
+    expect(audioSourceRepository.create).toHaveBeenCalledWith(registration);
+    await expect(projectRepository.load(initialProjectMetadata.id)).resolves.toMatchObject({
+      audioSources: [registration.metadata],
+      tracks: [expect.objectContaining({ id: trackId })],
+    });
+    expect('projectRepository' in app).toBe(false);
+    expect('audioSourceRepository' in app).toBe(false);
+  });
+
   it.each([
     ['명시한 대상 Track을 찾지 못하면', '22222222-2222-4222-8222-222222222222'],
     ['Track을 생략했고 Session이 비어 있으면', undefined],
@@ -95,7 +168,7 @@ describe('createApp', () => {
       createObjectUrl: () => 'blob:pending-source',
       revokeObjectUrl,
     });
-    const app = createApp({ audioEngine: new MockAudioEngine(), audioSourceRegistry });
+    const app = createTestApp({ audioEngine: new MockAudioEngine(), audioSourceRegistry });
 
     app.audioSourceStager.stage({
       metadata: {
@@ -126,13 +199,13 @@ describe('createApp', () => {
   it('기본 Source Registry 조립만으로 Object URL을 만들지 않는다', () => {
     const createObjectUrl = vi.spyOn(globalThis.URL, 'createObjectURL');
 
-    createApp({ audioEngine: new MockAudioEngine() });
+    createTestApp({ audioEngine: new MockAudioEngine() });
 
     expect(createObjectUrl).not.toHaveBeenCalled();
   });
 
   it('새 프로젝트 metadata를 UUID와 revision 0으로 만든다', () => {
-    const app = createApp({ audioEngine: new MockAudioEngine() });
+    const app = createTestApp({ audioEngine: new MockAudioEngine() });
 
     expect(app.session.getState().project).toMatchObject({
       name: '새 프로젝트',
@@ -150,13 +223,13 @@ describe('createApp', () => {
       revision: 4,
     };
 
-    const app = createApp({ audioEngine: new MockAudioEngine(), initialProjectMetadata });
+    const app = createTestApp({ audioEngine: new MockAudioEngine(), initialProjectMetadata });
 
     expect(app.session.getState().project).toEqual(initialProjectMetadata);
   });
 
   it('하나의 CommandExecutor를 조립한다', () => {
-    const app = createApp({ audioEngine: new MockAudioEngine() });
+    const app = createTestApp({ audioEngine: new MockAudioEngine() });
 
     expect(app.commandExecutor).toBeInstanceOf(CommandExecutor);
   });
@@ -165,7 +238,7 @@ describe('createApp', () => {
     const audioEngine = new MockAudioEngine();
     audioEngine.setTime(7.5);
 
-    const app = createApp({ audioEngine });
+    const app = createTestApp({ audioEngine });
 
     expect(app.playbackClock).toBeInstanceOf(PlaybackClockQuery);
     expect(app.playbackClock.getCurrentTime()).toBe(7.5);
@@ -181,7 +254,7 @@ describe('createApp', () => {
   });
 
   it('브라우저 오디오 환경을 읽기 전용 capability로 조립한다', () => {
-    const app = createApp({
+    const app = createTestApp({
       audioEngine: new MockAudioEngine(),
       audioRuntimeEnvironment: {
         crossOriginIsolated: false,

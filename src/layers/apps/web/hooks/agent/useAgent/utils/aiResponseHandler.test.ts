@@ -68,6 +68,13 @@ describe('Agent 응답 명령 검증', () => {
     expect(result.status).toBe('idle');
   });
 
+  it('SAVE_PROJECT 응답을 공통 명령 묶음으로 실행한다', async () => {
+    const result = await handleResponse('[{"type":"SAVE_PROJECT"}]');
+
+    expect(executeMany).toHaveBeenCalledWith([{ type: AudioCommandType.SAVE_PROJECT }]);
+    expect(result.executionResults).toEqual([{ commandType: AudioCommandType.SAVE_PROJECT, success: true }]);
+  });
+
   it('SET_EXPORT_RANGE만 응답하면 EXPORT_AUDIO를 임의로 추가하지 않는다', async () => {
     const result = await handleResponse('[{"type":"SET_EXPORT_RANGE","startTime":2,"endTime":8}]');
 

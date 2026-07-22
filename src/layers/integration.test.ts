@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { MockAudioEngine } from './audio-engine/mock-audio-engine';
 import { createApp } from './apps/create-app';
+import { InMemoryProjectRepository } from './project-repository/in-memory-project-repository';
 import { AudioCommandType } from './shared/types/audioCommand.schema';
 
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
@@ -8,7 +9,10 @@ const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 describe('Layers Integration', () => {
   function setup() {
     const mockEngine = new MockAudioEngine();
-    const { session, commandExecutor } = createApp({ audioEngine: mockEngine });
+    const { session, commandExecutor } = createApp({
+      audioEngine: mockEngine,
+      projectRepository: new InMemoryProjectRepository(),
+    });
     return { mockEngine, session, commandExecutor };
   }
 

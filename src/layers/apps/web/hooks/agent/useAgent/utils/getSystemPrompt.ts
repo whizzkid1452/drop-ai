@@ -62,6 +62,7 @@ const COMMAND_REFERENCE = {
   [AudioCommandType.CLEAR_EXPORT_RANGE]: '{"type":"CLEAR_EXPORT_RANGE"} - 내보내기 범위 해제',
   [AudioCommandType.EXPORT_AUDIO]:
     '{"type":"EXPORT_AUDIO","filename":"<optional filename>"} - 현재 선택 범위 또는 전체를 WAV로 내보내기',
+  [AudioCommandType.SAVE_PROJECT]: '{"type":"SAVE_PROJECT"} - 현재 프로젝트와 오디오 원본 저장',
 } satisfies Record<AudioCommandName, string>;
 
 export const AGENT_PROMPT_EXAMPLES = [
@@ -79,6 +80,14 @@ export const AGENT_PROMPT_EXAMPLES = [
       { type: AudioCommandType.SET_EXPORT_RANGE, startTime: 3, endTime: 10 },
       { type: AudioCommandType.EXPORT_AUDIO },
     ],
+  },
+  {
+    request: '현재 프로젝트 저장해줘',
+    commands: [{ type: AudioCommandType.SAVE_PROJECT }],
+  },
+  {
+    request: 'save the current project',
+    commands: [{ type: AudioCommandType.SAVE_PROJECT }],
   },
   {
     request: '안녕',
@@ -226,7 +235,8 @@ ${renderCommandReference()}
 8. 숫자는 문자열이 아닌 number로 쓴다. 시간은 절대 초다. 백분율은 100으로 나눠 volume 0..1, pan -1..1로 바꾼다. boolean은 true 또는 false다.
 9. 범위를 실제로 내보내려면 SET_EXPORT_RANGE 다음에 EXPORT_AUDIO를 둔다. endTime은 startTime보다 커야 한다.
 10. 입력 의존 순서를 유지한다. EXPORT_AUDIO는 해당 묶음의 마지막에 둔다.
-11. 요청을 안전하게 실행할 정보가 부족하면 []를 반환한다. 지원하지 않는 요청도 []를 반환한다.
+11. 편집과 저장을 함께 요청하면 SAVE_PROJECT를 해당 편집 명령 뒤에 둔다.
+12. 요청을 안전하게 실행할 정보가 부족하면 []를 반환한다. 지원하지 않는 요청도 []를 반환한다.
 
 # 예시
 ${renderExamples(projectContext.visibleTracks)}

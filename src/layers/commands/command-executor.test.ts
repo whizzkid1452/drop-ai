@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { AudioSourceRegistry } from '../audio-source-registry/audio-source-registry';
 import type { IAudioSourceRegistry } from '../audio-source-registry/i-audio-source-registry';
+import type { IAudioSourceRepository } from '../audio-source-repository/i-audio-source-repository';
 import { AppController } from '../controllers/app-controller';
 import { createSessionStore } from '../session/session';
+import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import { AudioCommandType, type AudioCommand } from '../shared/types/audioCommand.schema';
 import { CommandBatchExecutionError, CommandExecutor } from './command-executor';
 
@@ -24,14 +26,22 @@ function createTestContext() {
     createObjectUrl: () => SOURCE_OBJECT_URL,
     revokeObjectUrl: vi.fn(),
   });
+  const audioSourceRepository: IAudioSourceRepository = {
+    create: vi.fn().mockResolvedValue(undefined),
+    load: vi.fn().mockResolvedValue(null),
+    delete: vi.fn().mockResolvedValue(undefined),
+  };
+  const projectRepository = new InMemoryProjectRepository();
   const controller = new AppController({
     sessionStore: session,
     audioEngine: new MockAudioEngine(),
     audioSourceRegistry,
+    audioSourceRepository,
+    projectRepository,
   });
   const commandExecutor = new CommandExecutor(session, controller);
 
-  return { audioSourceRegistry, commandExecutor, controller, session };
+  return { audioSourceRegistry, commandExecutor, controller, projectRepository, session };
 }
 
 function stageSource(audioSourceRegistry: IAudioSourceRegistry): void {
@@ -90,6 +100,41 @@ async function addRegion(commandExecutor: CommandExecutor, audioSourceRegistry: 
 }
 
 describe('CommandExecutor', () => {
+  it('SAVE_PROJECT를 ProjectController에 위임한다', async () => {
+    const { commandExecutor, controller } = createTestContext();
+    const saveProject = vi.spyOn(controller.project, 'saveProject').mockResolvedValue(undefined);
+
+    await commandExecutor.execute({ type: AudioCommandType.SAVE_PROJECT });
+
+    expect(saveProject).toHaveBeenCalledTimes(1);
+  });
+
+  it('앞선 편집 결과를 포함한 snapshot을 저장한다', async () => {
+    const { commandExecutor, projectRepository } = createTestContext();
+
+    await commandExecutor.executeMany([
+      { type: AudioCommandType.SET_TEMPO, tempo: 140 },
+      { type: AudioCommandType.SAVE_PROJECT },
+    ]);
+
+    const storedDocument = await projectRepository.load(INITIAL_PROJECT_METADATA.id);
+    expect(storedDocument?.timeline.tempoBpm).toBe(140);
+  });
+
+  it('동시에 요청한 저장을 순서대로 실행해 두 번째 저장에 최신 revision을 사용한다', async () => {
+    const { commandExecutor, projectRepository, session } = createTestContext();
+
+    await Promise.all([
+      commandExecutor.execute({ type: AudioCommandType.SAVE_PROJECT }),
+      commandExecutor.execute({ type: AudioCommandType.SAVE_PROJECT }),
+    ]);
+
+    expect(session.getState().project.revision).toBe(1);
+    await expect(projectRepository.load(INITIAL_PROJECT_METADATA.id)).resolves.toMatchObject({
+      project: { revision: 1 },
+    });
+  });
+
   it('ADD_TRACK 명령으로 트랙을 추가한다', async () => {
     const { commandExecutor, session } = createTestContext();
 

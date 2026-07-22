@@ -56,7 +56,7 @@ interface RunTransactionOptions<T> {
 }
 
 export class IndexedDbProjectRepository implements IProjectRepository {
-  private readonly indexedDb: IDBFactory;
+  private readonly indexedDb: IDBFactory | undefined;
   private readonly databaseName: string;
   private readonly now: () => number;
   private connectionPromise?: Promise<IDBDatabase>;
@@ -66,15 +66,7 @@ export class IndexedDbProjectRepository implements IProjectRepository {
     databaseName = DEFAULT_DATABASE_NAME,
     now = Date.now,
   }: IndexedDbProjectRepositoryOptions = {}) {
-    const availableIndexedDb = indexedDb ?? globalThis.indexedDB;
-    if (!availableIndexedDb) {
-      throw new ProjectRepositoryError({
-        code: ProjectRepositoryErrorCode.STORAGE_UNAVAILABLE,
-        message: '이 환경에서는 IndexedDB를 사용할 수 없습니다.',
-      });
-    }
-
-    this.indexedDb = availableIndexedDb;
+    this.indexedDb = indexedDb ?? globalThis.indexedDB;
     this.databaseName = databaseName;
     this.now = now;
   }
@@ -322,10 +314,20 @@ export class IndexedDbProjectRepository implements IProjectRepository {
   }
 
   private openDatabase(onConnectionInvalidated: () => void): Promise<IDBDatabase> {
+    const indexedDb = this.indexedDb;
+    if (!indexedDb) {
+      return Promise.reject(
+        new ProjectRepositoryError({
+          code: ProjectRepositoryErrorCode.STORAGE_UNAVAILABLE,
+          message: '이 환경에서는 IndexedDB를 사용할 수 없습니다.',
+        })
+      );
+    }
+
     return new Promise((resolve, reject) => {
       let request: IDBOpenDBRequest;
       try {
-        request = this.indexedDb.open(this.databaseName, DATABASE_VERSION);
+        request = indexedDb.open(this.databaseName, DATABASE_VERSION);
       } catch (error) {
         reject(this.createStorageOperationError('open', error));
         return;

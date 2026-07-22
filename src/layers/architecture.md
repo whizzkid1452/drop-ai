@@ -17,12 +17,13 @@ AudioEngine 객체를 노출하지 않는다. 현재 `PlaybackClockQuery`는 `Pl
 남은 명령은 실행하지 않는다. 이미 완료된 변경은 되돌리지 않으므로 묶음 실행은 원자적 트랜잭션이 아니다.
 실패 오류는 0부터 시작하는 실패 위치, 실패 명령, 앞선 실행 결과와 원인을 보존한다. 실패한 실행 뒤에 대기 중인
 요청은 계속 실행한다.
-`EXPORT_AUDIO`는 현재 완료될 때까지 대기열을 점유한다. 별도 작업 모델을 도입하기 전의 알려진 제한이다.
+`EXPORT_AUDIO`와 `SAVE_PROJECT`는 현재 완료될 때까지 대기열을 점유한다. 별도 작업 모델을 도입하기 전의 알려진 제한이다.
 
 Agent 응답은 JSON 배열 전체를 엄격하게 검증한다. 빈 배열은 명령 없음으로 허용한다. 알 수 없는 명령, 잘못된
 필드, 누락·추가 필드, JSON 밖의 텍스트가 하나라도 있으면 전체를 실행하지 않는다. Agent 응답에 없는 명령을
 실행 단계에서 추가하지 않는다. 검증된 배열은 `executeMany` 한 번으로 실행하며, 중간 실패 뒤 남은 명령은
 실행하지 않는다.
+편집과 저장을 함께 요청하면 `SAVE_PROJECT`를 편집 명령 뒤에 둔다.
 
 Agent Prompt는 현재 AudioCommand 전체의 필드와 범위를 설명하고 실제 Track·Region ID, 시간 범위, 오디오 소스
 사용 가능 여부를 전달한다. 예시 출력은 엄격한 Agent Schema로 테스트한다. 앱이 예약한 새 ID와 허용 파일 목록이
@@ -57,7 +58,7 @@ Region, 허용 오차를 초과한 Region 끝 시각 불일치는 손실을 숨�
 
 `createApp`은 새 프로젝트의 UUID·이름·revision 0을 만들거나 검증을 마친 기존 metadata를 Session에 주입한다.
 `project.revision`은 편집 횟수나 저장 여부가 아니라 마지막 성공 저장 snapshot의 동시성 제어 값이다. 일반 편집과
-Undo에서는 바꾸지 않으며, 후속 저장 Controller가 Repository의 성공 결과를 받았을 때만 교체한다. 전체 Session 교체,
+Undo에서는 바꾸지 않으며, Project Controller가 Repository의 성공 결과를 받았을 때만 교체한다. 전체 Session 교체,
 문서 마이그레이션, Undo는 각각 후속 목적 단위에서 추가한다.
 신뢰할 수 없는 JSON은 `readProjectDocumentJson`으로 문법을 확인하고, `readProjectDocument`로 식별자·버전·본문 순서로
 검증한다. 객체 입력은 자기 소유 열거 가능 데이터 속성만 문서 필드로 인정한다. 현재 지원 버전은 실제 형식이 정의된
@@ -67,10 +68,11 @@ v1뿐이며, 정의되지 않은 버전을 임의 변환하지 않는다.
 Composition Root에서만 조립한다. 저장과 삭제는 expected revision 비교로 오래된 탭의 덮어쓰기와 삭제를 거부한다.
 `InMemoryProjectRepository`는 계약 검증용 구현이다. `IndexedDbProjectRepository`는 문서와 목록 요약을 별도 Store에 두되,
 두 값을 하나의 transaction으로 갱신한다. IndexedDB에서 읽은 문서 본문은 `readProjectDocument`로 판독하고, 손상된
-데이터와 현재 앱보다 새로운 문서 버전을 서로 다른 Repository 오류로 분류한다. 아직 Composition Root와 사용자
-진입점에는 연결하지 않는다.
+데이터와 현재 앱보다 새로운 문서 버전을 서로 다른 Repository 오류로 분류한다. `createApp`은 브라우저용
+`IndexedDbProjectRepository`를 조립하고 Project Controller에만 주입한다.
+IndexedDB가 없는 환경에서도 앱 조립은 완료하며 실제 저장소 작업에서 `STORAGE_UNAVAILABLE`을 반환한다.
 
-Session의 `replaceProjectMetadata`는 후속 Project Controller가 불러오기 또는 저장 성공 결과를 반영하기 위한 내부
+Session의 `replaceProjectMetadata`는 Project Controller가 불러오기 또는 저장 성공 결과를 반영하기 위한 내부
 상태 교체 동작이다. Apps는 이 동작을 직접 호출하지 않는다. 프로젝트를 불러올 때 metadata만 먼저 바꾸지 않고,
 Source와 AudioEngine 준비가 모두 성공한 뒤 전체 프로젝트 상태를 한 번에 반영한다.
 
@@ -81,6 +83,9 @@ committed Source와 URL은 Undo와 미디어 재사용을 위해 유지한다. p
 종료와 실패한 임시 프로젝트 복원 정리에서만 URL을 해제한다. 저장용 목록은 pending을 제외하고 Region이 없는 committed
 Source는 포함한다.
 URL 해제가 실패하면 해당 Source를 Registry에 남겨 다음 정리 호출에서 다시 시도할 수 있게 한다.
+Registry는 저장 시 OPFS에 전달할 원본 Blob도 Source 수명 동안 보관한다. 저장용 Blob 목록은
+`ICommittedAudioSourceReader`로 Project Controller에만 제공하고, Apps에는 기존 Stager와 Resolver만 노출한다. Blob은
+내용을 변경할 수 없는 브라우저 객체이므로 같은 참조를 전달하되 metadata는 복사해서 반환한다.
 
 Session의 Region은 `sourceId`만 저장하고 Object URL을 저장하지 않는다. `LOAD_REGION`은 폐기된 `url` 필드를 일반·Agent
 Schema에서 명시적으로 거부한다. 새 Region은 등록된 `sourceId`를 명시하거나 같은 Track의 첫 Region Source를 재사용한다.
@@ -125,8 +130,17 @@ Registry의 전체 계약을 주입하고, 조회만 필요한 Export에는 `IAu
 stage하는 Web Adapter는 등록용 계약만 사용한다. 파일 metadata 변환과 Web Adapter 반환값에는 재생용 URL을 넣지 않는다.
 Web Adapter는 Registry URL을 반환값에 노출하지 않고 `sourceId` 명령을 만든다. 재생 소비자는 Resolver에 Source UUID를
 전달해 런타임 Source를 조회한다.
-OPFS와 IndexedDB는 하나의 transaction이 아니다. 후속 저장은 오디오 바이트 저장·검증을 먼저 끝내고 ProjectDocument를
-공개해야 한다. ProjectDocument Mapper와 저장·불러오기 연결은 별도 기능 단위로 진행한다.
+OPFS와 IndexedDB는 하나의 transaction이 아니다. `SAVE_PROJECT`는 먼저 Session과 committed Source 목록을
+ProjectDocument로 검증한다. 그다음 모든 Source를 OPFS에서 load해 크기를 확인하고, 없으면 Registry의 Blob으로 create한
+뒤 ProjectDocument를 IndexedDB에 공개한다. Source create가 다른 탭과 겹쳐 `SOURCE_ALREADY_EXISTS`가 되면 다시 load해
+검증한다. 프로젝트가 없으면 create하고, 이미 있으면 Session revision을 expected revision으로 save한다. 성공 반환값의
+project metadata만 Session에 반영하며, 오류나 revision 충돌에서는 기존 Session metadata를 유지한다.
+
+Source 저장 뒤 ProjectDocument 저장이 실패하면 참조되지 않는 OPFS 파일이 남을 수 있다. 다른 저장이 같은 Source를
+참조했을 가능성이 있으므로 저장 실패 경로에서 자동 삭제하지 않는다. 후속 미사용 Source 정리는 모든 ProjectDocument
+참조를 확인해야 한다. 현재 Source 삭제는 사용자 진입점에 연결하지 않았지만, 연결하기 전에는 Source 확인과 문서 저장
+사이에 삭제가 끼지 않도록 전역 저장 잠금 또는 참조 인식 삭제 규칙이 필요하다. byteLength 검증은 같은 크기의 다른
+바이트를 구분하지 못한다.
 
 Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을 때 그 ID로 `SPLIT_REGION`을 실행한다. Region
 삭제도 사용자가 확인한 정확한 ID로 `UNLOAD_REGION`을 실행한다. 내부 CLI의 변경 작업은 CommandExecutor를
@@ -138,6 +152,9 @@ Web UI의 Tempo 입력은 `SET_TEMPO`로 Session 메타데이터만 변경한다
 오디오 Source를 연결한다. 첫 명령이 실패하면 pending Source를 정리한다. 두 번째 명령이 실패하면 `REMOVE_TRACK`을
 CommandExecutor로 실행한 뒤 pending Source 정리를 시도한다. 보상도 실패하면 Web workflow 전용
 `AudioImportCompensationError`에 원래 오류와 각 보상 오류를 함께 보존한다.
+Web 헤더의 저장 버튼과 내부 CLI의 `save`, Agent의 저장 요청은 모두 인자 없는 `SAVE_PROJECT`를 CommandExecutor에
+전달한다. Web 버튼은 처리 중 중복 입력을 막고 성공 또는 실패 결과를 표시한다. Agent는 편집과 저장을 함께 요청받으면
+저장 명령을 편집 명령 뒤에 둔다.
 Web JSON CLI도 파싱된 명령 배열을 `executeMany` 한 번으로 실행하고, 중간 실패 전 결과만 후처리한다. 기존 Track의
 `Region 추가`는 길이를 확인한 뒤 Blob을 stage하고 선택한 Track ID와 현재 시각으로 `sourceId` 기반 `LOAD_REGION`을 한 번
 실행한다. Command가 실패하면 stage 호출자가 `discardPending`을 실행한다. Session은 재생 URL 기반 파일 목록을 보관하지

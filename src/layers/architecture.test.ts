@@ -37,6 +37,10 @@ const audioEnginePublicContractPaths = new Set([
   path.join(audioEngineRoot, 'errors'),
   path.join(audioEngineRoot, 'i-audio-engine'),
 ]);
+const projectRepositoryPublicContractPaths = new Set([
+  path.join(projectRepositoryRoot, 'errors'),
+  path.join(projectRepositoryRoot, 'i-project-repository'),
+]);
 const webAudioConstructorNames = new Set([
   'AnalyserNode',
   'AudioBuffer',
@@ -470,6 +474,27 @@ describe('레이어 의존성 규칙', () => {
         isInside(sourceImport.resolvedPath, layersRoot) &&
         !isInside(sourceImport.resolvedPath, projectRepositoryRoot) &&
         !isInside(sourceImport.resolvedPath, sharedRoot)
+      );
+    });
+
+    expect(formatViolations(violations)).toEqual([]);
+  });
+
+  it('ProjectRepository 외부 소비자는 공개 계약만 import한다', () => {
+    const violations = sourceImports.filter(sourceImport => {
+      const resolvedPath = removeSourceExtension(sourceImport.resolvedPath);
+      if (
+        !resolvedPath ||
+        !isInside(resolvedPath, projectRepositoryRoot) ||
+        isInside(sourceImport.importerPath, projectRepositoryRoot)
+      ) {
+        return false;
+      }
+
+      return (
+        !isTestFile(sourceImport.importerPath) &&
+        sourceImport.importerPath !== compositionRootPath &&
+        !projectRepositoryPublicContractPaths.has(resolvedPath)
       );
     });
 

@@ -136,6 +136,7 @@ describe('LOAD_REGION 오디오 식별자 계약', () => {
 
 describe('AudioCommandSchema 프로젝트 변경 명령', () => {
   it.each([
+    { type: AudioCommandType.SAVE_PROJECT },
     { type: AudioCommandType.SET_TEMPO, tempo: 120 },
     { type: AudioCommandType.REMOVE_TRACK, trackId: TRACK_ID },
     { type: AudioCommandType.SET_TRACK_MUTE, trackId: TRACK_ID, muted: true },
@@ -285,6 +286,18 @@ describe('AudioCommandSchema 프로젝트 변경 명령', () => {
       }).success
     ).toBe(false);
   });
+
+  it('SAVE_PROJECT는 추가 필드가 없는 명령만 Agent에서 허용한다', () => {
+    expect(StrictAudioCommandSchema.parse({ type: AudioCommandType.SAVE_PROJECT })).toEqual({
+      type: AudioCommandType.SAVE_PROJECT,
+    });
+    expect(
+      StrictAudioCommandSchema.safeParse({
+        type: AudioCommandType.SAVE_PROJECT,
+        revision: 1,
+      }).success
+    ).toBe(false);
+  });
 });
 
 describe('SET_EXPORT_RANGE 계약', () => {
@@ -304,6 +317,14 @@ describe('SET_EXPORT_RANGE 계약', () => {
 });
 
 describe('Agent AudioCommand 묶음 파싱', () => {
+  it('SAVE_PROJECT 응답을 공통 명령으로 보존한다', () => {
+    expect(
+      parseAgentAudioCommandBatch({
+        commandString: '[{"type":"SAVE_PROJECT"}]',
+      })
+    ).toEqual({ commands: [{ type: AudioCommandType.SAVE_PROJECT }] });
+  });
+
   it('유효한 JSON 배열의 명령 순서를 보존한다', () => {
     const result = parseAgentAudioCommandBatch({
       commandString: '[{"type":"SET_TEMPO","tempo":140},{"type":"PLAY"}]',
@@ -384,6 +405,12 @@ describe('Agent AudioCommand 묶음 파싱', () => {
 });
 
 describe('Web JSON CLI 호환 파싱', () => {
+  it('SAVE_PROJECT를 저장 명령으로 파싱한다', () => {
+    expect(parseAudioCommandString({ commandString: '[{"type":"SAVE_PROJECT"}]' })).toEqual({
+      commands: [{ type: AudioCommandType.SAVE_PROJECT }],
+    });
+  });
+
   it('단일 명령 객체를 허용한다', () => {
     expect(parseAudioCommandString({ commandString: '{"type":"PLAY"}' }).commands).toEqual([
       { type: AudioCommandType.PLAY },

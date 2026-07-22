@@ -13,6 +13,7 @@ const RegionIdSchema = z.uuid('Invalid Region ID format');
 
 interface StoredAudioSource {
   readonly metadata: ProjectAudioSource;
+  readonly blob: Blob;
   readonly objectUrl: string;
   isCommitted: boolean;
   readonly regionIds: Set<string>;
@@ -39,6 +40,12 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
 
   listCommittedMetadata(): ReadonlyArray<Readonly<ProjectAudioSource>> {
     return [...this.sources.values()].filter(source => source.isCommitted).map(source => ({ ...source.metadata }));
+  }
+
+  listCommittedRegistrations(): ReadonlyArray<Readonly<AudioSourceRegistration>> {
+    return [...this.sources.values()]
+      .filter(source => source.isCommitted)
+      .map(source => ({ metadata: { ...source.metadata }, blob: source.blob }));
   }
 
   attach({ sourceId, regionId }: AudioSourceAttachment): void {
@@ -168,6 +175,7 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
     const objectUrl = this.createObjectUrl(registration.blob, metadata.id);
     const source: StoredAudioSource = {
       metadata: { ...metadata },
+      blob: registration.blob,
       objectUrl,
       isCommitted,
       regionIds: new Set(),

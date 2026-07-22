@@ -153,7 +153,8 @@ describe('AudioSourceRegistry', () => {
   });
 
   it('Region을 연결하면 Source를 committed 상태로 바꾸고 목록에 포함한다', () => {
-    registry.stage(createRegistration());
+    const registration = createRegistration();
+    registry.stage(registration);
 
     registry.attach({ sourceId: SOURCE_ID, regionId: REGION_ID });
 
@@ -162,6 +163,25 @@ describe('AudioSourceRegistry', () => {
       regionIds: [REGION_ID],
     });
     expect(registry.listCommittedMetadata()).toEqual([createRegistration().metadata]);
+    expect(registry.listCommittedRegistrations()).toEqual([
+      {
+        metadata: createRegistration().metadata,
+        blob: registration.blob,
+      },
+    ]);
+  });
+
+  it('저장용 목록은 pending Source를 제외하고 metadata 복사본과 원본 Blob을 반환한다', () => {
+    const committedRegistration = createRegistration();
+    registry.restoreCommitted(committedRegistration);
+    registry.stage(createRegistration(SECOND_SOURCE_ID));
+
+    const registrations = registry.listCommittedRegistrations();
+    (registrations[0].metadata as ProjectAudioSource).fileName = '반환값 변경.wav';
+
+    expect(registrations).toHaveLength(1);
+    expect(registrations[0].blob).toBe(committedRegistration.blob);
+    expect(registry.listCommittedRegistrations()[0].metadata.fileName).toBe('voice.wav');
   });
 
   it('잘못된 Region ID와 중복 Region 연결을 거부한다', () => {

@@ -27,7 +27,11 @@ export interface IAudioSourceResolver {
   listCommittedMetadata(): ReadonlyArray<Readonly<ProjectAudioSource>>;
 }
 
-export interface IAudioSourceRegistry extends IAudioSourceStager, IAudioSourceResolver {
+export interface ICommittedAudioSourceReader {
+  listCommittedRegistrations(): ReadonlyArray<Readonly<AudioSourceRegistration>>;
+}
+
+export interface IAudioSourceRegistry extends IAudioSourceStager, IAudioSourceResolver, ICommittedAudioSourceReader {
   restoreCommitted(registration: AudioSourceRegistration): RuntimeAudioSource;
   attach(attachment: AudioSourceAttachment): void;
   detach(attachment: AudioSourceAttachment): void;

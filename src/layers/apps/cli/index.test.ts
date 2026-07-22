@@ -49,6 +49,15 @@ describe('내부 CLI 명령 변환', () => {
     expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.STOP });
   });
 
+  it('save를 SAVE_PROJECT 명령으로 실행한다', async () => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    const result = await commands.save.fn();
+
+    expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.SAVE_PROJECT });
+    expect(result).toBe('Project saved.');
+  });
+
   it('seek 인자를 SET_CURRENT_TIME 명령으로 변환한다', async () => {
     const commands = createCliCommands(commandExecutor, defaultState);
 
@@ -286,6 +295,7 @@ describe('내부 CLI 명령 변환', () => {
     expect(result).toContain('region add-source <trackId> <regionId> <sourceId>');
     expect(result).not.toContain('region add <trackId> <regionId> <url>');
     expect(result).toContain('region split <trackId> <regionId> <time>');
+    expect(result).toContain('save');
     expect(result).not.toContain('--help');
   });
 

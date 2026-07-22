@@ -3,6 +3,8 @@ import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { AudioSourceRegistry } from '../audio-source-registry/audio-source-registry';
 import type { IAudioSourceRegistry } from '../audio-source-registry/i-audio-source-registry';
 import type { IObjectUrlAdapter } from '../audio-source-registry/i-object-url-adapter';
+import type { IAudioSourceRepository } from '../audio-source-repository/i-audio-source-repository';
+import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import { AppController } from './app-controller';
 import { ProjectMutationCompensationError } from './project-mutation-compensation-error';
 import { createSessionStore, type SessionStore } from '../session/session';
@@ -92,7 +94,18 @@ describe('Controllers - Phase 3 검증', () => {
       revokeObjectUrl,
     };
     audioSourceRegistry = new AudioSourceRegistry(objectUrlAdapter);
-    controller = new AppController({ sessionStore: session, audioEngine: engine, audioSourceRegistry });
+    const audioSourceRepository: IAudioSourceRepository = {
+      create: vi.fn().mockResolvedValue(undefined),
+      load: vi.fn().mockResolvedValue(null),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+    controller = new AppController({
+      sessionStore: session,
+      audioEngine: engine,
+      audioSourceRegistry,
+      audioSourceRepository,
+      projectRepository: new InMemoryProjectRepository(),
+    });
   });
 
   describe('PlaybackController 확장', () => {

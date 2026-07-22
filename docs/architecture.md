@@ -11,7 +11,7 @@
 
 AudioCommand 실행 방향은 아래와 같다.
 
-**Apps → CommandExecutor → Controllers → Session / AudioEngine → Tone.js**
+**Apps → CommandExecutor → Controllers → Session / AudioEngine / Repository → Tone.js·브라우저 저장소**
 
 아래 그림은 **실행 시점** 레이어만 보여 준다. 객체 조립(`createApp`)은 **§3**에서 따로 그린다.
 
@@ -47,6 +47,8 @@ flowchart TB
 
     subgraph low["⑥ 인프라"]
         T["Tone.js / Web Audio"]
+        PR[("IndexedDB Project Repository")]
+        AR[("OPFS Audio Source Repository")]
     end
 
     A -->|"AudioCommand 실행"| CE
@@ -57,6 +59,8 @@ flowchart TB
     CE -->|"실행 시점 상태 조회"| SS
     AC -->|"쓰기·구독 갱신"| SS
     AC -->|"재생·렌더·내보내기"| IAE
+    AC -->|"ProjectDocument 저장"| PR
+    AC -->|"오디오 원본 저장·확인"| AR
     Q -->|"getCurrentTime만 조회"| AC
     IAE --> T
 ```
@@ -74,12 +78,13 @@ Agent 메시지와 업로드 파일 같은 앱 워크플로 상태는 Session Ac
 않는다. 이미 완료된 변경은 되돌리지 않으므로 묶음 실행은 원자적 트랜잭션이 아니다. 실패한 실행이 있어도 그
 오류는 0부터 시작하는 실패 위치, 실패 명령, 앞선 실행 결과와 원인을 보존한다. 뒤에 대기 중인 요청은 계속
 실행한다.
-`EXPORT_AUDIO`는 현재 완료될 때까지 대기열을 점유한다. 별도 작업 모델을 도입하기 전의 알려진 제한이다.
+`EXPORT_AUDIO`와 `SAVE_PROJECT`는 현재 완료될 때까지 대기열을 점유한다. 별도 작업 모델을 도입하기 전의 알려진 제한이다.
 
 Agent 응답은 JSON 배열 전체를 엄격하게 검증한다. 빈 배열은 명령 없음으로 허용한다. 알 수 없는 명령, 잘못된
 필드, 누락·추가 필드, JSON 밖의 텍스트가 하나라도 있으면 전체를 실행하지 않는다. Agent 응답에 없는 명령을
 실행 단계에서 추가하지 않는다. 검증된 배열은 `executeMany` 한 번으로 실행하며, 중간 실패 뒤 남은 명령은
 실행하지 않는다.
+편집과 저장을 함께 요청하면 `SAVE_PROJECT`를 편집 명령 뒤에 둔다.
 
 Agent Prompt는 AudioCommand 전체의 정확한 필드와 범위를 안내한다. 현재 Session의 실제 Track·Region ID, 시간
 범위, 오디오 소스 사용 가능 여부도 함께 전달하며, Prompt 예시는 엄격한 Agent Schema를 통과해야 한다. 아직 앱이
@@ -143,8 +148,8 @@ Region Controller도 추가·이동·분할의 Source 연결, AudioEngine 호출
 
 **Composition Root** — §1과 달리 **부팅·테스트 진입점**에서 한 번 객체 그래프를 만드는 흐름이다.
 
-`createApp`이 **Session**, **AudioEngine**, **AudioSourceRegistry**, **AppController**, **CommandExecutor**,
-**PlaybackClockQuery**를 한 번 조립한다.
+`createApp`이 **Session**, **AudioEngine**, **AudioSourceRegistry**, **ProjectRepository**,
+**AudioSourceRepository**, **AppController**, **CommandExecutor**, **PlaybackClockQuery**를 한 번 조립한다.
 AppController 자체는 Apps에 노출하지 않는다. CommandExecutor에는 AppController를, PlaybackClockQuery에는
 PlaybackController의 읽기 전용 계약을 주입한다. AudioSourceRegistry는 전체 변경 계약을 노출하지 않고 등록용
 `IAudioSourceStager`와 조회용 `IAudioSourceResolver`로 나눠 노출한다. 같은 Registry의 전체 계약은 Source 연결 수명을
@@ -155,16 +160,20 @@ flowchart TB
     subgraph ext["외부"]
         IN["선택적 IAudioEngine\n(테스트에서는 Mock 주입)"]
         SRIN["선택적 IAudioSourceRegistry\n(테스트에서는 Stub 주입)"]
+        PRIN["선택적 IProjectRepository"]
+        ARIN["선택적 IAudioSourceRepository"]
     end
 
     subgraph asm["조립 (한 곳)"]
         CA["createApp(options)"]
         REG["IAudioSourceRegistry\n(full, private)"]
+        PR["IndexedDB Project Repository\n(private)"]
+        AR["OPFS Audio Source Repository\n(private)"]
     end
 
     subgraph out["결과"]
         SS["session\n(createSessionStore)"]
-        AC["AppController\n(session, audioEngine, audioSourceRegistry)"]
+        AC["AppController\n(runtime + persistence contracts)"]
         CE["CommandExecutor\n(session, controller)"]
         Q["PlaybackClockQuery\n(playback controller read-only)"]
         SR["Audio Source capabilities\n(stager / resolver only)"]
@@ -172,12 +181,18 @@ flowchart TB
 
     IN --> CA
     SRIN --> CA
+    PRIN --> CA
+    ARIN --> CA
     CA --> REG
+    CA --> PR
+    CA --> AR
     CA --> SS
     CA --> AC
     CA --> CE
     CA --> Q
     REG -.->|"같은 인스턴스 주입"| AC
+    PR -.->|"ProjectController에 주입"| AC
+    AR -.->|"ProjectController에 주입"| AC
     REG -.->|"좁은 계약으로 감쌈"| SR
     SS -.->|"같은 인스턴스 주입"| AC
     SS -.->|"같은 인스턴스 주입"| CE
@@ -213,16 +228,18 @@ sequenceDiagram
 
 ## 5. `src/` 디렉터리 역할
 
-| 경로                            | 역할                                        |
-| ------------------------------- | ------------------------------------------- |
-| `layers/apps/`                  | Web, Agent, 내부 CLI 진입점                 |
-| `layers/commands/`              | 명령 검증과 실행 순서 관리                  |
-| `layers/controllers/`           | Session과 AudioEngine 작업 조정             |
-| `layers/queries/`               | Controller의 명시된 값만 읽는 Query         |
-| `layers/project-repository/`    | 프로젝트 snapshot 저장 계약과 Adapter       |
-| `layers/audio-source-registry/` | 재생 Source URL의 런타임 소유권과 참조 관리 |
-| `layers/session/`               | 화면에 표시할 상태 저장                     |
-| `layers/audio-engine/`          | Tone.js와 Web Audio 기반 오디오 처리        |
+| 경로                              | 역할                                        |
+| --------------------------------- | ------------------------------------------- |
+| `layers/apps/`                    | Web, Agent, 내부 CLI 진입점                 |
+| `layers/commands/`                | 명령 검증과 실행 순서 관리                  |
+| `layers/controllers/`             | Session과 AudioEngine 작업 조정             |
+| `layers/queries/`                 | Controller의 명시된 값만 읽는 Query         |
+| `layers/project-document-mapper/` | Session과 ProjectDocument의 순수 변환       |
+| `layers/project-repository/`      | 프로젝트 snapshot 저장 계약과 Adapter       |
+| `layers/audio-source-repository/` | 오디오 원본 바이트 저장 계약과 OPFS Adapter |
+| `layers/audio-source-registry/`   | 재생 Source URL의 런타임 소유권과 참조 관리 |
+| `layers/session/`                 | 화면에 표시할 상태 저장                     |
+| `layers/audio-engine/`            | Tone.js와 Web Audio 기반 오디오 처리        |
 
 ---
 
@@ -328,8 +345,8 @@ metadata, tempo, master volume, Export 범위, Track·Region과 호출자가 전
 Mapper는 Export 범위의 부분 `null`, Track Map key와 Track ID 불일치, 유한한 끝 시각을 만들 수 없는 Region, 허용 오차를
 초과한 Region 끝 시각 불일치를 거부한다. 끝 시각 비교는 위 공통 Region 타임라인 규칙을 사용한다.
 최종 문서는 기존 `ProjectDocumentSchema`로 검증하고, 역변환 입력은 `readProjectDocument`로 다시 검증·복제한다. 현재
-화면의 저장·불러오기 기능과 Session 전체 교체 Action은 아직 없다. Undo 이력도 snapshot 문서에 넣지 않고 후속 Undo
-Journal에서 별도로 관리한다.
+화면 저장은 `SAVE_PROJECT`로 연결했다. 불러오기와 Session 전체 교체 Action은 아직 없다. Undo 이력도 snapshot 문서에
+넣지 않고 후속 Undo Journal에서 별도로 관리한다.
 
 ---
 
@@ -337,6 +354,7 @@ Journal에서 별도로 관리한다.
 
 `IProjectRepository`는 ProjectDocument snapshot만 다룬다. `InMemoryProjectRepository`는 계약 검증용이고,
 `IndexedDbProjectRepository`는 브라우저 metadata 영구 저장용이다.
+IndexedDB가 없는 환경에서도 앱 조립 자체는 허용하고, 실제 Repository 작업에서 `STORAGE_UNAVAILABLE`을 반환한다.
 
 | 작업   | 규칙                                                                   |
 | ------ | ---------------------------------------------------------------------- |
@@ -371,13 +389,23 @@ Root와 테스트에서만 import하고, 다른 계층은 Repository 인터페�
 크기 확인은 같은 크기의 바이트 손상을 검출하지 못한다. 후속 문서 버전에서 cryptographic hash를 비교하면 검출 범위를
 넓힐 수 있지만, hash 충돌 가능성 때문에 모든 손상을 절대적으로 보장하지는 않는다.
 
-OPFS와 IndexedDB는 하나의 transaction이 아니다. 후속 저장은 오디오 바이트 저장·검증을 먼저 끝내고 그 Source ID를
-참조하는 snapshot을 공개해야 한다. 반대 순서는 문서만 있고 오디오가 없는 손상 상태를 만들 수 있다.
+OPFS와 IndexedDB는 하나의 transaction이 아니다. `SAVE_PROJECT`는 Session과 committed Source 목록을 먼저
+ProjectDocument로 검증하고, 모든 Source 바이트의 OPFS 저장·크기 확인을 끝낸 뒤 그 Source ID를 참조하는 snapshot을
+공개한다. 반대 순서는 문서만 있고 오디오가 없는 손상 상태를 만들 수 있다. Source가 이미 있으면 load로 확인하고,
+없으면 Registry가 보관한 Blob으로 create한다. 다른 탭의 동시 create로 `SOURCE_ALREADY_EXISTS`가 되면 다시 load해
+확인한다.
 
-현재 Repository는 `createApp`, Controller, Command, Session에 아직 연결하지 않았다. 연결은 Session Mapper를 추가한 뒤
-별도 기능 단위에서 진행한다.
+Project Controller는 Project ID를 load해 신규 문서면 create, 기존 문서면 현재 Session revision으로 save한다. 저장된
+첫 문서도 revision 0일 수 있으므로 revision 값만으로 두 경우를 구분하지 않는다. Repository가 반환한 project metadata만
+Session에 반영하고, Source·Project 저장 오류나 revision 충돌에서는 Session revision을 유지한다. Web 헤더 저장 버튼,
+내부 CLI의 `save`, Agent의 저장 요청은 같은 `SAVE_PROJECT`를 사용한다.
 
-Session의 프로젝트 metadata 전체 교체는 후속 Project Controller만 사용한다. Apps는 직접 호출하지 않는다. 불러오기
+Source 저장 후 ProjectDocument 저장이 실패하면 참조되지 않는 OPFS 파일이 남을 수 있다. 다른 저장이 이미 같은 Source를
+참조할 수 있으므로 실패 경로에서 자동 삭제하지 않는다. 후속 정리는 모든 프로젝트 참조를 확인해야 한다. Source 삭제를
+사용자 기능으로 연결하기 전에는 Source 확인과 문서 저장 사이의 동시 삭제를 막는 전역 잠금 또는 참조 인식 삭제 규칙이
+필요하다.
+
+Session의 프로젝트 metadata 전체 교체는 Project Controller만 사용한다. Apps는 직접 호출하지 않는다. 불러오기
 과정에서는 Source와 AudioEngine 준비가 성공하기 전에 metadata만 먼저 교체하지 않는다. 저장 과정에서는 Repository가
 성공 결과를 반환했을 때만 Session revision을 교체하며, 실패나 revision 충돌이면 기존 값을 유지한다.
 
@@ -390,20 +418,24 @@ ProjectDocument의 식별자로 사용하지 않는다. Session Region도 Source
 **재생 Source용 Object URL**의 생성과 해제를 전담한다.
 오디오 길이 판독용 임시 URL과 Export 다운로드 URL은 별도 수명이라 이 Registry의 소유 범위가 아니다.
 
-| 상태·작업             | 규칙                                                                     |
-| --------------------- | ------------------------------------------------------------------------ |
-| stage                 | metadata와 Blob 크기를 검증하고 pending Source와 URL을 만든다.           |
-| attach                | 전역에서 중복되지 않은 Region ID를 연결하고 Source를 committed로 바꾼다. |
-| detach                | Region 연결만 끊고 committed Source와 URL은 유지한다.                    |
-| discardPending        | 한 번도 연결되지 않은 pending Source만 제거하고 URL을 해제한다.          |
-| purgeUnused           | Region이 없는 committed Source를 사용자가 명시적으로 정리한다.           |
-| clear                 | 프로젝트 종료나 실패한 임시 복원 정리에서 모든 Source URL을 해제한다.    |
-| listCommittedMetadata | pending은 제외하고 Region이 없는 committed Source는 포함한다.            |
+| 상태·작업                  | 규칙                                                                     |
+| -------------------------- | ------------------------------------------------------------------------ |
+| stage                      | metadata와 Blob 크기를 검증하고 pending Source와 URL을 만든다.           |
+| attach                     | 전역에서 중복되지 않은 Region ID를 연결하고 Source를 committed로 바꾼다. |
+| detach                     | Region 연결만 끊고 committed Source와 URL은 유지한다.                    |
+| discardPending             | 한 번도 연결되지 않은 pending Source만 제거하고 URL을 해제한다.          |
+| purgeUnused                | Region이 없는 committed Source를 사용자가 명시적으로 정리한다.           |
+| clear                      | 프로젝트 종료나 실패한 임시 복원 정리에서 모든 Source URL을 해제한다.    |
+| listCommittedMetadata      | pending은 제외하고 Region이 없는 committed Source는 포함한다.            |
+| listCommittedRegistrations | Project 저장용 metadata 복사본과 원본 Blob을 반환한다.                   |
 
 Region 삭제 직후 Source를 자동 제거하지 않는다. React·WaveSurfer 정리 순서와 경쟁할 수 있고 Undo가 같은 Source와 Region
 ID를 다시 연결할 수 있기 때문이다. 조회 결과와 metadata 목록은 내부 `Set`이나 객체 참조를 노출하지 않고 복사본을 반환한다.
 Object URL 생성·해제 실패는 typed Registry 오류로 구분한다.
 URL 해제가 실패한 Source는 Registry에 남겨 다음 정리 호출에서 다시 시도하고, 이미 해제한 Source는 다시 해제하지 않는다.
+Registry는 OPFS 저장에 필요한 원본 Blob을 Source 수명 동안 보관한다. Blob 저장 목록은
+`ICommittedAudioSourceReader`를 받는 Project Controller만 사용하며 Apps에는 노출하지 않는다. Blob 내용은 변경할 수
+없으므로 같은 참조를 반환하고 metadata는 복사한다.
 
 ### 11.1. Region Source 경로
 

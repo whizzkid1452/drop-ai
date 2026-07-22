@@ -29,7 +29,7 @@ const tracks: AgentPromptTrack[] = [
 ];
 
 describe('Agent 시스템 Prompt', () => {
-  it('현재 AudioCommand 18개를 모두 설명한다', () => {
+  it('현재 AudioCommand를 모두 설명한다', () => {
     const prompt = getSystemPrompt({ tracks });
 
     for (const commandType of Object.values(AudioCommandType)) {
@@ -82,6 +82,25 @@ describe('Agent 시스템 Prompt', () => {
   it('한국어와 영어 요청 예시를 모두 제공한다', () => {
     expect(AGENT_PROMPT_EXAMPLES.some(example => /[가-힣]/.test(example.request))).toBe(true);
     expect(AGENT_PROMPT_EXAMPLES.some(example => /^[A-Za-z0-9 .!?-]+$/.test(example.request))).toBe(true);
+  });
+
+  it('프로젝트 저장의 한국어·영어 예시와 실행 순서 규칙을 제공한다', () => {
+    const prompt = getSystemPrompt({ tracks });
+
+    expect(AGENT_PROMPT_EXAMPLES).toEqual(
+      expect.arrayContaining([
+        {
+          request: '현재 프로젝트 저장해줘',
+          commands: [{ type: AudioCommandType.SAVE_PROJECT }],
+        },
+        {
+          request: 'save the current project',
+          commands: [{ type: AudioCommandType.SAVE_PROJECT }],
+        },
+      ])
+    );
+    expect(prompt).toContain('{"type":"SAVE_PROJECT"}');
+    expect(prompt).toContain('SAVE_PROJECT를 해당 편집 명령 뒤에 둔다');
   });
 
   it('출력 형식과 식별자, Source ID 안전 규칙을 명시한다', () => {

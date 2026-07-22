@@ -21,6 +21,7 @@ export const AudioCommandType = {
   SET_EXPORT_RANGE: 'SET_EXPORT_RANGE',
   CLEAR_EXPORT_RANGE: 'CLEAR_EXPORT_RANGE',
   EXPORT_AUDIO: 'EXPORT_AUDIO',
+  SAVE_PROJECT: 'SAVE_PROJECT',
 } as const;
 export type AudioCommandType = (typeof AudioCommandType)[keyof typeof AudioCommandType];
 
@@ -153,6 +154,9 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal(AudioCommandType.EXPORT_AUDIO),
     filename: z.string().optional(),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SAVE_PROJECT),
   }),
 ]);
 
