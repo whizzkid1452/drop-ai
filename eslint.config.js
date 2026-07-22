@@ -8,7 +8,7 @@ import globals from 'globals';
 
 export default ts.config([
   {
-    ignores: ['coverage/**', 'dist/**', 'worktrees/**'],
+    ignores: ['AGENTS/**', 'coverage/**', 'dist/**', 'worktrees/**'],
   },
   js.configs.recommended,
   // TypeScript flat config는 배열이므로 펼쳐야 권장 규칙이 실제 파일에 적용된다.
