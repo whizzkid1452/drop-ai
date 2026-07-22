@@ -73,10 +73,11 @@ Session의 Region은 전환 기간에 두 형식 중 정확히 하나를 가진�
 Track의 첫 Region을 재사용해야 한다. 첫 Region이 기존 `audioFileUrl` 형식이면 재사용하지 않는다. `trackId`를 생략하면
 Controller가 첫 Track을 선택한다. 유효한 `LOAD_REGION`이 Controller에 전달된 뒤 Track 선택이나 검증이 실패하면 명시된
 pending Source도 Controller가 정리한다. Controller는 연결을 확인한 Object URL만 AudioEngine에 전달하고 Session에는
-`sourceId`만 저장한다. 기존 URL Region의 조회·분할과 Web 파형·Agent context·Export 호환 경로는 각 소비자를 Source ID
-전용으로 전환할 때까지 유지한다. 등록 Source 연결이 없으면 Web 파형은 오류를 표시하고, Agent context는 `unavailable`로
-표시해 복제 대상으로 쓰지 않으며, Export는 typed 오류를 반환한다. URL을 추측하거나 Export에서 Region을 조용히
-제외하지 않는다. 빈 기존 URL Region을 Export에서 제외하는 동작은 호환 경로가 제거될 때까지 유지한다.
+`sourceId`만 저장한다. 기존 URL Region의 분할과 Export 호환 경로는 해당 소비자를 Source ID 전용으로 전환할 때까지
+유지한다. Web 파형은 기존 URL을 직접 읽지 않고 오류를 표시한다. Agent context도 기존 URL Region을 `unavailable`로
+표시해 복제 대상으로 쓰지 않는다. 등록 Source 연결이 없으면 Web 파형은 오류를 표시하고 Export는 typed 오류를
+반환한다. URL을 추측하거나 Export에서 Region을 조용히 제외하지 않는다. 빈 기존 URL Region을 Export에서 제외하는
+동작은 호환 경로가 제거될 때까지 유지한다.
 
 등록 Source 길이를 알면 Controller는 Region의 원본 범위를 연결 전에 검증한다. `duration` 생략 시 Source의 남은
 길이로 정규화하고, Source 길이가 `null`이면 `duration`을 요구한다. ProjectDocument와 같은 1e-9초 부동소수점

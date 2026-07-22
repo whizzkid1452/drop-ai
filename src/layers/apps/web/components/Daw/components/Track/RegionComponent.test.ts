@@ -140,11 +140,22 @@ afterEach(() => {
 });
 
 describe('RegionComponent 오디오 소스', () => {
-  it('기존 URL Region의 URL을 WaveSurfer에 전달한다', () => {
+  it('기존 URL Region은 URL을 직접 사용하지 않고 오류를 표시한다', () => {
     const { host } = renderRegion({ onMove: vi.fn().mockResolvedValue(undefined) });
 
-    expect(host.querySelector('[data-audio-url="region.wav"]')).not.toBeNull();
+    expect(host.querySelector('[data-audio-url]')).toBeNull();
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe('오디오 소스를 찾을 수 없습니다.');
     expect(resolveAudioSource).not.toHaveBeenCalled();
+  });
+
+  it('원본 시작점이 이동한 Region도 오류 문구를 파형 offset 밖에 표시한다', () => {
+    const { host, regionElement } = renderRegion({
+      region: { ...legacyRegion, sourceStartTime: 2 },
+      onMove: vi.fn().mockResolvedValue(undefined),
+    });
+    const alert = host.querySelector('[role="alert"]');
+
+    expect(alert?.parentElement).toBe(regionElement);
   });
 
   it('sourceId Region이 실제 Region에 연결되어 있으면 Object URL을 WaveSurfer에 전달한다', () => {

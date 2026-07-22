@@ -23,9 +23,9 @@ interface RegionComponentProps {
   onRemove?: () => void;
 }
 
-function resolveRegionAudioFileUrl(region: RegionState, audioSourceResolver: IAudioSourceResolver): string | null {
+function resolveRegionAudioSourceUrl(region: RegionState, audioSourceResolver: IAudioSourceResolver): string | null {
   if (region.sourceId === undefined) {
-    return region.audioFileUrl ?? null;
+    return null;
   }
 
   const audioSource = audioSourceResolver.resolve(region.sourceId);
@@ -50,7 +50,7 @@ export const RegionComponent = ({
   const displayedStartTime = previewStartTime ?? region.startTime;
   const left = displayedStartTime * pixelsPerSecond;
   const width = region.duration * pixelsPerSecond;
-  const audioFileUrl = resolveRegionAudioFileUrl(region, audioSourceResolver);
+  const audioSourceUrl = resolveRegionAudioSourceUrl(region, audioSourceResolver);
 
   const calculateStartTime = (pointerX: number, session: RegionDragSession) =>
     calculateRegionDragStartTime({
@@ -186,27 +186,27 @@ export const RegionComponent = ({
           ×
         </button>
       ) : null}
-      <div
-        style={{
-          marginLeft: `-${region.sourceStartTime * pixelsPerSecond}px`,
-          height: '100%',
-        }}
-      >
-        {audioFileUrl === null ? (
-          <div role="alert">{MISSING_AUDIO_SOURCE_MESSAGE}</div>
-        ) : (
+      {audioSourceUrl === null ? (
+        <div role="alert">{MISSING_AUDIO_SOURCE_MESSAGE}</div>
+      ) : (
+        <div
+          style={{
+            marginLeft: `-${region.sourceStartTime * pixelsPerSecond}px`,
+            height: '100%',
+          }}
+        >
           <WavesurferPlayer
             height={100}
             waveColor="#555"
             progressColor="#555"
-            url={audioFileUrl}
+            url={audioSourceUrl}
             onReady={onReady}
             interact={false}
             cursorWidth={0}
             autoScroll={false}
           />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
