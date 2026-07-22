@@ -92,15 +92,24 @@ CommandExecutor 대기열로 동시 변경을 막지만, 향후 AudioEngine 교�
 Source 전환만 실패했다면 Engine과 Registry를 기존 Region 상태로 되돌린다.
 
 단건 `restoreCommitted`는 원자적인 프로젝트 불러오기 API가 아니다. 후속 불러오기 구현은 새 Registry에 모든 Blob을
-복원하고 AudioEngine 준비까지 성공한 뒤 기존 프로젝트와 교체해야 한다. Registry는 영구 저장소가 아니므로 실제 다시
-열기는 Source UUID를 키로 원본 바이트를 보존하는 OPFS Adapter를 추가한 뒤 연결한다. `createApp`은 Registry 구현을 한 번
-조립하되 Apps에는 등록용 `IAudioSourceStager`와 조회용 `IAudioSourceResolver`만 노출한다. 전체
+복원하고 AudioEngine 준비까지 성공한 뒤 기존 프로젝트와 교체해야 한다. Registry는 영구 저장소가 아니다.
+`OpfsAudioSourceRepository`는 Source UUID를 키로 `drop-ai/audio-sources/v1/<Source UUID>`에 원본 바이트를 보존한다.
+`create`는 metadata와 Blob 크기를 확인하고 쓰기를 닫은 뒤 저장 크기를 다시 확인한다. `load`도 ProjectDocument metadata의
+크기를 확인하고 `mimeType`을 Blob 생성 옵션으로 전달한다. 반환된 Blob의 `type`은 브라우저 Blob 규칙에 따라 정규화될 수
+있다. `delete`는 반복 호출을 허용한다. 같은 Source의 `create`, `load`, `delete`는
+`drop-ai:audio-source:v1:<Source UUID>` Web Lock으로 동일-origin에서 순서대로 실행한다. Web Locks가 없으면 저장소 사용
+불가로 처리한다. 크기 확인은 같은 크기의 바이트 손상을 검출하지 못한다. 후속 문서 버전에서 cryptographic hash를
+비교하면 검출 범위를 넓힐 수 있지만, hash 충돌 가능성 때문에 모든 손상을 절대적으로 보장하지는 않는다. 구체 OPFS
+구현은 Composition Root와 테스트에서만 import하고, 다른 계층은 Repository 인터페이스와 오류 계약만 참조한다.
+`createApp`은 Registry 구현을 한 번 조립하되 Apps에는 등록용 `IAudioSourceStager`와 조회용 `IAudioSourceResolver`만
+노출한다. 전체
 `IAudioSourceRegistry`와 구체 구현은 Composition Root 밖에 노출하지 않는다. Track·Region Controller에는 같은
 Registry의 전체 계약을 주입하고, 조회만 필요한 Export에는 `IAudioSourceResolver`를 주입한다. 기존 업로드가 Blob을
 stage하는 Web Adapter는 등록용 계약만 사용한다. 파일 metadata 변환과 Web Adapter 반환값에는 재생용 URL을 넣지 않는다.
 Web Adapter는 Registry URL을 반환값에 노출하지 않고 `sourceId` 명령을 만든다. 재생 소비자는 Resolver에 Source UUID를
 전달해 런타임 Source를 조회한다.
-ProjectDocument Mapper와 저장·불러오기는 OPFS 원본 저장소를 완료한 뒤 연결한다.
+OPFS와 IndexedDB는 하나의 transaction이 아니다. 후속 저장은 오디오 바이트 저장·검증을 먼저 끝내고 ProjectDocument를
+공개해야 한다. ProjectDocument Mapper와 저장·불러오기 연결은 별도 기능 단위로 진행한다.
 
 Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을 때 그 ID로 `SPLIT_REGION`을 실행한다. Region
 삭제도 사용자가 확인한 정확한 ID로 `UNLOAD_REGION`을 실행한다. 내부 CLI의 변경 작업은 CommandExecutor를

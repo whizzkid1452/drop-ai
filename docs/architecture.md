@@ -337,9 +337,19 @@ IndexedDB Adapter는 ProjectDocument와 목록 요약을 별도 Object Store에 
 transaction으로 갱신한다. save의 읽기·revision 비교·교체도 같은 transaction 안에서 처리한다. 단위 테스트는 메모리 기반
 IndexedDB 대역으로 이 규칙을 검증하므로, 실제 브라우저의 디스크 내구성·용량 제한·저장소 제거 정책까지 증명하지는 않는다.
 
-원본 오디오 바이트와 Undo Journal은 Repository snapshot에 포함하지 않는다. 후속 OPFS Adapter는 오디오 바이트를 먼저
-저장·검증한 뒤 그 Source ID를 참조하는 snapshot을 공개해야 한다. 반대 순서는 문서만 있고 오디오가 없는 손상 상태를
-만들 수 있다.
+원본 오디오 바이트와 Undo Journal은 Repository snapshot에 포함하지 않는다. `OpfsAudioSourceRepository`는 원본 바이트를
+`drop-ai/audio-sources/v1/<Source UUID>`에 저장한다. `create`는 metadata와 Blob 크기를 확인하고 쓰기를 닫은 뒤 저장
+크기를 다시 확인한다. `load`도 ProjectDocument metadata의 크기를 확인하고 `mimeType`을 Blob 생성 옵션으로 전달한다.
+반환된 Blob의 `type`은 브라우저 Blob 규칙에 따라 정규화될 수 있다. `delete`는 반복 호출을 허용한다. 같은 Source의
+`create`, `load`, `delete`는 `drop-ai:audio-source:v1:<Source UUID>` Web Lock으로 동일-origin에서 순서대로 실행한다.
+Web Locks가 없으면 동시 접근의 무결성을 보장할 수 없으므로 저장소 사용 불가로 처리한다. 구체 OPFS 구현은 Composition
+Root와 테스트에서만 import하고, 다른 계층은 Repository 인터페이스와 오류 계약만 참조한다.
+
+크기 확인은 같은 크기의 바이트 손상을 검출하지 못한다. 후속 문서 버전에서 cryptographic hash를 비교하면 검출 범위를
+넓힐 수 있지만, hash 충돌 가능성 때문에 모든 손상을 절대적으로 보장하지는 않는다.
+
+OPFS와 IndexedDB는 하나의 transaction이 아니다. 후속 저장은 오디오 바이트 저장·검증을 먼저 끝내고 그 Source ID를
+참조하는 snapshot을 공개해야 한다. 반대 순서는 문서만 있고 오디오가 없는 손상 상태를 만들 수 있다.
 
 현재 Repository는 `createApp`, Controller, Command, Session에 아직 연결하지 않았다. 연결은 Session Mapper를 추가한 뒤
 별도 기능 단위에서 진행한다.
@@ -416,11 +426,11 @@ Command Schema 검증이나 dispatch 전에 실패한 경우는 Controller가 So
 후속 불러오기 Controller는 새 Registry에서 모든 Source 복원과 AudioEngine 준비를 끝낸 뒤 기존 프로젝트를 교체해야 한다.
 중간 실패 시 새 Registry를 `clear`하고 기존 Session과 Registry를 유지한다.
 
-Registry는 영구 저장소가 아니다. 새로고침 후 프로젝트를 다시 열려면 Source UUID를 키로 원본 바이트를 보존하는 OPFS
-Adapter가 먼저 필요하다. 현재 단계에서는 Registry 계약·브라우저 URL Adapter·메모리 구현을 Composition Root에서 한 번
-조립한다. Apps에는 `IAudioSourceStager`와 `IAudioSourceResolver`만 제공하며, 전체 Registry 변경 계약과 구체 구현은
-노출하지 않는다. 연결 수명을 바꾸는 Track·Region Controller만 전체 Registry 계약을 받고, 조회만 하는 Export는
-`IAudioSourceResolver`를 받는다. ProjectDocument Mapper와 저장·불러오기는 OPFS 원본 저장소를 완료한 뒤 연결한다.
+Registry는 영구 저장소가 아니다. OPFS Repository가 Source UUID를 키로 원본 바이트를 보존하고, Registry는 현재 실행의
+Object URL과 Region 연결을 관리한다. 현재 단계에서는 Registry 계약·브라우저 URL Adapter·메모리 구현을 Composition
+Root에서 한 번 조립한다. Apps에는 `IAudioSourceStager`와 `IAudioSourceResolver`만 제공하며, 전체 Registry 변경 계약과
+구체 구현은 노출하지 않는다. 연결 수명을 바꾸는 Track·Region Controller만 전체 Registry 계약을 받고, 조회만 하는
+Export는 `IAudioSourceResolver`를 받는다. ProjectDocument Mapper와 저장·불러오기 연결은 별도 기능 단위로 진행한다.
 
 production Web 파일 가져오기는 파일 metadata를 만든 뒤 Blob을 Registry에 `stage`한다. metadata 변환 단계는 재생용
 Object URL을 만들지 않는다. Web Adapter가 Source UUID를 만들고, Registry가 이를 검증·등록하면서 Object URL을 만든다.

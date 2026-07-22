@@ -15,6 +15,7 @@ const sourceRoot = path.dirname(layersRoot);
 const repositoryRoot = path.dirname(sourceRoot);
 const appsRoot = path.join(layersRoot, 'apps');
 const audioEngineRoot = path.join(layersRoot, 'audio-engine');
+const audioSourceRepositoryRoot = path.join(layersRoot, 'audio-source-repository');
 const audioSourceRegistryRoot = path.join(layersRoot, 'audio-source-registry');
 const controllersRoot = path.join(layersRoot, 'controllers');
 const commandRoot = path.join(layersRoot, 'commands');
@@ -23,6 +24,10 @@ const projectRepositoryRoot = path.join(layersRoot, 'project-repository');
 const sessionRoot = path.join(layersRoot, 'session');
 const sharedRoot = path.join(layersRoot, 'shared');
 const compositionRootPath = path.join(appsRoot, 'create-app.ts');
+const audioSourceRepositoryPublicContractPaths = new Set([
+  path.join(audioSourceRepositoryRoot, 'errors'),
+  path.join(audioSourceRepositoryRoot, 'i-audio-source-repository'),
+]);
 const audioSourceRegistryPublicContractPaths = new Set([
   path.join(audioSourceRegistryRoot, 'errors'),
   path.join(audioSourceRegistryRoot, 'i-audio-source-registry'),
@@ -450,6 +455,43 @@ describe('레이어 의존성 규칙', () => {
           (isInside(sourceImport.resolvedPath, layersRoot) &&
             !isInside(sourceImport.resolvedPath, audioSourceRegistryRoot) &&
             !isInside(sourceImport.resolvedPath, sharedRoot)))
+      );
+    });
+
+    expect(formatViolations(violations)).toEqual([]);
+  });
+
+  it('AudioSourceRepository는 Shared 외 다른 계층을 import하지 않는다', () => {
+    const violations = sourceImports.filter(sourceImport => {
+      return (
+        isInside(sourceImport.importerPath, audioSourceRepositoryRoot) &&
+        !isTestFile(sourceImport.importerPath) &&
+        sourceImport.resolvedPath !== undefined &&
+        (isAppSource(sourceImport.resolvedPath) ||
+          (isInside(sourceImport.resolvedPath, layersRoot) &&
+            !isInside(sourceImport.resolvedPath, audioSourceRepositoryRoot) &&
+            !isInside(sourceImport.resolvedPath, sharedRoot)))
+      );
+    });
+
+    expect(formatViolations(violations)).toEqual([]);
+  });
+
+  it('AudioSourceRepository 외부 소비자는 공개 계약만 import한다', () => {
+    const violations = sourceImports.filter(sourceImport => {
+      const resolvedPath = removeSourceExtension(sourceImport.resolvedPath);
+      if (
+        !resolvedPath ||
+        !isInside(resolvedPath, audioSourceRepositoryRoot) ||
+        isInside(sourceImport.importerPath, audioSourceRepositoryRoot)
+      ) {
+        return false;
+      }
+
+      return (
+        !isTestFile(sourceImport.importerPath) &&
+        sourceImport.importerPath !== compositionRootPath &&
+        !audioSourceRepositoryPublicContractPaths.has(resolvedPath)
       );
     });
 
