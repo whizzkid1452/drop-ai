@@ -84,9 +84,10 @@ Agent 응답은 JSON 배열 전체를 엄격하게 검증한다. 빈 배열은 �
 Agent Prompt는 AudioCommand 전체의 정확한 필드와 범위를 안내한다. 현재 Session의 실제 Track·Region ID, 시간
 범위, 오디오 소스 사용 가능 여부도 함께 전달하며, Prompt 예시는 엄격한 Agent Schema를 통과해야 한다. 아직 앱이
 예약한 새 ID와 허용 파일 목록을 제공하지 않으므로 Agent의 `ADD_TRACK` 생성은 막는다. `LOAD_REGION`은 기존
-Track의 첫 Region 소스를 재사용하는 경우에만 제한적으로 허용한다. 등록 Source Region은 목록의 실제 `sourceId`만
-사용하고, 기존 URL Region은 Source 선택을 Controller에 맡긴다. Agent 명령의 `url` 필드는 금지하며 Object URL을 노출하지 않는다.
-프로젝트 컨텍스트는 모델 입력 한도를 넘길 위험을 줄이도록 길이를 제한하고 잘림 여부를 표시한다.
+Track의 첫 등록 Source Region을 재사용하는 경우에만 제한적으로 허용한다. 등록 Source Region은 목록의 실제
+`sourceId`만 사용하고, 기존 URL Region은 새 Region의 Source로 사용하지 않는다. Agent 명령의 `url` 필드는 금지하며
+Object URL을 노출하지 않는다. 프로젝트 컨텍스트는 모델 입력 한도를 넘길 위험을 줄이도록 길이를 제한하고 잘림
+여부를 표시한다.
 
 ```mermaid
 flowchart LR
@@ -380,13 +381,15 @@ Session Region은 다음 두 형식 중 정확히 하나다.
 | 등록 Source | `sourceId`     | Controller가 Registry에서 확인한 Object URL |
 | 기존 호환   | `audioFileUrl` | 기존 URL                                    |
 
-`LOAD_REGION`은 폐기된 `url` 필드를 일반·Agent Schema에서 명시적으로 거부한다. `sourceId`를 생략하면 Controller가 같은 Track의 첫 Region 소스를
-재사용한다. `trackId`도 생략하면 Controller가 첫 Track을 선택한다. 유효한 `LOAD_REGION`이 Controller에 전달된 뒤 Track
-선택이나 존재 검증이 실패하면 명시된 pending Source도 Controller가 정리한다. 등록 Source의 URL은 Session과 Agent
-Prompt에 넣지 않는다. Web 파형, Agent context, Export는 Resolver가 반환한 Source에 해당 Region ID가 실제로 연결됐는지
-확인한다. 등록 Source나 연결이 없으면 Web 파형은 오류를 표시하고, Agent
-context는 `unavailable`로 표시해 복제 대상으로 쓰지 않으며, Export는 typed 오류를 반환한다. 다른 URL을 추측하거나
-Export에서 조용히 제외하지 않는다. 빈 기존 URL Region을 Export에서 제외하는 동작은 호환 경로가 제거될 때까지 유지한다.
+기존 `audioFileUrl` 형식은 읽기 호환용이며 새 Region 생성에는 사용하지 않는다. `LOAD_REGION`은 폐기된 `url` 필드를
+일반·Agent Schema에서 명시적으로 거부한다. 새 Region은 등록된 `sourceId`를 명시하거나, `sourceId`가 있는 같은 Track의
+첫 Region을 재사용해야 한다. 첫 Region이 기존 `audioFileUrl` 형식이면 재사용하지 않는다. `trackId`를 생략하면
+Controller가 첫 Track을 선택한다. 유효한 `LOAD_REGION`이 Controller에 전달된 뒤 Track 선택이나 존재 검증이 실패하면
+명시된 pending Source도 Controller가 정리한다. 등록 Source의 URL은 Session과 Agent Prompt에 넣지 않는다. 기존 URL
+Region의 조회·분할과 Web 파형·Agent context·Export 호환 경로는 각 소비자를 Source ID 전용으로 전환할 때까지 유지한다.
+등록 Source나 연결이 없으면 Web 파형은 오류를 표시하고, Agent context는 `unavailable`로 표시해 복제 대상으로 쓰지
+않으며, Export는 typed 오류를 반환한다. 다른 URL을 추측하거나 Export에서 Region을 조용히 제외하지 않는다. 빈 기존
+URL Region을 Export에서 제외하는 동작은 호환 경로가 제거될 때까지 유지한다.
 
 등록 Source 길이를 알면 Controller는 `sourceStartTime + duration`이 Source 길이를 넘지 않는지 연결 전에 검증한다.
 `duration`을 생략하면 Source의 남은 길이로 정규화해 AudioEngine과 Session에 같은 값을 전달한다. Source 길이가

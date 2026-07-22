@@ -13,16 +13,18 @@ interface RegionPlacementFields {
   duration?: number;
 }
 
-type RegionSourceSelection =
-  | { sourceId: string; url?: never }
-  | { sourceId?: never; url: string }
-  | { sourceId?: undefined; url?: undefined };
+interface RegionSourceSelection {
+  sourceId?: string;
+}
 
 export type AddRegionData = RegionPlacementFields & RegionSourceSelection;
 
-type PreparedRegionSource =
-  | { kind: 'legacy'; url: string }
-  | { kind: 'registered'; sourceId: string; url: string; wasCommitted: boolean; duration: number };
+interface PreparedRegionSource {
+  sourceId: string;
+  url: string;
+  wasCommitted: boolean;
+  duration: number;
+}
 
 interface SplitRegionByIdOptions {
   trackId: string;
@@ -67,9 +69,7 @@ export class RegionController {
 
     const trackId = track.id;
     const source = this.prepareAddSource(track, regionData);
-    if (source.kind === 'registered') {
-      this.attachAddedSource({ source, regionId: regionData.id });
-    }
+    this.attachAddedSource({ source, regionId: regionData.id });
 
     let isEngineRegionAdded = false;
     try {
@@ -94,9 +94,7 @@ export class RegionController {
         }
       }
 
-      if (source.kind === 'registered') {
-        this.rollbackAddedSource({ source, regionId: regionData.id, cause });
-      }
+      this.rollbackAddedSource({ source, regionId: regionData.id, cause });
       throw cause;
     }
   }
@@ -329,10 +327,6 @@ export class RegionController {
       return this.prepareRegisteredSource({ sourceId: regionData.sourceId, regionData });
     }
 
-    if (typeof regionData.url === 'string') {
-      return { kind: 'legacy', url: regionData.url };
-    }
-
     const firstRegion = track.regions[0];
     if (!firstRegion) {
       throw new ProjectStateError(
@@ -348,10 +342,6 @@ export class RegionController {
         attachedRegionId: firstRegion.id,
         regionData,
       });
-    }
-
-    if (firstRegion.audioFileUrl) {
-      return { kind: 'legacy', url: firstRegion.audioFileUrl };
     }
 
     throw new ProjectStateError(
@@ -375,19 +365,16 @@ export class RegionController {
   }
 
   private createSessionRegion(regionData: RegionPlacementFields, source: PreparedRegionSource): RegionState {
-    const duration = source.kind === 'registered' ? source.duration : (regionData.duration ?? 0);
     const commonRegion = {
       id: regionData.id,
       startTime: regionData.startTime,
-      endTime: regionData.startTime + duration,
+      endTime: regionData.startTime + source.duration,
       sourceStartTime: regionData.sourceStartTime,
-      duration,
+      duration: source.duration,
       status: [],
     };
 
-    return source.kind === 'registered'
-      ? { ...commonRegion, sourceId: source.sourceId }
-      : { ...commonRegion, audioFileUrl: source.url };
+    return { ...commonRegion, sourceId: source.sourceId };
   }
 
   private prepareRegisteredSource({
@@ -398,12 +385,11 @@ export class RegionController {
     sourceId: string;
     attachedRegionId?: string;
     regionData: RegionPlacementFields;
-  }): Extract<PreparedRegionSource, { kind: 'registered' }> {
+  }): PreparedRegionSource {
     const source = this.assertRegisteredSource({ sourceId, regionId: attachedRegionId });
 
     try {
       return {
-        kind: 'registered',
         sourceId,
         url: source.objectUrl,
         wasCommitted: source.isCommitted,
@@ -509,13 +495,7 @@ export class RegionController {
     }
   }
 
-  private attachAddedSource({
-    source,
-    regionId,
-  }: {
-    source: Extract<PreparedRegionSource, { kind: 'registered' }>;
-    regionId: string;
-  }): void {
+  private attachAddedSource({ source, regionId }: { source: PreparedRegionSource; regionId: string }): void {
     try {
       this.audioSourceRegistry.attach({ sourceId: source.sourceId, regionId });
     } catch (cause) {
@@ -543,7 +523,7 @@ export class RegionController {
       url: source.url,
       startTime: regionData.startTime,
       sourceStartTime: regionData.sourceStartTime,
-      duration: source.kind === 'registered' ? source.duration : regionData.duration,
+      duration: source.duration,
     };
   }
 
@@ -552,7 +532,7 @@ export class RegionController {
     regionId,
     cause,
   }: {
-    source: Extract<PreparedRegionSource, { kind: 'registered' }>;
+    source: PreparedRegionSource;
     regionId: string;
     cause: unknown;
   }): void {

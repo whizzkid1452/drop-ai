@@ -83,7 +83,7 @@ function createTrackMap(): ReadonlyMap<string, TrackState> {
 }
 
 describe('Agent 프로젝트 컨텍스트', () => {
-  it('Source 존재와 Region 연결을 모두 확인해 사용 가능 여부를 계산한다', () => {
+  it('등록 Source 존재와 Region 연결을 모두 확인해 사용 가능 여부를 계산한다', () => {
     const resolve = vi.fn((sourceId: string) => {
       if (sourceId === ATTACHED_SOURCE_ID) {
         return createRuntimeSource(sourceId, [ATTACHED_REGION_ID]);
@@ -102,7 +102,7 @@ describe('Agent 프로젝트 컨텍스트', () => {
       expect.objectContaining({ id: ATTACHED_REGION_ID, sourceId: ATTACHED_SOURCE_ID, hasAudioSource: true }),
       expect.objectContaining({ id: DETACHED_REGION_ID, sourceId: DETACHED_SOURCE_ID, hasAudioSource: false }),
       expect.objectContaining({ id: MISSING_REGION_ID, sourceId: MISSING_SOURCE_ID, hasAudioSource: false }),
-      expect.objectContaining({ id: LEGACY_REGION_ID, sourceId: undefined, hasAudioSource: true }),
+      expect.objectContaining({ id: LEGACY_REGION_ID, sourceId: undefined, hasAudioSource: false }),
     ]);
     expect(JSON.stringify(promptTracks)).not.toContain('blob:legacy-url');
     expect(resolve).toHaveBeenCalledTimes(3);

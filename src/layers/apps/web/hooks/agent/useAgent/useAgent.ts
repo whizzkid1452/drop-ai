@@ -14,7 +14,7 @@ import { resolveAgentRunStatus } from './utils/resolve-agent-run-status';
 
 function hasAvailableAudioSource(region: RegionState, audioSourceResolver: IAudioSourceResolver): boolean {
   if (!region.sourceId) {
-    return Boolean(region.audioFileUrl);
+    return false;
   }
 
   const audioSource = audioSourceResolver.resolve(region.sourceId);

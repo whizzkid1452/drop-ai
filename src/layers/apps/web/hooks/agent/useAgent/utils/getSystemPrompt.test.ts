@@ -79,7 +79,7 @@ describe('Agent 시스템 Prompt', () => {
     expect(prompt).toContain(`"sourceId":"${SOURCE_ID}"`);
   });
 
-  it('기존 URL Region 복제 예시는 sourceId를 추측하지 않는다', () => {
+  it('기존 URL Region은 복제 예시를 만들지 않는다', () => {
     const legacyTracks: AgentPromptTrack[] = [
       {
         ...tracks[0],
@@ -92,8 +92,8 @@ describe('Agent 시스템 Prompt', () => {
       .split('\n')
       .find(line => line.includes('첫 번째 Region 소스'));
 
-    expect(cloneExample).toBeDefined();
-    expect(cloneExample).not.toContain('sourceId');
+    expect(cloneExample).toBeUndefined();
+    expect(prompt).toContain('sourceId가 없는 Region은 복제 대상으로 사용하지 않는다');
   });
 
   it('한국어와 영어 요청 예시를 모두 제공한다', () => {
@@ -109,6 +109,8 @@ describe('Agent 시스템 Prompt', () => {
     expect(prompt).toContain('url 필드는 폐기되어 사용할 수 없다');
     expect(prompt).toContain('sourceId를 임의로 만들지 않는다');
     expect(prompt).toContain('위 목록에 표시된 sourceId만 사용한다');
+    expect(prompt).toContain('"sourceId":"<listed Source UUID>"');
+    expect(prompt).not.toContain('"sourceId":"<listed Source UUID optional>"');
     expect(prompt).toContain('정보가 부족하면 []');
     expect(prompt).toContain('ADD_TRACK은 현재 Agent에서 사용하지 않는다');
     expect(prompt).toContain('{"type":"ADD_TRACK","trackId":"<new UUID>"}');

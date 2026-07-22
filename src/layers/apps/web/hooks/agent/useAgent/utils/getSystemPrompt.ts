@@ -49,7 +49,7 @@ const COMMAND_REFERENCE = {
   [AudioCommandType.SET_TRACK_SOLO]:
     '{"type":"SET_TRACK_SOLO","trackId":"<existing Track UUID>","soloed":<boolean>} - Track solo 변경',
   [AudioCommandType.LOAD_REGION]:
-    '{"type":"LOAD_REGION","trackId":"<existing Track UUID>","regionId":"<new UUID optional>","sourceId":"<listed Source UUID optional>","startTime":<seconds >= 0>,"startOffset":<seconds >= 0 optional>,"duration":<seconds >= 0 optional>} - Region 추가. Agent 복제에서는 duration > 0',
+    '{"type":"LOAD_REGION","trackId":"<existing Track UUID>","regionId":"<new UUID optional>","sourceId":"<listed Source UUID>","startTime":<seconds >= 0>,"startOffset":<seconds >= 0 optional>,"duration":<seconds >= 0 optional>} - Region 추가. Agent 복제에서는 duration > 0',
   [AudioCommandType.UNLOAD_REGION]:
     '{"type":"UNLOAD_REGION","trackId":"<existing Track UUID>","regionId":"<existing Region UUID>"} - Region 제거',
   [AudioCommandType.SPLIT_REGION]:
@@ -180,8 +180,7 @@ function createTargetExamples(tracks: readonly AgentPromptTrack[]): AgentPromptE
       },
     ],
   });
-  if (firstRegion.hasAudioSource && firstRegion.duration > 0) {
-    const sourceReference = firstRegion.sourceId ? { sourceId: firstRegion.sourceId } : {};
+  if (firstRegion.hasAudioSource && firstRegion.sourceId && firstRegion.duration > 0) {
     examples.push({
       request: `첫 번째 Region 소스를 ${firstRegion.endTime}초 위치에 복제해줘`,
       commands: [
@@ -191,7 +190,7 @@ function createTargetExamples(tracks: readonly AgentPromptTrack[]): AgentPromptE
           startTime: firstRegion.endTime,
           startOffset: firstRegion.sourceStartTime,
           duration: firstRegion.duration,
-          ...sourceReference,
+          sourceId: firstRegion.sourceId,
         },
       ],
     });
@@ -223,7 +222,7 @@ ${renderCommandReference()}
 3. 앱이 예약한 새 ID가 없으므로 새 UUID를 만들지 않는다. LOAD_REGION의 regionId는 생략해 실행기가 생성하게 한다.
 4. LOAD_REGION의 url 필드는 폐기되어 사용할 수 없다. sourceId를 임의로 만들지 않는다. 위 목록에 표시된 sourceId만 사용한다.
 5. ADD_TRACK은 현재 Agent에서 사용하지 않는다. 새 파일이나 새 Track이 필요한 요청은 []를 반환한다.
-6. LOAD_REGION은 사용자가 첫 Region 소스 복제를 명시했고 그 source가 available일 때만 사용한다. sourceId가 표시된 Region은 그 sourceId를 포함하고 regionId는 생략한다. sourceId가 없는 첫 Region은 sourceId를 생략해 기존 소스 선택을 Controller에 맡긴다. 첫 Region의 sourceStartTime과 duration은 그대로 쓴다. 두 번째 이후 Region의 소스 복제에는 사용하지 않는다.
+6. LOAD_REGION은 사용자가 첫 Region 소스 복제를 명시했고 sourceId가 표시되며 source가 available일 때만 사용한다. 목록의 sourceId를 포함하고 regionId는 생략한다. sourceId가 없는 Region은 복제 대상으로 사용하지 않는다. 첫 Region의 sourceStartTime과 duration은 그대로 쓴다. 두 번째 이후 Region의 소스 복제에는 사용하지 않는다.
 7. Region 제거, 분할, 이동 명령은 trackId와 regionId를 생략하지 않는다.
 8. 숫자는 문자열이 아닌 number로 쓴다. 시간은 절대 초다. 백분율은 100으로 나눠 volume 0..1, pan -1..1로 바꾼다. boolean은 true 또는 false다.
 9. 범위를 실제로 내보내려면 SET_EXPORT_RANGE 다음에 EXPORT_AUDIO를 둔다. endTime은 startTime보다 커야 한다.
