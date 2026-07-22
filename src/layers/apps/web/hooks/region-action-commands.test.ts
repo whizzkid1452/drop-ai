@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
-import { createUnloadRegionCommand, executeConfirmedRegionRemoval } from './region-action-commands';
+import {
+  createMoveRegionCommand,
+  createUnloadRegionCommand,
+  executeConfirmedRegionRemoval,
+  executeRegionMove,
+} from './region-action-commands';
 
 const target = {
   trackId: '11111111-1111-4111-8111-111111111111',
@@ -62,5 +67,42 @@ describe('Region UI 명령 변환', () => {
 
     expect(result).toBe('failed');
     expect(notifyFailure).toHaveBeenCalledWith('Region을 삭제하지 못했습니다: 엔진 오류');
+  });
+
+  it('이동 대상을 MOVE_REGION 명령으로 변환한다', () => {
+    expect(createMoveRegionCommand({ ...target, newStartTime: 4.25 })).toEqual({
+      type: AudioCommandType.MOVE_REGION,
+      ...target,
+      newStartTime: 4.25,
+    });
+  });
+
+  it('이동이 끝나면 정확한 명령을 한 번 실행한다', async () => {
+    const executeCommand = vi.fn<(command: AudioCommand) => Promise<unknown>>().mockResolvedValue(undefined);
+
+    const result = await executeRegionMove({
+      ...target,
+      newStartTime: 4.25,
+      executeCommand,
+      notifyFailure: vi.fn(),
+    });
+
+    expect(result).toBe('moved');
+    expect(executeCommand).toHaveBeenCalledTimes(1);
+    expect(executeCommand).toHaveBeenCalledWith(createMoveRegionCommand({ ...target, newStartTime: 4.25 }));
+  });
+
+  it('이동 실행이 실패하면 원인을 사용자 메시지로 전달한다', async () => {
+    const notifyFailure = vi.fn();
+
+    const result = await executeRegionMove({
+      ...target,
+      newStartTime: 4.25,
+      executeCommand: vi.fn().mockRejectedValue(new Error('예약 오류')),
+      notifyFailure,
+    });
+
+    expect(result).toBe('failed');
+    expect(notifyFailure).toHaveBeenCalledWith('Region을 이동하지 못했습니다: 예약 오류');
   });
 });

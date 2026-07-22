@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useCommandExecutor } from '@/layers/apps/web/context/LayerContext';
 import { AudioCommandType } from '@/types/audioCommand.schema';
-import { executeConfirmedRegionRemoval } from './region-action-commands';
+import { executeConfirmedRegionRemoval, executeRegionMove } from './region-action-commands';
 
 interface SplitRegionOptions {
   trackId: string;
@@ -12,6 +12,12 @@ interface SplitRegionOptions {
 interface RemoveRegionOptions {
   trackId: string;
   regionId: string;
+}
+
+interface MoveRegionOptions {
+  trackId: string;
+  regionId: string;
+  newStartTime: number;
 }
 
 export const useTrackActions = () => {
@@ -41,7 +47,19 @@ export const useTrackActions = () => {
     [commandExecutor]
   );
 
+  const moveRegion = useCallback(
+    async (options: MoveRegionOptions) => {
+      return executeRegionMove({
+        ...options,
+        executeCommand: command => commandExecutor.execute(command),
+        notifyFailure: message => window.alert(message),
+      });
+    },
+    [commandExecutor]
+  );
+
   return {
+    moveRegion,
     removeRegion,
     splitRegion,
   };
