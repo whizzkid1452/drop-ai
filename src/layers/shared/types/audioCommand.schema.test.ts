@@ -69,7 +69,20 @@ describe('LOAD_REGION 오디오 식별자 계약', () => {
     expect(StrictAudioCommandSchema.safeParse(command).success).toBe(true);
   });
 
-  it('url과 sourceId를 함께 전달하면 거부한다', () => {
+  it('기존 url 기반 명령을 일반 Schema와 Agent Schema에서 모두 거부한다', () => {
+    const command = {
+      type: AudioCommandType.LOAD_REGION,
+      trackId: TRACK_ID,
+      regionId: REGION_ID,
+      url: 'blob:test-audio',
+      startTime: 0,
+    };
+
+    expect(AudioCommandSchema.safeParse(command).success).toBe(false);
+    expect(StrictAudioCommandSchema.safeParse(command).success).toBe(false);
+  });
+
+  it('url과 sourceId를 함께 전달해도 거부한다', () => {
     const command = {
       type: AudioCommandType.LOAD_REGION,
       trackId: TRACK_ID,
@@ -355,5 +368,15 @@ describe('Web JSON CLI 호환 파싱', () => {
     });
 
     expect(result.commands).toEqual([{ type: AudioCommandType.EXPORT_AUDIO }]);
+  });
+
+  it('기존 url 기반 LOAD_REGION을 Source 재사용 명령으로 바꾸지 않고 거부한다', () => {
+    const result = parseAudioCommandString({
+      commandString:
+        '[{"type":"LOAD_REGION","trackId":"550e8400-e29b-41d4-a716-446655440000","url":"blob:test-audio","startTime":0}]',
+    });
+
+    expect(result.commands).toBeNull();
+    expect(result.error).toBeDefined();
   });
 });

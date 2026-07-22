@@ -127,11 +127,7 @@ export class CommandExecutor {
         return;
 
       case AudioCommandType.LOAD_REGION: {
-        const source = validatedCommand.sourceId
-          ? { sourceId: validatedCommand.sourceId }
-          : validatedCommand.url
-            ? { url: validatedCommand.url }
-            : {};
+        const source = validatedCommand.sourceId ? { sourceId: validatedCommand.sourceId } : {};
 
         // Track 선택과 검증은 pending Source 수명까지 관리하는 Controller가 맡는다.
         await this.controller.region.addRegion(validatedCommand.trackId, {

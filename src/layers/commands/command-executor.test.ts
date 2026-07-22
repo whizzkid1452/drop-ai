@@ -10,7 +10,6 @@ import { CommandBatchExecutionError, CommandExecutor } from './command-executor'
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
 const SECOND_REGION_ID = '33333333-3333-4333-8333-333333333333';
-const AUDIO_URL = 'https://example.com/audio.wav';
 const SOURCE_ID = '55555555-5555-4555-8555-555555555555';
 const SOURCE_OBJECT_URL = 'blob:command-source';
 const INITIAL_PROJECT_METADATA = {
@@ -78,12 +77,13 @@ async function addTrack(commandExecutor: CommandExecutor) {
   });
 }
 
-async function addRegion(commandExecutor: CommandExecutor) {
+async function addRegion(commandExecutor: CommandExecutor, audioSourceRegistry: IAudioSourceRegistry) {
+  stageSource(audioSourceRegistry);
   await commandExecutor.execute({
     type: AudioCommandType.LOAD_REGION,
     trackId: TRACK_ID,
     regionId: REGION_ID,
-    url: AUDIO_URL,
+    sourceId: SOURCE_ID,
     startTime: 0,
     duration: 5,
   });
@@ -119,10 +119,10 @@ describe('CommandExecutor', () => {
   });
 
   it('LOAD_REGION 명령으로 Region을 추가한다', async () => {
-    const { commandExecutor, session } = createTestContext();
+    const { audioSourceRegistry, commandExecutor, session } = createTestContext();
     await addTrack(commandExecutor);
 
-    await addRegion(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
 
     expect(session.getState().tracks.get(TRACK_ID)?.regions).toHaveLength(1);
     expect(session.getState().tracks.get(TRACK_ID)?.regions[0]?.id).toBe(REGION_ID);
@@ -216,9 +216,9 @@ describe('CommandExecutor', () => {
   });
 
   it('UNLOAD_REGION에서 ID를 생략하면 첫 번째 Region을 제거한다', async () => {
-    const { commandExecutor, session } = createTestContext();
+    const { audioSourceRegistry, commandExecutor, session } = createTestContext();
     await addTrack(commandExecutor);
-    await addRegion(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
 
     await commandExecutor.execute({ type: AudioCommandType.UNLOAD_REGION });
 
@@ -275,14 +275,13 @@ describe('CommandExecutor', () => {
   });
 
   it('SPLIT_REGION 명령은 겹친 Region 중 지정한 ID만 분할한다', async () => {
-    const { commandExecutor, session } = createTestContext();
+    const { audioSourceRegistry, commandExecutor, session } = createTestContext();
     await addTrack(commandExecutor);
-    await addRegion(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
     await commandExecutor.execute({
       type: AudioCommandType.LOAD_REGION,
       trackId: TRACK_ID,
       regionId: SECOND_REGION_ID,
-      url: AUDIO_URL,
       startTime: 0,
       duration: 5,
     });
@@ -301,9 +300,9 @@ describe('CommandExecutor', () => {
   });
 
   it('SPLIT_REGION의 도메인 오류를 호출자에게 전달한다', async () => {
-    const { commandExecutor } = createTestContext();
+    const { audioSourceRegistry, commandExecutor } = createTestContext();
     await addTrack(commandExecutor);
-    await addRegion(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
 
     await expect(
       commandExecutor.execute({
@@ -316,9 +315,9 @@ describe('CommandExecutor', () => {
   });
 
   it('MOVE_REGION 명령으로 Region의 시작과 끝 위치를 함께 변경한다', async () => {
-    const { commandExecutor, session } = createTestContext();
+    const { audioSourceRegistry, commandExecutor, session } = createTestContext();
     await addTrack(commandExecutor);
-    await addRegion(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
 
     await commandExecutor.execute({
       type: AudioCommandType.MOVE_REGION,
@@ -405,9 +404,9 @@ describe('CommandExecutor', () => {
   });
 
   it('executeMany는 오류 전에 생성한 Blob 결과를 보존한다', async () => {
-    const { commandExecutor } = createTestContext();
+    const { audioSourceRegistry, commandExecutor } = createTestContext();
     await addTrack(commandExecutor);
-    await addRegion(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
 
     const error = await captureBatchError(
       commandExecutor.executeMany([
@@ -463,9 +462,9 @@ describe('CommandExecutor', () => {
   });
 
   it('executeMany는 입력 순서와 같은 결과 배열을 반환한다', async () => {
-    const { commandExecutor } = createTestContext();
+    const { audioSourceRegistry, commandExecutor } = createTestContext();
     await addTrack(commandExecutor);
-    await addRegion(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
 
     const results = await commandExecutor.executeMany([
       { type: AudioCommandType.SET_TEMPO, tempo: 130 },
@@ -502,9 +501,9 @@ describe('CommandExecutor', () => {
   });
 
   it('EXPORT_AUDIO 명령 결과로 WAV Blob을 반환한다', async () => {
-    const { commandExecutor } = createTestContext();
+    const { audioSourceRegistry, commandExecutor } = createTestContext();
     await addTrack(commandExecutor);
-    await addRegion(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
 
     const result = await commandExecutor.execute({
       type: AudioCommandType.EXPORT_AUDIO,

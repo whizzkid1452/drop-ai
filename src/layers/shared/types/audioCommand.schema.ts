@@ -77,21 +77,17 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
     trackId: z.uuid('Invalid track ID format'),
     soloed: z.boolean(),
   }),
-  z
-    .strictObject({
-      type: z.literal(AudioCommandType.LOAD_REGION),
-      trackId: z.uuid('Invalid track ID format').optional(),
-      regionId: z.uuid('Invalid region ID format').optional(),
-      url: z.url('Invalid URL format').optional(),
-      sourceId: z.uuid('Invalid source ID format').optional(),
-      startTime: z.number().min(0, 'Start time must be >= 0'),
-      startOffset: z.number().min(0, 'Start offset must be >= 0').optional(),
-      duration: z.number().min(0, 'Duration must be >= 0').optional(),
-    })
-    .refine(command => command.url === undefined || command.sourceId === undefined, {
-      message: 'LOAD_REGION must include at most one of url or sourceId',
-      path: ['sourceId'],
-    }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.LOAD_REGION),
+    trackId: z.uuid('Invalid track ID format').optional(),
+    regionId: z.uuid('Invalid region ID format').optional(),
+    // 호환 파서가 제거하지 못하게 폐기된 필드를 명시적으로 거부한다.
+    url: z.never().optional(),
+    sourceId: z.uuid('Invalid source ID format').optional(),
+    startTime: z.number().min(0, 'Start time must be >= 0'),
+    startOffset: z.number().min(0, 'Start offset must be >= 0').optional(),
+    duration: z.number().min(0, 'Duration must be >= 0').optional(),
+  }),
   z.strictObject({
     type: z.literal(AudioCommandType.UNLOAD_REGION),
     trackId: z.uuid('Invalid track ID format').optional(),

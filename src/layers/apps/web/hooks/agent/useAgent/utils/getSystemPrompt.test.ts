@@ -101,20 +101,20 @@ describe('Agent 시스템 Prompt', () => {
     expect(AGENT_PROMPT_EXAMPLES.some(example => /^[A-Za-z0-9 .!?-]+$/.test(example.request))).toBe(true);
   });
 
-  it('출력 형식과 식별자, URL과 Source ID 안전 규칙을 명시한다', () => {
+  it('출력 형식과 식별자, Source ID 안전 규칙을 명시한다', () => {
     const prompt = getSystemPrompt({ tracks });
 
     expect(prompt).toContain('JSON 배열만 반환');
     expect(prompt).toContain('기존 Track과 Region의 ID는 위 목록의 값만 사용');
-    expect(prompt).toContain('URL을 추측하거나 만들어내지 않음');
+    expect(prompt).toContain('url 필드는 폐기되어 사용할 수 없다');
     expect(prompt).toContain('sourceId를 임의로 만들지 않는다');
     expect(prompt).toContain('위 목록에 표시된 sourceId만 사용한다');
-    expect(prompt).toContain('url과 sourceId를 동시에 넣지 않는다');
     expect(prompt).toContain('정보가 부족하면 []');
     expect(prompt).toContain('ADD_TRACK은 현재 Agent에서 사용하지 않는다');
     expect(prompt).toContain('{"type":"ADD_TRACK","trackId":"<new UUID>"}');
     expect(prompt).not.toContain('{"type":"ADD_TRACK","trackId":"<new UUID>","url"');
-    expect(prompt).toContain('regionId와 url은 생략');
+    expect(prompt).toContain('regionId는 생략');
+    expect(prompt).not.toContain('"url":"<known URL optional>"');
   });
 
   it('모든 시간 필드의 음수 금지 범위를 명시한다', () => {

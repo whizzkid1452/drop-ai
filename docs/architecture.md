@@ -85,7 +85,7 @@ Agent Prompt는 AudioCommand 전체의 정확한 필드와 범위를 안내한�
 범위, 오디오 소스 사용 가능 여부도 함께 전달하며, Prompt 예시는 엄격한 Agent Schema를 통과해야 한다. 아직 앱이
 예약한 새 ID와 허용 파일 목록을 제공하지 않으므로 Agent의 `ADD_TRACK` 생성은 막는다. `LOAD_REGION`은 기존
 Track의 첫 Region 소스를 재사용하는 경우에만 제한적으로 허용한다. 등록 Source Region은 목록의 실제 `sourceId`만
-사용하고, 기존 URL Region은 Source 선택을 Controller에 맡긴다. Agent에는 Object URL을 노출하지 않는다.
+사용하고, 기존 URL Region은 Source 선택을 Controller에 맡긴다. Agent 명령의 `url` 필드는 금지하며 Object URL을 노출하지 않는다.
 프로젝트 컨텍스트는 모델 입력 한도를 넘길 위험을 줄이도록 길이를 제한하고 잘림 여부를 표시한다.
 
 ```mermaid
@@ -380,7 +380,7 @@ Session Region은 다음 두 형식 중 정확히 하나다.
 | 등록 Source | `sourceId`     | Controller가 Registry에서 확인한 Object URL |
 | 기존 호환   | `audioFileUrl` | 기존 URL                                    |
 
-`LOAD_REGION`은 `sourceId`와 `url`을 동시에 허용하지 않는다. 둘 다 생략하면 Controller가 같은 Track의 첫 Region 소스를
+`LOAD_REGION`은 폐기된 `url` 필드를 일반·Agent Schema에서 명시적으로 거부한다. `sourceId`를 생략하면 Controller가 같은 Track의 첫 Region 소스를
 재사용한다. `trackId`도 생략하면 Controller가 첫 Track을 선택한다. 유효한 `LOAD_REGION`이 Controller에 전달된 뒤 Track
 선택이나 존재 검증이 실패하면 명시된 pending Source도 Controller가 정리한다. 등록 Source의 URL은 Session과 Agent
 Prompt에 넣지 않는다. Web 파형, Agent context, Export는 Resolver가 반환한 Source에 해당 Region ID가 실제로 연결됐는지
