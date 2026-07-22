@@ -2,9 +2,11 @@
 import type WaveSurfer from 'wavesurfer.js';
 import { useErrorBoundary } from 'react-error-boundary';
 import { TrackComponent } from '../Track/TrackComponent';
+import { pruneWaveSurferInstances } from './prune-wave-surfer-instances';
 import * as styles from './TrackList.css.ts';
 import { Cursor } from '@/layers/apps/web/components/Cursor/Cursor';
 import { useCommandExecutor, useSession } from '@/layers/apps/web/context/LayerContext';
+import { executeConfirmedTrackRemoval } from '@/layers/apps/web/hooks/track-action-commands';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 
 interface TrackListProps {
@@ -18,6 +20,13 @@ export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProp
   const commandExecutor = useCommandExecutor();
 
   const [wavesurferInstances, setWavesurferInstances] = useState<Map<string, WaveSurfer>>(new Map());
+
+  useEffect(() => {
+    const activeTrackIds = new Set(tracks.keys());
+    setWavesurferInstances(currentInstances =>
+      pruneWaveSurferInstances({ instances: currentInstances, activeTrackIds })
+    );
+  }, [tracks]);
 
   const { showBoundary } = useErrorBoundary();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -89,6 +98,18 @@ export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProp
     });
   }, []);
 
+  const handleRemoveTrack = useCallback(
+    async (trackId: string) => {
+      return executeConfirmedTrackRemoval({
+        trackId,
+        confirmRemoval: () => window.confirm('이 Track과 포함된 모든 Region을 삭제할까요?'),
+        executeCommand: command => commandExecutor.execute(command),
+        notifyFailure: message => window.alert(message),
+      });
+    },
+    [commandExecutor]
+  );
+
   return (
     <div className={styles.trackList}>
       {/* @todo: 異뷀썑 ?붿옄???섏젙 ?덉젙 */}
@@ -107,6 +128,7 @@ export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProp
               onReady={handleReady}
               onVolumeChange={handleVolumeChange}
               onPanChange={handlePanChange}
+              onRemoveTrack={() => handleRemoveTrack(track.id)}
             />
           );
         })}

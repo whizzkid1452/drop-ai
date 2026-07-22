@@ -1,6 +1,7 @@
 import type WaveSurfer from 'wavesurfer.js';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useSession } from '@/layers/apps/web/context/LayerContext';
+import type { TrackRemovalResult } from '@/layers/apps/web/hooks/track-action-commands';
 import type { TrackState } from '@/layers/session/session';
 import { useTrackActions } from '@/layers/apps/web/hooks/useTrackActions';
 import { resolveSplitRegionId } from '@/layers/apps/web/hooks/resolve-split-region-id';
@@ -15,6 +16,7 @@ export const TrackComponent = memo(function TrackComponent({
   onReady,
   onVolumeChange,
   onPanChange,
+  onRemoveTrack,
 }: {
   mediaElement: HTMLMediaElement | null;
   track: TrackState;
@@ -22,8 +24,10 @@ export const TrackComponent = memo(function TrackComponent({
   onReady: (trackId: string, ws: WaveSurfer) => void;
   onVolumeChange: (trackId: string, volume: number) => void;
   onPanChange: (trackId: string, pan: number) => void;
+  onRemoveTrack: () => Promise<TrackRemovalResult>;
 }) {
   const { moveRegion, removeRegion, splitRegion } = useTrackActions();
+  const [isRemovingTrack, setIsRemovingTrack] = useState(false);
   const currentTime = useSession(state => state.currentTime);
   const splitRegionId = resolveSplitRegionId({ regions: track.regions, splitTime: currentTime });
 
@@ -43,6 +47,19 @@ export const TrackComponent = memo(function TrackComponent({
 
   const handleMoveRegion = async (regionId: string, newStartTime: number) => {
     await moveRegion({ trackId: track.id, regionId, newStartTime });
+  };
+
+  const handleRemoveTrack = async () => {
+    if (isRemovingTrack) {
+      return;
+    }
+
+    setIsRemovingTrack(true);
+    try {
+      await onRemoveTrack();
+    } finally {
+      setIsRemovingTrack(false);
+    }
   };
 
   return (
@@ -83,6 +100,25 @@ export const TrackComponent = memo(function TrackComponent({
             </button>
           </>
         ) : null}
+        <button
+          type="button"
+          aria-label="Track 삭제"
+          aria-busy={isRemovingTrack}
+          disabled={isRemovingTrack}
+          onClick={() => void handleRemoveTrack()}
+          style={{
+            padding: '4px 8px',
+            fontSize: '12px',
+            backgroundColor: '#333',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: isRemovingTrack ? 'wait' : 'pointer',
+            opacity: isRemovingTrack ? 0.5 : 1,
+          }}
+        >
+          {isRemovingTrack ? '삭제 중…' : 'Track 삭제'}
+        </button>
       </div>
     </>
   );
