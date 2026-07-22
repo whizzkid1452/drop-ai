@@ -1,4 +1,4 @@
-import { parseAudioCommandString, AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
+import { parseAgentAudioCommandBatch, type AudioCommand } from '@/types/audioCommand.schema';
 import { queryToLLM as queryToLLM } from './queryToLLM';
 import type { MLCEngine } from '@/types/webllm.types';
 import { trackAudioCommandExecuted } from '@/utils/analytics';
@@ -42,16 +42,11 @@ export async function handleAIResponse(deps: AIResponseHandlerDependencies) {
     };
   }
 
-  const parseResult = parseAudioCommandString({
+  const parseResult = parseAgentAudioCommandBatch({
     commandString: fullResponse,
   });
-  let commands = parseResult.commands;
+  const commands = parseResult.commands;
   const { error } = parseResult;
-
-  // SET_EXPORT_RANGE만 있으면 실제 내보내기가 안 됨. EXPORT_AUDIO 자동 추가
-  if (commands && commands.length === 1 && commands[0].type === AudioCommandType.SET_EXPORT_RANGE) {
-    commands = [...commands, { type: AudioCommandType.EXPORT_AUDIO }];
-  }
 
   const executionResults: Array<{
     commandType: string;
@@ -92,7 +87,7 @@ export async function handleAIResponse(deps: AIResponseHandlerDependencies) {
   return {
     message: fullResponse || 'no response',
     status: error ? 'error' : 'idle',
-    parsedCommands: null,
+    parsedCommands: commands,
     executionResults: [],
   } as const;
 }

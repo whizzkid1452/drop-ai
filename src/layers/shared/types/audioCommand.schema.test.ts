@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { AudioCommandSchema, AudioCommandType } from './audioCommand.schema';
+import {
+  AudioCommandSchema,
+  AudioCommandType,
+  parseAudioCommandString,
+  parseAgentAudioCommandBatch,
+  StrictAudioCommandSchema,
+} from './audioCommand.schema';
 
 const TRACK_ID = '550e8400-e29b-41d4-a716-446655440000';
 const REGION_ID = '6ba7b810-9dad-41d1-80b4-00c04fd430c8';
@@ -136,5 +142,133 @@ describe('AudioCommandSchema 프로젝트 변경 명령', () => {
     },
   ])('$type의 문자열 숫자를 거부한다', command => {
     expect(AudioCommandSchema.safeParse(command).success).toBe(false);
+  });
+
+  it('기존 Command Schema는 호환성을 위해 추가 필드를 제거한다', () => {
+    expect(
+      AudioCommandSchema.parse({
+        type: AudioCommandType.EXPORT_AUDIO,
+        startTime: 1,
+      })
+    ).toEqual({ type: AudioCommandType.EXPORT_AUDIO });
+  });
+
+  it('Agent용 Command Schema는 정의되지 않은 필드를 거부한다', () => {
+    expect(
+      StrictAudioCommandSchema.safeParse({
+        type: AudioCommandType.EXPORT_AUDIO,
+        startTime: 1,
+      }).success
+    ).toBe(false);
+  });
+});
+
+describe('Agent AudioCommand 묶음 파싱', () => {
+  it('유효한 JSON 배열의 명령 순서를 보존한다', () => {
+    const result = parseAgentAudioCommandBatch({
+      commandString: '[{"type":"SET_TEMPO","tempo":140},{"type":"PLAY"}]',
+    });
+
+    expect(result).toEqual({
+      commands: [{ type: AudioCommandType.SET_TEMPO, tempo: 140 }, { type: AudioCommandType.PLAY }],
+    });
+  });
+
+  it('명령이 필요 없는 Agent 응답으로 빈 배열을 허용한다', () => {
+    expect(parseAgentAudioCommandBatch({ commandString: '[]' })).toEqual({ commands: [] });
+  });
+
+  it('유효하지 않은 명령이 섞인 배열 전체를 거부한다', () => {
+    const result = parseAgentAudioCommandBatch({
+      commandString: '[{"type":"PLAY"},{"type":"SET_TEMPO","tempo":0}]',
+    });
+
+    expect(result.commands).toBeNull();
+    expect(result.error).toBeDefined();
+  });
+
+  it('알 수 없는 명령이 섞인 배열 전체를 거부한다', () => {
+    const result = parseAgentAudioCommandBatch({
+      commandString: '[{"type":"PLAY"},{"type":"DELETE_EVERYTHING"}]',
+    });
+
+    expect(result.commands).toBeNull();
+    expect(result.error).toBeDefined();
+  });
+
+  it('명령에 추가 필드가 있는 배열 전체를 거부한다', () => {
+    const result = parseAgentAudioCommandBatch({
+      commandString: '[{"type":"EXPORT_AUDIO","startTime":1}]',
+    });
+
+    expect(result.commands).toBeNull();
+    expect(result.error).toBeDefined();
+  });
+
+  it('배열이 아닌 단일 명령 객체를 거부한다', () => {
+    const result = parseAgentAudioCommandBatch({ commandString: '{"type":"PLAY"}' });
+
+    expect(result.commands).toBeNull();
+    expect(result.error).toBeDefined();
+  });
+
+  it.each(['null', '1', '"PLAY"'])('배열이 아닌 JSON 값 %s을 예외 없이 거부한다', commandString => {
+    const result = parseAgentAudioCommandBatch({ commandString });
+
+    expect(result.commands).toBeNull();
+    expect(result.error).toBeDefined();
+  });
+
+  it('잘못된 JSON을 예외 없이 거부한다', () => {
+    const result = parseAgentAudioCommandBatch({ commandString: '[{"type":"PLAY"}' });
+
+    expect(result.commands).toBeNull();
+    expect(result.error).toBeDefined();
+  });
+
+  it('문자열 숫자를 number로 변환하지 않는다', () => {
+    const result = parseAgentAudioCommandBatch({
+      commandString: '[{"type":"SET_TEMPO","tempo":"140"}]',
+    });
+
+    expect(result.commands).toBeNull();
+    expect(result.error).toBeDefined();
+  });
+
+  it('JSON 밖에 설명 문장이 있는 응답을 거부한다', () => {
+    const result = parseAgentAudioCommandBatch({ commandString: '실행합니다: [{"type":"PLAY"}]' });
+
+    expect(result.commands).toBeNull();
+    expect(result.error).toBeDefined();
+  });
+});
+
+describe('Web JSON CLI 호환 파싱', () => {
+  it('단일 명령 객체를 허용한다', () => {
+    expect(parseAudioCommandString({ commandString: '{"type":"PLAY"}' }).commands).toEqual([
+      { type: AudioCommandType.PLAY },
+    ]);
+  });
+
+  it('설명문 안의 단일 명령 객체를 추출한다', () => {
+    expect(parseAudioCommandString({ commandString: '실행: {"type":"PLAY"}' }).commands).toEqual([
+      { type: AudioCommandType.PLAY },
+    ]);
+  });
+
+  it('배열의 유효하지 않은 항목과 null을 건너뛰고 유효한 명령을 반환한다', () => {
+    const result = parseAudioCommandString({
+      commandString: '[null,{"type":"SET_TEMPO","tempo":0},{"type":"PLAY"}]',
+    });
+
+    expect(result.commands).toEqual([{ type: AudioCommandType.PLAY }]);
+  });
+
+  it('기존 호환 규칙에 따라 추가 필드를 제거한다', () => {
+    const result = parseAudioCommandString({
+      commandString: '[{"type":"EXPORT_AUDIO","unexpected":true}]',
+    });
+
+    expect(result.commands).toEqual([{ type: AudioCommandType.EXPORT_AUDIO }]);
   });
 });

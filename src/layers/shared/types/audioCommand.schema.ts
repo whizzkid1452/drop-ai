@@ -22,6 +22,10 @@ export const AudioCommandType = {
 } as const;
 export type AudioCommandType = (typeof AudioCommandType)[keyof typeof AudioCommandType];
 
+function isAudioCommandType(value: unknown): value is AudioCommandType {
+  return typeof value === 'string' && Object.values(AudioCommandType).some(commandType => commandType === value);
+}
+
 /**
  * Zod Schema for AI-generated Audio Commands
  *
@@ -31,50 +35,50 @@ export type AudioCommandType = (typeof AudioCommandType)[keyof typeof AudioComma
  * - Self-correction loop support (validation error messages)
  */
 
-export const AudioCommandSchema = z.discriminatedUnion('type', [
-  z.object({
+export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
+  z.strictObject({
     type: z.literal(AudioCommandType.ADD_TRACK),
     trackId: z.uuid('Invalid track ID format'),
     url: z.url('Invalid audio URL format'),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal(AudioCommandType.REMOVE_TRACK),
     trackId: z.uuid('Invalid track ID format'),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal(AudioCommandType.PLAY),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal(AudioCommandType.PAUSE),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal(AudioCommandType.STOP),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal(AudioCommandType.SET_TEMPO),
     tempo: z.number().positive('Tempo must be > 0'),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal(AudioCommandType.SET_TRACK_VOLUME),
     trackId: z.string().uuid('Invalid track ID format').optional(),
     volume: z.number().min(0, 'Volume must be >= 0').max(1, 'Volume must be <= 1'),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal(AudioCommandType.SET_TRACK_PAN),
     trackId: z.uuid('Invalid track ID format').optional(),
     pan: z.number().min(-1, 'Pan must be >= -1').max(1, 'Pan must be <= 1'),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal(AudioCommandType.SET_TRACK_MUTE),
     trackId: z.uuid('Invalid track ID format'),
     muted: z.boolean(),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal(AudioCommandType.SET_TRACK_SOLO),
     trackId: z.uuid('Invalid track ID format'),
     soloed: z.boolean(),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal(AudioCommandType.LOAD_REGION),
     trackId: z.uuid('Invalid track ID format').optional(),
     regionId: z.uuid('Invalid region ID format').optional(),
@@ -83,42 +87,77 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
     startOffset: z.number().min(0, 'Start offset must be >= 0').optional(),
     duration: z.number().min(0, 'Duration must be >= 0').optional(),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal(AudioCommandType.UNLOAD_REGION),
     trackId: z.uuid('Invalid track ID format').optional(),
     regionId: z.uuid('Invalid region ID format').optional(),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal(AudioCommandType.SPLIT_REGION),
     trackId: z.uuid('Invalid track ID format'),
     regionId: z.uuid('Invalid region ID format'),
     splitTime: z.number().min(0, 'Split time must be >= 0'),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal(AudioCommandType.MOVE_REGION),
     trackId: z.uuid('Invalid track ID format'),
     regionId: z.uuid('Invalid region ID format'),
     newStartTime: z.number().min(0, 'New start time must be >= 0'),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal(AudioCommandType.SET_CURRENT_TIME),
     time: z.number().min(0, 'Time must be >= 0'),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal(AudioCommandType.SET_EXPORT_RANGE),
     startTime: z.number().min(0, 'Start time must be >= 0'),
     endTime: z.number().min(0, 'End time must be >= 0'),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal(AudioCommandType.CLEAR_EXPORT_RANGE),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal(AudioCommandType.EXPORT_AUDIO),
     filename: z.string().optional(),
   }),
 ]);
 
+// Web JSON CLI의 기존 보정 규칙은 추가 필드를 제거하므로 호환 Schema를 별도로 유지한다.
+const permissiveAudioCommandOptions = StrictAudioCommandSchema.options.map(commandSchema => commandSchema.strip());
+
+export const AudioCommandSchema = z.discriminatedUnion('type', [
+  permissiveAudioCommandOptions[0],
+  ...permissiveAudioCommandOptions.slice(1),
+]);
+
 export type AudioCommand = z.infer<typeof AudioCommandSchema>;
+export const AudioCommandBatchSchema = z.array(AudioCommandSchema);
+export const AgentAudioCommandBatchSchema = z.array(StrictAudioCommandSchema);
+
+export function parseAgentAudioCommandBatch({ commandString }: { commandString: string }): {
+  commands: AudioCommand[] | null;
+  error?: string;
+} {
+  let parsedResponse: unknown;
+  try {
+    parsedResponse = JSON.parse(commandString.trim());
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown JSON parse error';
+    return { commands: null, error: `Agent response is not valid JSON: ${message}` };
+  }
+
+  if (!Array.isArray(parsedResponse)) {
+    return { commands: null, error: 'Agent response must be a JSON array.' };
+  }
+
+  const validatedBatch = AgentAudioCommandBatchSchema.safeParse(parsedResponse);
+  if (!validatedBatch.success) {
+    const message = validatedBatch.error.issues.map(issue => issue.message).join(', ');
+    return { commands: null, error: `Invalid command batch: ${message}` };
+  }
+
+  return { commands: validatedBatch.data };
+}
 
 /**
  * Parse and validate AI response JSON
@@ -238,17 +277,18 @@ export function parseAudioCommandString({ commandString }: { commandString: stri
   }
 
   // Helper function to validate and parse commands
-  function validateAndParseCommands(parsed: any[]): {
+  function validateAndParseCommands(parsed: unknown[]): {
     commands: AudioCommand[] | null;
     error?: string;
   } {
     const validatedCommands: AudioCommand[] = [];
-    const validTypes = Object.values(AudioCommandType);
 
     for (const item of parsed) {
+      const commandType = typeof item === 'object' && item !== null && 'type' in item ? item.type : undefined;
+
       // 1. Filter out unknown command types (Hallucinations)
-      if (!validTypes.includes(item.type)) {
-        console.warn(`[parseAudioCommandString] Filtered out unknown command type: ${item.type}`);
+      if (!isAudioCommandType(commandType)) {
+        console.warn(`[parseAudioCommandString] Filtered out unknown command type: ${String(commandType)}`);
         continue;
       }
 
@@ -256,7 +296,7 @@ export function parseAudioCommandString({ commandString }: { commandString: stri
       const validated = AudioCommandSchema.safeParse(item);
       if (!validated.success) {
         const errorMsg = validated.error.issues.map(e => e.message).join(', ');
-        console.warn(`[parseAudioCommandString] Skipped invalid command (${item.type}): ${errorMsg}`);
+        console.warn(`[parseAudioCommandString] Skipped invalid command (${commandType}): ${errorMsg}`);
         continue;
       }
       validatedCommands.push(validated.data);

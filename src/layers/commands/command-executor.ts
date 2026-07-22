@@ -1,6 +1,11 @@
 import type { AppController } from '../controllers/app-controller';
 import type { SessionState, SessionStore } from '../session/session';
-import { AudioCommandSchema, AudioCommandType, type AudioCommand } from '../shared/types/audioCommand.schema';
+import {
+  AudioCommandBatchSchema,
+  AudioCommandSchema,
+  AudioCommandType,
+  type AudioCommand,
+} from '../shared/types/audioCommand.schema';
 
 export type CommandExecutionResult = Blob | void;
 export type CommandBatchExecutionResult = CommandExecutionResult[];
@@ -24,7 +29,7 @@ export class CommandExecutor {
   }
 
   async executeMany(commands: readonly AudioCommand[]): Promise<CommandBatchExecutionResult> {
-    const validatedCommands = AudioCommandSchema.array().parse(commands);
+    const validatedCommands = AudioCommandBatchSchema.parse(commands);
     return this.enqueue(async () => {
       const results: CommandBatchExecutionResult = [];
       for (const command of validatedCommands) {
