@@ -155,4 +155,15 @@ describe('CommandExecutor', () => {
 
     await expect(commandExecutor.execute(invalidCommand)).rejects.toThrow();
   });
+
+  it('아직 연결되지 않은 유효한 명령을 성공으로 처리하지 않는다', async () => {
+    const { commandExecutor } = createTestContext();
+
+    await expect(
+      commandExecutor.execute({
+        type: AudioCommandType.SET_TEMPO,
+        tempo: 120,
+      })
+    ).rejects.toThrow('Unsupported audio command: SET_TEMPO');
+  });
 });

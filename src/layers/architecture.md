@@ -6,7 +6,8 @@
 4. Apps는 Session을 구독해 화면을 갱신한다.
 5. Tone.js와 Web Audio API는 AudioEngine에서만 접근한다.
 
-현재 AudioCommand가 없는 Region 분할과 내부 CLI 전용 작업은 Controllers를 직접 호출한다.
+현재 Region 분할과 일부 내부 CLI 작업은 AudioCommand 계약만 정의됐으며, 실행 경로 이전이 끝나지 않아
+Controllers를 직접 호출한다.
 
 ## Architecture (Layers)
 

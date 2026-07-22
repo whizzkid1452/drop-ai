@@ -79,6 +79,8 @@ export class CommandExecutor {
       case AudioCommandType.EXPORT_AUDIO:
         return this.controller.export.exportProject();
     }
+
+    throw new Error(`Unsupported audio command: ${validatedCommand.type}`);
   }
 
   private resolveTrackId(session: SessionState, requestedTrackId?: string): string {

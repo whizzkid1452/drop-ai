@@ -2,13 +2,19 @@ import { z } from 'zod';
 
 export const AudioCommandType = {
   ADD_TRACK: 'ADD_TRACK',
+  REMOVE_TRACK: 'REMOVE_TRACK',
   PLAY: 'PLAY',
   PAUSE: 'PAUSE',
   STOP: 'STOP',
+  SET_TEMPO: 'SET_TEMPO',
   SET_TRACK_VOLUME: 'SET_TRACK_VOLUME',
   SET_TRACK_PAN: 'SET_TRACK_PAN',
+  SET_TRACK_MUTE: 'SET_TRACK_MUTE',
+  SET_TRACK_SOLO: 'SET_TRACK_SOLO',
   LOAD_REGION: 'LOAD_REGION',
   UNLOAD_REGION: 'UNLOAD_REGION',
+  SPLIT_REGION: 'SPLIT_REGION',
+  MOVE_REGION: 'MOVE_REGION',
   SET_CURRENT_TIME: 'SET_CURRENT_TIME',
   SET_EXPORT_RANGE: 'SET_EXPORT_RANGE',
   CLEAR_EXPORT_RANGE: 'CLEAR_EXPORT_RANGE',
@@ -32,6 +38,10 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
     url: z.url('Invalid audio URL format'),
   }),
   z.object({
+    type: z.literal(AudioCommandType.REMOVE_TRACK),
+    trackId: z.uuid('Invalid track ID format'),
+  }),
+  z.object({
     type: z.literal(AudioCommandType.PLAY),
   }),
   z.object({
@@ -39,6 +49,10 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal(AudioCommandType.STOP),
+  }),
+  z.object({
+    type: z.literal(AudioCommandType.SET_TEMPO),
+    tempo: z.number().positive('Tempo must be > 0'),
   }),
   z.object({
     type: z.literal(AudioCommandType.SET_TRACK_VOLUME),
@@ -49,6 +63,16 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
     type: z.literal(AudioCommandType.SET_TRACK_PAN),
     trackId: z.uuid('Invalid track ID format').optional(),
     pan: z.number().min(-1, 'Pan must be >= -1').max(1, 'Pan must be <= 1'),
+  }),
+  z.object({
+    type: z.literal(AudioCommandType.SET_TRACK_MUTE),
+    trackId: z.uuid('Invalid track ID format'),
+    muted: z.boolean(),
+  }),
+  z.object({
+    type: z.literal(AudioCommandType.SET_TRACK_SOLO),
+    trackId: z.uuid('Invalid track ID format'),
+    soloed: z.boolean(),
   }),
   z.object({
     type: z.literal(AudioCommandType.LOAD_REGION),
@@ -63,6 +87,18 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
     type: z.literal(AudioCommandType.UNLOAD_REGION),
     trackId: z.uuid('Invalid track ID format').optional(),
     regionId: z.uuid('Invalid region ID format').optional(),
+  }),
+  z.object({
+    type: z.literal(AudioCommandType.SPLIT_REGION),
+    trackId: z.uuid('Invalid track ID format'),
+    regionId: z.uuid('Invalid region ID format'),
+    splitTime: z.number().min(0, 'Split time must be >= 0'),
+  }),
+  z.object({
+    type: z.literal(AudioCommandType.MOVE_REGION),
+    trackId: z.uuid('Invalid track ID format'),
+    regionId: z.uuid('Invalid region ID format'),
+    newStartTime: z.number().min(0, 'New start time must be >= 0'),
   }),
   z.object({
     type: z.literal(AudioCommandType.SET_CURRENT_TIME),

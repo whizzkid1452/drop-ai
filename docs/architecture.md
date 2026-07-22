@@ -165,4 +165,5 @@ sequenceDiagram
 
 ## 참고
 
-- AudioCommand가 아직 없는 Region 분할과 내부 CLI 전용 작업은 Controller를 직접 호출한다.
+- Region 분할과 일부 내부 CLI 작업은 AudioCommand 계약만 정의됐으며, 실행 경로 이전이 끝나지 않아
+  Controller를 직접 호출한다.
