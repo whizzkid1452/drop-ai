@@ -175,5 +175,5 @@ sequenceDiagram
 
 ## 참고
 
-- Region 분할과 일부 내부 CLI 작업은 AudioCommand 계약만 정의됐으며, 실행 경로 이전이 끝나지 않아
-  Controller를 직접 호출한다.
+- Web UI의 Region 분할은 실행 경로 이전이 끝나지 않아 Controller를 직접 호출한다.
+- 내부 CLI의 변경 작업은 CommandExecutor를 사용한다.

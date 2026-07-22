@@ -15,8 +15,8 @@
 현재 Region의 `startTime`과 `endTime`은 절대 초 단위다. 음악 시간(musical time) 모델을 도입하기 전까지 Session의
 tempo 변경은 AudioEngine의 Transport BPM과 Region 예약을 변경하지 않는다.
 
-현재 Region 분할과 일부 내부 CLI 작업은 AudioCommand 계약만 정의됐으며, 실행 경로 이전이 끝나지 않아
-Controllers를 직접 호출한다.
+현재 Web UI의 Region 분할은 실행 경로 이전이 끝나지 않아 Controller를 직접 호출한다. 내부 CLI의 변경 작업은
+CommandExecutor를 사용한다.
 
 ## Architecture (Layers)
 

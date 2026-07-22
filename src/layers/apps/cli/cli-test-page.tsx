@@ -53,8 +53,9 @@ const CliTestContent = () => {
         try {
           const output = await command.fn(...args);
           term.write(`\r\n${output.replace(/\n/g, '\r\n')}`);
-        } catch (err: any) {
-          term.write(`\r\nError: ${err.message}`);
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          term.write(`\r\nError: ${message}`);
         }
       } else {
         term.write(`\r\nUnknown command: ${cmdName}. Type "help" for usage.`);
