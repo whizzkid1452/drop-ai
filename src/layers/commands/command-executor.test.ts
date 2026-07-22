@@ -7,6 +7,7 @@ import { CommandExecutor } from './command-executor';
 
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
+const SECOND_REGION_ID = '33333333-3333-4333-8333-333333333333';
 const AUDIO_URL = 'https://example.com/audio.wav';
 
 function createTestContext() {
@@ -85,6 +86,111 @@ describe('CommandExecutor', () => {
     expect(session.getState().tracks.get(TRACK_ID)?.regions).toHaveLength(0);
   });
 
+  it('REMOVE_TRACK 명령으로 트랙을 제거한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+
+    await commandExecutor.execute({
+      type: AudioCommandType.REMOVE_TRACK,
+      trackId: TRACK_ID,
+    });
+
+    expect(session.getState().tracks.has(TRACK_ID)).toBe(false);
+  });
+
+  it('SET_TEMPO 명령으로 프로젝트 템포를 변경한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+
+    await commandExecutor.execute({
+      type: AudioCommandType.SET_TEMPO,
+      tempo: 140,
+    });
+
+    expect(session.getState().tempo).toBe(140);
+  });
+
+  it('SET_TRACK_MUTE 명령으로 트랙을 음소거한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+
+    await commandExecutor.execute({
+      type: AudioCommandType.SET_TRACK_MUTE,
+      trackId: TRACK_ID,
+      muted: true,
+    });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.isMuted).toBe(true);
+  });
+
+  it('SET_TRACK_SOLO 명령으로 트랙을 Solo 상태로 변경한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+
+    await commandExecutor.execute({
+      type: AudioCommandType.SET_TRACK_SOLO,
+      trackId: TRACK_ID,
+      soloed: true,
+    });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.isSoloed).toBe(true);
+  });
+
+  it('SPLIT_REGION 명령은 겹친 Region 중 지정한 ID만 분할한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor);
+    await commandExecutor.execute({
+      type: AudioCommandType.LOAD_REGION,
+      trackId: TRACK_ID,
+      regionId: SECOND_REGION_ID,
+      url: AUDIO_URL,
+      startTime: 0,
+      duration: 5,
+    });
+
+    await commandExecutor.execute({
+      type: AudioCommandType.SPLIT_REGION,
+      trackId: TRACK_ID,
+      regionId: SECOND_REGION_ID,
+      splitTime: 2,
+    });
+
+    const regions = session.getState().tracks.get(TRACK_ID)?.regions ?? [];
+    expect(regions).toHaveLength(3);
+    expect(regions.find(region => region.id === REGION_ID)).toMatchObject({ startTime: 0, endTime: 5 });
+    expect(regions.some(region => region.id === SECOND_REGION_ID)).toBe(false);
+  });
+
+  it('SPLIT_REGION의 도메인 오류를 호출자에게 전달한다', async () => {
+    const { commandExecutor } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor);
+
+    await expect(
+      commandExecutor.execute({
+        type: AudioCommandType.SPLIT_REGION,
+        trackId: TRACK_ID,
+        regionId: REGION_ID,
+        splitTime: 0,
+      })
+    ).rejects.toMatchObject({ code: 'INVALID_SPLIT_POSITION' });
+  });
+
+  it('MOVE_REGION 명령으로 Region의 시작과 끝 위치를 함께 변경한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor);
+
+    await commandExecutor.execute({
+      type: AudioCommandType.MOVE_REGION,
+      trackId: TRACK_ID,
+      regionId: REGION_ID,
+      newStartTime: 3,
+    });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.regions[0]).toMatchObject({ startTime: 3, endTime: 8 });
+  });
+
   it('SET_EXPORT_RANGE 명령으로 내보내기 범위를 설정한다', async () => {
     const { commandExecutor, session } = createTestContext();
 
@@ -154,16 +260,5 @@ describe('CommandExecutor', () => {
     } as AudioCommand;
 
     await expect(commandExecutor.execute(invalidCommand)).rejects.toThrow();
-  });
-
-  it('아직 연결되지 않은 유효한 명령을 성공으로 처리하지 않는다', async () => {
-    const { commandExecutor } = createTestContext();
-
-    await expect(
-      commandExecutor.execute({
-        type: AudioCommandType.SET_TEMPO,
-        tempo: 120,
-      })
-    ).rejects.toThrow('Unsupported audio command: SET_TEMPO');
   });
 });

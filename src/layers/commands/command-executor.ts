@@ -4,6 +4,11 @@ import { AudioCommandSchema, AudioCommandType, type AudioCommand } from '../shar
 
 export type CommandExecutionResult = Blob | void;
 
+function throwUnsupportedCommand(command: never): never {
+  const commandType = (command as { type?: unknown }).type;
+  throw new Error(`Unsupported audio command: ${String(commandType)}`);
+}
+
 export class CommandExecutor {
   constructor(
     private readonly sessionStore: SessionStore,
@@ -20,6 +25,10 @@ export class CommandExecutor {
         await this.controller.track.addTrack(validatedCommand.url, validatedCommand.trackId);
         return;
 
+      case AudioCommandType.REMOVE_TRACK:
+        this.controller.track.removeTrack(validatedCommand.trackId);
+        return;
+
       case AudioCommandType.PLAY:
         await this.controller.playback.handlePlay();
         return;
@@ -30,6 +39,10 @@ export class CommandExecutor {
 
       case AudioCommandType.STOP:
         this.controller.playback.handleStop();
+        return;
+
+      case AudioCommandType.SET_TEMPO:
+        this.controller.playback.handleSetTempo(validatedCommand.tempo);
         return;
 
       case AudioCommandType.SET_CURRENT_TIME:
@@ -45,6 +58,14 @@ export class CommandExecutor {
 
       case AudioCommandType.SET_TRACK_PAN:
         this.controller.track.setPan(this.resolveTrackId(session, validatedCommand.trackId), validatedCommand.pan);
+        return;
+
+      case AudioCommandType.SET_TRACK_MUTE:
+        this.controller.track.setMute(validatedCommand.trackId, validatedCommand.muted);
+        return;
+
+      case AudioCommandType.SET_TRACK_SOLO:
+        this.controller.track.setSolo(validatedCommand.trackId, validatedCommand.soloed);
         return;
 
       case AudioCommandType.LOAD_REGION: {
@@ -68,6 +89,22 @@ export class CommandExecutor {
         return;
       }
 
+      case AudioCommandType.SPLIT_REGION:
+        await this.controller.region.splitRegionById({
+          trackId: validatedCommand.trackId,
+          regionId: validatedCommand.regionId,
+          splitTime: validatedCommand.splitTime,
+        });
+        return;
+
+      case AudioCommandType.MOVE_REGION:
+        this.controller.region.moveRegion({
+          trackId: validatedCommand.trackId,
+          regionId: validatedCommand.regionId,
+          newStartTime: validatedCommand.newStartTime,
+        });
+        return;
+
       case AudioCommandType.SET_EXPORT_RANGE:
         this.controller.export.setExportRange(validatedCommand.startTime, validatedCommand.endTime);
         return;
@@ -80,7 +117,7 @@ export class CommandExecutor {
         return this.controller.export.exportProject();
     }
 
-    throw new Error(`Unsupported audio command: ${validatedCommand.type}`);
+    return throwUnsupportedCommand(validatedCommand);
   }
 
   private resolveTrackId(session: SessionState, requestedTrackId?: string): string {
