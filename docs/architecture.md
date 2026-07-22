@@ -232,6 +232,25 @@ WebAssembly 실행 여부는 배포 환경에서 별도로 확인한다.
 
 ---
 
+## 8. 브라우저 오디오 런타임 전제조건
+
+`createApp()`은 시작할 때 브라우저 환경을 한 번 읽고 기능별 정적 전제조건을 계산한다.
+
+| 기능                    | 정적 전제조건                                                |
+| ----------------------- | ------------------------------------------------------------ |
+| AudioWorklet            | 보안 컨텍스트이고 AudioWorklet API가 노출됨                  |
+| 단일 스레드 WebAssembly | WebAssembly API가 노출됨                                     |
+| 공유 메모리             | 보안 컨텍스트, Cross-Origin Isolation, SharedArrayBuffer API |
+
+Cross-Origin Isolation이 없어도 AudioWorklet과 단일 스레드 WebAssembly 전제조건은 충족할 수 있다. 이 경우 공유
+메모리만 제한된다. Web UI 헤더는 이를 `고성능 전제조건 충족`, `공유 메모리 제한`, `기능 제한`으로 표시한다.
+
+브라우저 API 노출 확인은 실제 AudioWorklet 모듈 로딩이나 WebAssembly 컴파일 성공을 증명하지 않는다. Content Security
+Policy(CSP), 모듈 URL, 장치 상태를 포함한 실제 실행 검증은 AudioEngine 도입 단계에서 별도로 수행한다. 이 값은 읽기
+전용 환경 정보이므로 Session이나 AudioCommand를 거치지 않는다.
+
+---
+
 ## 참고
 
 - Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을 때 해당 ID로 `SPLIT_REGION`을 실행한다.

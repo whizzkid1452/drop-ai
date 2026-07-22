@@ -1,5 +1,6 @@
 import * as styles from '../../DawPage.css.ts';
 import { ExportButton } from '../ExportButton/ExportButton';
+import { AudioRuntimeStatus } from './AudioRuntimeStatus';
 import { TempoMetadataControl } from './TempoMetadataControl';
 
 interface DawHeaderProps {
@@ -11,6 +12,7 @@ export function DawHeader({ trackCount }: DawHeaderProps) {
     <div className={styles.header}>
       <h1 className={styles.title}>Tracks</h1>
       <div className={styles.headerRight}>
+        <AudioRuntimeStatus />
         <TempoMetadataControl />
         <span className={styles.trackCount}>{trackCount} tracks</span>
         <ExportButton />

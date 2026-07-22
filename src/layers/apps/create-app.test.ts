@@ -30,4 +30,23 @@ describe('createApp', () => {
 
     expect(app.session.getState().isPlaying).toBe(true);
   });
+
+  it('브라우저 오디오 환경을 읽기 전용 capability로 조립한다', () => {
+    const app = createApp({
+      audioEngine: new MockAudioEngine(),
+      audioRuntimeEnvironment: {
+        crossOriginIsolated: false,
+        hasAudioWorklet: true,
+        hasSharedArrayBuffer: false,
+        hasWebAssembly: true,
+        isSecureContext: true,
+      },
+    });
+
+    expect(app.audioRuntimeCapabilities).toMatchObject({
+      meetsAudioWorkletPreconditions: true,
+      meetsSharedMemoryPreconditions: false,
+      meetsWasmPreconditions: true,
+    });
+  });
 });
