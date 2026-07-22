@@ -4,10 +4,8 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { IAudioSourceStager } from '@/layers/audio-source-registry/i-audio-source-registry';
-import { AudioImportPostCommitError } from '@/layers/apps/web/audio-import-errors';
 import type { CommandExecutor } from '@/layers/commands/command-executor';
 import type { StagedWebAudioSource } from '@/layers/apps/web/hooks/stage-web-audio-source';
-import type { SessionState } from '@/layers/session/session';
 import type { AudioFileMetadata } from '@/utils/audio/convert-file-to-audio-file';
 import { AudioFileDrop } from './AudioFileDrop';
 
@@ -21,7 +19,6 @@ const basicFileDropMocks = vi.hoisted(() => ({
 }));
 
 const layerMocks = vi.hoisted(() => ({
-  addAudioFile: vi.fn<SessionState['addAudioFile']>(),
   stage: vi.fn<IAudioSourceStager['stage']>(),
   discardPending: vi.fn<IAudioSourceStager['discardPending']>(),
   execute: vi.fn<CommandExecutor['execute']>(),
@@ -56,8 +53,7 @@ vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
     execute: layerMocks.execute,
     executeMany: layerMocks.executeMany,
   }),
-  useSession: (selector: (state: { addAudioFile: SessionState['addAudioFile'] }) => unknown) =>
-    selector({ addAudioFile: layerMocks.addAudioFile }),
+  useSession: () => undefined,
 }));
 
 vi.mock('@/utils/audio/convert-file-to-audio-file', () => ({
@@ -118,7 +114,6 @@ afterEach(() => {
   });
   document.body.replaceChildren();
   basicFileDropMocks.onFileDrop = null;
-  layerMocks.addAudioFile.mockReset();
   layerMocks.stage.mockReset();
   layerMocks.discardPending.mockReset();
   layerMocks.execute.mockReset();
@@ -159,7 +154,6 @@ describe('AudioFileDrop', () => {
         stage: layerMocks.stage,
         discardPending: layerMocks.discardPending,
       },
-      addAudioFile: layerMocks.addAudioFile,
       stagedSource,
       trackId: TRACK_ID,
       regionId: REGION_ID,
@@ -218,34 +212,6 @@ describe('AudioFileDrop', () => {
 
     expect(onAudioFileDrop).not.toHaveBeenCalled();
     expect(alert).toHaveBeenCalledWith('오디오 파일을 가져오지 못했습니다: Region 보상 실패');
-  });
-
-  it('명령 성공 후 호환 목록 갱신 실패를 가져오기 실패와 구분한다', async () => {
-    const file = new File(['audio'], 'voice.wav', { type: 'audio/wav' });
-    const audioFileMetadata = createAudioFileMetadata(file);
-    const stagedSource = createStagedSource(audioFileMetadata);
-    const registrationFailure = new Error('Session 등록 실패');
-    const postCommitError = new AudioImportPostCommitError({
-      operation: 'audio-file-import',
-      failedStep: 'Session 호환 파일 목록 갱신',
-      cause: registrationFailure,
-    });
-    conversionMocks.convertFileToAudioFile.mockResolvedValue(audioFileMetadata);
-    stagingMocks.stageWebAudioSource.mockReturnValue(stagedSource);
-    executionMocks.executeAudioFileImport.mockRejectedValue(postCommitError);
-    vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce(TRACK_ID).mockReturnValueOnce(REGION_ID);
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const alert = vi.fn();
-    vi.stubGlobal('alert', alert);
-    const { onAudioFileDrop, onFileDrop } = renderAudioFileDrop();
-
-    await act(async () => onFileDrop(file));
-
-    expect(layerMocks.discardPending).not.toHaveBeenCalled();
-    expect(onAudioFileDrop).toHaveBeenCalledWith(stagedSource.audioFile);
-    expect(alert).toHaveBeenCalledWith(
-      '오디오 파일 가져오기는 완료됐지만 호환 파일 목록을 갱신하지 못했습니다: Session 등록 실패'
-    );
   });
 
   it('가져오기 성공 후 화면 callback 실패는 committed Source를 정리하지 않고 알린다', async () => {

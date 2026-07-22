@@ -12,12 +12,6 @@ interface AudioImportCompensationErrorOptions {
   readonly compensationFailures: readonly AudioImportCompensationFailure[];
 }
 
-interface AudioImportPostCommitErrorOptions {
-  readonly operation: AudioImportOperation;
-  readonly failedStep: string;
-  readonly cause: unknown;
-}
-
 export class AudioImportCompensationError extends Error {
   public readonly operation: AudioImportOperation;
   public readonly failedPhase: string;
@@ -29,17 +23,5 @@ export class AudioImportCompensationError extends Error {
     this.operation = operation;
     this.failedPhase = failedPhase;
     this.compensationFailures = [...compensationFailures];
-  }
-}
-
-export class AudioImportPostCommitError extends Error {
-  public readonly operation: AudioImportOperation;
-  public readonly failedStep: string;
-
-  constructor({ operation, failedStep, cause }: AudioImportPostCommitErrorOptions) {
-    super(`${operation}은 완료됐지만 ${failedStep}에 실패했습니다.`, { cause });
-    this.name = 'AudioImportPostCommitError';
-    this.operation = operation;
-    this.failedStep = failedStep;
   }
 }

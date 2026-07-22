@@ -1,7 +1,6 @@
-import type { AudioFile } from '@/types/audioFile';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
 import type { AudioFileMetadata } from '@/utils/audio/convert-file-to-audio-file';
-import { AudioImportCompensationError, AudioImportPostCommitError } from '@/layers/apps/web/audio-import-errors';
+import { AudioImportCompensationError } from '@/layers/apps/web/audio-import-errors';
 import type { StagedWebAudioSource } from './stage-web-audio-source';
 
 interface TrackRegionImportCommandOptions {
@@ -21,7 +20,6 @@ export interface ExecuteTrackRegionImportOptions {
   stageAudioSource: (audioFileMetadata: AudioFileMetadata) => StagedWebAudioSource;
   discardPendingSource: (sourceId: string) => void;
   executeCommand: (command: AudioCommand) => Promise<unknown>;
-  registerAudioFile: (url: string, audioFile: AudioFile) => void;
   notifyFailure: (message: string, error?: unknown) => void;
 }
 
@@ -93,7 +91,6 @@ export async function executeTrackRegionImport({
   stageAudioSource,
   discardPendingSource,
   executeCommand,
-  registerAudioFile,
   notifyFailure,
 }: ExecuteTrackRegionImportOptions): Promise<TrackRegionImportResult> {
   const audioFileMetadata = await convertAudioFile(file);
@@ -133,16 +130,6 @@ export async function executeTrackRegionImport({
       notifyFailure,
     });
     return 'failed';
-  }
-
-  try {
-    registerAudioFile(stagedAudioSource.objectUrl, stagedAudioSource.audioFile);
-  } catch (cause) {
-    throw new AudioImportPostCommitError({
-      operation: 'track-region-import',
-      failedStep: 'Session 호환 파일 목록 갱신',
-      cause,
-    });
   }
 
   return 'imported';

@@ -1,6 +1,5 @@
 import { createStore } from 'zustand/vanilla';
 import type { RegionStatus, TrackStatus } from '@/types/statusTypes';
-import type { AudioFile } from '@/types/audioFile';
 import type { AgentRunStatus, AgentStatus, Message } from '@/types/agent';
 import type { ProjectMetadata } from '../shared/types/project-document.schema';
 
@@ -56,9 +55,6 @@ export interface SessionState {
   agentRunStatus: AgentRunStatus;
   hasSuccessfulAgentResult: boolean;
 
-  /* Audio File State */
-  audioFiles: Map<string, AudioFile>;
-
   // Actions (Setters)
   setPlaying: (playing: boolean) => void;
   setCurrentTime: (time: number) => void;
@@ -80,9 +76,6 @@ export interface SessionState {
   setAgentRunStatus: (status: AgentRunStatus) => void;
   markAgentResultSuccessful: () => void;
   resetAgentWorkflow: () => void;
-
-  addAudioFile: (url: string, file: AudioFile) => void;
-  removeAudioFile: (url: string) => void;
 }
 
 export type SessionStore = ReturnType<typeof createSessionStore>;
@@ -110,9 +103,6 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     agentStatus: 'idle',
     agentRunStatus: 'idle',
     hasSuccessfulAgentResult: false,
-
-    /* Audio File State */
-    audioFiles: new Map(),
 
     /* Actions */
     setPlaying: playing => set({ isPlaying: playing }),
@@ -163,20 +153,6 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
         agentStatus: 'idle',
         agentRunStatus: 'idle',
         hasSuccessfulAgentResult: false,
-      }),
-
-    /* Audio File Actions */
-    addAudioFile: (url, file) =>
-      set(state => {
-        const newAudioFiles = new Map(state.audioFiles);
-        newAudioFiles.set(url, file);
-        return { audioFiles: newAudioFiles };
-      }),
-    removeAudioFile: url =>
-      set(state => {
-        const newAudioFiles = new Map(state.audioFiles);
-        newAudioFiles.delete(url);
-        return { audioFiles: newAudioFiles };
       }),
   }));
 }

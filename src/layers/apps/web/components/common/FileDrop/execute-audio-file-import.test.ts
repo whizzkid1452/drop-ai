@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IAudioSourceStager } from '@/layers/audio-source-registry/i-audio-source-registry';
-import { AudioImportCompensationError, AudioImportPostCommitError } from '@/layers/apps/web/audio-import-errors';
+import { AudioImportCompensationError } from '@/layers/apps/web/audio-import-errors';
 import {
   CommandBatchExecutionError,
   type CommandBatchExecutionResult,
@@ -8,7 +8,6 @@ import {
   type CommandExecutor,
 } from '@/layers/commands/command-executor';
 import type { StagedWebAudioSource } from '@/layers/apps/web/hooks/stage-web-audio-source';
-import type { SessionState } from '@/layers/session/session';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
 import { createAudioImportCommands } from './audio-import-commands';
 import { executeAudioFileImport } from './execute-audio-file-import';
@@ -21,7 +20,6 @@ const OBJECT_URL = 'blob:https://example.com/audio';
 const execute = vi.fn<(command: AudioCommand) => Promise<CommandExecutionResult>>();
 const executeMany = vi.fn<(commands: readonly AudioCommand[]) => Promise<CommandBatchExecutionResult>>();
 const discardPending = vi.fn<IAudioSourceStager['discardPending']>();
-const addAudioFile = vi.fn<SessionState['addAudioFile']>();
 const commandExecutor: Pick<CommandExecutor, 'execute' | 'executeMany'> = { execute, executeMany };
 const audioSourceStager: Pick<IAudioSourceStager, 'discardPending'> = { discardPending };
 
@@ -49,7 +47,6 @@ function executeImport(stagedSource = createStagedSource()) {
   return executeAudioFileImport({
     commandExecutor,
     audioSourceStager,
-    addAudioFile,
     stagedSource,
     trackId: TRACK_ID,
     regionId: REGION_ID,
@@ -89,10 +86,9 @@ describe('새 Track 오디오 파일 가져오기', () => {
     execute.mockReset();
     executeMany.mockReset();
     discardPending.mockReset();
-    addAudioFile.mockReset();
   });
 
-  it('명령 묶음이 성공한 뒤 Session에 호환 AudioFile을 등록한다', async () => {
+  it('명령 묶음이 성공하면 staged AudioFile을 반환한다', async () => {
     const stagedSource = createStagedSource();
     let resolveBatch!: (result: CommandBatchExecutionResult) => void;
     executeMany.mockImplementationOnce(
@@ -104,7 +100,6 @@ describe('새 Track 오디오 파일 가져오기', () => {
 
     const execution = executeImport(stagedSource);
 
-    expect(addAudioFile).not.toHaveBeenCalled();
     resolveBatch([undefined, undefined]);
 
     await expect(execution).resolves.toBe(stagedSource.audioFile);
@@ -112,27 +107,6 @@ describe('새 Track 오디오 파일 가져오기', () => {
     expect(executeMany).toHaveBeenCalledWith(
       createAudioImportCommands({ trackId: TRACK_ID, regionId: REGION_ID, stagedSource })
     );
-    expect(addAudioFile).toHaveBeenCalledWith(OBJECT_URL, stagedSource.audioFile);
-    expect(execute).not.toHaveBeenCalled();
-    expect(discardPending).not.toHaveBeenCalled();
-  });
-
-  it('명령 성공 후 Session 등록이 실패하면 post-commit 오류로 구분하고 committed Source를 보상하지 않는다', async () => {
-    const sessionError = new Error('Session 등록 실패');
-    executeMany.mockResolvedValueOnce([undefined, undefined]);
-    addAudioFile.mockImplementationOnce(() => {
-      throw sessionError;
-    });
-
-    const execution = executeImport();
-
-    await expect(execution).rejects.toMatchObject({
-      operation: 'audio-file-import',
-      failedStep: 'Session 호환 파일 목록 갱신',
-      cause: sessionError,
-    });
-    await expect(execution).rejects.toBeInstanceOf(AudioImportPostCommitError);
-
     expect(execute).not.toHaveBeenCalled();
     expect(discardPending).not.toHaveBeenCalled();
   });
@@ -145,7 +119,6 @@ describe('새 Track 오디오 파일 가져오기', () => {
 
     expect(execute).not.toHaveBeenCalled();
     expect(discardPending).toHaveBeenCalledWith(SOURCE_ID);
-    expect(addAudioFile).not.toHaveBeenCalled();
   });
 
   it('LOAD_REGION이 실패하면 생성한 Track을 제거한 뒤 pending Source를 정리한다', async () => {
@@ -158,7 +131,6 @@ describe('새 Track 오디오 파일 가져오기', () => {
     expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.REMOVE_TRACK, trackId: TRACK_ID });
     expect(discardPending).toHaveBeenCalledWith(SOURCE_ID);
     expect(execute.mock.invocationCallOrder[0]).toBeLessThan(discardPending.mock.invocationCallOrder[0]);
-    expect(addAudioFile).not.toHaveBeenCalled();
   });
 
   it('명령 묶음이 실행 전에 거부돼도 pending Source를 정리한다', async () => {

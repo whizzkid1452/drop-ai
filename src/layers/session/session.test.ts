@@ -71,6 +71,12 @@ describe('Session Store - Phase 1 검증', () => {
       expect(store.getState().tracks.size).toBe(0);
     });
 
+    it('재생 URL 기반 호환 파일 목록을 Session에 두지 않는다', () => {
+      expect(store.getState()).not.toHaveProperty('audioFiles');
+      expect(store.getState()).not.toHaveProperty('addAudioFile');
+      expect(store.getState()).not.toHaveProperty('removeAudioFile');
+    });
+
     it('Agent 대화와 실행 상태는 비어 있는 상태로 초기화되어야 함', () => {
       expect(store.getState().agentMessages).toEqual([]);
       expect(store.getState().agentStatus).toBe('idle');

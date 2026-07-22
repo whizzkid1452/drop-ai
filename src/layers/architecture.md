@@ -115,10 +115,9 @@ CommandExecutor로 실행한 뒤 pending Source 정리를 시도한다. 보상�
 `AudioImportCompensationError`에 원래 오류와 각 보상 오류를 함께 보존한다.
 Web JSON CLI도 파싱된 명령 배열을 `executeMany` 한 번으로 실행하고, 중간 실패 전 결과만 후처리한다. 기존 Track의
 `Region 추가`는 길이를 확인한 뒤 Blob을 stage하고 선택한 Track ID와 현재 시각으로 `sourceId` 기반 `LOAD_REGION`을 한 번
-실행한다. Command가 실패하면 stage 호출자가 `discardPending`을 실행한다. 성공한 파일만 URL 기반 Session 호환 상태에
-보관하며, Web UI는 Registry가 소유한 재생 URL을 직접 해제하지 않는다. Command 성공 뒤 Session 호환 등록만 실패하면
-`AudioImportPostCommitError`로 구분해 가져오기가 이미 완료됐음을 사용자에게 알린다. 새 프로젝트 화면 callback은 계속
-실행하고 Source를 정리하지 않는다.
+실행한다. Command가 실패하면 stage 호출자가 `discardPending`을 실행한다. Session은 재생 URL 기반 파일 목록을 보관하지
+않으며, Web UI는 Registry가 소유한 재생 URL을 직접 해제하지 않는다. 새 프로젝트 가져오기 성공 뒤 화면 callback이
+실패해도 이미 committed인 Source를 정리하지 않는다.
 
 ## Architecture (Layers)
 

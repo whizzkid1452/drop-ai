@@ -431,8 +431,8 @@ Adapter가 먼저 필요하다. 현재 단계에서는 Registry 계약·브라�
 
 production Web 파일 가져오기는 파일 metadata를 만든 뒤 Blob을 Registry에 `stage`한다. metadata 변환 단계는 재생용
 Object URL을 만들지 않는다. Web Adapter가 Source UUID를 만들고, Registry가 이를 검증·등록하면서 Object URL을 만든다.
-`ADD_TRACK`은 Track ID만으로 빈 Track을 만들고 Region 명령은 `sourceId`를 사용한다. Session `audioFiles`의 URL key만
-기존 소비자 호환을 위해 Registry URL을 임시로 사용한다.
+`ADD_TRACK`은 Track ID만으로 빈 Track을 만들고 Region 명령은 `sourceId`를 사용한다. Session은 재생 URL 기반 파일
+목록을 보관하지 않는다.
 Web UI는 이 재생 URL을 직접 해제하지 않는다. 길이 판독용 임시 URL과 Export 다운로드 URL은 각 기능이 계속 소유한다.
 
 새 Track 가져오기는 stage 성공 뒤 `ADD_TRACK`, `LOAD_REGION`을 하나의 `executeMany`에 전달한다. 첫 명령이 실패하면
@@ -441,10 +441,9 @@ pending Source만 정리한다. 두 번째 명령이 실패하면 별도 `REMOVE
 `AudioImportCompensationError`에 보존한다.
 기존 Track의 Region 가져오기는 유효한 길이를 stage 전에 확인한다. stage 뒤 `LOAD_REGION`이 실패하면 호출자가
 `discardPending`을 실행한다. Controller가 이미 정리한 Source라면 이 호출은 아무 작업도 하지 않는다. stage 자체가
-실패한 경우에는 같은 ID의 기존 Source를 잘못 제거할 수 있으므로 `discardPending`을 호출하지 않는다. Command 성공 뒤
-Session 호환 등록이 실패하면 `AudioImportPostCommitError`로 구분하고, UI는 가져오기가 이미 완료됐음을 알린다. 화면
-callback은 계속 실행해 완료된 프로젝트 화면으로 이동한다. callback 자체가 실패한 경우도 이미 committed인 Source는
-pending 정리하지 않는다. 이 보상은 여러 저장소를 묶는 원자적 transaction이 아니다.
+실패한 경우에는 같은 ID의 기존 Source를 잘못 제거할 수 있으므로 `discardPending`을 호출하지 않는다. 새 Track
+가져오기가 성공하면 화면 callback을 실행해 완료된 프로젝트 화면으로 이동한다. callback 자체가 실패한 경우도 이미
+committed인 Source는 pending 정리하지 않는다. 이 보상은 여러 저장소를 묶는 원자적 transaction이 아니다.
 
 ---
 

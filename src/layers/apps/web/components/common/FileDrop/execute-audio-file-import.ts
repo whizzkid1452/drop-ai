@@ -1,12 +1,10 @@
 import type { IAudioSourceStager } from '@/layers/audio-source-registry/i-audio-source-registry';
 import {
   AudioImportCompensationError,
-  AudioImportPostCommitError,
   type AudioImportCompensationFailure,
 } from '@/layers/apps/web/audio-import-errors';
 import { CommandBatchExecutionError, type CommandExecutor } from '@/layers/commands/command-executor';
 import type { StagedWebAudioSource } from '@/layers/apps/web/hooks/stage-web-audio-source';
-import type { SessionState } from '@/layers/session/session';
 import type { AudioFile } from '@/types/audioFile';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import { createAudioImportCommands } from './audio-import-commands';
@@ -14,7 +12,6 @@ import { createAudioImportCommands } from './audio-import-commands';
 interface ExecuteAudioFileImportOptions {
   commandExecutor: Pick<CommandExecutor, 'execute' | 'executeMany'>;
   audioSourceStager: Pick<IAudioSourceStager, 'discardPending'>;
-  addAudioFile: SessionState['addAudioFile'];
   stagedSource: StagedWebAudioSource;
   trackId: string;
   regionId: string;
@@ -65,7 +62,6 @@ function getFailedPhase(error: unknown): string {
 export async function executeAudioFileImport({
   commandExecutor,
   audioSourceStager,
-  addAudioFile,
   stagedSource,
   trackId,
   regionId,
@@ -94,16 +90,6 @@ export async function executeAudioFileImport({
     }
 
     throw cause;
-  }
-
-  try {
-    addAudioFile(stagedSource.objectUrl, stagedSource.audioFile);
-  } catch (cause) {
-    throw new AudioImportPostCommitError({
-      operation: 'audio-file-import',
-      failedStep: 'Session 호환 파일 목록 갱신',
-      cause,
-    });
   }
 
   return stagedSource.audioFile;

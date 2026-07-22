@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AudioImportCompensationError, AudioImportPostCommitError } from '@/layers/apps/web/audio-import-errors';
+import { AudioImportCompensationError } from '@/layers/apps/web/audio-import-errors';
 import type { AudioFileMetadata } from '@/utils/audio/convert-file-to-audio-file';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
 import type { StagedWebAudioSource } from './stage-web-audio-source';
@@ -49,7 +49,6 @@ function createExecutionOptions(overrides: Record<string, unknown> = {}) {
     stageAudioSource: vi.fn().mockReturnValue(stagedAudioSource),
     discardPendingSource: vi.fn(),
     executeCommand: vi.fn<(command: AudioCommand) => Promise<unknown>>().mockResolvedValue(undefined),
-    registerAudioFile: vi.fn(),
     notifyFailure: vi.fn(),
     ...overrides,
   };
@@ -76,7 +75,7 @@ describe('기존 Track Region 가져오기 명령', () => {
     });
   });
 
-  it('길이 검증 후 Source를 stage하고 Region 등록 성공 뒤 호환 audioFiles를 등록한다', async () => {
+  it('길이 검증 후 Source를 stage하고 Region을 등록한다', async () => {
     const options = createExecutionOptions();
 
     const result = await executeTrackRegionImport(options);
@@ -92,13 +91,10 @@ describe('기존 Track Region 가져오기 명령', () => {
         duration: 3.5,
       })
     );
-    expect(options.registerAudioFile).toHaveBeenCalledWith(AUDIO_URL, expect.objectContaining({ url: AUDIO_URL }));
     expect(options.discardPendingSource).not.toHaveBeenCalled();
+    expect(options.notifyFailure).not.toHaveBeenCalled();
     expect(options.stageAudioSource.mock.invocationCallOrder[0]).toBeLessThan(
       options.executeCommand.mock.invocationCallOrder[0]
-    );
-    expect(options.executeCommand.mock.invocationCallOrder[0]).toBeLessThan(
-      options.registerAudioFile.mock.invocationCallOrder[0]
     );
   });
 
@@ -165,7 +161,6 @@ describe('기존 Track Region 가져오기 명령', () => {
     expect(result).toBe('failed');
     expect(options.executeCommand).not.toHaveBeenCalled();
     expect(options.discardPendingSource).toHaveBeenCalledWith(SOURCE_ID);
-    expect(options.registerAudioFile).not.toHaveBeenCalled();
     expect(options.notifyFailure).toHaveBeenCalledWith(
       'Region을 추가하지 못했습니다. Region ID 생성 오류',
       commandCreationFailure
@@ -179,30 +174,8 @@ describe('기존 Track Region 가져오기 명령', () => {
     const result = await executeTrackRegionImport(options);
 
     expect(result).toBe('failed');
-    expect(options.registerAudioFile).not.toHaveBeenCalled();
     expect(options.discardPendingSource).toHaveBeenCalledWith(SOURCE_ID);
     expect(options.notifyFailure).toHaveBeenCalledWith('Region을 추가하지 못했습니다. 디코더 오류', commandFailure);
-  });
-
-  it('명령 성공 후 호환 audioFiles 등록이 실패하면 committed Source를 discard하지 않는다', async () => {
-    const registrationFailure = new Error('Session 등록 오류');
-    const options = createExecutionOptions({
-      registerAudioFile: vi.fn(() => {
-        throw registrationFailure;
-      }),
-    });
-
-    const execution = executeTrackRegionImport(options);
-
-    await expect(execution).rejects.toMatchObject({
-      operation: 'track-region-import',
-      failedStep: 'Session 호환 파일 목록 갱신',
-      cause: registrationFailure,
-    });
-    await expect(execution).rejects.toBeInstanceOf(AudioImportPostCommitError);
-
-    expect(options.executeCommand).toHaveBeenCalledTimes(1);
-    expect(options.discardPendingSource).not.toHaveBeenCalled();
   });
 
   it('명령 오류와 pending Source discard 오류를 구조화된 오류에 함께 보존한다', async () => {

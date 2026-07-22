@@ -1,5 +1,4 @@
 import { useRef, useState, type ChangeEvent } from 'react';
-import { AudioImportPostCommitError } from '@/layers/apps/web/audio-import-errors';
 import { useAudioSourceStager, useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
 import { executeTrackRegionImport } from '@/layers/apps/web/hooks/track-region-import-command';
 import { stageWebAudioSource } from '@/layers/apps/web/hooks/stage-web-audio-source';
@@ -37,7 +36,6 @@ export function TrackRegionImportControl({
   const commandExecutor = useCommandExecutor();
   const audioSourceStager = useAudioSourceStager();
   const currentTime = useSession(state => state.currentTime);
-  const addAudioFile = useSession(state => state.addAudioFile);
   const inputRef = useRef<HTMLInputElement>(null);
   const [isPending, setIsPending] = useState(false);
   const isDisabled = disabled || isPending;
@@ -73,7 +71,6 @@ export function TrackRegionImportControl({
         stageAudioSource: audioFileMetadata => stageWebAudioSource({ audioSourceStager, audioFileMetadata }),
         discardPendingSource: sourceId => audioSourceStager.discardPending(sourceId),
         executeCommand: command => commandExecutor.execute(command),
-        registerAudioFile: addAudioFile,
         notifyFailure: (message, error) => {
           if (error !== undefined) {
             console.error(error);
@@ -83,11 +80,6 @@ export function TrackRegionImportControl({
       });
     } catch (error) {
       console.error(error);
-      if (error instanceof AudioImportPostCommitError) {
-        window.alert(`Region 추가는 완료됐지만 호환 파일 목록을 갱신하지 못했습니다: ${getErrorMessage(error.cause)}`);
-        return;
-      }
-
       window.alert(`Region 파일 처리를 완료하지 못했습니다: ${getErrorMessage(error)}`);
     } finally {
       input.value = '';

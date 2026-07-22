@@ -1,8 +1,7 @@
 import type { AudioFile } from '@/types/audioFile';
 import { convertFileToAudioFile } from '@/utils/audio/convert-file-to-audio-file';
-import { AudioImportPostCommitError } from '@/layers/apps/web/audio-import-errors';
-import { useAudioSourceStager, useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
-import { stageWebAudioSource, type StagedWebAudioSource } from '@/layers/apps/web/hooks/stage-web-audio-source';
+import { useAudioSourceStager, useCommandExecutor } from '@/layers/apps/web/context/layer-hooks';
+import { stageWebAudioSource } from '@/layers/apps/web/hooks/stage-web-audio-source';
 import { useCallback } from 'react';
 import { BasicFileDrop } from './BasicFileDrop';
 import { executeAudioFileImport } from './execute-audio-file-import';
@@ -21,7 +20,6 @@ function reportFileDropFailure(message: string, error: unknown): void {
 }
 
 export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
-  const addAudioFile = useSession(state => state.addAudioFile);
   const commandExecutor = useCommandExecutor();
   const audioSourceStager = useAudioSourceStager();
 
@@ -46,26 +44,19 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
 
       const trackId = crypto.randomUUID();
       const regionId = crypto.randomUUID();
-      let stagedSource: StagedWebAudioSource | null = null;
       let uploadedAudioFile: AudioFile;
       try {
-        stagedSource = stageWebAudioSource({ audioSourceStager, audioFileMetadata });
+        const stagedSource = stageWebAudioSource({ audioSourceStager, audioFileMetadata });
         uploadedAudioFile = await executeAudioFileImport({
           commandExecutor,
           audioSourceStager,
-          addAudioFile,
           stagedSource,
           trackId,
           regionId,
         });
       } catch (error) {
-        if (error instanceof AudioImportPostCommitError && stagedSource !== null) {
-          reportFileDropFailure('오디오 파일 가져오기는 완료됐지만 호환 파일 목록을 갱신하지 못했습니다', error.cause);
-          uploadedAudioFile = stagedSource.audioFile;
-        } else {
-          reportFileDropFailure('오디오 파일을 가져오지 못했습니다', error);
-          return null;
-        }
+        reportFileDropFailure('오디오 파일을 가져오지 못했습니다', error);
+        return null;
       }
 
       try {
@@ -76,7 +67,7 @@ export const AudioFileDrop = ({ onAudioFileDrop }: AudioFileDropProps) => {
 
       return uploadedAudioFile;
     },
-    [addAudioFile, audioSourceStager, commandExecutor, onAudioFileDrop]
+    [audioSourceStager, commandExecutor, onAudioFileDrop]
   );
 
   return (
