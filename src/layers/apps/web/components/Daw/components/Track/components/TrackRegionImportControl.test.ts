@@ -4,7 +4,6 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { IAudioSourceStager } from '@/layers/audio-source-registry/i-audio-source-registry';
-import type { AudioFile } from '@/types/audioFile';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
 import type { AudioFileMetadata } from '@/utils/audio/convert-file-to-audio-file';
 import { MAX_FILE_SIZE } from '@/layers/apps/web/components/common/FileDrop/constants/audioConstants';
@@ -66,7 +65,7 @@ function createAudioFileMetadata(file: File): AudioFileMetadata {
   };
 }
 
-function stageAudioFile(audioFileMetadata: AudioFileMetadata): AudioFile {
+function stageAudioFile(audioFileMetadata: AudioFileMetadata): AudioFileMetadata {
   layerMocks.stage.mockImplementationOnce(registration => ({
     metadata: registration.metadata,
     objectUrl: AUDIO_URL,
@@ -74,7 +73,7 @@ function stageAudioFile(audioFileMetadata: AudioFileMetadata): AudioFile {
     regionIds: [],
   }));
 
-  return { ...audioFileMetadata, url: AUDIO_URL };
+  return audioFileMetadata;
 }
 
 function createDeferred<T>(): Deferred<T> {

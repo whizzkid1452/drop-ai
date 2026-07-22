@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { IAudioSourceStager } from '@/layers/audio-source-registry/i-audio-source-registry';
+import type { AudioFile } from '@/types/audioFile';
 import type { AudioFileMetadata } from '@/utils/audio/convert-file-to-audio-file';
-import { stageWebAudioSource } from './stage-web-audio-source';
+import { stageWebAudioSource, type StagedWebAudioSource } from './stage-web-audio-source';
 
 const SOURCE_ID = '11111111-1111-4111-8111-111111111111';
 const OBJECT_URL = 'blob:https://example.com/source';
@@ -22,7 +23,13 @@ function createAudioFileMetadata(duration: number | undefined): AudioFileMetadat
 }
 
 describe('stageWebAudioSource', () => {
-  it('파일과 메타데이터를 Source로 stage하고 호환 AudioFile을 만든다', () => {
+  it('공개 파일 정보 타입에 재생 URL과 정리 함수를 포함하지 않는다', () => {
+    expectTypeOf<AudioFile>().not.toHaveProperty('url');
+    expectTypeOf<AudioFile>().not.toHaveProperty('dispose');
+    expectTypeOf<StagedWebAudioSource>().not.toHaveProperty('objectUrl');
+  });
+
+  it('파일을 Source로 stage하고 URL 없는 파일 정보를 반환한다', () => {
     const audioFileMetadata = createAudioFileMetadata(3.5);
     const stage = vi.fn<IAudioSourceStager['stage']>().mockReturnValue({
       metadata: {
@@ -55,13 +62,11 @@ describe('stageWebAudioSource', () => {
     });
     expect(result).toEqual({
       sourceId: SOURCE_ID,
-      objectUrl: OBJECT_URL,
-      audioFile: {
-        ...audioFileMetadata,
-        url: OBJECT_URL,
-      },
+      audioFile: audioFileMetadata,
     });
-    expect(result.audioFile.url).toBe(result.objectUrl);
+    expect(result).not.toHaveProperty('objectUrl');
+    expect(result.audioFile).not.toHaveProperty('url');
+    expect(result.audioFile).not.toBe(audioFileMetadata);
   });
 
   it('길이를 모르는 파일은 null duration을 가진 Source로 stage한다', () => {

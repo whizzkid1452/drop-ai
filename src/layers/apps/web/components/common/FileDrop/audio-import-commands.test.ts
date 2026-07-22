@@ -6,14 +6,11 @@ import { createAudioImportCommands } from './audio-import-commands';
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
 const SOURCE_ID = '33333333-3333-4333-8333-333333333333';
-const OBJECT_URL = 'blob:https://example.com/audio';
-
 function createStagedSource({ duration }: { duration?: number } = { duration: 12.5 }): StagedWebAudioSource {
   const file = new File(['audio'], 'sample.wav', { type: 'audio/wav' });
 
   return {
     sourceId: SOURCE_ID,
-    objectUrl: OBJECT_URL,
     audioFile: {
       file,
       name: file.name,
@@ -22,7 +19,6 @@ function createStagedSource({ duration }: { duration?: number } = { duration: 12
       type: file.type,
       duration,
       formattedDuration: duration === undefined ? undefined : '0:12',
-      url: OBJECT_URL,
       volume: 1,
     },
   };

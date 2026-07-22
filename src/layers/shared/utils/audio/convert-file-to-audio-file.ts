@@ -3,7 +3,7 @@ import { getFileDuration } from './get-audio-metadata';
 import { formatDuration } from '@/utils/audio/formatDuration';
 import { formatFileSize } from '@/utils/audio/formatFileSize';
 
-export type AudioFileMetadata = Omit<AudioFile, 'url' | 'dispose'>;
+export type AudioFileMetadata = AudioFile;
 
 export async function convertFileToAudioFile(file: File): Promise<AudioFileMetadata | null> {
   try {

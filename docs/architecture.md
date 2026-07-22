@@ -431,6 +431,7 @@ Adapter가 먼저 필요하다. 현재 단계에서는 Registry 계약·브라�
 
 production Web 파일 가져오기는 파일 metadata를 만든 뒤 Blob을 Registry에 `stage`한다. metadata 변환 단계는 재생용
 Object URL을 만들지 않는다. Web Adapter가 Source UUID를 만들고, Registry가 이를 검증·등록하면서 Object URL을 만든다.
+Web Adapter 반환값도 URL 없는 파일 metadata와 Source UUID만 제공한다. 재생 URL은 Web 파일 정보로 전달하지 않는다.
 `ADD_TRACK`은 Track ID만으로 빈 Track을 만들고 Region 명령은 `sourceId`를 사용한다. Session은 재생 URL 기반 파일
 목록을 보관하지 않는다.
 Web UI는 이 재생 URL을 직접 해제하지 않는다. 길이 판독용 임시 URL과 Export 다운로드 URL은 각 기능이 계속 소유한다.

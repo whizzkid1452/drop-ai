@@ -15,8 +15,6 @@ import { executeAudioFileImport } from './execute-audio-file-import';
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
 const SOURCE_ID = '33333333-3333-4333-8333-333333333333';
-const OBJECT_URL = 'blob:https://example.com/audio';
-
 const execute = vi.fn<(command: AudioCommand) => Promise<CommandExecutionResult>>();
 const executeMany = vi.fn<(commands: readonly AudioCommand[]) => Promise<CommandBatchExecutionResult>>();
 const discardPending = vi.fn<IAudioSourceStager['discardPending']>();
@@ -28,7 +26,6 @@ function createStagedSource(): StagedWebAudioSource {
 
   return {
     sourceId: SOURCE_ID,
-    objectUrl: OBJECT_URL,
     audioFile: {
       file,
       name: file.name,
@@ -37,7 +34,6 @@ function createStagedSource(): StagedWebAudioSource {
       type: file.type,
       duration: 12.5,
       formattedDuration: '0:12',
-      url: OBJECT_URL,
       volume: 1,
     },
   };

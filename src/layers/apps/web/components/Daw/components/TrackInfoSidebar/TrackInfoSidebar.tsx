@@ -12,8 +12,6 @@ export function TrackInfoSidebar() {
       ...acc,
       [track.id]: {
         ...track,
-        // Optional: simplify complex objects if needed,
-        // e.g. replacing AudioFile blob with url
       },
     }),
     {}

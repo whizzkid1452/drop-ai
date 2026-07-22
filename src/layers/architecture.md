@@ -99,8 +99,9 @@ Source 전환만 실패했다면 Engine과 Registry를 기존 Region 상태로 �
 조립하되 Apps에는 등록용 `IAudioSourceStager`와 조회용 `IAudioSourceResolver`만 노출한다. 전체
 `IAudioSourceRegistry`와 구체 구현은 Composition Root 밖에 노출하지 않는다. Track·Region Controller에는 같은
 Registry의 전체 계약을 주입하고, 조회만 필요한 Export에는 `IAudioSourceResolver`를 주입한다. 기존 업로드가 Blob을
-stage하는 Web Adapter는 등록용 계약만 사용한다. 파일 metadata 변환은 재생용 URL을 만들지 않으며, Registry가 반환한
-Object URL과 Source UUID로 호환 `AudioFile`과 `sourceId` 명령을 만든다.
+stage하는 Web Adapter는 등록용 계약만 사용한다. 파일 metadata 변환과 Web Adapter 반환값에는 재생용 URL을 넣지 않는다.
+Web Adapter는 Registry URL을 반환값에 노출하지 않고 `sourceId` 명령을 만든다. 재생 소비자는 Resolver에 Source UUID를
+전달해 런타임 Source를 조회한다.
 ProjectDocument Mapper와 저장·불러오기는 기존 URL Region 제거와 OPFS 원본 저장소를 완료한 뒤 연결한다.
 
 Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을 때 그 ID로 `SPLIT_REGION`을 실행한다. Region

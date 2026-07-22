@@ -12,8 +12,6 @@ import { AudioFileDrop } from './AudioFileDrop';
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
 const SOURCE_ID = '33333333-3333-4333-8333-333333333333';
-const OBJECT_URL = 'blob:https://example.com/audio';
-
 const basicFileDropMocks = vi.hoisted(() => ({
   onFileDrop: null as ((file: File) => Promise<void>) | null,
 }));
@@ -88,8 +86,7 @@ function createAudioFileMetadata(file: File): AudioFileMetadata {
 function createStagedSource(audioFileMetadata: AudioFileMetadata): StagedWebAudioSource {
   return {
     sourceId: SOURCE_ID,
-    objectUrl: OBJECT_URL,
-    audioFile: { ...audioFileMetadata, url: OBJECT_URL },
+    audioFile: audioFileMetadata,
   };
 }
 

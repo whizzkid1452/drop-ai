@@ -5,7 +5,6 @@ import type { AudioFileMetadata } from '@/utils/audio/convert-file-to-audio-file
 
 export interface StagedWebAudioSource {
   sourceId: string;
-  objectUrl: string;
   audioFile: AudioFile;
 }
 
@@ -38,10 +37,6 @@ export function stageWebAudioSource({
 
   return {
     sourceId: stagedSource.metadata.id,
-    objectUrl: stagedSource.objectUrl,
-    audioFile: {
-      ...audioFileMetadata,
-      url: stagedSource.objectUrl,
-    },
+    audioFile: { ...audioFileMetadata },
   };
 }
