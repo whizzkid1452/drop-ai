@@ -304,9 +304,20 @@ v1은 이 상태를 손실 없이 저장하기 위해 길이 0과 `startTimeSeco
 
 원본 오디오 바이트는 Source UUID를 키로 사용하는 별도 저장소에 둔다. 프로젝트를 다시 열 때 새 Object URL을 만들고
 런타임 Source Registry에서 관리한다. 현재 Session은 ProjectDocument의 `project` 형식과 같은 프로젝트 metadata를
-가지며, `createApp`이 새 UUID·기본 이름·revision 0을 만들거나 검증을 마친 기존 metadata를 주입한다. 전체 Session
-변환과 화면의 저장·불러오기 기능은 아직 없다. Undo 이력도 snapshot 문서에 넣지 않고 후속 Undo Journal에서 별도로
-관리한다.
+가지며, `createApp`이 새 UUID·기본 이름·revision 0을 만들거나 검증을 마친 기존 metadata를 주입한다.
+
+`ProjectDocumentMapper`는 Store·Repository·Registry를 호출하지 않는 순수 변환 계층이다. 저장할 때 Session의 프로젝트
+metadata, tempo, master volume, Export 범위, Track·Region과 호출자가 전달한 committed Source metadata를 문서로 만든다.
+참조되지 않는 committed Source도 보존하며, pending 여부는 metadata만으로 판별할 수 없으므로 호출자가 제외해야 한다.
+복원할 때는 Session용 snapshot과 Source metadata를 분리해 반환한다. Track Map 삽입 순서와 Region·Source 입력 순서를
+유지하고 임의 정렬하지 않는다. Region `endTime`은 `startTime + duration`으로 다시 계산하며 Track·Region status는 빈
+배열로 초기화한다. 재생 여부, playhead, Agent 상태는 Mapper 결과에 포함하지 않고 후속 Controller가 교체 정책을 정한다.
+
+Mapper는 Export 범위의 부분 `null`, Track Map key와 Track ID 불일치, 허용 오차를 초과한 Region 끝 시각 불일치를
+거부한다. 끝 시각 비교는 절대 오차 `1e-9`초와 숫자 크기에 비례한 `Number.EPSILON * magnitude * 4` 중 큰 값을 허용한다.
+최종 문서는 기존 `ProjectDocumentSchema`로 검증하고, 역변환 입력은 `readProjectDocument`로 다시 검증·복제한다. 현재
+화면의 저장·불러오기 기능과 Session 전체 교체 Action은 아직 없다. Undo 이력도 snapshot 문서에 넣지 않고 후속 Undo
+Journal에서 별도로 관리한다.
 
 ---
 

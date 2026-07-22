@@ -19,6 +19,7 @@ const audioSourceRepositoryRoot = path.join(layersRoot, 'audio-source-repository
 const audioSourceRegistryRoot = path.join(layersRoot, 'audio-source-registry');
 const controllersRoot = path.join(layersRoot, 'controllers');
 const commandRoot = path.join(layersRoot, 'commands');
+const projectDocumentMapperRoot = path.join(layersRoot, 'project-document-mapper');
 const queriesRoot = path.join(layersRoot, 'queries');
 const projectRepositoryRoot = path.join(layersRoot, 'project-repository');
 const sessionRoot = path.join(layersRoot, 'session');
@@ -418,12 +419,42 @@ describe('레이어 의존성 규칙', () => {
   });
 
   it('Session은 상위 계층과 AudioEngine을 import하지 않는다', () => {
-    const forbiddenRoots = [commandRoot, controllersRoot, queriesRoot, audioEngineRoot];
+    const forbiddenRoots = [commandRoot, controllersRoot, projectDocumentMapperRoot, queriesRoot, audioEngineRoot];
     const violations = sourceImports.filter(sourceImport => {
       return (
         isInside(sourceImport.importerPath, sessionRoot) &&
         (isAppSource(sourceImport.resolvedPath) ||
           forbiddenRoots.some(directoryPath => isInside(sourceImport.resolvedPath, directoryPath)))
+      );
+    });
+
+    expect(formatViolations(violations)).toEqual([]);
+  });
+
+  it('ProjectDocumentMapper는 Session과 Shared 외 다른 계층을 import하지 않는다', () => {
+    const violations = sourceImports.filter(sourceImport => {
+      return (
+        isInside(sourceImport.importerPath, projectDocumentMapperRoot) &&
+        !isTestFile(sourceImport.importerPath) &&
+        sourceImport.resolvedPath !== undefined &&
+        (isAppSource(sourceImport.resolvedPath) ||
+          (isInside(sourceImport.resolvedPath, layersRoot) &&
+            !isInside(sourceImport.resolvedPath, projectDocumentMapperRoot) &&
+            !isInside(sourceImport.resolvedPath, sessionRoot) &&
+            !isInside(sourceImport.resolvedPath, sharedRoot)))
+      );
+    });
+
+    expect(formatViolations(violations)).toEqual([]);
+  });
+
+  it('ProjectDocumentMapper는 Controllers 밖의 production 계층에서 직접 사용하지 않는다', () => {
+    const violations = sourceImports.filter(sourceImport => {
+      return (
+        !isTestFile(sourceImport.importerPath) &&
+        !isInside(sourceImport.importerPath, projectDocumentMapperRoot) &&
+        isInside(sourceImport.resolvedPath, projectDocumentMapperRoot) &&
+        !isInside(sourceImport.importerPath, controllersRoot)
       );
     });
 

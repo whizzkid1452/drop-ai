@@ -38,12 +38,19 @@ Session과 AudioCommand에는 저장하지 않는다. API 존재 확인은 실�
 
 영구 저장 형식은 Shared의 `ProjectDocumentSchema`로 검증한다. v1은 Track·Region과 오디오 Source 메타데이터를
 절대 초 단위로 저장하고, Region은 임시 URL이 아닌 안정적인 Source ID를 참조한다. `File`, `Blob`, Object URL,
-AudioBuffer, 함수, 재생 중 상태, Agent·UI 상태는 ProjectDocument에 넣지 않는다. 현재는 문서 계약과 metadata
-Adapter와 ProjectDocument의 `project` 형식을 그대로 쓰는 Session 프로젝트 metadata까지만 있다. `createApp`은 새 프로젝트의
-UUID·이름·revision 0을 만들거나 검증을 마친 기존 metadata를 Session에 주입한다. `project.revision`은 편집 횟수나
-저장 여부가 아니라 마지막 성공 저장 snapshot의 동시성 제어 값이다. 일반 편집과 Undo에서는 바꾸지 않으며, 후속 저장
-Controller가 Repository의 성공 결과를 받았을 때만 교체한다. 전체 Session 변환, 마이그레이션, Undo는 각각 후속 목적
-단위에서 추가한다.
+AudioBuffer, 함수, 재생 중 상태, Agent·UI 상태는 ProjectDocument에 넣지 않는다. `ProjectDocumentMapper`는 Store나
+Repository를 호출하지 않고 Session의 저장 대상 snapshot과 committed Source metadata를 ProjectDocument로 변환한다.
+역변환은 Session용 snapshot과 Source metadata를 분리해 반환한다. Track은 Map 삽입 순서, Region과 Source는 입력 배열
+순서를 유지한다. Region `endTime`은 저장하지 않고 `startTime + duration`으로 복원하며, Track·Region status는 빈 배열로
+초기화한다. Export 범위의 한쪽만 `null`인 상태, Track Map key와 Track ID 불일치, 허용 오차를 초과한 Region 끝 시각
+불일치는 손실을 숨기지 않고 오류로 거부한다. Region 끝 시각 비교는 절대 오차 `1e-9`초와 숫자 크기에 비례한
+`Number.EPSILON * magnitude * 4` 중 큰 값을 허용한다. Mapper는 Session과 Shared만 의존하며 Controllers 밖의
+production 계층에서 직접 사용하지 않는다.
+
+`createApp`은 새 프로젝트의 UUID·이름·revision 0을 만들거나 검증을 마친 기존 metadata를 Session에 주입한다.
+`project.revision`은 편집 횟수나 저장 여부가 아니라 마지막 성공 저장 snapshot의 동시성 제어 값이다. 일반 편집과
+Undo에서는 바꾸지 않으며, 후속 저장 Controller가 Repository의 성공 결과를 받았을 때만 교체한다. 전체 Session 교체,
+문서 마이그레이션, Undo는 각각 후속 목적 단위에서 추가한다.
 신뢰할 수 없는 JSON은 `readProjectDocumentJson`으로 문법을 확인하고, `readProjectDocument`로 식별자·버전·본문 순서로
 검증한다. 객체 입력은 자기 소유 열거 가능 데이터 속성만 문서 필드로 인정한다. 현재 지원 버전은 실제 형식이 정의된
 v1뿐이며, 정의되지 않은 버전을 임의 변환하지 않는다.
