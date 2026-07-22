@@ -24,7 +24,7 @@ export const TrackComponent = memo(function TrackComponent({
   mediaElement: HTMLMediaElement | null;
   track: TrackState;
   pixelsPerSecond: number;
-  onReady: (trackId: string, ws: WaveSurfer) => void;
+  onReady: (trackId: string, regionId: string, ws: WaveSurfer) => void;
   onVolumeChange: (trackId: string, volume: number) => void;
   onPanChange: (trackId: string, pan: number) => void;
   onMuteChange: (muted: boolean) => Promise<TrackToggleResult>;
@@ -103,7 +103,7 @@ export const TrackComponent = memo(function TrackComponent({
             key={region.id}
             region={region}
             pixelsPerSecond={pixelsPerSecond}
-            onReady={ws => onReady(track.id, ws)}
+            onReady={ws => onReady(track.id, region.id, ws)}
             onMove={newStartTime => handleMoveRegion(region.id, newStartTime)}
             onRemove={() => handleRemoveRegion(region.id)}
           />

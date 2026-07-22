@@ -2,7 +2,11 @@
 import type WaveSurfer from 'wavesurfer.js';
 import { useErrorBoundary } from 'react-error-boundary';
 import { TrackComponent } from '../Track/TrackComponent';
-import { pruneWaveSurferInstances } from './prune-wave-surfer-instances';
+import {
+  createRegionWaveSurferKey,
+  pruneWaveSurferInstances,
+  registerWaveSurferInstance,
+} from './prune-wave-surfer-instances';
 import * as styles from './TrackList.css.ts';
 import { Cursor } from '@/layers/apps/web/components/Cursor/Cursor';
 import { useCommandExecutor, useSession } from '@/layers/apps/web/context/LayerContext';
@@ -23,9 +27,13 @@ export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProp
   const [wavesurferInstances, setWavesurferInstances] = useState<Map<string, WaveSurfer>>(new Map());
 
   useEffect(() => {
-    const activeTrackIds = new Set(tracks.keys());
+    const activeRegionKeys = new Set(
+      Array.from(tracks.values()).flatMap(track =>
+        track.regions.map(region => createRegionWaveSurferKey({ trackId: track.id, regionId: region.id }))
+      )
+    );
     setWavesurferInstances(currentInstances =>
-      pruneWaveSurferInstances({ instances: currentInstances, activeTrackIds })
+      pruneWaveSurferInstances({ instances: currentInstances, activeRegionKeys })
     );
   }, [tracks]);
 
@@ -91,12 +99,10 @@ export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProp
     [commandExecutor, showBoundary]
   );
 
-  const handleReady = useCallback((trackId: string, ws: WaveSurfer) => {
-    setWavesurferInstances(prev => {
-      const newMap = new Map(prev);
-      newMap.set(trackId, ws);
-      return newMap;
-    });
+  const handleReady = useCallback((trackId: string, regionId: string, ws: WaveSurfer) => {
+    setWavesurferInstances(currentInstances =>
+      registerWaveSurferInstance({ instances: currentInstances, trackId, regionId, instance: ws })
+    );
   }, []);
 
   const handleRemoveTrack = useCallback(
@@ -141,7 +147,11 @@ export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProp
       <div ref={containerRef} className={styles.tracksContainer}>
         <Cursor pixelsPerSecond={pixelsPerSecond} />
         {trackArray.map(track => {
-          const thisWs = wavesurferInstances.get(track.id);
+          const thisWs = track.regions
+            .map(region =>
+              wavesurferInstances.get(createRegionWaveSurferKey({ trackId: track.id, regionId: region.id }))
+            )
+            .find(instance => instance !== undefined);
           const thisMedia = thisWs?.getMediaElement();
 
           return (

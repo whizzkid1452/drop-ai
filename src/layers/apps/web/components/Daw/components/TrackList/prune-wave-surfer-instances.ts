@@ -2,17 +2,42 @@ import type WaveSurfer from 'wavesurfer.js';
 
 interface PruneWaveSurferInstancesOptions {
   instances: Map<string, WaveSurfer>;
-  activeTrackIds: ReadonlySet<string>;
+  activeRegionKeys: ReadonlySet<string>;
+}
+
+interface RegionWaveSurferIdentity {
+  trackId: string;
+  regionId: string;
+}
+
+interface RegisterWaveSurferInstanceOptions extends RegionWaveSurferIdentity {
+  instances: Map<string, WaveSurfer>;
+  instance: WaveSurfer;
+}
+
+export function createRegionWaveSurferKey({ trackId, regionId }: RegionWaveSurferIdentity): string {
+  return JSON.stringify([trackId, regionId]);
+}
+
+export function registerWaveSurferInstance({
+  instances,
+  trackId,
+  regionId,
+  instance,
+}: RegisterWaveSurferInstanceOptions): Map<string, WaveSurfer> {
+  const nextInstances = new Map(instances);
+  nextInstances.set(createRegionWaveSurferKey({ trackId, regionId }), instance);
+  return nextInstances;
 }
 
 export function pruneWaveSurferInstances({
   instances,
-  activeTrackIds,
+  activeRegionKeys,
 }: PruneWaveSurferInstancesOptions): Map<string, WaveSurfer> {
-  const hasRemovedTrack = Array.from(instances.keys()).some(trackId => !activeTrackIds.has(trackId));
-  if (!hasRemovedTrack) {
+  const hasRemovedRegion = Array.from(instances.keys()).some(regionKey => !activeRegionKeys.has(regionKey));
+  if (!hasRemovedRegion) {
     return instances;
   }
 
-  return new Map(Array.from(instances).filter(([trackId]) => activeTrackIds.has(trackId)));
+  return new Map(Array.from(instances).filter(([regionKey]) => activeRegionKeys.has(regionKey)));
 }
