@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const AudioCommandType = {
+  ADD_TRACK: 'ADD_TRACK',
   PLAY: 'PLAY',
   PAUSE: 'PAUSE',
   STOP: 'STOP',
@@ -25,6 +26,11 @@ export type AudioCommandType = (typeof AudioCommandType)[keyof typeof AudioComma
  */
 
 export const AudioCommandSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal(AudioCommandType.ADD_TRACK),
+    trackId: z.uuid('Invalid track ID format'),
+    url: z.url('Invalid audio URL format'),
+  }),
   z.object({
     type: z.literal(AudioCommandType.PLAY),
   }),
