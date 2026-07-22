@@ -1,21 +1,17 @@
-import type { AppController } from '../../../controllers/app-controller';
-import { executeAudioCommand } from '../../../controllers/utils/command-dispatcher';
-import type { SessionState } from '../../../session/session';
+import type { CommandExecutor } from '../../../commands/command-executor';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
 import { downloadBlob } from '../components/Daw/components/ExportButton/utils/audioExport';
 
 interface ExecuteWebAudioCommandOptions {
-  controller: AppController;
-  session: SessionState;
+  commandExecutor: CommandExecutor;
   command: AudioCommand;
 }
 
 export async function executeWebAudioCommand({
-  controller,
-  session,
+  commandExecutor,
   command,
 }: ExecuteWebAudioCommandOptions): Promise<void> {
-  const result = await executeAudioCommand({ controller, session, command });
+  const result = await commandExecutor.execute(command);
   if (!(result instanceof Blob)) return;
 
   const filename = command.type === AudioCommandType.EXPORT_AUDIO ? command.filename || 'export' : 'export';

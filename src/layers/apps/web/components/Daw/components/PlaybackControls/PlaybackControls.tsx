@@ -1,7 +1,8 @@
 import { ErrorBoundary, useErrorBoundary, type FallbackProps } from 'react-error-boundary';
 import * as styles from './PlaybackControls.css.ts';
 import { AudioEngineError, getUserFriendlyMessage } from '@/layers/audio-engine/errors';
-import { useController, useSession } from '@/layers/apps/web/context/LayerContext';
+import { useCommandExecutor, useSession } from '@/layers/apps/web/context/LayerContext';
+import { AudioCommandType } from '@/types/audioCommand.schema';
 
 type PlaybackControlsLayout = 'floating' | 'inline';
 
@@ -32,13 +33,13 @@ interface PlaybackControlsContentProps {
 }
 
 function PlaybackControlsContent({ layout }: PlaybackControlsContentProps) {
-  const controller = useController();
+  const commandExecutor = useCommandExecutor();
   const isPlaying = useSession(state => state.isPlaying);
   const { showBoundary } = useErrorBoundary();
 
   const handlePlay = async () => {
     try {
-      await controller.playback.handlePlay();
+      await commandExecutor.execute({ type: AudioCommandType.PLAY });
     } catch (error) {
       showBoundary(error);
     }
@@ -46,7 +47,7 @@ function PlaybackControlsContent({ layout }: PlaybackControlsContentProps) {
 
   const handlePause = async () => {
     try {
-      controller.playback.handlePause();
+      await commandExecutor.execute({ type: AudioCommandType.PAUSE });
     } catch (error) {
       showBoundary(error);
     }
@@ -54,7 +55,7 @@ function PlaybackControlsContent({ layout }: PlaybackControlsContentProps) {
 
   const handleStop = async () => {
     try {
-      controller.playback.handleStop();
+      await commandExecutor.execute({ type: AudioCommandType.STOP });
     } catch (error) {
       showBoundary(error);
     }

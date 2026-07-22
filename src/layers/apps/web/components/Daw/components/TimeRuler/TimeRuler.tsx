@@ -1,8 +1,9 @@
 import { memo, useMemo, useRef, useState, useEffect } from 'react';
 import * as styles from './TimeRuler.css.ts';
 import type { Track } from '@/types/track';
-import { useSession, useController } from '@/layers/apps/web/context/LayerContext';
+import { useCommandExecutor, useSession } from '@/layers/apps/web/context/LayerContext';
 import { useErrorBoundary } from 'react-error-boundary';
+import { AudioCommandType } from '@/types/audioCommand.schema';
 
 // ...
 
@@ -15,7 +16,7 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
   const exportStartTime = useSession(state => state.exportStartTime);
   const exportEndTime = useSession(state => state.exportEndTime);
 
-  const controller = useController();
+  const commandExecutor = useCommandExecutor();
 
   const trackArray = Array.from(tracks.values()) as unknown as Track[];
 
@@ -58,7 +59,11 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
 
       if (currentDragRangeRef.current) {
         try {
-          controller.export.setExportRange(currentDragRangeRef.current.start, currentDragRangeRef.current.end);
+          await commandExecutor.execute({
+            type: AudioCommandType.SET_EXPORT_RANGE,
+            startTime: currentDragRangeRef.current.start,
+            endTime: currentDragRangeRef.current.end,
+          });
         } catch (error) {
           showBoundary(error);
         }
@@ -73,7 +78,7 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
       window.removeEventListener('mousemove', handleWindowMouseMove);
       window.removeEventListener('mouseup', handleWindowMouseUp);
     };
-  }, [isDraggingRange, pixelsPerSecond, controller, showBoundary]);
+  }, [isDraggingRange, pixelsPerSecond, commandExecutor, showBoundary]);
 
   const ticks = useMemo(() => {
     const tickElements = [];
@@ -110,7 +115,11 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
 
     // Init range via execute (optional, could be skipped if we trust visual feedback only until mouseup)
     try {
-      controller.export.setExportRange(time, time);
+      await commandExecutor.execute({
+        type: AudioCommandType.SET_EXPORT_RANGE,
+        startTime: time,
+        endTime: time,
+      });
     } catch (error) {
       showBoundary(error);
     }
@@ -127,7 +136,10 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
     const time = Math.max(0, x / pixelsPerSecond);
 
     try {
-      controller.playback.handleSeek(time);
+      await commandExecutor.execute({
+        type: AudioCommandType.SET_CURRENT_TIME,
+        time,
+      });
     } catch (error) {
       showBoundary(error);
     }
@@ -135,7 +147,9 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
 
   const handleDoubleClick = async () => {
     try {
-      controller.export.setExportRange(null, null);
+      await commandExecutor.execute({
+        type: AudioCommandType.CLEAR_EXPORT_RANGE,
+      });
     } catch (error) {
       showBoundary(error);
     }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import * as styles from './ExportButton.css.ts';
-import { useController, useSessionStore } from '@/layers/apps/web/context/LayerContext';
+import { useCommandExecutor } from '@/layers/apps/web/context/LayerContext';
 import { executeWebAudioCommand } from '@/layers/apps/web/utils/execute-web-audio-command';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import { ErrorBoundary, useErrorBoundary, type FallbackProps } from 'react-error-boundary';
@@ -22,8 +22,7 @@ function ExportErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
 
 function ExportButtonContent() {
   const [isExporting, setIsExporting] = useState(false);
-  const controller = useController();
-  const sessionStore = useSessionStore();
+  const commandExecutor = useCommandExecutor();
   const { showBoundary } = useErrorBoundary();
 
   const handleExport = async () => {
@@ -33,8 +32,7 @@ function ExportButtonContent() {
     try {
       const filename = `project-${Date.now()}`;
       await executeWebAudioCommand({
-        controller,
-        session: sessionStore.getState(),
+        commandExecutor,
         command: {
           type: AudioCommandType.EXPORT_AUDIO,
           filename,

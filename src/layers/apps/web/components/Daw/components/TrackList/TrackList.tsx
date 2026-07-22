@@ -4,7 +4,8 @@ import { useErrorBoundary } from 'react-error-boundary';
 import { TrackComponent } from '../Track/TrackComponent';
 import * as styles from './TrackList.css.ts';
 import { Cursor } from '@/layers/apps/web/components/Cursor/Cursor';
-import { useSession, useController } from '@/layers/apps/web/context/LayerContext';
+import { useCommandExecutor, useSession } from '@/layers/apps/web/context/LayerContext';
+import { AudioCommandType } from '@/types/audioCommand.schema';
 
 interface TrackListProps {
   pixelsPerSecond: number;
@@ -14,7 +15,7 @@ interface TrackListProps {
 export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProps) {
   const tracks = useSession(state => state.tracks);
   const trackArray = Array.from(tracks.values());
-  const controller = useController();
+  const commandExecutor = useCommandExecutor();
 
   const [wavesurferInstances, setWavesurferInstances] = useState<Map<string, WaveSurfer>>(new Map());
 
@@ -53,23 +54,31 @@ export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProp
   const handleVolumeChange = useCallback(
     async (trackId: string, vol: number) => {
       try {
-        controller.track.setVolume(trackId, vol);
+        await commandExecutor.execute({
+          type: AudioCommandType.SET_TRACK_VOLUME,
+          trackId,
+          volume: vol,
+        });
       } catch (error) {
         showBoundary(error);
       }
     },
-    [controller, showBoundary]
+    [commandExecutor, showBoundary]
   );
 
   const handlePanChange = useCallback(
     async (trackId: string, pan: number) => {
       try {
-        controller.track.setPan(trackId, pan);
+        await commandExecutor.execute({
+          type: AudioCommandType.SET_TRACK_PAN,
+          trackId,
+          pan,
+        });
       } catch (error) {
         showBoundary(error);
       }
     },
-    [controller, showBoundary]
+    [commandExecutor, showBoundary]
   );
 
   const handleReady = useCallback((trackId: string, ws: WaveSurfer) => {
