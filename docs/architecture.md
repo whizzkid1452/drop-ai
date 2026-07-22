@@ -195,15 +195,16 @@ sequenceDiagram
 
 ## 5. `src/` 디렉터리 역할
 
-| 경로                         | 역할                                  |
-| ---------------------------- | ------------------------------------- |
-| `layers/apps/`               | Web, Agent, 내부 CLI 진입점           |
-| `layers/commands/`           | 명령 검증과 실행 순서 관리            |
-| `layers/controllers/`        | Session과 AudioEngine 작업 조정       |
-| `layers/queries/`            | Controller의 명시된 값만 읽는 Query   |
-| `layers/project-repository/` | 프로젝트 snapshot 저장 계약과 Adapter |
-| `layers/session/`            | 화면에 표시할 상태 저장               |
-| `layers/audio-engine/`       | Tone.js와 Web Audio 기반 오디오 처리  |
+| 경로                            | 역할                                        |
+| ------------------------------- | ------------------------------------------- |
+| `layers/apps/`                  | Web, Agent, 내부 CLI 진입점                 |
+| `layers/commands/`              | 명령 검증과 실행 순서 관리                  |
+| `layers/controllers/`           | Session과 AudioEngine 작업 조정             |
+| `layers/queries/`               | Controller의 명시된 값만 읽는 Query         |
+| `layers/project-repository/`    | 프로젝트 snapshot 저장 계약과 Adapter       |
+| `layers/audio-source-registry/` | 재생 Source URL의 런타임 소유권과 참조 관리 |
+| `layers/session/`               | 화면에 표시할 상태 저장                     |
+| `layers/audio-engine/`          | Tone.js와 Web Audio 기반 오디오 처리        |
 
 ---
 
@@ -334,6 +335,37 @@ IndexedDB 대역으로 이 규칙을 검증하므로, 실제 브라우저의 디
 Session의 프로젝트 metadata 전체 교체는 후속 Project Controller만 사용한다. Apps는 직접 호출하지 않는다. 불러오기
 과정에서는 Source와 AudioEngine 준비가 성공하기 전에 metadata만 먼저 교체하지 않는다. 저장 과정에서는 Repository가
 성공 결과를 반환했을 때만 Session revision을 교체하며, 실패나 revision 충돌이면 기존 값을 유지한다.
+
+---
+
+## 11. Runtime Audio Source Registry
+
+Source UUID는 ProjectDocument에 저장하는 고정 식별자다. Object URL은 브라우저가 현재 실행 중에만 제공하는 임시 값이므로
+문서와 Session의 영구 식별자로 사용하지 않는다. `AudioSourceRegistry`가 **재생 Source용 Object URL**의 생성과 해제를
+전담한다. 오디오 길이 판독용 임시 URL과 Export 다운로드 URL은 별도 수명이라 이 Registry의 소유 범위가 아니다.
+
+| 상태·작업             | 규칙                                                                     |
+| --------------------- | ------------------------------------------------------------------------ |
+| stage                 | metadata와 Blob 크기를 검증하고 pending Source와 URL을 만든다.           |
+| attach                | 전역에서 중복되지 않은 Region ID를 연결하고 Source를 committed로 바꾼다. |
+| detach                | Region 연결만 끊고 committed Source와 URL은 유지한다.                    |
+| discardPending        | 한 번도 연결되지 않은 pending Source만 제거하고 URL을 해제한다.          |
+| purgeUnused           | Region이 없는 committed Source를 사용자가 명시적으로 정리한다.           |
+| clear                 | 프로젝트 종료나 실패한 임시 복원 정리에서 모든 Source URL을 해제한다.    |
+| listCommittedMetadata | pending은 제외하고 Region이 없는 committed Source는 포함한다.            |
+
+Region 삭제 직후 Source를 자동 제거하지 않는다. React·WaveSurfer 정리 순서와 경쟁할 수 있고 Undo가 같은 Source와 Region
+ID를 다시 연결할 수 있기 때문이다. 조회 결과와 metadata 목록은 내부 `Set`이나 객체 참조를 노출하지 않고 복사본을 반환한다.
+Object URL 생성·해제 실패는 typed Registry 오류로 구분한다.
+URL 해제가 실패한 Source는 Registry에 남겨 다음 정리 호출에서 다시 시도하고, 이미 해제한 Source는 다시 해제하지 않는다.
+
+`restoreCommitted`는 Blob 하나를 committed 상태로 복원하는 동작일 뿐 프로젝트 전체를 원자적으로 불러오는 API가 아니다.
+후속 불러오기 Controller는 새 Registry에서 모든 Source 복원과 AudioEngine 준비를 끝낸 뒤 기존 프로젝트를 교체해야 한다.
+중간 실패 시 새 Registry를 `clear`하고 기존 Session과 Registry를 유지한다.
+
+Registry는 영구 저장소가 아니다. 새로고침 후 프로젝트를 다시 열려면 Source UUID를 키로 원본 바이트를 보존하는 OPFS
+Adapter가 먼저 필요하다. 현재 단계에서는 Registry 계약·브라우저 URL Adapter·메모리 구현만 있으며, 기존 업로드 흐름과
+Composition Root에는 아직 연결하지 않는다.
 
 ---
 

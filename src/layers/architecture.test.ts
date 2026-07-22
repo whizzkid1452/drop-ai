@@ -15,6 +15,7 @@ const sourceRoot = path.dirname(layersRoot);
 const repositoryRoot = path.dirname(sourceRoot);
 const appsRoot = path.join(layersRoot, 'apps');
 const audioEngineRoot = path.join(layersRoot, 'audio-engine');
+const audioSourceRegistryRoot = path.join(layersRoot, 'audio-source-registry');
 const controllersRoot = path.join(layersRoot, 'controllers');
 const commandRoot = path.join(layersRoot, 'commands');
 const queriesRoot = path.join(layersRoot, 'queries');
@@ -429,6 +430,22 @@ describe('레이어 의존성 규칙', () => {
         isInside(sourceImport.resolvedPath, layersRoot) &&
         !isInside(sourceImport.resolvedPath, projectRepositoryRoot) &&
         !isInside(sourceImport.resolvedPath, sharedRoot)
+      );
+    });
+
+    expect(formatViolations(violations)).toEqual([]);
+  });
+
+  it('AudioSourceRegistry는 Shared 외 다른 계층을 import하지 않는다', () => {
+    const violations = sourceImports.filter(sourceImport => {
+      return (
+        isInside(sourceImport.importerPath, audioSourceRegistryRoot) &&
+        !isTestFile(sourceImport.importerPath) &&
+        sourceImport.resolvedPath !== undefined &&
+        (isAppSource(sourceImport.resolvedPath) ||
+          (isInside(sourceImport.resolvedPath, layersRoot) &&
+            !isInside(sourceImport.resolvedPath, audioSourceRegistryRoot) &&
+            !isInside(sourceImport.resolvedPath, sharedRoot)))
       );
     });
 

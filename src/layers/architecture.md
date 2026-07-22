@@ -58,6 +58,19 @@ Session의 `replaceProjectMetadata`는 후속 Project Controller가 불러오기
 상태 교체 동작이다. Apps는 이 동작을 직접 호출하지 않는다. 프로젝트를 불러올 때 metadata만 먼저 바꾸지 않고,
 Source와 AudioEngine 준비가 모두 성공한 뒤 전체 프로젝트 상태를 한 번에 반영한다.
 
+`AudioSourceRegistry`는 재생에 쓰는 Source Object URL의 생성과 해제를 한곳에서 관리한다. 파일 길이 판독용 임시 URL과
+Export 다운로드 URL은 이 범위가 아니다. Source UUID는 프로젝트에 저장하는 고정 식별자이고 Object URL은 현재 앱 실행
+중에만 유효한 값이다. 등록 직후 Source는 pending이며 Region을 연결하면 committed가 된다. Region을 모두 분리해도
+committed Source와 URL은 Undo와 미디어 재사용을 위해 유지한다. pending 실패 정리, 명시적 미사용 Source 정리, 프로젝트
+종료와 실패한 임시 프로젝트 복원 정리에서만 URL을 해제한다. 저장용 목록은 pending을 제외하고 Region이 없는 committed
+Source는 포함한다.
+URL 해제가 실패하면 해당 Source를 Registry에 남겨 다음 정리 호출에서 다시 시도할 수 있게 한다.
+
+단건 `restoreCommitted`는 원자적인 프로젝트 불러오기 API가 아니다. 후속 불러오기 구현은 새 Registry에 모든 Blob을
+복원하고 AudioEngine 준비까지 성공한 뒤 기존 프로젝트와 교체해야 한다. Registry는 영구 저장소가 아니므로 실제 다시
+열기는 Source UUID를 키로 원본 바이트를 보존하는 OPFS Adapter를 추가한 뒤 연결한다. 현재 Registry 계약과 구현만 있으며
+기존 업로드·Controller·Composition Root에는 아직 연결하지 않는다.
+
 Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을 때 그 ID로 `SPLIT_REGION`을 실행한다. Region
 삭제도 사용자가 확인한 정확한 ID로 `UNLOAD_REGION`을 실행한다. 내부 CLI의 변경 작업은 CommandExecutor를
 사용한다. Region 이동은 드래그 중 로컬 미리보기만 갱신하고 포인터를 놓을 때 정확한 ID로 `MOVE_REGION`을 한 번
@@ -109,6 +122,7 @@ graph TD
 - Command와 Query는 AudioEngine 계층을 import하지 않는다.
 - Controllers는 `IAudioEngine` 계약과 오류 타입만 import한다.
 - ProjectRepository는 Shared 외 다른 계층을 import하지 않는다.
+- AudioSourceRegistry는 Shared 외 다른 계층을 import하지 않는다.
 - 하위 계층은 상위 계층을 역참조하지 않는다.
 - Tone.js import와 대표 Web Audio 생성자·팩토리의 직접 호출은 AudioEngine 계층에서만 수행한다.
 
