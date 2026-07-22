@@ -63,7 +63,6 @@ describe('createApp', () => {
     await app.commandExecutor.execute({
       type: AudioCommandType.ADD_TRACK,
       trackId,
-      url: 'https://example.com/empty-track.wav',
     });
     await app.commandExecutor.execute({
       type: AudioCommandType.LOAD_REGION,

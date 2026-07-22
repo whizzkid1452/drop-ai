@@ -33,8 +33,7 @@ interface AgentProjectContext {
 export const AGENT_PROJECT_CONTEXT_MAX_CHARACTERS = 1600;
 
 const COMMAND_REFERENCE = {
-  [AudioCommandType.ADD_TRACK]:
-    '{"type":"ADD_TRACK","trackId":"<new UUID>","url":"<known URL>"} - 빈 Track 추가. 현재 Agent 생성은 금지',
+  [AudioCommandType.ADD_TRACK]: '{"type":"ADD_TRACK","trackId":"<new UUID>"} - 빈 Track 추가. 현재 Agent 생성은 금지',
   [AudioCommandType.REMOVE_TRACK]:
     '{"type":"REMOVE_TRACK","trackId":"<existing Track UUID>"} - Track과 포함된 Region을 제거',
   [AudioCommandType.PLAY]: '{"type":"PLAY"} - 재생',

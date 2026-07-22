@@ -4,7 +4,6 @@ import { createApp } from './apps/create-app';
 import { AudioCommandType } from './shared/types/audioCommand.schema';
 
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
-const TRACK_URL = 'https://example.com/test.wav';
 
 describe('Layers Integration', () => {
   function setup() {
@@ -47,7 +46,7 @@ describe('Layers Integration', () => {
     it('트랙을 추가하면 tracks에 반영된다', async () => {
       const { session, commandExecutor } = setup();
 
-      await commandExecutor.execute({ type: AudioCommandType.ADD_TRACK, trackId: TRACK_ID, url: TRACK_URL });
+      await commandExecutor.execute({ type: AudioCommandType.ADD_TRACK, trackId: TRACK_ID });
 
       const tracks = session.getState().tracks;
       expect(tracks.size).toBe(1);
@@ -57,7 +56,7 @@ describe('Layers Integration', () => {
 
     it('트랙 볼륨을 변경하면 session에 반영된다', async () => {
       const { session, commandExecutor } = setup();
-      await commandExecutor.execute({ type: AudioCommandType.ADD_TRACK, trackId: TRACK_ID, url: TRACK_URL });
+      await commandExecutor.execute({ type: AudioCommandType.ADD_TRACK, trackId: TRACK_ID });
 
       await commandExecutor.execute({ type: AudioCommandType.SET_TRACK_VOLUME, trackId: TRACK_ID, volume: 0.5 });
 
@@ -66,7 +65,7 @@ describe('Layers Integration', () => {
 
     it('트랙을 제거하면 tracks에서 사라진다', async () => {
       const { session, commandExecutor } = setup();
-      await commandExecutor.execute({ type: AudioCommandType.ADD_TRACK, trackId: TRACK_ID, url: TRACK_URL });
+      await commandExecutor.execute({ type: AudioCommandType.ADD_TRACK, trackId: TRACK_ID });
 
       await commandExecutor.execute({ type: AudioCommandType.REMOVE_TRACK, trackId: TRACK_ID });
 

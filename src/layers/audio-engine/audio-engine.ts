@@ -52,9 +52,9 @@ export class AudioEngine implements IAudioEngine {
     return Tone.getTransport().seconds;
   }
 
-  async loadTrack(url: string, id: string): Promise<void> {
-    console.log(`[AudioEngine] Loading track ${id} from ${url}`);
-    this.getOrInitChannel(id);
+  async addTrack(trackId: string): Promise<void> {
+    console.log(`[AudioEngine] Adding track: ${trackId}`);
+    this.getOrInitChannel(trackId);
   }
 
   removeTrack(trackId: string): void {

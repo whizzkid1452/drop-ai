@@ -29,7 +29,7 @@ function createStagedSource({ duration }: { duration?: number } = { duration: 12
 }
 
 describe('오디오 파일 가져오기 명령', () => {
-  it('Track에는 Object URL을 전달하고 Region에는 Source ID만 전달한다', () => {
+  it('빈 Track과 sourceId 기반 Region 명령을 만든다', () => {
     const commands = createAudioImportCommands({
       trackId: TRACK_ID,
       regionId: REGION_ID,
@@ -40,7 +40,6 @@ describe('오디오 파일 가져오기 명령', () => {
       {
         type: AudioCommandType.ADD_TRACK,
         trackId: TRACK_ID,
-        url: OBJECT_URL,
       },
       {
         type: AudioCommandType.LOAD_REGION,

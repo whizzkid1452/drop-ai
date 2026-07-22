@@ -39,12 +39,12 @@ describe('MockAudioEngine - Phase 2 검증', () => {
   });
 
   describe('Track Management', () => {
-    it('loadTrack() 호출 가능', async () => {
-      await expect(engine.loadTrack('test.mp3', 'track-1')).resolves.toBeUndefined();
+    it('addTrack() 호출 가능', async () => {
+      await expect(engine.addTrack('track-1')).resolves.toBeUndefined();
     });
 
     it('setTrackMute()와 setTrackSolo() 호출 가능', async () => {
-      await engine.loadTrack('test.mp3', 'track-1');
+      await engine.addTrack('track-1');
 
       expect(() => engine.setTrackMute('track-1', true)).not.toThrow();
       expect(() => engine.setTrackSolo('track-1', true)).not.toThrow();
@@ -59,7 +59,7 @@ describe('MockAudioEngine - Phase 2 검증', () => {
     });
 
     it('getTrackParams() 반환값 확인', async () => {
-      await engine.loadTrack('test.mp3', 'track-1');
+      await engine.addTrack('track-1');
       const params = engine.getTrackParams('track-1');
       expect(params).toBeDefined();
       expect(params?.volume).toBe(1.0);
@@ -67,7 +67,7 @@ describe('MockAudioEngine - Phase 2 검증', () => {
     });
 
     it('mute 중 변경한 목표 볼륨을 반환한다', async () => {
-      await engine.loadTrack('test.mp3', 'track-1');
+      await engine.addTrack('track-1');
       engine.setTrackMute('track-1', true);
       engine.setTrackVolume('track-1', 0.25);
 
@@ -140,7 +140,7 @@ describe('MockAudioEngine - Phase 2 검증', () => {
       expect(typeof engine.setTime).toBe('function');
       expect(typeof engine.getCurrentTime).toBe('function');
       // Track Management
-      expect(typeof engine.loadTrack).toBe('function');
+      expect(typeof engine.addTrack).toBe('function');
       expect(typeof engine.removeTrack).toBe('function');
       expect(typeof engine.setTrackVolume).toBe('function');
       expect(typeof engine.setTrackPan).toBe('function');

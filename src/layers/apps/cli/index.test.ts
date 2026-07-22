@@ -66,12 +66,12 @@ describe('내부 CLI 명령 변환', () => {
     expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.SET_TEMPO, tempo: 140 });
   });
 
-  it('track add 인자를 ADD_TRACK 명령으로 변환한다', async () => {
+  it('track add의 Track ID를 URL 없는 ADD_TRACK 명령으로 변환한다', async () => {
     const commands = createCliCommands(commandExecutor, defaultState);
 
-    await commands.track.fn('add', TRACK_ID, AUDIO_URL);
+    await commands.track.fn('add', TRACK_ID);
 
-    expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.ADD_TRACK, trackId: TRACK_ID, url: AUDIO_URL });
+    expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.ADD_TRACK, trackId: TRACK_ID });
   });
 
   it('track remove 인자를 REMOVE_TRACK 명령으로 변환한다', async () => {
@@ -265,12 +265,12 @@ describe('내부 CLI 명령 변환', () => {
     expect(executeMany).not.toHaveBeenCalled();
   });
 
-  it('URL이 없는 track add를 거부한다', async () => {
+  it('Track ID가 없는 track add를 거부한다', async () => {
     const commands = createCliCommands(commandExecutor, defaultState);
 
-    const result = await commands.track.fn('add', TRACK_ID);
+    const result = await commands.track.fn('add');
 
-    expect(result).toBe('Error: Usage: track add <trackId> <url>');
+    expect(result).toBe('Error: Usage: track add <trackId>');
     expect(execute).not.toHaveBeenCalled();
   });
 
@@ -286,7 +286,8 @@ describe('내부 CLI 명령 변환', () => {
 
     const result = await commands.help.fn();
 
-    expect(result).toContain('track add <trackId> <url>');
+    expect(result).toContain('track add <trackId>');
+    expect(result).not.toContain('track add <trackId> <url>');
     expect(result).toContain('region add-source <trackId> <regionId> <sourceId>');
     expect(result).toContain('region split <trackId> <regionId> <time>');
     expect(result).not.toContain('--help');

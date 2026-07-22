@@ -59,7 +59,7 @@ export interface IAudioEngine {
   getCurrentTime(): number;
 
   // Track Management
-  loadTrack(url: string, id: string): Promise<void>;
+  addTrack(trackId: string): Promise<void>;
   removeTrack(trackId: string): void;
   setTrackVolume(trackId: string, volume: number): void;
   setTrackPan(trackId: string, pan: number): void;

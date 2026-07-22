@@ -215,7 +215,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
 
   it('기존 채널의 mute와 solo 값을 변경한다', async () => {
     const engine = new AudioEngine();
-    await engine.loadTrack('track.wav', 'track-1');
+    await engine.addTrack('track-1');
 
     engine.setTrackMute('track-1', true);
     engine.setTrackSolo('track-1', true);
@@ -225,7 +225,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
 
   it('mute 중 볼륨 변경은 음소거를 유지하고 unmute 전에 목표 볼륨을 적용한다', async () => {
     const engine = new AudioEngine();
-    await engine.loadTrack('track.wav', 'track-1');
+    await engine.addTrack('track-1');
     engine.setTrackMute('track-1', true);
     toneMocks.channelVolumeRampTo.mockClear();
 
@@ -244,7 +244,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
 
   it('명시적 mute 없이 volume 0에서 올리면 다시 소리가 나도록 Param을 변경한다', async () => {
     const engine = new AudioEngine();
-    await engine.loadTrack('track.wav', 'track-1');
+    await engine.addTrack('track-1');
     engine.setTrackVolume('track-1', 0);
     expect(toneMocks.channels[0]?.mute).toBe(true);
     expect(toneMocks.channels[0]?.volume.value).toBe(Number.NEGATIVE_INFINITY);
@@ -258,7 +258,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
 
   it('mute 중 목표 volume이 0이면 unmute해도 이전 gain을 복원하지 않는다', async () => {
     const engine = new AudioEngine();
-    await engine.loadTrack('track.wav', 'track-1');
+    await engine.addTrack('track-1');
     engine.setTrackMute('track-1', true);
     engine.setTrackVolume('track-1', 0);
     toneMocks.channelVolumeRampTo.mockClear();
@@ -277,11 +277,11 @@ describe('AudioEngine 실시간 상태 일관성', () => {
 
   it('트랙을 제거하고 같은 ID로 다시 만들면 목표 볼륨을 기본값으로 초기화한다', async () => {
     const engine = new AudioEngine();
-    await engine.loadTrack('track.wav', 'track-1');
+    await engine.addTrack('track-1');
     engine.setTrackVolume('track-1', 0.25);
     engine.removeTrack('track-1');
 
-    await engine.loadTrack('track.wav', 'track-1');
+    await engine.addTrack('track-1');
 
     expect(engine.getTrackParams('track-1')?.volume).toBe(1);
   });
@@ -414,7 +414,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     await vi.waitFor(() => expect(toneMocks.playerLoad).toHaveBeenCalledWith('pending.wav'));
 
     engine.removeTrack('track-1');
-    await engine.loadTrack('new-track.wav', 'track-1');
+    await engine.addTrack('track-1');
     resolveLoad?.();
 
     await expect(addRegion).rejects.toMatchObject({ code: AudioEngineErrorCode.REGION_STATE_CHANGED });
@@ -576,7 +576,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
 
   it('Solo 트랙 제거 전에 solo를 해제한다', async () => {
     const engine = new AudioEngine();
-    await engine.loadTrack('track.wav', 'track-1');
+    await engine.addTrack('track-1');
     engine.setTrackSolo('track-1', true);
     toneMocks.channelSoloWrites.mockClear();
 

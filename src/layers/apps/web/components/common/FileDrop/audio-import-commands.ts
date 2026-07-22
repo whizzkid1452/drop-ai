@@ -16,7 +16,6 @@ export function createAudioImportCommands({
     {
       type: AudioCommandType.ADD_TRACK,
       trackId,
-      url: stagedSource.objectUrl,
     },
     {
       type: AudioCommandType.LOAD_REGION,

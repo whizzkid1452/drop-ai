@@ -75,7 +75,6 @@ async function addTrack(commandExecutor: CommandExecutor) {
   await commandExecutor.execute({
     type: AudioCommandType.ADD_TRACK,
     trackId: TRACK_ID,
-    url: AUDIO_URL,
   });
 }
 

@@ -41,9 +41,9 @@ export class MockAudioEngine implements IAudioEngine {
     return this.mockTime;
   }
 
-  async loadTrack(url: string, id: string): Promise<void> {
-    this.initializeTrack(id);
-    console.log(`[MockAudioEngine] Track ${id} loaded from ${url}`);
+  async addTrack(trackId: string): Promise<void> {
+    this.initializeTrack(trackId);
+    console.log(`[MockAudioEngine] Track added: ${trackId}`);
   }
 
   removeTrack(trackId: string): void {

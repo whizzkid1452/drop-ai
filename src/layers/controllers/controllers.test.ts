@@ -110,28 +110,25 @@ describe('Controllers - Phase 3 검증', () => {
 
   describe('TrackController 확장', () => {
     beforeEach(async () => {
-      await controller.track.addTrack('test.mp3', 'track-1');
+      await controller.track.addTrack('track-1');
     });
 
     it('addTrack은 중복 Track ID를 AudioEngine 호출 전에 거부한다', async () => {
-      const loadTrackSpy = vi.spyOn(engine, 'loadTrack');
+      const addTrackSpy = vi.spyOn(engine, 'addTrack');
 
-      await expectRejectedProjectStateError(
-        () => controller.track.addTrack('duplicate.mp3', 'track-1'),
-        'TRACK_ID_CONFLICT'
-      );
+      await expectRejectedProjectStateError(() => controller.track.addTrack('track-1'), 'TRACK_ID_CONFLICT');
 
-      expect(loadTrackSpy).not.toHaveBeenCalled();
+      expect(addTrackSpy).not.toHaveBeenCalled();
       expect(session.getState().tracks.get('track-1')?.name).toBe('Track track-1');
     });
 
     it('같은 Track ID를 동시에 추가하면 먼저 완료한 호출만 Session에 반영한다', async () => {
       const deferred = createDeferredVoid();
-      const loadTrackSpy = vi.spyOn(engine, 'loadTrack').mockReturnValue(deferred.promise);
-      const firstAdd = controller.track.addTrack('first.mp3', 'concurrent-track');
-      const secondAdd = controller.track.addTrack('second.mp3', 'concurrent-track');
+      const addTrackSpy = vi.spyOn(engine, 'addTrack').mockReturnValue(deferred.promise);
+      const firstAdd = controller.track.addTrack('concurrent-track');
+      const secondAdd = controller.track.addTrack('concurrent-track');
 
-      expect(loadTrackSpy).toHaveBeenCalledTimes(2);
+      expect(addTrackSpy).toHaveBeenCalledTimes(2);
       deferred.resolve();
 
       await firstAdd;
@@ -269,7 +266,7 @@ describe('Controllers - Phase 3 검증', () => {
 
   describe('RegionController', () => {
     beforeEach(async () => {
-      await controller.track.addTrack('test.mp3', 'track-1');
+      await controller.track.addTrack('track-1');
     });
 
     it('addRegion 호출 가능', async () => {
@@ -1272,7 +1269,7 @@ describe('Controllers - Phase 3 검증', () => {
     });
 
     it('exportProject Blob 반환', async () => {
-      await controller.track.addTrack('test.mp3', 'track-1');
+      await controller.track.addTrack('track-1');
       await controller.region.addRegion('track-1', {
         id: 'region-1',
         url: 'region.mp3',
@@ -1290,7 +1287,7 @@ describe('Controllers - Phase 3 검증', () => {
     });
 
     it('exportRange Blob 반환', async () => {
-      await controller.track.addTrack('test.mp3', 'track-1');
+      await controller.track.addTrack('track-1');
       await controller.region.addRegion('track-1', {
         id: 'region-1',
         url: 'region.mp3',
@@ -1329,7 +1326,7 @@ describe('Controllers - Phase 3 검증', () => {
     });
 
     it('sourceId Region Export는 Registry URL을 AudioEngine 요청에 사용한다', async () => {
-      await controller.track.addTrack('test.mp3', 'track-1');
+      await controller.track.addTrack('track-1');
       stageSource(audioSourceRegistry);
       await controller.region.addRegion('track-1', {
         id: SOURCE_REGION_ID,
@@ -1354,7 +1351,7 @@ describe('Controllers - Phase 3 검증', () => {
     });
 
     it('sourceId Region의 Registry 항목이 없으면 Export를 명확히 거부한다', async () => {
-      await controller.track.addTrack('test.mp3', 'track-1');
+      await controller.track.addTrack('track-1');
       session.getState().updateTrack('track-1', {
         regions: [
           {
@@ -1376,7 +1373,7 @@ describe('Controllers - Phase 3 검증', () => {
     });
 
     it('길이가 0인 sourceId Region도 Source 연결이 없으면 Export에서 거부한다', async () => {
-      await controller.track.addTrack('test.mp3', 'track-1');
+      await controller.track.addTrack('track-1');
       stageSource(audioSourceRegistry);
       session.getState().updateTrack('track-1', {
         regions: [
@@ -1399,7 +1396,7 @@ describe('Controllers - Phase 3 검증', () => {
     });
 
     it('길이가 0인 Export 범위를 거부한다', async () => {
-      await controller.track.addTrack('test.mp3', 'track-1');
+      await controller.track.addTrack('track-1');
       await controller.region.addRegion('track-1', {
         id: 'region-1',
         url: 'region.mp3',
@@ -1439,7 +1436,7 @@ describe('Controllers - Phase 3 검증', () => {
   describe('아키텍처 규칙 준수', () => {
     it('Controllers는 SessionStore를 통해 상태 업데이트', async () => {
       // Track 추가
-      await controller.track.addTrack('test.mp3', 'track-1');
+      await controller.track.addTrack('track-1');
       expect(session.getState().tracks.size).toBe(1);
 
       // Volume 변경

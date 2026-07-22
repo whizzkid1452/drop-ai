@@ -21,11 +21,11 @@ export class TrackController {
     this.audioSourceRegistry = audioSourceRegistry;
   }
 
-  async addTrack(url: string, id: string): Promise<void> {
+  async addTrack(id: string): Promise<void> {
     console.log(`[TrackController] Adding track: ${id}`);
 
     this.throwIfTrackExists(id);
-    await this.audioEngine.loadTrack(url, id);
+    await this.audioEngine.addTrack(id);
     this.throwIfTrackExists(id);
 
     this.sessionStore.getState().addTrack({

@@ -109,8 +109,8 @@ Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을
 실행한다. Track 삭제는 사용자가 확인한 정확한 ID로 `REMOVE_TRACK`을 한 번 실행하고 처리 중 중복 입력을 막는다. Web
 UI의 Mute·Solo는 Session 상태의 반대 값을 정확한 Track ID와 함께 `SET_TRACK_MUTE`·`SET_TRACK_SOLO`로 실행한다.
 Web UI의 Tempo 입력은 `SET_TEMPO`로 Session 메타데이터만 변경한다. Web 파일 가져오기는 Track 생성과 Region 등록을
-`executeMany` 한 번으로 실행한다. `ADD_TRACK`은 아직 호환용 Registry Object URL을 사용하고 `LOAD_REGION`은
-`sourceId`만 사용한다. 첫 명령이 실패하면 pending Source를 정리한다. 두 번째 명령이 실패하면 `REMOVE_TRACK`을
+`executeMany` 한 번으로 실행한다. `ADD_TRACK`은 Track ID만으로 빈 Track을 만들고 `LOAD_REGION`은 `sourceId`로
+오디오 Source를 연결한다. 첫 명령이 실패하면 pending Source를 정리한다. 두 번째 명령이 실패하면 `REMOVE_TRACK`을
 CommandExecutor로 실행한 뒤 pending Source 정리를 시도한다. 보상도 실패하면 Web workflow 전용
 `AudioImportCompensationError`에 원래 오류와 각 보상 오류를 함께 보존한다.
 Web JSON CLI도 파싱된 명령 배열을 `executeMany` 한 번으로 실행하고, 중간 실패 전 결과만 후처리한다. 기존 Track의

@@ -80,7 +80,7 @@ export class CommandExecutor {
 
     switch (validatedCommand.type) {
       case AudioCommandType.ADD_TRACK:
-        await this.controller.track.addTrack(validatedCommand.url, validatedCommand.trackId);
+        await this.controller.track.addTrack(validatedCommand.trackId);
         return;
 
       case AudioCommandType.REMOVE_TRACK:

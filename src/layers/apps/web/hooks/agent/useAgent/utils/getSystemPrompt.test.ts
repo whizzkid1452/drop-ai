@@ -112,6 +112,8 @@ describe('Agent 시스템 Prompt', () => {
     expect(prompt).toContain('url과 sourceId를 동시에 넣지 않는다');
     expect(prompt).toContain('정보가 부족하면 []');
     expect(prompt).toContain('ADD_TRACK은 현재 Agent에서 사용하지 않는다');
+    expect(prompt).toContain('{"type":"ADD_TRACK","trackId":"<new UUID>"}');
+    expect(prompt).not.toContain('{"type":"ADD_TRACK","trackId":"<new UUID>","url"');
     expect(prompt).toContain('regionId와 url은 생략');
   });
 

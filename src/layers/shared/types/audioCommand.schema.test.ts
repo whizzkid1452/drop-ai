@@ -11,6 +11,38 @@ const TRACK_ID = '550e8400-e29b-41d4-a716-446655440000';
 const REGION_ID = '6ba7b810-9dad-41d1-80b4-00c04fd430c8';
 const SOURCE_ID = '11111111-1111-4111-8111-111111111111';
 
+describe('ADD_TRACK 계약', () => {
+  it('Track ID만으로 빈 Track 생성 명령을 허용한다', () => {
+    const command = {
+      type: AudioCommandType.ADD_TRACK,
+      trackId: TRACK_ID,
+    };
+
+    expect(AudioCommandSchema.parse(command)).toEqual(command);
+    expect(StrictAudioCommandSchema.parse(command)).toEqual(command);
+  });
+
+  it('Agent 명령의 URL 필드를 거부한다', () => {
+    expect(
+      StrictAudioCommandSchema.safeParse({
+        type: AudioCommandType.ADD_TRACK,
+        trackId: TRACK_ID,
+        url: 'https://example.com/audio.wav',
+      }).success
+    ).toBe(false);
+  });
+
+  it('일반 명령의 이전 URL 필드는 제거하고 빈 Track 생성으로 해석한다', () => {
+    expect(
+      AudioCommandSchema.parse({
+        type: AudioCommandType.ADD_TRACK,
+        trackId: TRACK_ID,
+        url: 'https://example.com/audio.wav',
+      })
+    ).toEqual({ type: AudioCommandType.ADD_TRACK, trackId: TRACK_ID });
+  });
+});
+
 describe('LOAD_REGION 오디오 식별자 계약', () => {
   it('sourceId를 보존한다', () => {
     const command = {

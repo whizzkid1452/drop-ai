@@ -39,7 +39,6 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal(AudioCommandType.ADD_TRACK),
     trackId: z.uuid('Invalid track ID format'),
-    url: z.url('Invalid audio URL format'),
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.REMOVE_TRACK),

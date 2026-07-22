@@ -29,13 +29,13 @@ function parseFiniteNumber(value: string): number | null {
 }
 
 async function executeTrackCommand(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
-  const [subcommand, trackId, url] = args;
+  const [subcommand, trackId] = args;
 
   if (subcommand === 'add') {
-    if (!trackId || !url) {
-      return 'Error: Usage: track add <trackId> <url>';
+    if (!trackId) {
+      return 'Error: Usage: track add <trackId>';
     }
-    await commandExecutor.execute({ type: AudioCommandType.ADD_TRACK, trackId, url });
+    await commandExecutor.execute({ type: AudioCommandType.ADD_TRACK, trackId });
     return `Track ${trackId} added.`;
   }
 
@@ -47,7 +47,7 @@ async function executeTrackCommand(commandExecutor: CliCommandExecutor, args: st
     return `Track ${trackId} removed.`;
   }
 
-  return 'Usage: track add <trackId> <url> OR track remove <trackId>';
+  return 'Usage: track add <trackId> OR track remove <trackId>';
 }
 
 async function executeRegionCommand(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
@@ -218,7 +218,7 @@ export const createCliCommands = (commandExecutor: CliCommandExecutor, state: Cl
     },
     track: {
       description: 'Track management',
-      usage: 'track add <trackId> <url> | track remove <trackId>',
+      usage: 'track add <trackId> | track remove <trackId>',
       fn: (...args: string[]) => executeTrackCommand(commandExecutor, args),
     },
     volume: {
