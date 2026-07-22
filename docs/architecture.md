@@ -2,13 +2,16 @@
 
 ## 개요
 
-레이어 의존성과 상태·오디오 흐름을 한눈에 본다. 규칙의 단일 출처는 [`src/layers/discipline.md`](../src/layers/discipline.md)이다.
+레이어 의존성과 상태·오디오 흐름을 한눈에 본다. 규칙의 단일 출처는
+[`src/layers/architecture.md`](../src/layers/architecture.md)이다.
 
 ---
 
 ## 1. 레이어 한 장 요약
 
-의존 방향은 **항상 아래로만** 간다: Apps → Controllers → (Session + Audio Engine) → Tone.js
+AudioCommand 실행 방향은 아래와 같다.
+
+**Apps → CommandExecutor → Controllers → Session / AudioEngine → Tone.js**
 
 아래 그림은 **실행 시점** 레이어만 보여 준다. 객체 조립(`createApp`)은 **§3**에서 따로 그린다.
 
@@ -19,25 +22,31 @@ flowchart TB
         A["CLI / Web / Agent UI"]
     end
 
-    subgraph ctrl["② Controllers"]
+    subgraph command["② Commands"]
+        CE["CommandExecutor"]
+    end
+
+    subgraph ctrl["③ Controllers"]
         AC["AppController → Playback / Track …"]
     end
 
-    subgraph state["③ Session"]
+    subgraph state["④ Session"]
         SS[("Zustand Vanilla Store")]
     end
 
-    subgraph ae["④ Audio Engine"]
+    subgraph ae["⑤ Audio Engine"]
         IAE["IAudioEngine 구현"]
     end
 
-    subgraph low["⑤ 인프라"]
+    subgraph low["⑥ 인프라"]
         T["Tone.js / Web Audio"]
     end
 
-    A -->|"액션만"| AC
-    A -->|"읽기만"| SS
+    A -->|"AudioCommand 실행"| CE
+    A -->|"구독·워크플로 상태"| SS
 
+    CE -->|"검증 후 위임"| AC
+    CE -->|"실행 시점 상태 조회"| SS
     AC -->|"쓰기·구독 갱신"| SS
     AC -->|"재생·렌더·내보내기"| IAE
     IAE --> T
@@ -45,9 +54,11 @@ flowchart TB
 
 ---
 
-## 2. 읽기 / 쓰기 (규칙 3·6)
+## 2. 상태와 오디오 흐름
 
-UI는 **session을 읽어** 그리고, **상태 변경은 controller**만 한다. 오디오 엔진만으로는 UI state가 바뀌지 않는다.
+UI는 **Session을 읽어** 그리고, AudioCommand는 **CommandExecutor**에 전달한다.
+CommandExecutor는 명령을 검증하고 Controller에 실행을 위임한다.
+Agent 메시지와 업로드 파일 같은 앱 워크플로 상태는 Session Action으로 갱신한다.
 
 ```mermaid
 flowchart LR
@@ -59,6 +70,10 @@ flowchart LR
         X["AppController"]
     end
 
+    subgraph CMD["Commands"]
+        CE["CommandExecutor"]
+    end
+
     subgraph S["Session"]
         ST[("sessionStore")]
     end
@@ -67,14 +82,16 @@ flowchart LR
         AE["IAudioEngine"]
     end
 
-    V -->|"dispatch / 액션"| X
+    V -->|"AudioCommand"| CE
+    CE -->|"검증 후 위임"| X
+    CE -->|"현재 상태 조회"| ST
     X -->|"set / patch"| ST
     X -->|"오디오"| AE
     ST -->|"구독 → 리렌더"| V
     AE -.->|"소리만 (UI 직접 갱신 없음)"| V
 ```
 
-점선: 엔진 출력은 스피커로 나가지만, **표시용 state는 session 경로**로만 맞춘다(규칙 6).
+점선: 엔진 출력은 스피커로 나가지만, **표시용 state는 Session 경로**로 맞춘다.
 
 ---
 
@@ -82,31 +99,35 @@ flowchart LR
 
 **Composition Root** — §1과 달리 **부팅·테스트 진입점**에서 한 번 객체 그래프를 만드는 흐름이다.
 
-`createApp`이 **session**을 만들고, 바깥에서 받은 **audioEngine**과 함께 **AppController**를 조립한다.
+`createApp`이 **Session**, **AudioEngine**, **AppController**, **CommandExecutor**를 한 번 조립한다.
 
 ```mermaid
 flowchart TB
     subgraph ext["외부"]
-        IN["IAudioEngine\n(팩토리·앱 진입점에서 생성)"]
+        IN["선택적 IAudioEngine\n(테스트에서는 Mock 주입)"]
     end
 
     subgraph asm["조립 (한 곳)"]
-        CA["createApp(audioEngine)"]
+        CA["createApp(options)"]
     end
 
     subgraph out["결과"]
         SS["session\n(createSessionStore)"]
         AC["AppController\n(session, audioEngine)"]
+        CE["CommandExecutor\n(session, controller)"]
     end
 
     IN --> CA
     CA --> SS
     CA --> AC
+    CA --> CE
     SS -.->|"같은 인스턴스 주입"| AC
+    SS -.->|"같은 인스턴스 주입"| CE
+    AC -.->|"같은 인스턴스 주입"| CE
 ```
 
 구현: [`src/layers/apps/create-app.ts`](../src/layers/apps/create-app.ts)  
-웹에서는 [`LayerProvider`](../src/layers/apps/context/LayerContext.tsx)가 `createApp(engine)`을 호출한다.
+웹 진입점은 `createApp()` 결과를 `LayerProvider`에 전달한다.
 
 ---
 
@@ -115,11 +136,14 @@ flowchart TB
 ```mermaid
 sequenceDiagram
     participant U as Apps UI
+    participant X as CommandExecutor
     participant C as AppController
     participant S as Session
     participant E as AudioEngine
 
-    U->>C: 사용자 액션
+    U->>X: AudioCommand
+    X->>X: Zod 검증
+    X->>C: 검증된 작업 위임
     C->>E: 오디오 연산
     C->>S: 상태 반영
     S-->>U: 구독으로 화면 갱신
@@ -129,14 +153,16 @@ sequenceDiagram
 
 ## 5. `src/` 디렉터리 역할
 
-| 경로                                  | 역할                                                             |
-| ------------------------------------- | ---------------------------------------------------------------- |
-| `layers/`                             | 규칙의 중심: apps, controllers, session, audio-engine            |
-| `core/`                               | 도메인·순수 로직 ([`src/core/README.md`](../src/core/README.md)) |
-| `components/`, `logics/`, `hooks/` 등 | UI·보조 로직·에이전트 등                                         |
+| 경로                   | 역할                                 |
+| ---------------------- | ------------------------------------ |
+| `layers/apps/`         | Web, Agent, 내부 CLI 진입점          |
+| `layers/commands/`     | 명령 검증과 실행 순서 관리           |
+| `layers/controllers/`  | Session과 AudioEngine 작업 조정      |
+| `layers/session/`      | 화면에 표시할 상태 저장              |
+| `layers/audio-engine/` | Tone.js와 Web Audio 기반 오디오 처리 |
 
 ---
 
 ## 참고
 
-- [`records/`](../records/) 문서는 마이그레이션 이전 기록이며 현재 아키텍처 가이드로 쓰지 않는다([`discipline.md`](../src/layers/discipline.md)).
+- AudioCommand가 아직 없는 Region 분할과 내부 CLI 전용 작업은 Controller를 직접 호출한다.
