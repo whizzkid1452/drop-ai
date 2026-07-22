@@ -68,8 +68,10 @@ URL 해제가 실패하면 해당 Source를 Registry에 남겨 다음 정리 호
 
 단건 `restoreCommitted`는 원자적인 프로젝트 불러오기 API가 아니다. 후속 불러오기 구현은 새 Registry에 모든 Blob을
 복원하고 AudioEngine 준비까지 성공한 뒤 기존 프로젝트와 교체해야 한다. Registry는 영구 저장소가 아니므로 실제 다시
-열기는 Source UUID를 키로 원본 바이트를 보존하는 OPFS Adapter를 추가한 뒤 연결한다. 현재 Registry 계약과 구현만 있으며
-기존 업로드·Controller·Composition Root에는 아직 연결하지 않는다.
+열기는 Source UUID를 키로 원본 바이트를 보존하는 OPFS Adapter를 추가한 뒤 연결한다. `createApp`은 Registry 구현을 한 번
+조립하되 Apps에는 등록용 `IAudioSourceStager`와 조회용 `IAudioSourceResolver`만 노출한다. 전체
+`IAudioSourceRegistry`와 구체 구현은 Composition Root 밖에 노출하지 않는다. 기존 업로드와 Controller 연결은 후속
+소비자 마이그레이션에서 추가한다.
 
 Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을 때 그 ID로 `SPLIT_REGION`을 실행한다. Region
 삭제도 사용자가 확인한 정확한 ID로 `UNLOAD_REGION`을 실행한다. 내부 CLI의 변경 작업은 CommandExecutor를
@@ -91,6 +93,7 @@ graph TD
     Controllers["Controllers (AppController Facade)"]
     Session["Session (Zustand Vanilla Store)"]
     AudioEngine["Audio Engine"]
+    AudioSourceRegistry["Audio Source Registry"]
     ToneJS["Tone.js / WebAudio"]
     CreateApp["createApp (Composition Root)"]
 
@@ -100,6 +103,7 @@ graph TD
     Commands -->|Read Current State| Session
     Apps -->|Subscribe| Session
     Apps -.->|Create via| CreateApp
+    Apps -->|Stage / Resolve only| AudioSourceRegistry
 
     Controllers -->|Use| AudioEngine
     Controllers -->|Update| Session
@@ -108,6 +112,7 @@ graph TD
     AudioEngine -->|Wrap / Use| ToneJS
 
     CreateApp -->|Create| AudioEngine
+    CreateApp -->|Create narrow contracts| AudioSourceRegistry
     CreateApp -->|Create| Session
     CreateApp -->|Create & Inject Deps| Controllers
     CreateApp -->|Create & Inject Deps| Commands
@@ -123,6 +128,7 @@ graph TD
 - Controllers는 `IAudioEngine` 계약과 오류 타입만 import한다.
 - ProjectRepository는 Shared 외 다른 계층을 import하지 않는다.
 - AudioSourceRegistry는 Shared 외 다른 계층을 import하지 않는다.
+- Audio Source 외부 소비자는 공개 계약과 오류 타입만 import하고, 구현체는 Composition Root에서만 import한다.
 - 하위 계층은 상위 계층을 역참조하지 않는다.
 - Tone.js import와 대표 Web Audio 생성자·팩토리의 직접 호출은 AudioEngine 계층에서만 수행한다.
 

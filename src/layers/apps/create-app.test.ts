@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AudioSourceRegistry } from '../audio-source-registry/audio-source-registry';
+import type { IObjectUrlAdapter } from '../audio-source-registry/i-object-url-adapter';
 import { CommandExecutor } from '../commands/command-executor';
 import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { PlaybackClockQuery } from '../queries/playback-clock-query';
@@ -6,6 +8,45 @@ import { AudioCommandType } from '../shared/types/audioCommand.schema';
 import { createApp, createCliTestApp } from './create-app';
 
 describe('createApp', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('주입한 Source Registry를 등록·조회 전용 계약으로만 노출한다', () => {
+    const objectUrlAdapter: IObjectUrlAdapter = {
+      createObjectUrl: vi.fn(() => 'blob:test-source'),
+      revokeObjectUrl: vi.fn(),
+    };
+    const audioSourceRegistry = new AudioSourceRegistry(objectUrlAdapter);
+
+    const app = createApp({ audioEngine: new MockAudioEngine(), audioSourceRegistry });
+
+    const registration = {
+      metadata: {
+        id: '11111111-1111-4111-8111-111111111111',
+        fileName: 'source.wav',
+        mimeType: 'audio/wav',
+        byteLength: 4,
+        durationSeconds: 1,
+      },
+      blob: new Blob(['test'], { type: 'audio/wav' }),
+    };
+    const stagedSource = app.audioSourceStager.stage(registration);
+
+    expect(app.audioSourceResolver.resolve(registration.metadata.id)).toEqual(stagedSource);
+    expect('audioSourceRegistry' in app).toBe(false);
+    expect('attach' in app.audioSourceStager).toBe(false);
+    expect('stage' in app.audioSourceResolver).toBe(false);
+  });
+
+  it('기본 Source Registry 조립만으로 Object URL을 만들지 않는다', () => {
+    const createObjectUrl = vi.spyOn(globalThis.URL, 'createObjectURL');
+
+    createApp({ audioEngine: new MockAudioEngine() });
+
+    expect(createObjectUrl).not.toHaveBeenCalled();
+  });
+
   it('새 프로젝트 metadata를 UUID와 revision 0으로 만든다', () => {
     const app = createApp({ audioEngine: new MockAudioEngine() });
 

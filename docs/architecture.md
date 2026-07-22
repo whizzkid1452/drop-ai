@@ -135,14 +135,17 @@ Session의 프로젝트 값이며, AudioEngine의 Transport BPM이나 Region 예
 
 **Composition Root** — §1과 달리 **부팅·테스트 진입점**에서 한 번 객체 그래프를 만드는 흐름이다.
 
-`createApp`이 **Session**, **AudioEngine**, **AppController**, **CommandExecutor**, **PlaybackClockQuery**를 한 번 조립한다.
+`createApp`이 **Session**, **AudioEngine**, **AudioSourceRegistry**, **AppController**, **CommandExecutor**,
+**PlaybackClockQuery**를 한 번 조립한다.
 AppController 자체는 Apps에 노출하지 않는다. CommandExecutor에는 AppController를, PlaybackClockQuery에는
-PlaybackController의 읽기 전용 계약을 주입한다.
+PlaybackController의 읽기 전용 계약을 주입한다. AudioSourceRegistry는 전체 변경 계약을 노출하지 않고 등록용
+`IAudioSourceStager`와 조회용 `IAudioSourceResolver`로 나눠 노출한다.
 
 ```mermaid
 flowchart TB
     subgraph ext["외부"]
         IN["선택적 IAudioEngine\n(테스트에서는 Mock 주입)"]
+        SRIN["선택적 IAudioSourceRegistry\n(테스트에서는 Stub 주입)"]
     end
 
     subgraph asm["조립 (한 곳)"]
@@ -154,13 +157,16 @@ flowchart TB
         AC["AppController\n(session, audioEngine)"]
         CE["CommandExecutor\n(session, controller)"]
         Q["PlaybackClockQuery\n(playback controller read-only)"]
+        SR["AudioSourceRegistry\n(stager / resolver only)"]
     end
 
     IN --> CA
+    SRIN --> CA
     CA --> SS
     CA --> AC
     CA --> CE
     CA --> Q
+    CA --> SR
     SS -.->|"같은 인스턴스 주입"| AC
     SS -.->|"같은 인스턴스 주입"| CE
     AC -.->|"같은 인스턴스 주입"| CE
@@ -364,8 +370,9 @@ URL 해제가 실패한 Source는 Registry에 남겨 다음 정리 호출에서 
 중간 실패 시 새 Registry를 `clear`하고 기존 Session과 Registry를 유지한다.
 
 Registry는 영구 저장소가 아니다. 새로고침 후 프로젝트를 다시 열려면 Source UUID를 키로 원본 바이트를 보존하는 OPFS
-Adapter가 먼저 필요하다. 현재 단계에서는 Registry 계약·브라우저 URL Adapter·메모리 구현만 있으며, 기존 업로드 흐름과
-Composition Root에는 아직 연결하지 않는다.
+Adapter가 먼저 필요하다. 현재 단계에서는 Registry 계약·브라우저 URL Adapter·메모리 구현을 Composition Root에서 한 번
+조립한다. Apps에는 `IAudioSourceStager`와 `IAudioSourceResolver`만 제공하며, 전체 Registry 변경 계약과 구체 구현은
+노출하지 않는다. 기존 업로드 흐름과 Controller 연결은 후속 소비자 마이그레이션에서 추가한다.
 
 ---
 

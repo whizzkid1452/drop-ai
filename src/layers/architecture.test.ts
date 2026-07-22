@@ -23,6 +23,10 @@ const projectRepositoryRoot = path.join(layersRoot, 'project-repository');
 const sessionRoot = path.join(layersRoot, 'session');
 const sharedRoot = path.join(layersRoot, 'shared');
 const compositionRootPath = path.join(appsRoot, 'create-app.ts');
+const audioSourceRegistryPublicContractPaths = new Set([
+  path.join(audioSourceRegistryRoot, 'errors'),
+  path.join(audioSourceRegistryRoot, 'i-audio-source-registry'),
+]);
 const audioEnginePublicContractPaths = new Set([
   path.join(audioEngineRoot, 'errors'),
   path.join(audioEngineRoot, 'i-audio-engine'),
@@ -446,6 +450,27 @@ describe('레이어 의존성 규칙', () => {
           (isInside(sourceImport.resolvedPath, layersRoot) &&
             !isInside(sourceImport.resolvedPath, audioSourceRegistryRoot) &&
             !isInside(sourceImport.resolvedPath, sharedRoot)))
+      );
+    });
+
+    expect(formatViolations(violations)).toEqual([]);
+  });
+
+  it('Audio Source 외부 소비자는 공개 계약만 import한다', () => {
+    const violations = sourceImports.filter(sourceImport => {
+      const resolvedPath = removeSourceExtension(sourceImport.resolvedPath);
+      if (
+        !resolvedPath ||
+        !isInside(resolvedPath, audioSourceRegistryRoot) ||
+        isInside(sourceImport.importerPath, audioSourceRegistryRoot)
+      ) {
+        return false;
+      }
+
+      return (
+        !isTestFile(sourceImport.importerPath) &&
+        sourceImport.importerPath !== compositionRootPath &&
+        !audioSourceRegistryPublicContractPaths.has(resolvedPath)
       );
     });
 
