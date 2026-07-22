@@ -1,8 +1,8 @@
 import { useState, useRef, type KeyboardEvent, useEffect } from 'react';
 import * as styles from './CliTerminal.css.ts';
 import { useCommandExecutor } from '@/layers/apps/web/context/LayerContext';
-import { executeWebAudioCommand } from '@/layers/apps/web/utils/execute-web-audio-command';
-import { parseAudioCommandString, type AudioCommand } from '@/types/audioCommand.schema';
+import { parseAudioCommandString } from '@/types/audioCommand.schema';
+import { executeJsonCliCommandBatch } from './execute-json-cli-command-batch';
 
 interface LogItem {
   id: string;
@@ -15,10 +15,6 @@ export function CliTerminal() {
   const [input, setInput] = useState('');
   const [logs, setLogs] = useState<LogItem[]>([]);
   const commandExecutor = useCommandExecutor();
-
-  const execute = async (command: AudioCommand) => {
-    await executeWebAudioCommand({ commandExecutor, command });
-  };
 
   const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -52,7 +48,6 @@ export function CliTerminal() {
     addLog(`> ${trimmedInput}`, 'info');
 
     try {
-      // Use parseAudioCommandString for consistent validation and array support
       const { commands, error } = parseAudioCommandString({
         commandString: trimmedInput,
       });
@@ -67,13 +62,17 @@ export function CliTerminal() {
         return;
       }
 
-      // Execute all commands sequentially
-      for (const command of commands) {
-        await execute(command);
+      const outcome = await executeJsonCliCommandBatch({ commandExecutor, commands });
+      for (const command of outcome.completedCommands) {
         addLog(`Executed: ${command.type}`, 'success');
       }
 
-      setInput(''); // Clear input on success
+      if (outcome.batchError) {
+        addLog(`Error (${outcome.batchError.failedCommand.type}): ${outcome.batchError.message}`, 'error');
+        return;
+      }
+
+      setInput('');
     } catch (err) {
       if (err instanceof Error) {
         addLog(`Error: ${err.message}`, 'error');
