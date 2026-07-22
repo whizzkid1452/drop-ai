@@ -1,10 +1,18 @@
-/**
- * WebGPU Navigator 인터페이스 확장
- */
+interface GPUAdapterInfoLike {
+  readonly device: string;
+  readonly vendor: string;
+}
+
+interface GPUAdapterLike {
+  readonly info: GPUAdapterInfoLike;
+}
+
+interface GPULike {
+  requestAdapter(): Promise<GPUAdapterLike | null>;
+}
+
 interface NavigatorWithGPU extends Navigator {
-  gpu?: {
-    requestAdapter(): Promise<any>;
-  };
+  readonly gpu?: GPULike;
 }
 
 /**
@@ -13,18 +21,17 @@ interface NavigatorWithGPU extends Navigator {
  */
 export async function getHardwareInfo(): Promise<string> {
   try {
-    const navigatorWithGPU = navigator as NavigatorWithGPU;
-    if ('gpu' in navigatorWithGPU && navigatorWithGPU.gpu) {
-      const adapter = await navigatorWithGPU.gpu.requestAdapter();
-      if (adapter) {
-        const info = await adapter.requestAdapterInfo();
-        return `${info.vendor} - ${info.device}`;
-      } else {
-        return 'WebGPU Adapter not found.';
-      }
-    } else {
+    const gpu = (navigator as NavigatorWithGPU).gpu;
+    if (!gpu) {
       return 'WebGPU not supported by browser.';
     }
+
+    const adapter = await gpu.requestAdapter();
+    if (!adapter) {
+      return 'WebGPU Adapter not found.';
+    }
+
+    return `${adapter.info.vendor} - ${adapter.info.device}`;
   } catch (e: unknown) {
     const errorMessage = e instanceof Error ? e.message : 'Unknown error';
     return `GPU Query Error: ${errorMessage}`;
