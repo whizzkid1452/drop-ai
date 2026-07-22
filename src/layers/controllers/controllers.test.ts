@@ -1377,6 +1377,106 @@ describe('Controllers - Phase 3 검증', () => {
       expect(exportSpy).not.toHaveBeenCalled();
     });
 
+    it('sourceId Region과 Registry 연결이 끊겼으면 Export를 명확히 거부한다', async () => {
+      await controller.track.addTrack('track-1');
+      stageSource(audioSourceRegistry);
+      await controller.region.addRegion('track-1', {
+        id: SOURCE_REGION_ID,
+        sourceId: SOURCE_ID,
+        startTime: 0,
+        sourceStartTime: 0,
+        duration: 10,
+      });
+      audioSourceRegistry.detach({ sourceId: SOURCE_ID, regionId: SOURCE_REGION_ID });
+      const exportSpy = vi.spyOn(engine, 'exportProject');
+
+      await expectRejectedProjectStateError(() => controller.export.exportProject(), 'REGION_SOURCE_MISSING');
+
+      expect(exportSpy).not.toHaveBeenCalled();
+    });
+
+    it('기존 URL Region은 Export에서 거부한다', async () => {
+      await controller.track.addTrack('track-1');
+      session.getState().updateTrack('track-1', {
+        regions: [
+          {
+            id: 'legacy-region',
+            audioFileUrl: 'legacy-region.mp3',
+            startTime: 0,
+            endTime: 10,
+            sourceStartTime: 0,
+            duration: 10,
+            status: [],
+          },
+        ],
+      });
+      const exportSpy = vi.spyOn(engine, 'exportProject');
+
+      await expectRejectedProjectStateError(() => controller.export.exportProject(), 'REGION_SOURCE_MISSING');
+
+      expect(exportSpy).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { audioFileUrl: '', duration: 10, name: 'URL이 빈' },
+      { audioFileUrl: 'legacy-region.mp3', duration: 0, name: '길이가 0인' },
+    ])('$name 기존 URL Region도 Export에서 제외하지 않고 거부한다', async ({ audioFileUrl, duration }) => {
+      await controller.track.addTrack('track-1');
+      session.getState().updateTrack('track-1', {
+        regions: [
+          {
+            id: 'legacy-region',
+            audioFileUrl,
+            startTime: 0,
+            endTime: duration,
+            sourceStartTime: 0,
+            duration,
+            status: [],
+          },
+        ],
+      });
+      const exportSpy = vi.spyOn(engine, 'exportProject');
+
+      await expectRejectedProjectStateError(() => controller.export.exportRange(0, 1), 'REGION_SOURCE_MISSING');
+
+      expect(exportSpy).not.toHaveBeenCalled();
+    });
+
+    it('정상 Source와 기존 URL Region이 섞여 있으면 전체 Export를 거부한다', async () => {
+      await controller.track.addTrack('track-1');
+      stageSource(audioSourceRegistry);
+      await controller.region.addRegion('track-1', {
+        id: SOURCE_REGION_ID,
+        sourceId: SOURCE_ID,
+        startTime: 0,
+        sourceStartTime: 0,
+        duration: 10,
+      });
+      const sourceRegion = session.getState().tracks.get('track-1')?.regions[0];
+      if (!sourceRegion) {
+        throw new Error('테스트용 Source Region을 찾을 수 없습니다.');
+      }
+      session.getState().updateTrack('track-1', {
+        regions: [
+          sourceRegion,
+          {
+            id: 'legacy-region',
+            audioFileUrl: 'legacy-region.mp3',
+            startTime: 10,
+            endTime: 20,
+            sourceStartTime: 0,
+            duration: 10,
+            status: [],
+          },
+        ],
+      });
+      const exportSpy = vi.spyOn(engine, 'exportProject');
+
+      await expectRejectedProjectStateError(() => controller.export.exportProject(), 'REGION_SOURCE_MISSING');
+
+      expect(exportSpy).not.toHaveBeenCalled();
+    });
+
     it('길이가 0인 sourceId Region도 Source 연결이 없으면 Export에서 거부한다', async () => {
       await controller.track.addTrack('track-1');
       stageSource(audioSourceRegistry);

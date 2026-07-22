@@ -54,16 +54,8 @@ export class ExportController {
       isMuted: track.isMuted,
       isSoloed: track.isSoloed,
       regions: track.regions.flatMap(region => {
-        if (typeof region.sourceId === 'string') {
-          const url = this.resolveRegionSourceUrl(region);
-          return region.duration <= 0 ? [] : [this.createExportRegion(region, url)];
-        }
-
-        if (region.duration <= 0 || region.audioFileUrl.length === 0) {
-          return [];
-        }
-
-        return [this.createExportRegion(region, region.audioFileUrl)];
+        const url = this.resolveRegionSourceUrl(region);
+        return region.duration <= 0 ? [] : [this.createExportRegion(region, url)];
       }),
     }));
 
@@ -98,27 +90,23 @@ export class ExportController {
   }
 
   private resolveRegionSourceUrl(region: RegionState): string {
-    if (typeof region.sourceId === 'string') {
-      const source = this.audioSourceResolver.resolve(region.sourceId);
-      if (source?.regionIds.includes(region.id)) {
-        return source.objectUrl;
-      }
-
+    if (region.sourceId === undefined) {
       throw new ProjectStateError(
         ProjectStateErrorCode.REGION_SOURCE_MISSING,
-        `Export할 Region의 Source 연결을 찾을 수 없습니다: ${region.id}`,
-        { regionId: region.id, sourceId: region.sourceId }
+        `Export할 Region의 Source ID를 찾을 수 없습니다: ${region.id}`,
+        { regionId: region.id }
       );
     }
 
-    if (region.audioFileUrl) {
-      return region.audioFileUrl;
+    const source = this.audioSourceResolver.resolve(region.sourceId);
+    if (source?.regionIds.includes(region.id)) {
+      return source.objectUrl;
     }
 
     throw new ProjectStateError(
       ProjectStateErrorCode.REGION_SOURCE_MISSING,
-      `Export할 Region의 오디오 소스를 찾을 수 없습니다: ${region.id}`,
-      { regionId: region.id }
+      `Export할 Region의 Source 연결을 찾을 수 없습니다: ${region.id}`,
+      { regionId: region.id, sourceId: region.sourceId }
     );
   }
 
