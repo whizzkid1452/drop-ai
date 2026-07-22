@@ -1,5 +1,6 @@
 import type { IAudioEngine } from '../audio-engine/i-audio-engine';
 import { AudioEngine } from '../audio-engine/audio-engine';
+import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { createSessionStore, type SessionStore } from '../session/session';
 import { AppController } from '../controllers/app-controller';
 import { CommandExecutor } from '../commands/command-executor';
@@ -26,4 +27,8 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   const playbackClock = new PlaybackClockQuery(controller.playback);
 
   return { session, commandExecutor, playbackClock };
+}
+
+export function createCliTestApp(): AppInstance {
+  return createApp({ audioEngine: new MockAudioEngine() });
 }

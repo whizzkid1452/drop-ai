@@ -1,7 +1,7 @@
 import React, { createContext, use } from 'react';
 import { useStore } from 'zustand';
 import type { AppInstance } from '../../create-app';
-import { type SessionStore, type SessionState } from '../../../session/session';
+import type { SessionState } from '../../../session/session';
 import type { CommandExecutor } from '../../../commands/command-executor';
 import type { IPlaybackClockQuery } from '../../../queries/playback-clock-query';
 
@@ -48,12 +48,4 @@ export function usePlaybackClock(): IPlaybackClockQuery {
 export function useSession<T>(selector: (state: SessionState) => T): T {
   const { session } = useLayer();
   return useStore(session, selector);
-}
-
-/**
- * Hook to access the raw SessionStore (Zustand store instance).
- * Useful for accessing state in callbacks without subscribing to updates.
- */
-export function useSessionStore(): SessionStore {
-  return useLayer().session;
 }

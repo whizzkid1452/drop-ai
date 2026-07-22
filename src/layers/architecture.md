@@ -73,4 +73,14 @@ graph TD
     CreateApp -->|Create & Inject Deps| Queries
 ```
 
+## 자동 검사
+
+`architecture.test.ts`가 다음 경계를 검사한다.
+
+- Apps는 Composition Root 밖에서 Controller를 import하지 않는다.
+- Command와 Query는 AudioEngine 계층을 import하지 않는다.
+- Controllers는 `IAudioEngine` 계약과 오류 타입만 import한다.
+- 하위 계층은 상위 계층을 역참조하지 않는다.
+- Tone.js import와 대표 Web Audio 생성자·팩토리의 직접 호출은 AudioEngine 계층에서만 수행한다.
+
 > **Note:** `records/` 디렉터리의 문서들은 마이그레이션 이전 구현 기록이다. 현재 아키텍처 가이드로 참고하지 않는다.

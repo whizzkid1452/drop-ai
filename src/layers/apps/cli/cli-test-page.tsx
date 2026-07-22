@@ -3,8 +3,7 @@ import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 import { LayerProvider } from '../web/context/LayerContext';
-import { MockAudioEngine } from '../../audio-engine/mock-audio-engine';
-import { createApp } from '../create-app';
+import { createCliTestApp } from '../create-app';
 import { useCliApp } from './index';
 
 const CliTestContent = () => {
@@ -113,7 +112,7 @@ const CliTestContent = () => {
 };
 
 export const CliTestPage = () => {
-  const app = useRef(createApp({ audioEngine: new MockAudioEngine() })).current;
+  const app = useRef(createCliTestApp()).current;
   return (
     <LayerProvider app={app}>
       <CliTestContent />
