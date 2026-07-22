@@ -1,32 +1,33 @@
 import * as Tone from 'tone';
-import type { ExportRequest, ExportTrack, IAudioEngine, RegionData } from './i-audio-engine';
 import { startPlayer } from './config/player-config';
-import { RegionRenderer, type RegionRenderParams } from './renderers/region-renderer';
 import { encodeAudioBufferToWav } from './encoders/wav-encoder';
 import { AudioEngineError, AudioEngineErrorCode, ERROR_MESSAGES } from './errors';
+import type {
+  ExportRequest,
+  ExportTrack,
+  IAudioEngine,
+  RegionData,
+  ReplaceRegionRequest,
+  RescheduleRegionRequest,
+} from './i-audio-engine';
+import { RegionRenderer, type RegionRenderParams } from './renderers/region-renderer';
 
-interface AudioEngineOptions {
-  initialTempo: number;
+interface RegionPlayerEntry {
+  player: Tone.Player;
+  regionData: RegionData;
+  revision: number;
 }
 
-/**
- * AudioEngine - Tone.js 기반 오디오 엔진 구현
- *
- * 아키텍처 규칙:
- * - audio-engine만 Tone.js에 접근 가능
- * - Controllers에서만 호출됨
- */
+interface CreateRegionEntriesRequest {
+  channel: Tone.Channel;
+  regions: RegionData[];
+}
+
 export class AudioEngine implements IAudioEngine {
-  // Tone.js Objects
   private channels: Map<string, Tone.Channel> = new Map();
-  private players: Map<string, Map<string, Tone.Player>> = new Map();
-
-  constructor(options: AudioEngineOptions = { initialTempo: 120 }) {
-    // 상태 저장소 대신 초기값만 받아 AudioEngine의 Session 의존을 막는다.
-    Tone.Transport.bpm.value = options.initialTempo;
-  }
-
-  // ===== Transport Control =====
+  private desiredTrackVolumes: Map<string, number> = new Map();
+  private mutedTrackIds: Set<string> = new Set();
+  private players: Map<string, Map<string, RegionPlayerEntry>> = new Map();
 
   async play(): Promise<void> {
     if (Tone.getContext().state !== 'running') {
@@ -51,44 +52,34 @@ export class AudioEngine implements IAudioEngine {
     return Tone.getTransport().seconds;
   }
 
-  setTempo(tempo: number): void {
-    Tone.Transport.bpm.value = tempo;
-  }
-
-  // ===== Track Management =====
-
   async loadTrack(url: string, id: string): Promise<void> {
     console.log(`[AudioEngine] Loading track ${id} from ${url}`);
-    // 기본 트랙 채널 초기화
     this.getOrInitChannel(id);
   }
 
   removeTrack(trackId: string): void {
     const trackPlayers = this.players.get(trackId);
-    trackPlayers?.forEach(player => this.disposePlayer(player));
+    trackPlayers?.forEach(entry => this.disposePlayer(entry.player));
     this.players.delete(trackId);
 
     const channel = this.channels.get(trackId);
-    channel?.disconnect();
-    channel?.dispose();
-    this.channels.delete(trackId);
-  }
-
-  private getOrInitChannel(trackId: string): Tone.Channel {
-    let channel = this.channels.get(trackId);
-    if (!channel) {
-      channel = new Tone.Channel({
-        volume: 0,
-        pan: 0,
-      }).toDestination();
-      this.channels.set(trackId, channel);
-      this.players.set(trackId, new Map());
+    if (channel) {
+      channel.solo = false;
+      channel.disconnect();
+      channel.dispose();
     }
-    return channel;
+    this.channels.delete(trackId);
+    this.desiredTrackVolumes.delete(trackId);
+    this.mutedTrackIds.delete(trackId);
   }
 
   setTrackVolume(trackId: string, volume: number): void {
     const channel = this.getOrInitChannel(trackId);
+    this.desiredTrackVolumes.set(trackId, volume);
+    if (this.mutedTrackIds.has(trackId)) {
+      return;
+    }
+
     const volumeInDb = Tone.gainToDb(volume);
     channel.volume.rampTo(volumeInDb, 0.1);
   }
@@ -98,76 +89,133 @@ export class AudioEngine implements IAudioEngine {
     channel.pan.rampTo(pan, 0.1);
   }
 
+  setTrackMute(trackId: string, muted: boolean): void {
+    const channel = this.getExistingChannel(trackId);
+    if (muted) {
+      channel.mute = true;
+      this.mutedTrackIds.add(trackId);
+      return;
+    }
+
+    this.mutedTrackIds.delete(trackId);
+    const desiredVolume = this.desiredTrackVolumes.get(trackId) ?? 1;
+    channel.mute = false;
+    channel.volume.value = Tone.gainToDb(desiredVolume);
+  }
+
+  setTrackSolo(trackId: string, soloed: boolean): void {
+    this.getExistingChannel(trackId).solo = soloed;
+  }
+
   getTrackParams(trackId: string): { volume: number; pan: number } | null {
     const channel = this.channels.get(trackId);
-    if (!channel) return null;
+    if (!channel) {
+      return null;
+    }
 
     return {
-      volume: Tone.dbToGain(channel.volume.value),
+      volume: this.desiredTrackVolumes.get(trackId) ?? Tone.dbToGain(channel.volume.value),
       pan: channel.pan.value,
     };
   }
 
-  // ===== Region Management =====
-
   async addRegion(trackId: string, regionData: RegionData): Promise<void> {
-    console.log('[AudioEngine] addRegion called', { trackId, regionData });
-
     const channel = this.getOrInitChannel(trackId);
-    const trackPlayers = this.players.get(trackId)!;
-
+    const trackPlayers = this.players.get(trackId);
+    if (!trackPlayers) {
+      throw this.createRegionStateChangedError({ trackId, regionId: regionData.id });
+    }
     if (trackPlayers.has(regionData.id)) {
-      console.log('[AudioEngine] Player already exists for region', regionData.id);
-      return;
+      throw this.createRegionIdConflictError({ trackId, regionId: regionData.id });
     }
 
-    return new Promise((resolve, reject) => {
-      const player = new Tone.Player({
-        url: regionData.url,
-        loop: false,
-        onload: () => {
-          console.log('[AudioEngine] Player loaded for region', regionData.id);
+    const [entry] = await this.createScheduledRegionEntries({ channel, regions: [regionData] });
+    if (!entry) {
+      return;
+    }
+    if (this.players.get(trackId) !== trackPlayers) {
+      this.cleanupRegionEntries([entry]);
+      throw this.createRegionStateChangedError({ trackId, regionId: regionData.id });
+    }
+    if (trackPlayers.has(regionData.id)) {
+      this.cleanupRegionEntries([entry]);
+      throw this.createRegionIdConflictError({ trackId, regionId: regionData.id });
+    }
 
-          // Tone.js Player 동기화
-          startPlayer({
-            player,
-            syncMode: true,
-            startTime: regionData.startTime,
-            startOffset: regionData.sourceStartTime,
-            duration: regionData.duration,
-          });
-
-          resolve();
-        },
-        onerror: e => {
-          console.error('[AudioEngine] Player load error', e);
-          reject(e);
-        },
-      }).connect(channel);
-
-      trackPlayers.set(regionData.id, player);
-    });
+    trackPlayers.set(entry.regionData.id, entry);
   }
 
   removeRegion(trackId: string, regionId: string): void {
     const trackPlayers = this.players.get(trackId);
-    const player = trackPlayers?.get(regionId);
-
-    if (player) {
-      this.disposePlayer(player);
-      trackPlayers?.delete(regionId);
+    const entry = trackPlayers?.get(regionId);
+    if (!entry) {
+      return;
     }
+
+    this.disposePlayer(entry.player);
+    trackPlayers?.delete(regionId);
   }
 
-  private disposePlayer(player: Tone.Player): void {
-    // Transport 예약을 먼저 해제해야 삭제된 Region이 이후 재생되지 않는다.
-    player.unsync();
-    player.stop();
-    player.disconnect();
-    player.dispose();
+  rescheduleRegion(request: RescheduleRegionRequest): void {
+    const trackPlayers = this.players.get(request.trackId);
+    const entry = this.getRegionEntry(request);
+    const channel = this.getExistingChannel(request.trackId);
+    const nextRegionData = { ...entry.regionData, startTime: request.startTime };
+    const nextEntry: RegionPlayerEntry = {
+      player: new Tone.Player({ url: entry.player.buffer, loop: false }).connect(channel),
+      regionData: this.cloneRegionData(nextRegionData),
+      revision: entry.revision + 1,
+    };
+
+    try {
+      this.schedulePlayer(nextEntry.player, nextEntry.regionData);
+    } catch (error) {
+      this.cleanupRegionEntries([nextEntry]);
+      throw new AudioEngineError(AudioEngineErrorCode.REGION_SCHEDULE_FAILED, ERROR_MESSAGES.REGION_SCHEDULE_FAILED, {
+        cause: this.describeError(error),
+      });
+    }
+
+    this.disposePlayer(entry.player);
+    trackPlayers?.set(request.regionId, nextEntry);
   }
 
-  // ===== Export =====
+  async replaceRegion(request: ReplaceRegionRequest): Promise<void> {
+    const trackPlayers = this.players.get(request.trackId);
+    const originalEntry = trackPlayers?.get(request.regionId);
+    if (!trackPlayers || !originalEntry) {
+      throw this.createRegionNotFoundError(request);
+    }
+
+    const originalRevision = originalEntry.revision;
+    this.validateReplacementIds(trackPlayers, request);
+    const channel = this.getExistingChannel(request.trackId);
+    const replacementEntries = await this.createScheduledRegionEntries({
+      channel,
+      regions: request.replacements,
+    });
+
+    const currentEntry = trackPlayers.get(request.regionId);
+    const stateChanged =
+      this.players.get(request.trackId) !== trackPlayers ||
+      currentEntry !== originalEntry ||
+      currentEntry?.revision !== originalRevision;
+    if (stateChanged) {
+      this.cleanupRegionEntries(replacementEntries);
+      throw this.createRegionStateChangedError(request);
+    }
+
+    try {
+      this.validateReplacementIds(trackPlayers, request);
+    } catch (error) {
+      this.cleanupRegionEntries(replacementEntries);
+      throw error;
+    }
+
+    this.disposePlayer(originalEntry.player);
+    trackPlayers.delete(request.regionId);
+    replacementEntries.forEach(entry => trackPlayers.set(entry.regionData.id, entry));
+  }
 
   async exportProject(request: ExportRequest): Promise<Blob> {
     const duration = request.range.endTime - request.range.startTime;
@@ -195,9 +243,143 @@ export class AudioEngine implements IAudioEngine {
         throw error;
       }
       throw new AudioEngineError(AudioEngineErrorCode.EXPORT_FAILED, ERROR_MESSAGES.EXPORT_FAILED, {
-        cause: error instanceof Error ? error.message : String(error),
+        cause: this.describeError(error),
       });
     }
+  }
+
+  private getOrInitChannel(trackId: string): Tone.Channel {
+    const currentChannel = this.channels.get(trackId);
+    if (currentChannel) {
+      return currentChannel;
+    }
+
+    const channel = new Tone.Channel({
+      volume: 0,
+      pan: 0,
+    }).toDestination();
+    this.channels.set(trackId, channel);
+    this.desiredTrackVolumes.set(trackId, 1);
+    this.players.set(trackId, new Map());
+    return channel;
+  }
+
+  private getExistingChannel(trackId: string): Tone.Channel {
+    const channel = this.channels.get(trackId);
+    if (!channel) {
+      throw new AudioEngineError(AudioEngineErrorCode.TRACK_NOT_FOUND, ERROR_MESSAGES.TRACK_NOT_FOUND, { trackId });
+    }
+    return channel;
+  }
+
+  private getRegionEntry(request: RescheduleRegionRequest): RegionPlayerEntry {
+    const entry = this.players.get(request.trackId)?.get(request.regionId);
+    if (!entry) {
+      throw this.createRegionNotFoundError(request);
+    }
+    return entry;
+  }
+
+  private async createScheduledRegionEntries(request: CreateRegionEntriesRequest): Promise<RegionPlayerEntry[]> {
+    const entries = request.regions.map(regionData => ({
+      player: new Tone.Player({ loop: false }).connect(request.channel),
+      regionData: this.cloneRegionData(regionData),
+      revision: 0,
+    }));
+
+    const loadResults = await Promise.allSettled(entries.map(entry => entry.player.load(entry.regionData.url)));
+    const loadFailure = loadResults.find(result => result.status === 'rejected');
+    if (loadFailure?.status === 'rejected') {
+      this.cleanupRegionEntries(entries);
+      throw new AudioEngineError(AudioEngineErrorCode.REGION_LOAD_FAILED, ERROR_MESSAGES.REGION_LOAD_FAILED, {
+        cause: this.describeError(loadFailure.reason),
+      });
+    }
+
+    try {
+      entries.forEach(entry => this.schedulePlayer(entry.player, entry.regionData));
+    } catch (error) {
+      this.cleanupRegionEntries(entries);
+      throw new AudioEngineError(AudioEngineErrorCode.REGION_SCHEDULE_FAILED, ERROR_MESSAGES.REGION_SCHEDULE_FAILED, {
+        cause: this.describeError(error),
+      });
+    }
+
+    return entries;
+  }
+
+  private schedulePlayer(player: Tone.Player, regionData: RegionData): void {
+    startPlayer({
+      player,
+      syncMode: true,
+      startTime: regionData.startTime,
+      startOffset: regionData.sourceStartTime,
+      duration: regionData.duration,
+    });
+  }
+
+  private validateReplacementIds(trackPlayers: Map<string, RegionPlayerEntry>, request: ReplaceRegionRequest): void {
+    const replacementIds = new Set<string>();
+    const hasConflict = request.replacements.some(replacement => {
+      if (replacementIds.has(replacement.id)) {
+        return true;
+      }
+      replacementIds.add(replacement.id);
+      return replacement.id !== request.regionId && trackPlayers.has(replacement.id);
+    });
+
+    if (hasConflict) {
+      throw this.createRegionIdConflictError(request);
+    }
+  }
+
+  private createRegionIdConflictError(request: { trackId: string; regionId: string }): AudioEngineError {
+    return new AudioEngineError(AudioEngineErrorCode.REGION_ID_CONFLICT, ERROR_MESSAGES.REGION_ID_CONFLICT, {
+      trackId: request.trackId,
+      regionId: request.regionId,
+    });
+  }
+
+  private createRegionStateChangedError(request: { trackId: string; regionId: string }): AudioEngineError {
+    return new AudioEngineError(AudioEngineErrorCode.REGION_STATE_CHANGED, ERROR_MESSAGES.REGION_STATE_CHANGED, {
+      trackId: request.trackId,
+      regionId: request.regionId,
+    });
+  }
+
+  private createRegionNotFoundError(request: { trackId: string; regionId: string }): AudioEngineError {
+    return new AudioEngineError(AudioEngineErrorCode.REGION_NOT_FOUND, ERROR_MESSAGES.REGION_NOT_FOUND, {
+      trackId: request.trackId,
+      regionId: request.regionId,
+    });
+  }
+
+  private cloneRegionData(regionData: RegionData): RegionData {
+    return {
+      ...regionData,
+      audioFile: regionData.audioFile ? { ...regionData.audioFile } : undefined,
+    };
+  }
+
+  private cleanupRegionEntries(entries: RegionPlayerEntry[]): void {
+    entries.forEach(entry => {
+      try {
+        this.disposePlayer(entry.player);
+      } catch (error) {
+        console.error('[AudioEngine] Failed to clean up a Region Player', error);
+      }
+    });
+  }
+
+  private disposePlayer(player: Tone.Player): void {
+    player.unsync();
+    player.stop();
+    player.disconnect();
+    player.dispose();
+  }
+
+  private describeError(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 
   private async scheduleExport(request: ExportRequest): Promise<void> {
@@ -211,15 +393,15 @@ export class AudioEngine implements IAudioEngine {
 
       for (const region of track.regions) {
         const params = RegionRenderer.adjustForExportRange(RegionRenderer.calculateRenderParams(region), request.range);
-        if (params.duration <= 0) continue;
+        if (params.duration <= 0) {
+          continue;
+        }
 
         scheduledPlayers.push({ player: new Tone.Player({ loop: false }).connect(channel), params });
       }
     }
 
     await Promise.all(scheduledPlayers.map(({ player, params }) => player.load(params.url)));
-
-    // 모든 파일을 먼저 디코딩해야 OfflineAudioContext가 빈 버퍼를 렌더링하지 않는다.
     scheduledPlayers.forEach(({ player, params }) => {
       startPlayer({ player, syncMode: false, ...params });
     });

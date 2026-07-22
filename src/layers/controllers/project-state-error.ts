@@ -1,0 +1,23 @@
+export const ProjectStateErrorCode = {
+  TRACK_NOT_FOUND: 'TRACK_NOT_FOUND',
+  TRACK_ID_CONFLICT: 'TRACK_ID_CONFLICT',
+  REGION_NOT_FOUND: 'REGION_NOT_FOUND',
+  REGION_ID_CONFLICT: 'REGION_ID_CONFLICT',
+  AMBIGUOUS_REGION_TARGET: 'AMBIGUOUS_REGION_TARGET',
+  INVALID_SPLIT_POSITION: 'INVALID_SPLIT_POSITION',
+  INVALID_REGION_POSITION: 'INVALID_REGION_POSITION',
+  REGION_SOURCE_MISSING: 'REGION_SOURCE_MISSING',
+} as const;
+
+export type ProjectStateErrorCode = (typeof ProjectStateErrorCode)[keyof typeof ProjectStateErrorCode];
+
+export class ProjectStateError extends Error {
+  constructor(
+    public readonly code: ProjectStateErrorCode,
+    message: string,
+    public readonly details?: Readonly<Record<string, unknown>>
+  ) {
+    super(message);
+    this.name = 'ProjectStateError';
+  }
+}

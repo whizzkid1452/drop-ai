@@ -93,6 +93,9 @@ flowchart LR
 
 점선: 엔진 출력은 스피커로 나가지만, **표시용 state는 Session 경로**로 맞춘다.
 
+현재 Region의 시작·끝 위치는 **절대 초**로 저장한다. 음악 시간(musical time) 모델을 도입하기 전까지 tempo는
+Session의 프로젝트 값이며, AudioEngine의 Transport BPM이나 Region 예약 시각을 변경하지 않는다.
+
 ---
 
 ## 3. 조립: `createApp`

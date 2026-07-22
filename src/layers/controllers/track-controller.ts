@@ -1,5 +1,6 @@
 import type { IAudioEngine } from '../audio-engine/i-audio-engine';
-import { type SessionStore } from '../session/session';
+import type { SessionStore, TrackState } from '../session/session';
+import { ProjectStateError, ProjectStateErrorCode } from './project-state-error';
 
 export class TrackController {
   constructor(
@@ -10,24 +11,26 @@ export class TrackController {
   async addTrack(url: string, id: string): Promise<void> {
     console.log(`[TrackController] Adding track: ${id}`);
 
-    // 1. Audio Engine Load
+    this.throwIfTrackExists(id);
     await this.audioEngine.loadTrack(url, id);
+    this.throwIfTrackExists(id);
 
-    // 2. Update Session via Zustand
     this.sessionStore.getState().addTrack({
       id,
-      name: `Track ${id}`, // TODO Phase 7: name 관리 개선
+      name: `Track ${id}`,
       volume: 1.0,
       pan: 0,
       isMuted: false,
       isSoloed: false,
-      status: [], // TODO Phase 7: status 타입 정리
+      status: [],
       regions: [],
     });
   }
 
   removeTrack(id: string): void {
     console.log(`[TrackController] Removing track: ${id}`);
+
+    this.getTrackOrThrow(id);
     this.audioEngine.removeTrack(id);
     this.sessionStore.getState().removeTrack(id);
   }
@@ -35,34 +38,53 @@ export class TrackController {
   setVolume(trackId: string, volume: number): void {
     console.log(`[TrackController] Setting volume for ${trackId}: ${volume}`);
 
-    // 1. AudioEngine을 통해 오디오 업데이트
+    this.getTrackOrThrow(trackId);
     this.audioEngine.setTrackVolume(trackId, volume);
-
-    // 2. SessionStore도 명시적으로 업데이트 (MockAudioEngine에서는 SessionStore가 없으므로)
     this.sessionStore.getState().updateTrack(trackId, { volume });
   }
 
   setPan(trackId: string, pan: number): void {
     console.log(`[TrackController] Setting pan for ${trackId}: ${pan}`);
 
-    // 1. AudioEngine을 통해 오디오 업데이트
+    this.getTrackOrThrow(trackId);
     this.audioEngine.setTrackPan(trackId, pan);
-
-    // 2. SessionStore도 명시적으로 업데이트 (MockAudioEngine에서는 SessionStore가 없으므로)
     this.sessionStore.getState().updateTrack(trackId, { pan });
   }
 
   setMute(trackId: string, muted: boolean): void {
     console.log(`[TrackController] Setting mute for ${trackId}: ${muted}`);
 
-    // SessionStore 업데이트
+    this.getTrackOrThrow(trackId);
+    this.audioEngine.setTrackMute(trackId, muted);
     this.sessionStore.getState().updateTrack(trackId, { isMuted: muted });
   }
 
   setSolo(trackId: string, soloed: boolean): void {
     console.log(`[TrackController] Setting solo for ${trackId}: ${soloed}`);
 
-    // SessionStore 업데이트
+    this.getTrackOrThrow(trackId);
+    this.audioEngine.setTrackSolo(trackId, soloed);
     this.sessionStore.getState().updateTrack(trackId, { isSoloed: soloed });
+  }
+
+  private getTrackOrThrow(trackId: string): TrackState {
+    const track = this.sessionStore.getState().tracks.get(trackId);
+    if (track) {
+      return track;
+    }
+
+    throw new ProjectStateError(ProjectStateErrorCode.TRACK_NOT_FOUND, `트랙을 찾을 수 없습니다: ${trackId}`, {
+      trackId,
+    });
+  }
+
+  private throwIfTrackExists(trackId: string): void {
+    if (!this.sessionStore.getState().tracks.has(trackId)) {
+      return;
+    }
+
+    throw new ProjectStateError(ProjectStateErrorCode.TRACK_ID_CONFLICT, `이미 사용 중인 Track ID입니다: ${trackId}`, {
+      trackId,
+    });
   }
 }

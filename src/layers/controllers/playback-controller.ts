@@ -50,10 +50,7 @@ export class PlaybackController {
   handleSetTempo(tempo: number): void {
     console.log(`[PlaybackController] Setting tempo to ${tempo}`);
 
-    // Command Audio Engine
-    this.audioEngine.setTempo(tempo);
-
-    // Update Session State
+    // Region 좌표가 절대 초이므로 BPM으로 기존 예약 시점을 바꾸지 않는다.
     this.sessionStore.getState().setTempo(tempo);
   }
 

@@ -19,7 +19,7 @@ export interface CreateAppOptions {
  */
 export function createApp(options: CreateAppOptions = {}): AppInstance {
   const session = createSessionStore();
-  const audioEngine = options.audioEngine ?? new AudioEngine({ initialTempo: session.getState().tempo });
+  const audioEngine = options.audioEngine ?? new AudioEngine();
   const controller = new AppController(session, audioEngine);
   const commandExecutor = new CommandExecutor(session, controller);
 

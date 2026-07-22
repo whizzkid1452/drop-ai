@@ -38,6 +38,18 @@ export interface ExportRequest {
   sampleRate: number;
 }
 
+export interface RescheduleRegionRequest {
+  trackId: string;
+  regionId: string;
+  startTime: number;
+}
+
+export interface ReplaceRegionRequest {
+  trackId: string;
+  regionId: string;
+  replacements: RegionData[];
+}
+
 export interface IAudioEngine {
   // Transport Control
   play(): Promise<void>;
@@ -46,19 +58,20 @@ export interface IAudioEngine {
   setTime(time: number): void;
   getCurrentTime(): number;
 
-  // Tempo
-  setTempo(tempo: number): void;
-
   // Track Management
   loadTrack(url: string, id: string): Promise<void>;
   removeTrack(trackId: string): void;
   setTrackVolume(trackId: string, volume: number): void;
   setTrackPan(trackId: string, pan: number): void;
+  setTrackMute(trackId: string, muted: boolean): void;
+  setTrackSolo(trackId: string, soloed: boolean): void;
   getTrackParams(trackId: string): { volume: number; pan: number } | null;
 
   // Region Management
   addRegion(trackId: string, regionData: RegionData): Promise<void>;
   removeRegion(trackId: string, regionId: string): void;
+  rescheduleRegion(request: RescheduleRegionRequest): void;
+  replaceRegion(request: ReplaceRegionRequest): Promise<void>;
 
   // Export
   exportProject(request: ExportRequest): Promise<Blob>;

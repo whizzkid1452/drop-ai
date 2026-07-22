@@ -6,6 +6,9 @@
 4. Apps는 Session을 구독해 화면을 갱신한다.
 5. Tone.js와 Web Audio API는 AudioEngine에서만 접근한다.
 
+현재 Region의 `startTime`과 `endTime`은 절대 초 단위다. 음악 시간(musical time) 모델을 도입하기 전까지 Session의
+tempo 변경은 AudioEngine의 Transport BPM과 Region 예약을 변경하지 않는다.
+
 현재 Region 분할과 일부 내부 CLI 작업은 AudioCommand 계약만 정의됐으며, 실행 경로 이전이 끝나지 않아
 Controllers를 직접 호출한다.
 
