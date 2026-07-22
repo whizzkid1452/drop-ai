@@ -50,6 +50,7 @@ Web UI / CLI / Agent Chat
 ## 허용되는 직접 접근
 
 - Apps는 `useSession` selector로 Session을 읽을 수 있다.
+- Apps는 Composition Root가 주입한 읽기 전용 Query로 명시된 조회 메서드만 호출할 수 있다.
 - 모달 열림, 입력값, hover처럼 화면에만 필요한 상태는 React 로컬 상태로 관리할 수 있다.
 - Agent 메시지, 모델 로딩 상태처럼 오디오·프로젝트 도메인을 변경하지 않는 앱 워크플로 상태는 Session Action으로 변경할 수 있다.
 - 조회 전용 CLI 명령은 Session snapshot을 읽을 수 있다.

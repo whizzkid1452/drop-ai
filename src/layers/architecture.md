@@ -7,6 +7,9 @@
 5. Apps는 Session을 구독해 화면을 갱신한다.
 6. Tone.js와 Web Audio API는 AudioEngine에서만 접근한다.
 
+재생 중 현재 시각처럼 Session 구독만으로 갱신되지 않는 값은 읽기 전용 Query로 조회한다. Apps에는 Controller나
+AudioEngine 객체를 노출하지 않는다. 현재 `PlaybackClockQuery`는 `PlaybackController.getCurrentTime()`만 노출한다.
+
 `executeMany`는 묶음 전체를 먼저 검증하고, 다른 명령이 끼어들지 않게 순서대로 실행한다. 실행 중 첫 오류가 나면
 남은 명령은 실행하지 않는다. 이미 완료된 변경은 되돌리지 않으므로 묶음 실행은 원자적 트랜잭션이 아니다.
 실패 오류는 0부터 시작하는 실패 위치, 실패 명령, 앞선 실행 결과와 원인을 보존한다. 실패한 실행 뒤에 대기 중인
@@ -43,6 +46,7 @@ Web UI의 Tempo 입력은 `SET_TEMPO`로 Session 메타데이터만 변경한다
 graph TD
     Apps["Apps (CLI, Web, Agent)"]
     Commands["CommandExecutor"]
+    Queries["Read-only Queries"]
     Controllers["Controllers (AppController Facade)"]
     Session["Session (Zustand Vanilla Store)"]
     AudioEngine["Audio Engine"]
@@ -50,14 +54,15 @@ graph TD
     CreateApp["createApp (Composition Root)"]
 
     Apps -->|Execute AudioCommand| Commands
+    Apps -->|Read Current Clock| Queries
     Commands -->|Validate & Delegate| Controllers
     Commands -->|Read Current State| Session
-    Apps -.->|Non-command Operations| Controllers
     Apps -->|Subscribe| Session
     Apps -.->|Create via| CreateApp
 
     Controllers -->|Use| AudioEngine
     Controllers -->|Update| Session
+    Queries -->|Read Only| Controllers
 
     AudioEngine -->|Wrap / Use| ToneJS
 
@@ -65,6 +70,7 @@ graph TD
     CreateApp -->|Create| Session
     CreateApp -->|Create & Inject Deps| Controllers
     CreateApp -->|Create & Inject Deps| Commands
+    CreateApp -->|Create & Inject Deps| Queries
 ```
 
 > **Note:** `records/` 디렉터리의 문서들은 마이그레이션 이전 구현 기록이다. 현재 아키텍처 가이드로 참고하지 않는다.

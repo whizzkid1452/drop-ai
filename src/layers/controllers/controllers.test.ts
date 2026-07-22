@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
-import { createApp } from '../apps/create-app';
-import type { AppController } from './app-controller';
-import type { SessionStore } from '../session/session';
+import { AppController } from './app-controller';
+import { createSessionStore, type SessionStore } from '../session/session';
 import { ProjectStateError, type ProjectStateErrorCode } from './project-state-error';
 
 function expectProjectStateError(action: () => unknown, code: ProjectStateErrorCode): void {
@@ -50,9 +49,8 @@ describe('Controllers - Phase 3 검증', () => {
 
   beforeEach(() => {
     engine = new MockAudioEngine();
-    const app = createApp({ audioEngine: engine });
-    controller = app.controller;
-    session = app.session;
+    session = createSessionStore();
+    controller = new AppController(session, engine);
   });
 
   describe('PlaybackController 확장', () => {

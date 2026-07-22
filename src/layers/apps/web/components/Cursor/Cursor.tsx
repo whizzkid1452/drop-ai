@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { useSession, useController } from '@/layers/apps/web/context/LayerContext';
+import { usePlaybackClock, useSession } from '@/layers/apps/web/context/LayerContext';
 import * as styles from './Cursor.css.ts';
 
 interface CursorProps {
@@ -11,7 +11,7 @@ export const Cursor = ({ pixelsPerSecond }: CursorProps) => {
   const rAF = useRef<number>(0);
   const isPlaying = useSession(state => state.isPlaying);
   const currentTime = useSession(state => state.currentTime);
-  const controller = useController();
+  const playbackClock = usePlaybackClock();
 
   useEffect(() => {
     const updatePosition = (time: number) => {
@@ -22,7 +22,7 @@ export const Cursor = ({ pixelsPerSecond }: CursorProps) => {
     };
 
     const animate = () => {
-      const time = controller.playback.getCurrentTime();
+      const time = playbackClock.getCurrentTime();
       updatePosition(time);
       rAF.current = requestAnimationFrame(animate);
     };
@@ -39,7 +39,7 @@ export const Cursor = ({ pixelsPerSecond }: CursorProps) => {
     return () => {
       cancelAnimationFrame(rAF.current);
     };
-  }, [isPlaying, currentTime, pixelsPerSecond]);
+  }, [isPlaying, currentTime, pixelsPerSecond, playbackClock]);
 
   return <div ref={cursorRef} className={styles.cursor} />;
 };

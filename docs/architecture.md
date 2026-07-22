@@ -15,6 +15,9 @@ AudioCommand 실행 방향은 아래와 같다.
 
 아래 그림은 **실행 시점** 레이어만 보여 준다. 객체 조립(`createApp`)은 **§3**에서 따로 그린다.
 
+재생 중 현재 시각은 상태 변경이 아니라 조회이므로 `PlaybackClockQuery`가 PlaybackController의 조회 메서드만 호출한다.
+Apps에는 Controller와 AudioEngine 객체를 노출하지 않는다.
+
 ```mermaid
 flowchart TB
     subgraph apps["① Apps"]
@@ -24,6 +27,10 @@ flowchart TB
 
     subgraph command["② Commands"]
         CE["CommandExecutor"]
+    end
+
+    subgraph query["② Read-only Queries"]
+        Q["PlaybackClockQuery"]
     end
 
     subgraph ctrl["③ Controllers"]
@@ -43,12 +50,14 @@ flowchart TB
     end
 
     A -->|"AudioCommand 실행"| CE
+    A -->|"현재 재생 시각 조회"| Q
     A -->|"구독·워크플로 상태"| SS
 
     CE -->|"검증 후 위임"| AC
     CE -->|"실행 시점 상태 조회"| SS
     AC -->|"쓰기·구독 갱신"| SS
     AC -->|"재생·렌더·내보내기"| IAE
+    Q -->|"getCurrentTime만 조회"| AC
     IAE --> T
 ```
 
@@ -92,6 +101,10 @@ flowchart LR
         CE["CommandExecutor"]
     end
 
+    subgraph Q["Read-only Query"]
+        PQ["PlaybackClockQuery"]
+    end
+
     subgraph S["Session"]
         ST[("sessionStore")]
     end
@@ -101,10 +114,12 @@ flowchart LR
     end
 
     V -->|"AudioCommand"| CE
+    V -->|"현재 시각 조회"| PQ
     CE -->|"검증 후 위임"| X
     CE -->|"현재 상태 조회"| ST
     X -->|"set / patch"| ST
     X -->|"오디오"| AE
+    PQ -->|"조회만"| X
     ST -->|"구독 → 리렌더"| V
     AE -.->|"소리만 (UI 직접 갱신 없음)"| V
 ```
@@ -120,7 +135,9 @@ Session의 프로젝트 값이며, AudioEngine의 Transport BPM이나 Region 예
 
 **Composition Root** — §1과 달리 **부팅·테스트 진입점**에서 한 번 객체 그래프를 만드는 흐름이다.
 
-`createApp`이 **Session**, **AudioEngine**, **AppController**, **CommandExecutor**를 한 번 조립한다.
+`createApp`이 **Session**, **AudioEngine**, **AppController**, **CommandExecutor**, **PlaybackClockQuery**를 한 번 조립한다.
+AppController 자체는 Apps에 노출하지 않는다. CommandExecutor에는 AppController를, PlaybackClockQuery에는
+PlaybackController의 읽기 전용 계약을 주입한다.
 
 ```mermaid
 flowchart TB
@@ -136,15 +153,18 @@ flowchart TB
         SS["session\n(createSessionStore)"]
         AC["AppController\n(session, audioEngine)"]
         CE["CommandExecutor\n(session, controller)"]
+        Q["PlaybackClockQuery\n(playback controller read-only)"]
     end
 
     IN --> CA
     CA --> SS
     CA --> AC
     CA --> CE
+    CA --> Q
     SS -.->|"같은 인스턴스 주입"| AC
     SS -.->|"같은 인스턴스 주입"| CE
     AC -.->|"같은 인스턴스 주입"| CE
+    AC -.->|"PlaybackController 주입"| Q
 ```
 
 구현: [`src/layers/apps/create-app.ts`](../src/layers/apps/create-app.ts)  
@@ -180,6 +200,7 @@ sequenceDiagram
 | `layers/apps/`         | Web, Agent, 내부 CLI 진입점          |
 | `layers/commands/`     | 명령 검증과 실행 순서 관리           |
 | `layers/controllers/`  | Session과 AudioEngine 작업 조정      |
+| `layers/queries/`      | Controller의 명시된 값만 읽는 Query  |
 | `layers/session/`      | 화면에 표시할 상태 저장              |
 | `layers/audio-engine/` | Tone.js와 Web Audio 기반 오디오 처리 |
 

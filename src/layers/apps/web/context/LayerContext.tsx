@@ -1,17 +1,11 @@
 import React, { createContext, use } from 'react';
 import { useStore } from 'zustand';
 import type { AppInstance } from '../../create-app';
-import { AppController } from '../../../controllers/app-controller';
 import { type SessionStore, type SessionState } from '../../../session/session';
 import type { CommandExecutor } from '../../../commands/command-executor';
+import type { IPlaybackClockQuery } from '../../../queries/playback-clock-query';
 
-interface LayerContextValue {
-  session: SessionStore;
-  controller: AppController;
-  commandExecutor: CommandExecutor;
-}
-
-const LayerContext = createContext<LayerContextValue | null>(null);
+const LayerContext = createContext<AppInstance | null>(null);
 
 interface LayerProviderProps {
   app: AppInstance;
@@ -34,17 +28,17 @@ function useLayer() {
 }
 
 /**
- * Hook to access the AppController for executing actions.
- */
-export function useController(): AppController {
-  return useLayer().controller;
-}
-
-/**
  * UI와 Agent가 같은 명령 실행 경로를 사용하도록 조립된 실행기를 반환한다.
  */
 export function useCommandExecutor(): CommandExecutor {
   return useLayer().commandExecutor;
+}
+
+/**
+ * 재생 위치를 변경하지 않고 AudioEngine의 현재 시각만 읽는 Query를 반환한다.
+ */
+export function usePlaybackClock(): IPlaybackClockQuery {
+  return useLayer().playbackClock;
 }
 
 /**
