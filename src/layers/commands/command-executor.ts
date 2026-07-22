@@ -3,6 +3,7 @@ import type { SessionState, SessionStore } from '../session/session';
 import { AudioCommandSchema, AudioCommandType, type AudioCommand } from '../shared/types/audioCommand.schema';
 
 export type CommandExecutionResult = Blob | void;
+export type CommandBatchExecutionResult = CommandExecutionResult[];
 
 function throwUnsupportedCommand(command: never): never {
   const commandType = (command as { type?: unknown }).type;
@@ -10,6 +11,8 @@ function throwUnsupportedCommand(command: never): never {
 }
 
 export class CommandExecutor {
+  private executionTail: Promise<void> = Promise.resolve();
+
   constructor(
     private readonly sessionStore: SessionStore,
     private readonly controller: AppController
@@ -17,6 +20,21 @@ export class CommandExecutor {
 
   async execute(command: AudioCommand): Promise<CommandExecutionResult> {
     const validatedCommand = AudioCommandSchema.parse(command);
+    return this.enqueue(() => this.executeValidated(validatedCommand));
+  }
+
+  async executeMany(commands: readonly AudioCommand[]): Promise<CommandBatchExecutionResult> {
+    const validatedCommands = AudioCommandSchema.array().parse(commands);
+    return this.enqueue(async () => {
+      const results: CommandBatchExecutionResult = [];
+      for (const command of validatedCommands) {
+        results.push(await this.executeValidated(command));
+      }
+      return results;
+    });
+  }
+
+  private async executeValidated(validatedCommand: AudioCommand): Promise<CommandExecutionResult> {
     // 연속 명령에서 앞 명령의 변경 상태를 다음 명령이 사용하도록 실행 직전에 Session을 읽는다.
     const session = this.sessionStore.getState();
 
@@ -118,6 +136,15 @@ export class CommandExecutor {
     }
 
     return throwUnsupportedCommand(validatedCommand);
+  }
+
+  private enqueue<Result>(operation: () => Promise<Result>): Promise<Result> {
+    const execution = this.executionTail.then(operation);
+    this.executionTail = execution.then(
+      () => undefined,
+      () => undefined
+    );
+    return execution;
   }
 
   private resolveTrackId(session: SessionState, requestedTrackId?: string): string {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { AppController } from '../controllers/app-controller';
 import { createSessionStore } from '../session/session';
@@ -15,7 +15,16 @@ function createTestContext() {
   const controller = new AppController(session, new MockAudioEngine());
   const commandExecutor = new CommandExecutor(session, controller);
 
-  return { commandExecutor, session };
+  return { commandExecutor, controller, session };
+}
+
+function createDeferredVoid(): { promise: Promise<void>; resolve: () => void } {
+  let resolvePromise = (): void => undefined;
+  const promise = new Promise<void>(resolve => {
+    resolvePromise = resolve;
+  });
+
+  return { promise, resolve: resolvePromise };
 }
 
 async function addTrack(commandExecutor: CommandExecutor) {
@@ -189,6 +198,103 @@ describe('CommandExecutor', () => {
     });
 
     expect(session.getState().tracks.get(TRACK_ID)?.regions[0]).toMatchObject({ startTime: 3, endTime: 8 });
+  });
+
+  it('동시에 들어온 execute 호출을 입력 순서대로 하나씩 실행한다', async () => {
+    const { commandExecutor, controller, session } = createTestContext();
+    const deferred = createDeferredVoid();
+    vi.spyOn(controller.playback, 'handlePlay').mockReturnValueOnce(deferred.promise);
+
+    const playExecution = commandExecutor.execute({ type: AudioCommandType.PLAY });
+    const tempoExecution = commandExecutor.execute({ type: AudioCommandType.SET_TEMPO, tempo: 140 });
+    await Promise.resolve();
+
+    expect(session.getState().tempo).toBe(120);
+    deferred.resolve();
+    await Promise.all([playExecution, tempoExecution]);
+
+    expect(session.getState().tempo).toBe(140);
+  });
+
+  it('앞 명령이 실패해도 뒤에 대기한 명령을 계속 실행한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+
+    const failedExecution = commandExecutor.execute({
+      type: AudioCommandType.REMOVE_TRACK,
+      trackId: TRACK_ID,
+    });
+    const nextExecution = commandExecutor.execute({
+      type: AudioCommandType.SET_TEMPO,
+      tempo: 140,
+    });
+
+    await expect(failedExecution).rejects.toMatchObject({ code: 'TRACK_NOT_FOUND' });
+    await nextExecution;
+    expect(session.getState().tempo).toBe(140);
+  });
+
+  it('executeMany 묶음 안에는 다른 execute 호출을 끼워 넣지 않는다', async () => {
+    const { commandExecutor, controller, session } = createTestContext();
+    const deferred = createDeferredVoid();
+    vi.spyOn(controller.playback, 'handlePlay').mockReturnValueOnce(deferred.promise);
+
+    const batchExecution = commandExecutor.executeMany([
+      { type: AudioCommandType.PLAY },
+      { type: AudioCommandType.SET_TEMPO, tempo: 140 },
+    ]);
+    const nextExecution = commandExecutor.execute({
+      type: AudioCommandType.SET_TEMPO,
+      tempo: 160,
+    });
+    await Promise.resolve();
+
+    expect(session.getState().tempo).toBe(120);
+    deferred.resolve();
+    await Promise.all([batchExecution, nextExecution]);
+
+    expect(session.getState().tempo).toBe(160);
+  });
+
+  it('executeMany는 첫 실행 오류에서 멈추고 앞선 성공 결과는 되돌리지 않는다', async () => {
+    const { commandExecutor, session } = createTestContext();
+
+    await expect(
+      commandExecutor.executeMany([
+        { type: AudioCommandType.SET_TEMPO, tempo: 130 },
+        { type: AudioCommandType.REMOVE_TRACK, trackId: TRACK_ID },
+        { type: AudioCommandType.SET_TEMPO, tempo: 160 },
+      ])
+    ).rejects.toMatchObject({ code: 'TRACK_NOT_FOUND' });
+
+    expect(session.getState().tempo).toBe(130);
+  });
+
+  it('executeMany는 모든 명령을 먼저 검증한 뒤 실행한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    const invalidCommand = {
+      type: AudioCommandType.SET_TEMPO,
+      tempo: 0,
+    } as AudioCommand;
+
+    await expect(
+      commandExecutor.executeMany([{ type: AudioCommandType.SET_TEMPO, tempo: 130 }, invalidCommand])
+    ).rejects.toThrow();
+
+    expect(session.getState().tempo).toBe(120);
+  });
+
+  it('executeMany는 입력 순서와 같은 결과 배열을 반환한다', async () => {
+    const { commandExecutor } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor);
+
+    const results = await commandExecutor.executeMany([
+      { type: AudioCommandType.SET_TEMPO, tempo: 130 },
+      { type: AudioCommandType.EXPORT_AUDIO },
+    ]);
+
+    expect(results[0]).toBeUndefined();
+    expect(results[1]).toBeInstanceOf(Blob);
   });
 
   it('SET_EXPORT_RANGE 명령으로 내보내기 범위를 설정한다', async () => {

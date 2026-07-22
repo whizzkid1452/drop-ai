@@ -60,6 +60,12 @@ UI는 **Session을 읽어** 그리고, AudioCommand는 **CommandExecutor**에 �
 CommandExecutor는 명령을 검증하고 Controller에 실행을 위임한다.
 Agent 메시지와 업로드 파일 같은 앱 워크플로 상태는 Session Action으로 갱신한다.
 
+검증된 명령은 CommandExecutor의 단일 대기열에서 접수 순서대로 하나씩 실행한다. `executeMany`는 묶음 전체를
+먼저 검증한 후, 다른 요청이 끼어들지 않게 순서대로 실행한다. 실행 중 첫 오류가 나면 남은 명령은 실행하지
+않는다. 이미 완료된 변경은 되돌리지 않으므로 묶음 실행은 원자적 트랜잭션이 아니다. 실패한 실행이 있어도 그
+뒤에 대기 중인 요청은 계속 실행한다.
+`EXPORT_AUDIO`는 현재 완료될 때까지 대기열을 점유한다. 별도 작업 모델을 도입하기 전의 알려진 제한이다.
+
 ```mermaid
 flowchart LR
     subgraph UI["Apps (UI)"]
@@ -146,6 +152,7 @@ sequenceDiagram
 
     U->>X: AudioCommand
     X->>X: Zod 검증
+    X->>X: 단일 대기열에서 순서대로 실행
     X->>C: 검증된 작업 위임
     C->>E: 오디오 연산
     C->>S: 상태 반영
