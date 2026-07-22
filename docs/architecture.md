@@ -268,7 +268,8 @@ Policy(CSP), 모듈 URL, 장치 상태를 포함한 실제 실행 검증은 Audi
 Region의 끝 시각은 `startTimeSeconds + durationSeconds`로 계산하므로 따로 저장하지 않는다. 모든 ID는 종류별로 중복될
 수 없고, Region은 문서 안에 존재하는 Source만 참조한다. Source 길이를 알면 Region의 원본 범위가 그 길이를 넘을 수 없다.
 `schemaVersion`은 문서 구조 버전이고 `project.revision`은 같은 프로젝트 내용의 저장 revision이다. 새 문서는 revision
-0에서 시작하고, 후속 저장소는 교체 저장에 성공할 때 1씩 증가시킨다.
+0에서 시작하고, 후속 저장소는 교체 저장에 성공할 때 1씩 증가시킨다. 이 값은 편집 횟수, Undo 번호, 저장되지 않은 변경
+여부가 아니다. 일반 편집과 Undo에서는 유지하고, 저장 성공 후 Repository가 반환한 값으로만 교체한다.
 
 `readProjectDocument`는 신뢰할 수 없는 입력에서 문서 식별자와 정수 `schemaVersion`을 먼저 읽고, 지원하는 버전의 전체
 Schema를 적용한다. `readProjectDocumentJson`은 JSON 문법 오류를 문서 구조 오류와 구분한다. 현재 실제로 정의된 형식은
@@ -289,8 +290,10 @@ v1은 이 상태를 손실 없이 저장하기 위해 길이 0과 `startTimeSeco
 - Agent 대화, 모델 로딩, 모달과 zoom 같은 앱 상태
 
 원본 오디오 바이트는 Source UUID를 키로 사용하는 별도 저장소에 둔다. 프로젝트를 다시 열 때 새 Object URL을 만들고
-런타임 Source Registry에서 관리한다. 현재는 ProjectDocument와 metadata 저장소까지만 있으며, Session 변환과 화면의
-저장·불러오기 기능은 아직 없다. Undo 이력도 snapshot 문서에 넣지 않고 후속 Undo Journal에서 별도로 관리한다.
+런타임 Source Registry에서 관리한다. 현재 Session은 ProjectDocument의 `project` 형식과 같은 프로젝트 metadata를
+가지며, `createApp`이 새 UUID·기본 이름·revision 0을 만들거나 검증을 마친 기존 metadata를 주입한다. 전체 Session
+변환과 화면의 저장·불러오기 기능은 아직 없다. Undo 이력도 snapshot 문서에 넣지 않고 후속 Undo Journal에서 별도로
+관리한다.
 
 ---
 
@@ -327,6 +330,10 @@ IndexedDB 대역으로 이 규칙을 검증하므로, 실제 브라우저의 디
 
 현재 Repository는 `createApp`, Controller, Command, Session에 아직 연결하지 않았다. 연결은 Session Mapper를 추가한 뒤
 별도 기능 단위에서 진행한다.
+
+Session의 프로젝트 metadata 전체 교체는 후속 Project Controller만 사용한다. Apps는 직접 호출하지 않는다. 불러오기
+과정에서는 Source와 AudioEngine 준비가 성공하기 전에 metadata만 먼저 교체하지 않는다. 저장 과정에서는 Repository가
+성공 결과를 반환했을 때만 Session revision을 교체하며, 실패나 revision 충돌이면 기존 값을 유지한다.
 
 ---
 

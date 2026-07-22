@@ -2,6 +2,7 @@ import { createStore } from 'zustand/vanilla';
 import type { RegionStatus, TrackStatus } from '@/types/statusTypes';
 import type { AudioFile } from '@/types/audioFile';
 import type { AgentRunStatus, AgentStatus, Message } from '@/types/agent';
+import type { ProjectMetadata } from '../shared/types/project-document.schema';
 
 export interface RegionState {
   id: string;
@@ -25,6 +26,7 @@ export interface TrackState {
 }
 
 export interface SessionState {
+  project: ProjectMetadata;
   isPlaying: boolean;
   currentTime: number;
   tempo: number;
@@ -53,6 +55,7 @@ export interface SessionState {
   setTempo: (tempo: number) => void;
   setMasterVolume: (volume: number) => void;
   setExportRange: (startTime: number | null, endTime: number | null) => void;
+  replaceProjectMetadata: (project: ProjectMetadata) => void;
 
   addTrack: (track: TrackState) => void;
   updateTrack: (id: string, updates: Partial<TrackState>) => void;
@@ -73,8 +76,13 @@ export interface SessionState {
 
 export type SessionStore = ReturnType<typeof createSessionStore>;
 
-export function createSessionStore() {
+export interface CreateSessionStoreOptions {
+  readonly initialProjectMetadata: ProjectMetadata;
+}
+
+export function createSessionStore({ initialProjectMetadata }: CreateSessionStoreOptions) {
   return createStore<SessionState>(set => ({
+    project: { ...initialProjectMetadata },
     isPlaying: false,
     currentTime: 0,
     tempo: 120,
@@ -102,6 +110,7 @@ export function createSessionStore() {
     setTempo: tempo => set({ tempo: tempo }),
     setMasterVolume: volume => set({ masterVolume: volume }),
     setExportRange: (startTime, endTime) => set({ exportStartTime: startTime, exportEndTime: endTime }),
+    replaceProjectMetadata: project => set({ project: { ...project } }),
 
     /* Track Actions */
     addTrack: track =>

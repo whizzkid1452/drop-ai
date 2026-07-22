@@ -11,6 +11,9 @@ import {
   type AudioRuntimeCapabilities,
   type AudioRuntimeEnvironment,
 } from '../shared/utils/audio-runtime-capabilities';
+import type { ProjectMetadata } from '../shared/types/project-document.schema';
+
+const NEW_PROJECT_NAME = '새 프로젝트';
 
 export interface AppInstance {
   readonly audioRuntimeCapabilities: AudioRuntimeCapabilities;
@@ -22,13 +25,23 @@ export interface AppInstance {
 export interface CreateAppOptions {
   audioEngine?: IAudioEngine;
   audioRuntimeEnvironment?: AudioRuntimeEnvironment;
+  initialProjectMetadata?: ProjectMetadata;
+}
+
+function createNewProjectMetadata(): ProjectMetadata {
+  return {
+    id: globalThis.crypto.randomUUID(),
+    name: NEW_PROJECT_NAME,
+    revision: 0,
+  };
 }
 
 /**
  * Core Application Factory
  */
 export function createApp(options: CreateAppOptions = {}): AppInstance {
-  const session = createSessionStore();
+  const initialProjectMetadata = options.initialProjectMetadata ?? createNewProjectMetadata();
+  const session = createSessionStore({ initialProjectMetadata });
   const audioEngine = options.audioEngine ?? new AudioEngine();
   const controller = new AppController(session, audioEngine);
   const commandExecutor = new CommandExecutor(session, controller);

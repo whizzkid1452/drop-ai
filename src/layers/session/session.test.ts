@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSessionStore, type SessionStore } from './session';
 
+const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
+const INITIAL_PROJECT_METADATA = { id: PROJECT_ID, name: '새 프로젝트', revision: 0 };
+
 describe('Session Store - Phase 1 검증', () => {
   let store: SessionStore;
 
   beforeEach(() => {
-    store = createSessionStore();
+    store = createSessionStore({ initialProjectMetadata: INITIAL_PROJECT_METADATA });
   });
 
   describe('기본 상태 초기화', () => {
@@ -40,6 +43,34 @@ describe('Session Store - Phase 1 검증', () => {
       expect(store.getState().agentStatus).toBe('idle');
       expect(store.getState().agentRunStatus).toBe('idle');
       expect(store.getState().hasSuccessfulAgentResult).toBe(false);
+    });
+  });
+
+  describe('프로젝트 metadata 관리', () => {
+    it('주입한 프로젝트 metadata를 원본과 참조를 공유하지 않고 초기화한다', () => {
+      const initialProject = { id: PROJECT_ID, name: '불러온 프로젝트', revision: 3 };
+      const initializedStore = createSessionStore({ initialProjectMetadata: initialProject });
+
+      initialProject.name = '외부 변경';
+
+      expect(initializedStore.getState().project).toEqual({
+        id: PROJECT_ID,
+        name: '불러온 프로젝트',
+        revision: 3,
+      });
+    });
+
+    it('프로젝트 metadata 전체를 새 값으로 교체한다', () => {
+      const nextProject = { id: PROJECT_ID, name: '저장된 프로젝트', revision: 1 };
+
+      store.getState().replaceProjectMetadata(nextProject);
+      nextProject.name = '외부 변경';
+
+      expect(store.getState().project).toEqual({
+        id: PROJECT_ID,
+        name: '저장된 프로젝트',
+        revision: 1,
+      });
     });
   });
 

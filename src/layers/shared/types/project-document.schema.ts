@@ -143,3 +143,4 @@ export type ProjectAudioSource = z.infer<typeof ProjectAudioSourceSchema>;
 export type ProjectRegion = z.infer<typeof ProjectRegionSchema>;
 export type ProjectTrack = z.infer<typeof ProjectTrackSchema>;
 export type ProjectDocument = z.infer<typeof ProjectDocumentSchema>;
+export type ProjectMetadata = ProjectDocument['project'];

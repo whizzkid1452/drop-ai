@@ -4,6 +4,12 @@ import { AppController } from './app-controller';
 import { createSessionStore, type SessionStore } from '../session/session';
 import { ProjectStateError, type ProjectStateErrorCode } from './project-state-error';
 
+const INITIAL_PROJECT_METADATA = {
+  id: '11111111-1111-4111-8111-111111111111',
+  name: '테스트 프로젝트',
+  revision: 0,
+};
+
 function expectProjectStateError(action: () => unknown, code: ProjectStateErrorCode): void {
   let thrownError: unknown;
 
@@ -49,7 +55,7 @@ describe('Controllers - Phase 3 검증', () => {
 
   beforeEach(() => {
     engine = new MockAudioEngine();
-    session = createSessionStore();
+    session = createSessionStore({ initialProjectMetadata: INITIAL_PROJECT_METADATA });
     controller = new AppController(session, engine);
   });
 

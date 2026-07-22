@@ -6,6 +6,30 @@ import { AudioCommandType } from '../shared/types/audioCommand.schema';
 import { createApp, createCliTestApp } from './create-app';
 
 describe('createApp', () => {
+  it('새 프로젝트 metadata를 UUID와 revision 0으로 만든다', () => {
+    const app = createApp({ audioEngine: new MockAudioEngine() });
+
+    expect(app.session.getState().project).toMatchObject({
+      name: '새 프로젝트',
+      revision: 0,
+    });
+    expect(app.session.getState().project.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    );
+  });
+
+  it('주입한 프로젝트 metadata로 Session을 조립한다', () => {
+    const initialProjectMetadata = {
+      id: '11111111-1111-4111-8111-111111111111',
+      name: '불러온 프로젝트',
+      revision: 4,
+    };
+
+    const app = createApp({ audioEngine: new MockAudioEngine(), initialProjectMetadata });
+
+    expect(app.session.getState().project).toEqual(initialProjectMetadata);
+  });
+
   it('하나의 CommandExecutor를 조립한다', () => {
     const app = createApp({ audioEngine: new MockAudioEngine() });
 

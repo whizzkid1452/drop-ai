@@ -38,7 +38,11 @@ Session과 AudioCommand에는 저장하지 않는다. API 존재 확인은 실�
 영구 저장 형식은 Shared의 `ProjectDocumentSchema`로 검증한다. v1은 Track·Region과 오디오 Source 메타데이터를
 절대 초 단위로 저장하고, Region은 임시 URL이 아닌 안정적인 Source ID를 참조한다. `File`, `Blob`, Object URL,
 AudioBuffer, 함수, 재생 중 상태, Agent·UI 상태는 ProjectDocument에 넣지 않는다. 현재는 문서 계약과 metadata
-Adapter까지만 있으며 Session 변환, 마이그레이션, Undo는 각각 후속 목적 단위에서 추가한다.
+Adapter와 ProjectDocument의 `project` 형식을 그대로 쓰는 Session 프로젝트 metadata까지만 있다. `createApp`은 새 프로젝트의
+UUID·이름·revision 0을 만들거나 검증을 마친 기존 metadata를 Session에 주입한다. `project.revision`은 편집 횟수나
+저장 여부가 아니라 마지막 성공 저장 snapshot의 동시성 제어 값이다. 일반 편집과 Undo에서는 바꾸지 않으며, 후속 저장
+Controller가 Repository의 성공 결과를 받았을 때만 교체한다. 전체 Session 변환, 마이그레이션, Undo는 각각 후속 목적
+단위에서 추가한다.
 신뢰할 수 없는 JSON은 `readProjectDocumentJson`으로 문법을 확인하고, `readProjectDocument`로 식별자·버전·본문 순서로
 검증한다. 객체 입력은 자기 소유 열거 가능 데이터 속성만 문서 필드로 인정한다. 현재 지원 버전은 실제 형식이 정의된
 v1뿐이며, 정의되지 않은 버전을 임의 변환하지 않는다.
@@ -49,6 +53,10 @@ Composition Root에서만 조립한다. 저장과 삭제는 expected revision �
 두 값을 하나의 transaction으로 갱신한다. IndexedDB에서 읽은 문서 본문은 `readProjectDocument`로 판독하고, 손상된
 데이터와 현재 앱보다 새로운 문서 버전을 서로 다른 Repository 오류로 분류한다. 아직 Composition Root와 사용자
 진입점에는 연결하지 않는다.
+
+Session의 `replaceProjectMetadata`는 후속 Project Controller가 불러오기 또는 저장 성공 결과를 반영하기 위한 내부
+상태 교체 동작이다. Apps는 이 동작을 직접 호출하지 않는다. 프로젝트를 불러올 때 metadata만 먼저 바꾸지 않고,
+Source와 AudioEngine 준비가 모두 성공한 뒤 전체 프로젝트 상태를 한 번에 반영한다.
 
 Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을 때 그 ID로 `SPLIT_REGION`을 실행한다. Region
 삭제도 사용자가 확인한 정확한 ID로 `UNLOAD_REGION`을 실행한다. 내부 CLI의 변경 작업은 CommandExecutor를
