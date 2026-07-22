@@ -3,7 +3,7 @@ import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { AppController } from '../controllers/app-controller';
 import { createSessionStore } from '../session/session';
 import { AudioCommandType, type AudioCommand } from '../shared/types/audioCommand.schema';
-import { CommandExecutor } from './command-executor';
+import { CommandBatchExecutionError, CommandExecutor } from './command-executor';
 
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
@@ -25,6 +25,20 @@ function createDeferredVoid(): { promise: Promise<void>; resolve: () => void } {
   });
 
   return { promise, resolve: resolvePromise };
+}
+
+async function captureBatchError(execution: Promise<unknown>): Promise<CommandBatchExecutionError> {
+  try {
+    await execution;
+  } catch (error) {
+    if (error instanceof CommandBatchExecutionError) {
+      return error;
+    }
+
+    throw error;
+  }
+
+  throw new Error('명령 묶음이 성공해 실패 정보를 확인할 수 없습니다.');
 }
 
 async function addTrack(commandExecutor: CommandExecutor) {
@@ -255,18 +269,66 @@ describe('CommandExecutor', () => {
     expect(session.getState().tempo).toBe(160);
   });
 
-  it('executeMany는 첫 실행 오류에서 멈추고 앞선 성공 결과는 되돌리지 않는다', async () => {
+  it('executeMany는 첫 실행 오류의 위치와 앞선 성공 결과를 보존한다', async () => {
     const { commandExecutor, session } = createTestContext();
 
-    await expect(
+    const failedCommand: AudioCommand = { type: AudioCommandType.REMOVE_TRACK, trackId: TRACK_ID };
+    const error = await captureBatchError(
       commandExecutor.executeMany([
         { type: AudioCommandType.SET_TEMPO, tempo: 130 },
-        { type: AudioCommandType.REMOVE_TRACK, trackId: TRACK_ID },
+        failedCommand,
         { type: AudioCommandType.SET_TEMPO, tempo: 160 },
       ])
-    ).rejects.toMatchObject({ code: 'TRACK_NOT_FOUND' });
+    );
 
+    expect(error.failedIndex).toBe(1);
+    expect(error.failedCommand).toEqual(failedCommand);
+    expect(error.completedResults).toEqual([undefined]);
+    expect(error.cause).toMatchObject({ code: 'TRACK_NOT_FOUND' });
     expect(session.getState().tempo).toBe(130);
+  });
+
+  it('executeMany는 오류 전에 생성한 Blob 결과를 보존한다', async () => {
+    const { commandExecutor } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor);
+
+    const error = await captureBatchError(
+      commandExecutor.executeMany([
+        { type: AudioCommandType.EXPORT_AUDIO },
+        { type: AudioCommandType.REMOVE_TRACK, trackId: SECOND_REGION_ID },
+      ])
+    );
+
+    expect(error.completedResults).toHaveLength(1);
+    expect(error.completedResults[0]).toBeInstanceOf(Blob);
+  });
+
+  it('executeMany는 원래 실행 오류를 같은 참조로 보존한다', async () => {
+    const { commandExecutor, controller } = createTestContext();
+    const originalError = new Error('재생 일시정지에 실패했습니다.');
+    vi.spyOn(controller.playback, 'handlePause').mockImplementationOnce(() => {
+      throw originalError;
+    });
+
+    const error = await captureBatchError(commandExecutor.executeMany([{ type: AudioCommandType.PAUSE }]));
+
+    expect(error.cause).toBe(originalError);
+    expect(error.message).toBe(originalError.message);
+  });
+
+  it('executeMany가 실패해도 대기 중인 다음 명령은 계속 실행한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+
+    const failedBatch = captureBatchError(
+      commandExecutor.executeMany([{ type: AudioCommandType.REMOVE_TRACK, trackId: TRACK_ID }])
+    );
+    const nextExecution = commandExecutor.execute({ type: AudioCommandType.SET_TEMPO, tempo: 140 });
+
+    await failedBatch;
+    await nextExecution;
+
+    expect(session.getState().tempo).toBe(140);
   });
 
   it('executeMany는 모든 명령을 먼저 검증한 뒤 실행한다', async () => {
@@ -276,9 +338,10 @@ describe('CommandExecutor', () => {
       tempo: 0,
     } as AudioCommand;
 
-    await expect(
-      commandExecutor.executeMany([{ type: AudioCommandType.SET_TEMPO, tempo: 130 }, invalidCommand])
-    ).rejects.toThrow();
+    const execution = commandExecutor.executeMany([{ type: AudioCommandType.SET_TEMPO, tempo: 130 }, invalidCommand]);
+
+    await expect(execution).rejects.toThrow();
+    await expect(execution).rejects.not.toBeInstanceOf(CommandBatchExecutionError);
 
     expect(session.getState().tempo).toBe(120);
   });

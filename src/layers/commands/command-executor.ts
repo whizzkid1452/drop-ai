@@ -8,7 +8,32 @@ import {
 } from '../shared/types/audioCommand.schema';
 
 export type CommandExecutionResult = Blob | void;
-export type CommandBatchExecutionResult = CommandExecutionResult[];
+export type CommandBatchExecutionResult = readonly CommandExecutionResult[];
+
+interface CommandBatchExecutionErrorOptions {
+  failedIndex: number;
+  failedCommand: AudioCommand;
+  completedResults: CommandBatchExecutionResult;
+  cause: unknown;
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export class CommandBatchExecutionError extends Error {
+  readonly failedIndex: number;
+  readonly failedCommand: AudioCommand;
+  readonly completedResults: CommandBatchExecutionResult;
+
+  constructor(options: CommandBatchExecutionErrorOptions) {
+    super(getErrorMessage(options.cause), { cause: options.cause });
+    this.name = 'CommandBatchExecutionError';
+    this.failedIndex = options.failedIndex;
+    this.failedCommand = options.failedCommand;
+    this.completedResults = [...options.completedResults];
+  }
+}
 
 function throwUnsupportedCommand(command: never): never {
   const commandType = (command as { type?: unknown }).type;
@@ -30,13 +55,23 @@ export class CommandExecutor {
 
   async executeMany(commands: readonly AudioCommand[]): Promise<CommandBatchExecutionResult> {
     const validatedCommands = AudioCommandBatchSchema.parse(commands);
-    return this.enqueue(async () => {
-      const results: CommandBatchExecutionResult = [];
-      for (const command of validatedCommands) {
-        results.push(await this.executeValidated(command));
+    return this.enqueue(() => this.executeValidatedBatch(validatedCommands));
+  }
+
+  private async executeValidatedBatch(
+    validatedCommands: readonly AudioCommand[]
+  ): Promise<CommandBatchExecutionResult> {
+    const completedResults: CommandExecutionResult[] = [];
+
+    for (const [failedIndex, failedCommand] of validatedCommands.entries()) {
+      try {
+        completedResults.push(await this.executeValidated(failedCommand));
+      } catch (cause) {
+        throw new CommandBatchExecutionError({ failedIndex, failedCommand, completedResults, cause });
       }
-      return results;
-    });
+    }
+
+    return completedResults;
   }
 
   private async executeValidated(validatedCommand: AudioCommand): Promise<CommandExecutionResult> {
