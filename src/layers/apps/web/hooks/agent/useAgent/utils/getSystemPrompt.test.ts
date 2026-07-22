@@ -79,23 +79,6 @@ describe('Agent 시스템 Prompt', () => {
     expect(prompt).toContain(`"sourceId":"${SOURCE_ID}"`);
   });
 
-  it('기존 URL Region은 복제 예시를 만들지 않는다', () => {
-    const legacyTracks: AgentPromptTrack[] = [
-      {
-        ...tracks[0],
-        regions: [{ ...tracks[0].regions[0], sourceId: undefined }],
-      },
-    ];
-    const prompt = getSystemPrompt({ tracks: legacyTracks });
-    const cloneExample = prompt
-      .split('# 예시\n')[1]
-      .split('\n')
-      .find(line => line.includes('첫 번째 Region 소스'));
-
-    expect(cloneExample).toBeUndefined();
-    expect(prompt).toContain('sourceId가 없는 Region은 복제 대상으로 사용하지 않는다');
-  });
-
   it('한국어와 영어 요청 예시를 모두 제공한다', () => {
     expect(AGENT_PROMPT_EXAMPLES.some(example => /[가-힣]/.test(example.request))).toBe(true);
     expect(AGENT_PROMPT_EXAMPLES.some(example => /^[A-Za-z0-9 .!?-]+$/.test(example.request))).toBe(true);
@@ -145,6 +128,7 @@ describe('Agent 시스템 Prompt', () => {
             sourceStartTime: 0,
             duration: 1,
             hasAudioSource: true,
+            sourceId: SOURCE_ID,
           },
         ],
       })

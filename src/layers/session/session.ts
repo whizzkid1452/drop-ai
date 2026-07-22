@@ -12,17 +12,12 @@ interface RegionCommonState {
   status: RegionStatus[];
 }
 
-interface LegacyUrlRegionSource {
-  audioFileUrl: string;
-  sourceId?: never;
-}
-
-interface RegisteredRegionSource {
+type RegionSource = {
   sourceId: string;
   audioFileUrl?: never;
-}
+};
 
-export type RegionState = RegionCommonState & (LegacyUrlRegionSource | RegisteredRegionSource);
+export type RegionState = RegionCommonState & RegionSource;
 
 export interface TrackState {
   id: string;

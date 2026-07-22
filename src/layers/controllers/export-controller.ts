@@ -90,14 +90,6 @@ export class ExportController {
   }
 
   private resolveRegionSourceUrl(region: RegionState): string {
-    if (region.sourceId === undefined) {
-      throw new ProjectStateError(
-        ProjectStateErrorCode.REGION_SOURCE_MISSING,
-        `Export할 Region의 Source ID를 찾을 수 없습니다: ${region.id}`,
-        { regionId: region.id }
-      );
-    }
-
     const source = this.audioSourceResolver.resolve(region.sourceId);
     if (source?.regionIds.includes(region.id)) {
       return source.objectUrl;

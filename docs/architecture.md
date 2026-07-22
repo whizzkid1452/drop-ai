@@ -85,8 +85,8 @@ Agent Prompt는 AudioCommand 전체의 정확한 필드와 범위를 안내한�
 범위, 오디오 소스 사용 가능 여부도 함께 전달하며, Prompt 예시는 엄격한 Agent Schema를 통과해야 한다. 아직 앱이
 예약한 새 ID와 허용 파일 목록을 제공하지 않으므로 Agent의 `ADD_TRACK` 생성은 막는다. `LOAD_REGION`은 기존
 Track의 첫 등록 Source Region을 재사용하는 경우에만 제한적으로 허용한다. 등록 Source Region은 목록의 실제
-`sourceId`만 사용하고, 기존 URL Region은 새 Region의 Source로 사용하지 않는다. Agent 명령의 `url` 필드는 금지하며
-Object URL을 노출하지 않는다. 프로젝트 컨텍스트는 모델 입력 한도를 넘길 위험을 줄이도록 길이를 제한하고 잘림
+`sourceId`만 사용한다. Agent 명령의 `url` 필드는 금지하며 Object URL을 노출하지 않는다. 프로젝트 컨텍스트는 모델
+입력 한도를 넘길 위험을 줄이도록 길이를 제한하고 잘림
 여부를 표시한다.
 
 ```mermaid
@@ -353,8 +353,8 @@ Session의 프로젝트 metadata 전체 교체는 후속 Project Controller만 �
 ## 11. Runtime Audio Source Registry
 
 Source UUID는 ProjectDocument에 저장하는 고정 식별자다. Object URL은 브라우저가 현재 실행 중에만 제공하는 임시 값이므로
-ProjectDocument의 식별자로 사용하지 않는다. 새 Session Region도 Source UUID를 저장한다. 기존 `audioFileUrl` Region은
-소비자 전환이 끝날 때까지만 호환한다. `AudioSourceRegistry`가 **재생 Source용 Object URL**의 생성과 해제를 전담한다.
+ProjectDocument의 식별자로 사용하지 않는다. Session Region도 Source UUID만 저장한다. `AudioSourceRegistry`가
+**재생 Source용 Object URL**의 생성과 해제를 전담한다.
 오디오 길이 판독용 임시 URL과 Export 다운로드 URL은 별도 수명이라 이 Registry의 소유 범위가 아니다.
 
 | 상태·작업             | 규칙                                                                     |
@@ -372,24 +372,15 @@ ID를 다시 연결할 수 있기 때문이다. 조회 결과와 metadata 목록
 Object URL 생성·해제 실패는 typed Registry 오류로 구분한다.
 URL 해제가 실패한 Source는 Registry에 남겨 다음 정리 호출에서 다시 시도하고, 이미 해제한 Source는 다시 해제하지 않는다.
 
-### 11.1. Region 호환 경로
+### 11.1. Region Source 경로
 
-Session Region은 다음 두 형식 중 정확히 하나다.
-
-| 형식        | Session 저장값 | AudioEngine 입력                            |
-| ----------- | -------------- | ------------------------------------------- |
-| 등록 Source | `sourceId`     | Controller가 Registry에서 확인한 Object URL |
-| 기존 호환   | `audioFileUrl` | 기존 URL                                    |
-
-기존 `audioFileUrl` 형식은 읽기 호환용이며 새 Region 생성에는 사용하지 않는다. `LOAD_REGION`은 폐기된 `url` 필드를
-일반·Agent Schema에서 명시적으로 거부한다. 새 Region은 등록된 `sourceId`를 명시하거나, `sourceId`가 있는 같은 Track의
-첫 Region을 재사용해야 한다. 첫 Region이 기존 `audioFileUrl` 형식이면 재사용하지 않는다. `trackId`를 생략하면
-Controller가 첫 Track을 선택한다. 유효한 `LOAD_REGION`이 Controller에 전달된 뒤 Track 선택이나 존재 검증이 실패하면
-명시된 pending Source도 Controller가 정리한다. 등록 Source의 URL은 Session과 Agent Prompt에 넣지 않는다. 기존 URL
-Region의 분할 호환 경로는 해당 소비자를 Source ID 전용으로 전환할 때까지 유지한다. Web 파형은 기존 URL을 직접 읽지
-않고 오류를 표시한다. Agent context도 기존 URL Region을 `unavailable`로 표시해 복제 대상으로 쓰지 않는다. Export는
-모든 Region의 등록 Source와 연결을 확인하고, 하나라도 없으면 typed 오류를 반환한다. 다른 URL을 추측하거나 Region을
-조용히 제외하지 않는다.
+Session Region은 `sourceId`만 저장하고 Object URL을 저장하지 않는다. `LOAD_REGION`은 폐기된 `url` 필드를 일반·Agent
+Schema에서 명시적으로 거부한다. 새 Region은 등록된 `sourceId`를 명시하거나 같은 Track의 첫 Region Source를 재사용한다.
+`trackId`를 생략하면 Controller가 첫 Track을 선택한다. 유효한 `LOAD_REGION`이 Controller에 전달된 뒤 Track 선택이나
+존재 검증이 실패하면 명시된 pending Source도 Controller가 정리한다. Controller는 Registry 등록과 Region 연결을 확인한
+Object URL만 AudioEngine에 전달한다. 등록 Source의 URL은 Session과 Agent Prompt에 넣지 않는다. Web 파형, Agent
+context, Export도 같은 등록·연결 조건을 사용한다. 연결이 없으면 Web 파형은 오류를 표시하고 Agent context는
+`unavailable`, Export는 typed 오류를 반환한다. 다른 URL을 추측하거나 Region을 조용히 제외하지 않는다.
 
 등록 Source 길이를 알면 Controller는 `sourceStartTime + duration`이 Source 길이를 넘지 않는지 연결 전에 검증한다.
 `duration`을 생략하면 Source의 남은 길이로 정규화해 AudioEngine과 Session에 같은 값을 전달한다. Source 길이가
@@ -429,8 +420,7 @@ Registry는 영구 저장소가 아니다. 새로고침 후 프로젝트를 다�
 Adapter가 먼저 필요하다. 현재 단계에서는 Registry 계약·브라우저 URL Adapter·메모리 구현을 Composition Root에서 한 번
 조립한다. Apps에는 `IAudioSourceStager`와 `IAudioSourceResolver`만 제공하며, 전체 Registry 변경 계약과 구체 구현은
 노출하지 않는다. 연결 수명을 바꾸는 Track·Region Controller만 전체 Registry 계약을 받고, 조회만 하는 Export는
-`IAudioSourceResolver`를 받는다. ProjectDocument Mapper와 저장·불러오기는 기존 URL Region 제거와 OPFS 원본 저장소를
-완료한 뒤 연결한다.
+`IAudioSourceResolver`를 받는다. ProjectDocument Mapper와 저장·불러오기는 OPFS 원본 저장소를 완료한 뒤 연결한다.
 
 production Web 파일 가져오기는 파일 metadata를 만든 뒤 Blob을 Registry에 `stage`한다. metadata 변환 단계는 재생용
 Object URL을 만들지 않는다. Web Adapter가 Source UUID를 만들고, Registry가 이를 검증·등록하면서 Object URL을 만든다.

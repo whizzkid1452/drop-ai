@@ -116,9 +116,7 @@ export class TrackController {
   }
 
   private getSourceAttachments(track: TrackState): AudioSourceAttachment[] {
-    return track.regions.flatMap(region =>
-      typeof region.sourceId === 'string' ? [{ sourceId: region.sourceId, regionId: region.id }] : []
-    );
+    return track.regions.map(region => ({ sourceId: region.sourceId, regionId: region.id }));
   }
 
   private validateSourceAttachments(attachments: readonly AudioSourceAttachment[]): void {

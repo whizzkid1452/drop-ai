@@ -47,16 +47,16 @@ interface PointerOptions {
 }
 
 const mountedRoots: Root[] = [];
-const legacyRegion: RegionState = {
+const sourceId = '41e673bf-5467-4d36-a716-2d80a76ac82f';
+const sourceBackedRegion: RegionState = {
   id: 'region-1',
   startTime: 2,
   endTime: 5,
   sourceStartTime: 0,
   duration: 3,
   status: [],
-  audioFileUrl: 'region.wav',
+  sourceId,
 };
-const sourceId = '41e673bf-5467-4d36-a716-2d80a76ac82f';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -71,19 +71,7 @@ function createDeferred<T>(): Deferred<T> {
   return { promise, resolve, reject };
 }
 
-function createSourceBackedRegion(): RegionState {
-  return {
-    id: legacyRegion.id,
-    startTime: legacyRegion.startTime,
-    endTime: legacyRegion.endTime,
-    sourceStartTime: legacyRegion.sourceStartTime,
-    duration: legacyRegion.duration,
-    status: legacyRegion.status,
-    sourceId,
-  };
-}
-
-function renderRegion({ onMove, onRemove, region = legacyRegion }: RenderRegionOptions) {
+function renderRegion({ onMove, onRemove, region = sourceBackedRegion }: RenderRegionOptions) {
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
@@ -140,17 +128,9 @@ afterEach(() => {
 });
 
 describe('RegionComponent 오디오 소스', () => {
-  it('기존 URL Region은 URL을 직접 사용하지 않고 오류를 표시한다', () => {
-    const { host } = renderRegion({ onMove: vi.fn().mockResolvedValue(undefined) });
-
-    expect(host.querySelector('[data-audio-url]')).toBeNull();
-    expect(host.querySelector('[role="alert"]')?.textContent).toBe('오디오 소스를 찾을 수 없습니다.');
-    expect(resolveAudioSource).not.toHaveBeenCalled();
-  });
-
   it('원본 시작점이 이동한 Region도 오류 문구를 파형 offset 밖에 표시한다', () => {
     const { host, regionElement } = renderRegion({
-      region: { ...legacyRegion, sourceStartTime: 2 },
+      region: { ...sourceBackedRegion, sourceStartTime: 2 },
       onMove: vi.fn().mockResolvedValue(undefined),
     });
     const alert = host.querySelector('[role="alert"]');
@@ -159,7 +139,6 @@ describe('RegionComponent 오디오 소스', () => {
   });
 
   it('sourceId Region이 실제 Region에 연결되어 있으면 Object URL을 WaveSurfer에 전달한다', () => {
-    const sourceBackedRegion = createSourceBackedRegion();
     resolveAudioSource.mockReturnValue({
       metadata: {
         id: sourceId,
@@ -201,7 +180,6 @@ describe('RegionComponent 오디오 소스', () => {
       },
     },
   ])('$label 접근 가능한 오류를 표시한다', ({ resolvedSource }) => {
-    const sourceBackedRegion = createSourceBackedRegion();
     resolveAudioSource.mockReturnValue(resolvedSource);
 
     const { host } = renderRegion({

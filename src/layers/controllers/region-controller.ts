@@ -104,26 +104,22 @@ export class RegionController {
 
     const track = this.getTrackOrThrow(trackId);
     const region = this.getRegionOrThrow(track, regionId);
-    const attachment = typeof region.sourceId === 'string' ? { sourceId: region.sourceId, regionId: region.id } : null;
-    if (attachment) {
-      this.assertRegisteredSource({ sourceId: attachment.sourceId, regionId: attachment.regionId });
-      this.audioSourceRegistry.detach(attachment);
-    }
+    const attachment = { sourceId: region.sourceId, regionId: region.id };
+    this.assertRegisteredSource({ sourceId: attachment.sourceId, regionId: attachment.regionId });
+    this.audioSourceRegistry.detach(attachment);
 
     try {
       this.audioEngine.removeRegion(trackId, regionId);
     } catch (cause) {
-      if (attachment) {
-        try {
-          this.audioSourceRegistry.attach(attachment);
-        } catch (compensationCause) {
-          throw new ProjectMutationCompensationError({
-            operation: 'remove-region',
-            failedPhase: 'Source 연결 복원',
-            cause,
-            compensationFailures: [{ step: `Source 연결 복원: ${regionId}`, cause: compensationCause }],
-          });
-        }
+      try {
+        this.audioSourceRegistry.attach(attachment);
+      } catch (compensationCause) {
+        throw new ProjectMutationCompensationError({
+          operation: 'remove-region',
+          failedPhase: 'Source 연결 복원',
+          cause,
+          compensationFailures: [{ step: `Source 연결 복원: ${regionId}`, cause: compensationCause }],
+        });
       }
       throw cause;
     }
@@ -187,14 +183,12 @@ export class RegionController {
 
     const { left: leftRegion, right: rightRegion } = splitRegions;
 
-    if (typeof regionToSplit.sourceId === 'string') {
-      this.prepareSplitSourceAttachments({
-        sourceId: regionToSplit.sourceId,
-        original: regionToSplit,
-        leftRegion,
-        rightRegion,
-      });
-    }
+    this.prepareSplitSourceAttachments({
+      sourceId: regionToSplit.sourceId,
+      original: regionToSplit,
+      leftRegion,
+      rightRegion,
+    });
 
     try {
       await this.audioEngine.replaceRegion({
@@ -203,14 +197,12 @@ export class RegionController {
         replacements: [this.toRegionData(leftRegion, sourceUrl), this.toRegionData(rightRegion, sourceUrl)],
       });
     } catch (cause) {
-      if (typeof regionToSplit.sourceId === 'string') {
-        this.rollbackPreparedSplitSourceAttachments({
-          sourceId: regionToSplit.sourceId,
-          leftRegion,
-          rightRegion,
-          cause,
-        });
-      }
+      this.rollbackPreparedSplitSourceAttachments({
+        sourceId: regionToSplit.sourceId,
+        leftRegion,
+        rightRegion,
+        cause,
+      });
       throw cause;
     }
 
@@ -230,22 +222,20 @@ export class RegionController {
       throw cause;
     }
 
-    if (typeof regionToSplit.sourceId === 'string') {
-      try {
-        this.assertRegisteredSource({ sourceId: regionToSplit.sourceId, regionId: regionToSplit.id });
-        this.audioSourceRegistry.detach({ sourceId: regionToSplit.sourceId, regionId: regionToSplit.id });
-      } catch (cause) {
-        await this.rollbackSplitToOriginal({
-          trackId,
-          original: regionToSplit,
-          leftRegion,
-          rightRegion,
-          sourceId: regionToSplit.sourceId,
-          sourceUrl,
-          cause,
-        });
-        throw cause;
-      }
+    try {
+      this.assertRegisteredSource({ sourceId: regionToSplit.sourceId, regionId: regionToSplit.id });
+      this.audioSourceRegistry.detach({ sourceId: regionToSplit.sourceId, regionId: regionToSplit.id });
+    } catch (cause) {
+      await this.rollbackSplitToOriginal({
+        trackId,
+        original: regionToSplit,
+        leftRegion,
+        rightRegion,
+        sourceId: regionToSplit.sourceId,
+        sourceUrl,
+        cause,
+      });
+      throw cause;
     }
 
     const regions = latestTrack.regions.flatMap(region =>
@@ -336,19 +326,11 @@ export class RegionController {
       );
     }
 
-    if (typeof firstRegion.sourceId === 'string') {
-      return this.prepareRegisteredSource({
-        sourceId: firstRegion.sourceId,
-        attachedRegionId: firstRegion.id,
-        regionData,
-      });
-    }
-
-    throw new ProjectStateError(
-      ProjectStateErrorCode.REGION_SOURCE_MISSING,
-      `재사용할 Region 소스를 찾을 수 없습니다: ${firstRegion.id}`,
-      { regionId: firstRegion.id, trackId: track.id }
-    );
+    return this.prepareRegisteredSource({
+      sourceId: firstRegion.sourceId,
+      attachedRegionId: firstRegion.id,
+      regionData,
+    });
   }
 
   private assertRegisteredSource({ sourceId, regionId }: { sourceId: string; regionId?: string }): RuntimeAudioSource {
@@ -565,19 +547,7 @@ export class RegionController {
   }
 
   private resolveRegionSourceUrl(region: RegionState): string {
-    if (typeof region.sourceId === 'string') {
-      return this.assertRegisteredSource({ sourceId: region.sourceId, regionId: region.id }).objectUrl;
-    }
-
-    if (region.audioFileUrl) {
-      return region.audioFileUrl;
-    }
-
-    throw new ProjectStateError(
-      ProjectStateErrorCode.REGION_SOURCE_MISSING,
-      `Region의 오디오 소스를 찾을 수 없습니다: ${region.id}`,
-      { regionId: region.id }
-    );
+    return this.assertRegisteredSource({ sourceId: region.sourceId, regionId: region.id }).objectUrl;
   }
 
   private prepareSplitSourceAttachments({
@@ -664,7 +634,7 @@ export class RegionController {
     original: RegionState;
     leftRegion: RegionState;
     rightRegion: RegionState;
-    sourceId?: string;
+    sourceId: string;
     cause: unknown;
   }): void {
     const compensationFailures: Array<{ step: string; cause: unknown }> = [];
@@ -678,7 +648,7 @@ export class RegionController {
         compensationFailures.push({ step: `AudioEngine 분할 Region 제거: ${region.id}`, cause: compensationCause });
       }
 
-      if (!isEngineRegionRemoved || typeof sourceId !== 'string') {
+      if (!isEngineRegionRemoved) {
         return;
       }
 
@@ -689,14 +659,12 @@ export class RegionController {
       }
     });
 
-    if (typeof sourceId === 'string') {
-      const source = this.audioSourceRegistry.resolve(sourceId);
-      if (source?.regionIds.includes(original.id)) {
-        try {
-          this.audioSourceRegistry.detach({ sourceId, regionId: original.id });
-        } catch (compensationCause) {
-          compensationFailures.push({ step: `기존 Source 연결 해제: ${original.id}`, cause: compensationCause });
-        }
+    const source = this.audioSourceRegistry.resolve(sourceId);
+    if (source?.regionIds.includes(original.id)) {
+      try {
+        this.audioSourceRegistry.detach({ sourceId, regionId: original.id });
+      } catch (compensationCause) {
+        compensationFailures.push({ step: `기존 Source 연결 해제: ${original.id}`, cause: compensationCause });
       }
     }
 

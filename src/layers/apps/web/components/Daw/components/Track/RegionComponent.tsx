@@ -24,10 +24,6 @@ interface RegionComponentProps {
 }
 
 function resolveRegionAudioSourceUrl(region: RegionState, audioSourceResolver: IAudioSourceResolver): string | null {
-  if (region.sourceId === undefined) {
-    return null;
-  }
-
   const audioSource = audioSourceResolver.resolve(region.sourceId);
   if (!audioSource || !audioSource.regionIds.includes(region.id)) {
     return null;

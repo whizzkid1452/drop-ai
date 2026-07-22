@@ -17,10 +17,10 @@ describe('RegionState 오디오 식별자 계약', () => {
     };
 
     expect(region.sourceId).toBe('11111111-1111-4111-8111-111111111111');
-    expect(region.audioFileUrl).toBeUndefined();
+    expect(region).not.toHaveProperty('audioFileUrl');
   });
 
-  it('audioFileUrl 또는 sourceId 중 정확히 하나만 허용한다', () => {
+  it('sourceId만 허용한다', () => {
     type RegionCommonFields = {
       id: string;
       startTime: number;
@@ -30,7 +30,7 @@ describe('RegionState 오디오 식별자 계약', () => {
       status: [];
     };
 
-    expectTypeOf<RegionCommonFields & { audioFileUrl: string }>().toExtend<RegionState>();
+    expectTypeOf<RegionCommonFields & { audioFileUrl: string }>().not.toExtend<RegionState>();
     expectTypeOf<RegionCommonFields & { sourceId: string }>().toExtend<RegionState>();
     expectTypeOf<RegionCommonFields>().not.toExtend<RegionState>();
     expectTypeOf<RegionCommonFields & { audioFileUrl: string; sourceId: string }>().not.toExtend<RegionState>();
@@ -349,7 +349,7 @@ describe('Session Store - Phase 1 검증', () => {
         sourceStartTime: 0,
         duration: 5.0,
         status: [],
-        audioFileUrl: 'test.mp3',
+        sourceId: '11111111-1111-4111-8111-111111111111',
       };
 
       const track = {

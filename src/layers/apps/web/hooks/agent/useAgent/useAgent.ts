@@ -13,10 +13,6 @@ import type { AgentPromptTrack } from './utils/getSystemPrompt';
 import { resolveAgentRunStatus } from './utils/resolve-agent-run-status';
 
 function hasAvailableAudioSource(region: RegionState, audioSourceResolver: IAudioSourceResolver): boolean {
-  if (!region.sourceId) {
-    return false;
-  }
-
   const audioSource = audioSourceResolver.resolve(region.sourceId);
   return audioSource?.regionIds.includes(region.id) ?? false;
 }

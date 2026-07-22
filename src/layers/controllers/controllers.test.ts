@@ -373,7 +373,7 @@ describe('Controllers - Phase 3 검증', () => {
         regions: [
           {
             id: SOURCE_REGION_ID,
-            audioFileUrl: 'existing-region.mp3',
+            sourceId: SOURCE_ID,
             startTime: 0,
             endTime: 10,
             sourceStartTime: 0,
@@ -599,35 +599,29 @@ describe('Controllers - Phase 3 검증', () => {
       expect(session.getState().tracks.get('track-1')?.regions).toEqual([]);
     });
 
-    it('Source를 생략할 때 첫 번째 기존 URL Region을 재사용하지 않는다', async () => {
-      session.getState().updateTrack('track-1', {
-        regions: [
-          {
-            id: 'legacy-region',
-            audioFileUrl: 'legacy-region.mp3',
-            startTime: 0,
-            endTime: 10,
-            sourceStartTime: 0,
-            duration: 10,
-            status: [],
-          },
-        ],
+    it('Source를 생략하면 첫 Region의 sourceId를 재사용한다', async () => {
+      stageSource(audioSourceRegistry);
+      await controller.region.addRegion('track-1', {
+        id: SOURCE_REGION_ID,
+        sourceId: SOURCE_ID,
+        startTime: 0,
+        sourceStartTime: 0,
+        duration: 5,
       });
       const addRegionSpy = vi.spyOn(engine, 'addRegion');
 
-      await expectRejectedProjectStateError(
-        () =>
-          controller.region.addRegion('track-1', {
-            id: 'fallback-region',
-            startTime: 10,
-            sourceStartTime: 0,
-            duration: 5,
-          }),
-        'REGION_SOURCE_MISSING'
-      );
+      await controller.region.addRegion('track-1', {
+        id: SECOND_SOURCE_REGION_ID,
+        startTime: 5,
+        sourceStartTime: 5,
+        duration: 5,
+      });
 
-      expect(addRegionSpy).not.toHaveBeenCalled();
-      expect(session.getState().tracks.get('track-1')?.regions).toHaveLength(1);
+      expect(addRegionSpy).toHaveBeenLastCalledWith(
+        'track-1',
+        expect.objectContaining({ id: SECOND_SOURCE_REGION_ID, url: SOURCE_OBJECT_URL })
+      );
+      expect(session.getState().tracks.get('track-1')?.regions[1]).toMatchObject({ sourceId: SOURCE_ID });
     });
 
     it('pending Source의 Region 추가가 실패하면 연결과 Object URL을 정리한다', async () => {
@@ -722,16 +716,17 @@ describe('Controllers - Phase 3 검증', () => {
         sourceStartTime: 0,
         duration: 10,
       });
+      audioSourceRegistry.attach({ sourceId: SOURCE_ID, regionId: SECOND_SOURCE_REGION_ID });
       session.getState().updateTrack('track-1', {
         regions: [
           {
             id: SECOND_SOURCE_REGION_ID,
+            sourceId: SOURCE_ID,
             startTime: 20,
             endTime: 25,
             sourceStartTime: 0,
             duration: 5,
             status: [],
-            audioFileUrl: 'concurrent.mp3',
           },
         ],
       });
@@ -1050,7 +1045,7 @@ describe('Controllers - Phase 3 검증', () => {
         regions: [
           {
             id: 'region-1',
-            audioFileUrl: '',
+            sourceId: SOURCE_ID,
             startTime: 0,
             endTime: 10,
             sourceStartTime: 0,
@@ -1063,55 +1058,6 @@ describe('Controllers - Phase 3 검증', () => {
       await expect(
         controller.region.splitRegionById({ trackId: 'track-1', regionId: 'region-1', splitTime: 5 })
       ).rejects.toMatchObject({ code: 'REGION_SOURCE_MISSING' });
-    });
-
-    it('splitRegionById는 기존 URL Region의 읽기 호환 경로를 유지한다', async () => {
-      await engine.addRegion('track-1', {
-        id: 'legacy-region',
-        url: 'legacy-region.mp3',
-        startTime: 0,
-        sourceStartTime: 2,
-        duration: 10,
-      });
-      session.getState().updateTrack('track-1', {
-        regions: [
-          {
-            id: 'legacy-region',
-            audioFileUrl: 'legacy-region.mp3',
-            startTime: 0,
-            endTime: 10,
-            sourceStartTime: 2,
-            duration: 10,
-            status: [],
-          },
-        ],
-      });
-      const replaceRegionSpy = vi.spyOn(engine, 'replaceRegion');
-
-      await controller.region.splitRegionById({ trackId: 'track-1', regionId: 'legacy-region', splitTime: 4 });
-
-      expect(replaceRegionSpy).toHaveBeenCalledWith({
-        trackId: 'track-1',
-        regionId: 'legacy-region',
-        replacements: [
-          expect.objectContaining({
-            url: 'legacy-region.mp3',
-            startTime: 0,
-            sourceStartTime: 2,
-            duration: 4,
-          }),
-          expect.objectContaining({
-            url: 'legacy-region.mp3',
-            startTime: 4,
-            sourceStartTime: 6,
-            duration: 6,
-          }),
-        ],
-      });
-      expect(session.getState().tracks.get('track-1')?.regions).toEqual([
-        expect.objectContaining({ audioFileUrl: 'legacy-region.mp3', startTime: 0, endTime: 4 }),
-        expect.objectContaining({ audioFileUrl: 'legacy-region.mp3', startTime: 4, endTime: 10 }),
-      ]);
     });
 
     it('splitRegionById의 AudioEngine 호출이 실패하면 SessionStore를 변경하지 않는다', async () => {
@@ -1136,17 +1082,18 @@ describe('Controllers - Phase 3 검증', () => {
         splitTime: 5,
       });
       const currentRegions = session.getState().tracks.get('track-1')?.regions ?? [];
+      audioSourceRegistry.attach({ sourceId: SOURCE_ID, regionId: SECOND_SOURCE_REGION_ID });
       session.getState().updateTrack('track-1', {
         regions: [
           ...currentRegions,
           {
-            id: 'concurrent-region',
+            id: SECOND_SOURCE_REGION_ID,
+            sourceId: SOURCE_ID,
             startTime: 20,
             endTime: 25,
             sourceStartTime: 0,
             duration: 5,
             status: [],
-            audioFileUrl: 'concurrent.mp3',
           },
         ],
       });
@@ -1156,7 +1103,7 @@ describe('Controllers - Phase 3 검증', () => {
 
       const updatedRegions = session.getState().tracks.get('track-1')?.regions;
       expect(updatedRegions).toHaveLength(3);
-      expect(updatedRegions?.map(region => region.id)).toContain('concurrent-region');
+      expect(updatedRegions?.map(region => region.id)).toContain(SECOND_SOURCE_REGION_ID);
       expect(updatedRegions?.map(region => region.id)).not.toContain(SOURCE_REGION_ID);
     });
 
@@ -1388,88 +1335,6 @@ describe('Controllers - Phase 3 검증', () => {
         duration: 10,
       });
       audioSourceRegistry.detach({ sourceId: SOURCE_ID, regionId: SOURCE_REGION_ID });
-      const exportSpy = vi.spyOn(engine, 'exportProject');
-
-      await expectRejectedProjectStateError(() => controller.export.exportProject(), 'REGION_SOURCE_MISSING');
-
-      expect(exportSpy).not.toHaveBeenCalled();
-    });
-
-    it('기존 URL Region은 Export에서 거부한다', async () => {
-      await controller.track.addTrack('track-1');
-      session.getState().updateTrack('track-1', {
-        regions: [
-          {
-            id: 'legacy-region',
-            audioFileUrl: 'legacy-region.mp3',
-            startTime: 0,
-            endTime: 10,
-            sourceStartTime: 0,
-            duration: 10,
-            status: [],
-          },
-        ],
-      });
-      const exportSpy = vi.spyOn(engine, 'exportProject');
-
-      await expectRejectedProjectStateError(() => controller.export.exportProject(), 'REGION_SOURCE_MISSING');
-
-      expect(exportSpy).not.toHaveBeenCalled();
-    });
-
-    it.each([
-      { audioFileUrl: '', duration: 10, name: 'URL이 빈' },
-      { audioFileUrl: 'legacy-region.mp3', duration: 0, name: '길이가 0인' },
-    ])('$name 기존 URL Region도 Export에서 제외하지 않고 거부한다', async ({ audioFileUrl, duration }) => {
-      await controller.track.addTrack('track-1');
-      session.getState().updateTrack('track-1', {
-        regions: [
-          {
-            id: 'legacy-region',
-            audioFileUrl,
-            startTime: 0,
-            endTime: duration,
-            sourceStartTime: 0,
-            duration,
-            status: [],
-          },
-        ],
-      });
-      const exportSpy = vi.spyOn(engine, 'exportProject');
-
-      await expectRejectedProjectStateError(() => controller.export.exportRange(0, 1), 'REGION_SOURCE_MISSING');
-
-      expect(exportSpy).not.toHaveBeenCalled();
-    });
-
-    it('정상 Source와 기존 URL Region이 섞여 있으면 전체 Export를 거부한다', async () => {
-      await controller.track.addTrack('track-1');
-      stageSource(audioSourceRegistry);
-      await controller.region.addRegion('track-1', {
-        id: SOURCE_REGION_ID,
-        sourceId: SOURCE_ID,
-        startTime: 0,
-        sourceStartTime: 0,
-        duration: 10,
-      });
-      const sourceRegion = session.getState().tracks.get('track-1')?.regions[0];
-      if (!sourceRegion) {
-        throw new Error('테스트용 Source Region을 찾을 수 없습니다.');
-      }
-      session.getState().updateTrack('track-1', {
-        regions: [
-          sourceRegion,
-          {
-            id: 'legacy-region',
-            audioFileUrl: 'legacy-region.mp3',
-            startTime: 10,
-            endTime: 20,
-            sourceStartTime: 0,
-            duration: 10,
-            status: [],
-          },
-        ],
-      });
       const exportSpy = vi.spyOn(engine, 'exportProject');
 
       await expectRejectedProjectStateError(() => controller.export.exportProject(), 'REGION_SOURCE_MISSING');
