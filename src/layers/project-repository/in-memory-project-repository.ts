@@ -1,4 +1,4 @@
-import { ProjectDocumentSchema, type ProjectDocument } from '../shared/types/project-document.schema';
+import type { ProjectDocument } from '../shared/types/project-document.schema';
 import { ProjectRepositoryError, ProjectRepositoryErrorCode } from './errors';
 import type {
   DeleteProjectRequest,
@@ -6,6 +6,13 @@ import type {
   ProjectSummary,
   SaveProjectRequest,
 } from './i-project-repository';
+import {
+  cloneAndValidateProjectDocument,
+  throwIfRevisionConflict,
+  validateExpectedRevision,
+  validateInitialRevision,
+  validateSaveExpectedRevision,
+} from './project-repository-validation';
 
 interface InMemoryProjectRepositoryOptions {
   now?: () => number;
@@ -25,16 +32,9 @@ export class InMemoryProjectRepository implements IProjectRepository {
   }
 
   async create(document: ProjectDocument): Promise<ProjectDocument> {
-    const validatedDocument = this.cloneAndValidate(document);
-    const { id: projectId, revision } = validatedDocument.project;
-
-    if (revision !== 0) {
-      throw new ProjectRepositoryError({
-        code: ProjectRepositoryErrorCode.INVALID_INITIAL_REVISION,
-        message: '새 프로젝트의 revision은 0이어야 합니다.',
-        details: { projectId, revision },
-      });
-    }
+    const validatedDocument = cloneAndValidateProjectDocument(document);
+    validateInitialRevision(validatedDocument);
+    const { id: projectId } = validatedDocument.project;
 
     if (this.projects.has(projectId)) {
       throw new ProjectRepositoryError({
@@ -49,23 +49,23 @@ export class InMemoryProjectRepository implements IProjectRepository {
       savedAtEpochMilliseconds: this.now(),
     });
 
-    return this.cloneAndValidate(validatedDocument);
+    return cloneAndValidateProjectDocument(validatedDocument);
   }
 
   async save({ document, expectedRevision }: SaveProjectRequest): Promise<ProjectDocument> {
-    this.validateSaveExpectedRevision(expectedRevision);
-    const validatedDocument = this.cloneAndValidate(document);
+    validateSaveExpectedRevision(expectedRevision);
+    const validatedDocument = cloneAndValidateProjectDocument(document);
     const projectId = validatedDocument.project.id;
     const storedProject = this.getStoredProject(projectId);
 
-    this.throwIfRevisionConflict({
+    throwIfRevisionConflict({
       projectId,
       expectedRevision,
       documentRevision: validatedDocument.project.revision,
       storedRevision: storedProject.document.project.revision,
     });
 
-    const nextDocument = this.cloneAndValidate({
+    const nextDocument = cloneAndValidateProjectDocument({
       ...validatedDocument,
       project: {
         ...validatedDocument.project,
@@ -77,12 +77,12 @@ export class InMemoryProjectRepository implements IProjectRepository {
       savedAtEpochMilliseconds: this.now(),
     });
 
-    return this.cloneAndValidate(nextDocument);
+    return cloneAndValidateProjectDocument(nextDocument);
   }
 
   async load(projectId: string): Promise<ProjectDocument | null> {
     const storedProject = this.projects.get(projectId);
-    return storedProject ? this.cloneAndValidate(storedProject.document) : null;
+    return storedProject ? cloneAndValidateProjectDocument(storedProject.document) : null;
   }
 
   async list(): Promise<readonly ProjectSummary[]> {
@@ -95,7 +95,7 @@ export class InMemoryProjectRepository implements IProjectRepository {
   }
 
   async delete({ projectId, expectedRevision }: DeleteProjectRequest): Promise<void> {
-    this.validateExpectedRevision(expectedRevision);
+    validateExpectedRevision(expectedRevision);
     const storedProject = this.getStoredProject(projectId);
     const storedRevision = storedProject.document.project.revision;
 
@@ -110,19 +110,6 @@ export class InMemoryProjectRepository implements IProjectRepository {
     this.projects.delete(projectId);
   }
 
-  private cloneAndValidate(document: ProjectDocument): ProjectDocument {
-    const result = ProjectDocumentSchema.safeParse(document);
-    if (result.success) {
-      return result.data;
-    }
-
-    throw new ProjectRepositoryError({
-      code: ProjectRepositoryErrorCode.INVALID_DOCUMENT,
-      message: '유효하지 않은 ProjectDocument입니다.',
-      cause: result.error,
-    });
-  }
-
   private getStoredProject(projectId: string): StoredProject {
     const storedProject = this.projects.get(projectId);
     if (storedProject) {
@@ -133,53 +120,6 @@ export class InMemoryProjectRepository implements IProjectRepository {
       code: ProjectRepositoryErrorCode.PROJECT_NOT_FOUND,
       message: `프로젝트를 찾을 수 없습니다: ${projectId}`,
       details: { projectId },
-    });
-  }
-
-  private validateExpectedRevision(expectedRevision: number): void {
-    if (Number.isSafeInteger(expectedRevision) && expectedRevision >= 0) {
-      return;
-    }
-
-    throw new ProjectRepositoryError({
-      code: ProjectRepositoryErrorCode.INVALID_EXPECTED_REVISION,
-      message: 'expectedRevision은 0 이상의 정수여야 합니다.',
-      details: { expectedRevision },
-    });
-  }
-
-  private validateSaveExpectedRevision(expectedRevision: number): void {
-    this.validateExpectedRevision(expectedRevision);
-    if (expectedRevision < Number.MAX_SAFE_INTEGER) {
-      return;
-    }
-
-    throw new ProjectRepositoryError({
-      code: ProjectRepositoryErrorCode.INVALID_EXPECTED_REVISION,
-      message: '저장할 revision은 Number.MAX_SAFE_INTEGER보다 작아야 합니다.',
-      details: { expectedRevision },
-    });
-  }
-
-  private throwIfRevisionConflict({
-    projectId,
-    expectedRevision,
-    documentRevision,
-    storedRevision,
-  }: {
-    projectId: string;
-    expectedRevision: number;
-    documentRevision: number;
-    storedRevision: number;
-  }): void {
-    if (documentRevision === expectedRevision && storedRevision === expectedRevision) {
-      return;
-    }
-
-    throw new ProjectRepositoryError({
-      code: ProjectRepositoryErrorCode.REVISION_CONFLICT,
-      message: `프로젝트 revision이 변경되었습니다: ${projectId}`,
-      details: { projectId, expectedRevision, documentRevision, storedRevision },
     });
   }
 }

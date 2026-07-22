@@ -283,15 +283,15 @@ v1은 이 상태를 손실 없이 저장하기 위해 길이 0과 `startTimeSeco
 - Agent 대화, 모델 로딩, 모달과 zoom 같은 앱 상태
 
 원본 오디오 바이트는 Source UUID를 키로 사용하는 별도 저장소에 둔다. 프로젝트를 다시 열 때 새 Object URL을 만들고
-런타임 Source Registry에서 관리한다. 현재 변경은 문서 계약만 정의하며, Session 변환·저장·불러오기 기능은 아직 없다.
-Undo 이력도 snapshot 문서에 넣지 않고 후속 Undo Journal에서 별도로 관리한다.
+런타임 Source Registry에서 관리한다. 현재는 ProjectDocument와 metadata 저장소까지만 있으며, Session 변환과 화면의
+저장·불러오기 기능은 아직 없다. Undo 이력도 snapshot 문서에 넣지 않고 후속 Undo Journal에서 별도로 관리한다.
 
 ---
 
 ## 10. ProjectRepository 계약
 
-`IProjectRepository`는 ProjectDocument snapshot만 다룬다. 현재 `InMemoryProjectRepository`는 revision 규칙과 오류 처리를
-검증하는 테스트용 Adapter이며 브라우저를 새로고침하면 내용이 사라진다.
+`IProjectRepository`는 ProjectDocument snapshot만 다룬다. `InMemoryProjectRepository`는 계약 검증용이고,
+`IndexedDbProjectRepository`는 브라우저 metadata 영구 저장용이다.
 
 | 작업   | 규칙                                                                   |
 | ------ | ---------------------------------------------------------------------- |
@@ -304,13 +304,18 @@ Undo 이력도 snapshot 문서에 넣지 않고 후속 Undo Journal에서 별도
 create·save의 입력, 반환값, load 결과는 내부 저장값과 객체 참조를 공유하지 않는다. 같은 revision을 가진 두 저장이 겹치면
 하나만 성공하고 다른 하나는 `REVISION_CONFLICT`로 끝난다. 비교와 교체는 한 저장소 작업 안에서 수행해야 한다.
 expected revision은 0 이상의 JavaScript 안전 정수여야 하며, save는 증가 결과도 안전 정수 범위에 남아야 한다.
+`list()` 반환 순서는 계약하지 않는다. 화면은 필요한 정렬 기준을 직접 적용해야 한다.
 
-원본 오디오 바이트와 Undo Journal은 Repository snapshot에 포함하지 않는다. 후속 IndexedDB Adapter는 ProjectDocument와
-목록 요약을 하나의 metadata transaction으로 갱신해야 한다. OPFS 오디오 바이트는 먼저 저장·검증한 뒤 그 Source ID를
-참조하는 snapshot을 공개한다. 반대 순서는 문서만 있고 오디오가 없는 손상 상태를 만들 수 있다.
+IndexedDB Adapter는 ProjectDocument와 목록 요약을 별도 Object Store에 두고, create·save·delete에서 두 Store를 하나의
+transaction으로 갱신한다. save의 읽기·revision 비교·교체도 같은 transaction 안에서 처리한다. 단위 테스트는 메모리 기반
+IndexedDB 대역으로 이 규칙을 검증하므로, 실제 브라우저의 디스크 내구성·용량 제한·저장소 제거 정책까지 증명하지는 않는다.
 
-현재 Repository는 `createApp`, Controller, Command, Session에 아직 연결하지 않았다. 연결은 영구 저장 Adapter와 Session
-Mapper를 추가한 뒤 별도 기능 단위에서 진행한다.
+원본 오디오 바이트와 Undo Journal은 Repository snapshot에 포함하지 않는다. 후속 OPFS Adapter는 오디오 바이트를 먼저
+저장·검증한 뒤 그 Source ID를 참조하는 snapshot을 공개해야 한다. 반대 순서는 문서만 있고 오디오가 없는 손상 상태를
+만들 수 있다.
+
+현재 Repository는 `createApp`, Controller, Command, Session에 아직 연결하지 않았다. 연결은 Session Mapper를 추가한 뒤
+별도 기능 단위에서 진행한다.
 
 ---
 
