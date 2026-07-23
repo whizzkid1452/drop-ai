@@ -84,6 +84,11 @@ Session은 Plugin 기반 상태도 보관한다. Track에는 Plugin 인스턴스
 manifest 검증 결과, 런타임 로그가 있다. 카탈로그·검증 결과·로그 Action과 프로젝트 상태 교체는 입력 객체의 필요한
 중첩 값까지 복제한다. 현재 단계는 상태 기반만 제공하며 Plugin 설치, 오디오 처리, AudioCommand, UI는 아직 제공하지 않는다.
 
+Plugin SDK는 manifest를 선언하는 독립 계약이다. v1은 effect 유형과 number·boolean·enum Parameter를 지원하고,
+slider·toggle·select control이 실제 Parameter ID와 맞는 type을 참조하는지 검사한다. 알 수 없는 필드, 중복 ID, 범위 밖
+기본값은 거부한다. AudioWorklet 모듈은 상대 경로 문법만 허용하지만, 이 검사만으로 등록 자산이나 same-origin 여부가
+증명되지는 않는다. 실제 URL 확인과 모듈 로딩은 후속 Plugin Host 책임이다.
+
 검증된 명령은 CommandExecutor의 단일 대기열에서 접수 순서대로 하나씩 실행한다. `executeMany`는 묶음 전체를
 먼저 검증한 후, 다른 요청이 끼어들지 않게 순서대로 실행한다. 실행 중 첫 오류가 나면 남은 명령은 실행하지
 않는다. 이미 완료된 변경은 되돌리지 않으므로 묶음 실행은 원자적 트랜잭션이 아니다. 실패한 실행이 있어도 그
@@ -260,6 +265,7 @@ sequenceDiagram
 | `layers/project-repository/`      | 프로젝트 snapshot 저장 계약과 Adapter       |
 | `layers/audio-source-repository/` | 오디오 원본 바이트 저장 계약과 OPFS Adapter |
 | `layers/audio-source-registry/`   | 재생 Source URL의 런타임 소유권과 참조 관리 |
+| `layers/plugin-sdk/`              | Plugin manifest 선언과 검증 계약            |
 | `layers/session/`                 | 화면에 표시할 상태 저장                     |
 | `layers/audio-engine/`            | Tone.js와 Web Audio 기반 오디오 처리        |
 

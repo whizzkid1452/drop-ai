@@ -61,6 +61,12 @@ Plugin 인스턴스는 ID, manifest 요약, 활성 여부, boolean·number·stri
 Action은 입력 객체를 복제해 저장하며, 프로젝트 상태 교체 시 Track의 Plugin 인스턴스도 깊은 복사한다. 이 기반은 아직
 Plugin 설치, 오디오 처리, AudioCommand, UI를 제공하지 않는다.
 
+Plugin SDK는 다른 프로젝트 계층을 import하지 않는 선언 계약이다. manifest v1은 namespaced ID, Semantic Versioning 형식,
+effect 유형, number·boolean·enum 매개변수, AudioWorklet 모듈 상대 경로, slider·toggle·select UI control만 허용한다.
+알 수 없는 필드, 중복 Parameter ID와 control, 잘못된 기본값 범위, 존재하지 않거나 type이 맞지 않는 Parameter 참조는
+검증에서 거부한다. `workletModulePath` 검증은 상대 경로 문법만 보장한다. 실제 모듈이 등록된 자산인지와 URL 해석 뒤
+same-origin인지 여부는 후속 Plugin Host가 별도로 확인해야 한다.
+
 영구 저장 형식은 Shared의 `ProjectDocumentSchema`로 검증한다. v1은 Track·Region과 오디오 Source 메타데이터를
 절대 초 단위로 저장하고, Region은 임시 URL이 아닌 안정적인 Source ID를 참조한다. `File`, `Blob`, Object URL,
 AudioBuffer, 함수, 재생 중 상태, Agent·UI 상태는 ProjectDocument에 넣지 않는다. `ProjectDocumentMapper`는 Store나

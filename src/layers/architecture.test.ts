@@ -22,6 +22,7 @@ const commandRoot = path.join(layersRoot, 'commands');
 const projectDocumentMapperRoot = path.join(layersRoot, 'project-document-mapper');
 const queriesRoot = path.join(layersRoot, 'queries');
 const projectRepositoryRoot = path.join(layersRoot, 'project-repository');
+const pluginSdkRoot = path.join(layersRoot, 'plugin-sdk');
 const sessionRoot = path.join(layersRoot, 'session');
 const sharedRoot = path.join(layersRoot, 'shared');
 const compositionRootPath = path.join(appsRoot, 'create-app.ts');
@@ -581,6 +582,19 @@ describe('레이어 의존성 규칙', () => {
         isInside(sourceImport.importerPath, sharedRoot) &&
         sourceImport.resolvedPath !== undefined &&
         ((isInside(sourceImport.resolvedPath, layersRoot) && !isInside(sourceImport.resolvedPath, sharedRoot)) ||
+          isAppSource(sourceImport.resolvedPath))
+      );
+    });
+
+    expect(formatViolations(violations)).toEqual([]);
+  });
+
+  it('Plugin SDK는 다른 계층을 import하지 않는다', () => {
+    const violations = sourceImports.filter(sourceImport => {
+      return (
+        isInside(sourceImport.importerPath, pluginSdkRoot) &&
+        sourceImport.resolvedPath !== undefined &&
+        ((isInside(sourceImport.resolvedPath, layersRoot) && !isInside(sourceImport.resolvedPath, pluginSdkRoot)) ||
           isAppSource(sourceImport.resolvedPath))
       );
     });
