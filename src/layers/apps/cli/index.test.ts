@@ -11,6 +11,8 @@ const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
 const SOURCE_ID = '33333333-3333-4333-8333-333333333333';
 const PROJECT_ID = '44444444-4444-4444-8444-444444444444';
+const PLUGIN_INSTANCE_ID = '55555555-5555-4555-8555-555555555555';
+const PLUGIN_MANIFEST_ID = 'builtin.gain';
 
 type CliCommandExecutor = Pick<CommandExecutor, 'execute' | 'executeMany'>;
 
@@ -125,6 +127,90 @@ describe('내부 CLI 명령 변환', () => {
     await commands.track.fn('remove', TRACK_ID);
 
     expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.REMOVE_TRACK, trackId: TRACK_ID });
+  });
+
+  it('plugin install 인자를 INSTALL_PLUGIN 명령으로 변환한다', async () => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    const result = await commands.plugin.fn('install', TRACK_ID, PLUGIN_MANIFEST_ID, PLUGIN_INSTANCE_ID);
+
+    expect(execute).toHaveBeenCalledWith({
+      type: AudioCommandType.INSTALL_PLUGIN,
+      trackId: TRACK_ID,
+      manifestId: PLUGIN_MANIFEST_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+    });
+    expect(result).toBe(`Plugin ${PLUGIN_INSTANCE_ID} installed on track ${TRACK_ID}`);
+  });
+
+  it('plugin install에서 instanceId를 생략할 수 있다', async () => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    const result = await commands.plugin.fn('install', TRACK_ID, PLUGIN_MANIFEST_ID);
+
+    expect(execute).toHaveBeenCalledWith({
+      type: AudioCommandType.INSTALL_PLUGIN,
+      trackId: TRACK_ID,
+      manifestId: PLUGIN_MANIFEST_ID,
+    });
+    expect(result).toBe(`Plugin ${PLUGIN_MANIFEST_ID} installed on track ${TRACK_ID}`);
+  });
+
+  it('plugin remove 인자를 REMOVE_PLUGIN 명령으로 변환한다', async () => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    const result = await commands.plugin.fn('remove', TRACK_ID, PLUGIN_INSTANCE_ID);
+
+    expect(execute).toHaveBeenCalledWith({
+      type: AudioCommandType.REMOVE_PLUGIN,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+    });
+    expect(result).toBe(`Plugin ${PLUGIN_INSTANCE_ID} removed from track ${TRACK_ID}`);
+  });
+
+  it.each([
+    ['number', '0.5', 0.5],
+    ['boolean', 'true', true],
+    ['boolean', 'false', false],
+    ['string', 'soft', 'soft'],
+  ] as const)('plugin set의 %s 값을 SET_PLUGIN_PARAMETER 명령으로 변환한다', async (valueType, rawValue, value) => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    const result = await commands.plugin.fn('set', TRACK_ID, PLUGIN_INSTANCE_ID, 'gain', valueType, rawValue);
+
+    expect(execute).toHaveBeenCalledWith({
+      type: AudioCommandType.SET_PLUGIN_PARAMETER,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      parameterId: 'gain',
+      value,
+    });
+    expect(result).toBe(`Plugin ${PLUGIN_INSTANCE_ID} Parameter gain set to ${rawValue}`);
+  });
+
+  it.each([
+    [['install', TRACK_ID], 'Error: Usage: plugin install <trackId> <manifestId> [instanceId]'],
+    [['remove', TRACK_ID], 'Error: Usage: plugin remove <trackId> <instanceId>'],
+    [
+      ['set', TRACK_ID, PLUGIN_INSTANCE_ID, 'gain', 'boolean', 'yes'],
+      'Error: Plugin Parameter value must match its declared CLI type.',
+    ],
+    [
+      ['set', TRACK_ID, PLUGIN_INSTANCE_ID, 'gain', 'number', 'Infinity'],
+      'Error: Plugin Parameter value must match its declared CLI type.',
+    ],
+    [
+      ['set', TRACK_ID, PLUGIN_INSTANCE_ID, 'gain', 'object', '{}'],
+      'Error: Plugin Parameter value type must be number, boolean, or string.',
+    ],
+  ] as const)('잘못된 plugin 인자 %j를 실행 전에 거부한다', async (args, expectedMessage) => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    const result = await commands.plugin.fn(...args);
+
+    expect(result).toBe(expectedMessage);
+    expect(execute).not.toHaveBeenCalled();
   });
 
   it.each(['0', '0.4', '1'])('volume 경계값 %s를 SET_TRACK_VOLUME 명령으로 변환한다', async value => {
@@ -332,6 +418,8 @@ describe('내부 CLI 명령 변환', () => {
     expect(result).toContain('region add-source <trackId> <regionId> <sourceId>');
     expect(result).not.toContain('region add <trackId> <regionId> <url>');
     expect(result).toContain('region split <trackId> <regionId> <time>');
+    expect(result).toContain('plugin install <trackId> <manifestId> [instanceId]');
+    expect(result).toContain('plugin set <trackId> <instanceId> <parameterId> <number|boolean|string> <value>');
     expect(result).toContain('save');
     expect(result).not.toContain('--help');
   });

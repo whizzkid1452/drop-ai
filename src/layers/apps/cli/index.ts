@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { CommandExecutor } from '../../commands/command-executor';
+import type { PluginParameterValue } from '../../shared/types/plugin-state';
 import { AudioCommandSchema, AudioCommandType } from '../../shared/types/audioCommand.schema';
 import { useCommandExecutor, useSession } from '../web/context/layer-hooks';
 
@@ -14,6 +15,9 @@ type CliCommandExecutor = Pick<CommandExecutor, 'execute' | 'executeMany'>;
 
 const REGION_ADD_SOURCE_USAGE =
   'region add-source <trackId> <regionId> <sourceId> <startTime> <duration> [startOffset]';
+const PLUGIN_INSTALL_USAGE = 'plugin install <trackId> <manifestId> [instanceId]';
+const PLUGIN_REMOVE_USAGE = 'plugin remove <trackId> <instanceId>';
+const PLUGIN_SET_USAGE = 'plugin set <trackId> <instanceId> <parameterId> <number|boolean|string> <value>';
 
 interface CliState {
   isPlaying: boolean;
@@ -25,6 +29,23 @@ interface CliState {
 function parseFiniteNumber(value: string): number | null {
   const parsedValue = Number(value);
   return Number.isFinite(parsedValue) ? parsedValue : null;
+}
+
+function isPluginParameterValueType(valueType: string): valueType is 'number' | 'boolean' | 'string' {
+  return valueType === 'number' || valueType === 'boolean' || valueType === 'string';
+}
+
+function parsePluginParameterValue(valueType: string, rawValue: string): PluginParameterValue | null {
+  if (valueType === 'number') {
+    return parseFiniteNumber(rawValue);
+  }
+  if (valueType === 'boolean') {
+    if (rawValue === 'true') {
+      return true;
+    }
+    return rawValue === 'false' ? false : null;
+  }
+  return rawValue;
 }
 
 async function executeTrackCommand(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
@@ -122,6 +143,69 @@ async function executeRegionCommand(commandExecutor: CliCommandExecutor, args: s
     'region split <trackId> <regionId> <time>',
     'region move <trackId> <regionId> <newStartTime>',
   ].join('\n');
+}
+
+async function executePluginInstall(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
+  const [trackId, manifestId, instanceId] = args;
+  if (!trackId || !manifestId) {
+    return `Error: Usage: ${PLUGIN_INSTALL_USAGE}`;
+  }
+  await commandExecutor.execute({
+    type: AudioCommandType.INSTALL_PLUGIN,
+    trackId,
+    manifestId,
+    ...(instanceId ? { instanceId } : {}),
+  });
+  return `Plugin ${instanceId ?? manifestId} installed on track ${trackId}`;
+}
+
+async function executePluginRemove(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
+  const [trackId, instanceId] = args;
+  if (!trackId || !instanceId) {
+    return `Error: Usage: ${PLUGIN_REMOVE_USAGE}`;
+  }
+  await commandExecutor.execute({
+    type: AudioCommandType.REMOVE_PLUGIN,
+    trackId,
+    instanceId,
+  });
+  return `Plugin ${instanceId} removed from track ${trackId}`;
+}
+
+async function executePluginSet(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
+  const [trackId, instanceId, parameterId, valueType, rawValue] = args;
+  if (!trackId || !instanceId || !parameterId || !valueType || rawValue === undefined) {
+    return `Error: Usage: ${PLUGIN_SET_USAGE}`;
+  }
+  if (!isPluginParameterValueType(valueType)) {
+    return 'Error: Plugin Parameter value type must be number, boolean, or string.';
+  }
+  const value = parsePluginParameterValue(valueType, rawValue);
+  if (value === null) {
+    return 'Error: Plugin Parameter value must match its declared CLI type.';
+  }
+  await commandExecutor.execute({
+    type: AudioCommandType.SET_PLUGIN_PARAMETER,
+    trackId,
+    instanceId,
+    parameterId,
+    value,
+  });
+  return `Plugin ${instanceId} Parameter ${parameterId} set to ${rawValue}`;
+}
+
+async function executePluginCommand(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
+  const [subcommand, ...subcommandArgs] = args;
+  if (subcommand === 'install') {
+    return executePluginInstall(commandExecutor, subcommandArgs);
+  }
+  if (subcommand === 'remove') {
+    return executePluginRemove(commandExecutor, subcommandArgs);
+  }
+  if (subcommand === 'set') {
+    return executePluginSet(commandExecutor, subcommandArgs);
+  }
+  return ['Usage:', PLUGIN_INSTALL_USAGE, PLUGIN_REMOVE_USAGE, PLUGIN_SET_USAGE].join('\n');
 }
 
 async function executeExportCommand(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
@@ -254,6 +338,11 @@ export const createCliCommands = (commandExecutor: CliCommandExecutor, state: Cl
       description: 'Track management',
       usage: 'track add <trackId> | track remove <trackId>',
       fn: (...args: string[]) => executeTrackCommand(commandExecutor, args),
+    },
+    plugin: {
+      description: 'Plugin management',
+      usage: [PLUGIN_INSTALL_USAGE, PLUGIN_REMOVE_USAGE, PLUGIN_SET_USAGE].join(' | '),
+      fn: (...args: string[]) => executePluginCommand(commandExecutor, args),
     },
     volume: {
       description: 'Set track volume',

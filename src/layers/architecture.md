@@ -87,7 +87,8 @@ Gain Factory를 등록한다. AudioEngine은 Plugin을 설치 순서대로 `Trac
 제거 시 남은 chain을 다시 연결한다. 연결 변경 실패 시 이전 chain 복원을 시도하며, 복원도 실패한 동안에는 다른 실시간
 오디오 작업을 거부하고 다음 호출에서 복원을 먼저 재시도한다. `INSTALL_PLUGIN`, `REMOVE_PLUGIN`, `SET_PLUGIN_PARAMETER`는
 CommandExecutor와 PluginController를 거쳐 이 API를 호출한다. Web JSON CLI는 이 공통 Schema를 사용할 수 있다. 이름 기반
-내부 CLI 명령, Agent용 Plugin 컨텍스트, Plugin UI는 아직 제공하지 않는다.
+내부 CLI도 `plugin install`, `plugin remove`, `plugin set`을 같은 CommandExecutor에 전달한다. `plugin set` 값은
+`number`·`boolean`·`string` type을 명시해 변환한다. Agent용 Plugin 컨텍스트와 Plugin UI는 아직 제공하지 않는다.
 
 영구 저장 형식은 Shared의 `ProjectDocumentSchema`로 검증한다. v1은 Track·Region과 오디오 Source 메타데이터를
 절대 초 단위로 저장하고, Region은 임시 URL이 아닌 안정적인 Source ID를 참조한다. `File`, `Blob`, Object URL,
