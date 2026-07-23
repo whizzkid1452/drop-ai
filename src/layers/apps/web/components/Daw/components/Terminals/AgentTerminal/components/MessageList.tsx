@@ -1,12 +1,14 @@
-import type { Message } from '@/types/agent';
+import type { AgentStatus, Message } from '@/types/agent';
 import * as styles from '../ChatModalTerminal.css.ts';
 
 interface MessageListProps {
   messages: Message[];
-  isGenerating: boolean;
+  agentStatus: AgentStatus;
 }
 
-export function MessageList({ messages, isGenerating }: MessageListProps) {
+export function MessageList({ messages, agentStatus }: MessageListProps) {
+  const isBusy = agentStatus === 'generating' || agentStatus === 'executing';
+
   return (
     <div className={styles.messageGroup}>
       {messages.map((msg, i) => (
@@ -27,7 +29,9 @@ export function MessageList({ messages, isGenerating }: MessageListProps) {
               <span className={`${styles.senderName} ${msg.role === 'assistant' ? styles.aiSenderName : ''}`}>
                 {msg.role === 'assistant' ? 'AI AGENT' : 'USER'}
               </span>
-              <span className={styles.timestamp}>{new Date().toLocaleTimeString([], { hour12: false })}</span>
+              <span className={styles.timestamp}>
+                {new Date(msg.timestamp).toLocaleTimeString([], { hour12: false })}
+              </span>
             </div>
             <div
               className={`${styles.bubble} ${msg.role === 'assistant' ? styles.aiBubble : ''} ${msg.role === 'user' ? styles.bubbleUser : ''}`}
@@ -38,13 +42,15 @@ export function MessageList({ messages, isGenerating }: MessageListProps) {
         </div>
       ))}
 
-      {isGenerating && (
+      {isBusy && (
         <div className={styles.systemMessage}>
           <div className={styles.systemInfo}>
             <span className={`material-symbols-outlined ${styles.spinning}`} style={{ fontSize: '14px' }}>
               sync
             </span>
-            <span className={styles.systemText}>PROCESSING COMMAND...</span>
+            <span className={styles.systemText}>
+              {agentStatus === 'generating' ? 'GENERATING RESPONSE...' : 'APPLYING COMMANDS...'}
+            </span>
           </div>
         </div>
       )}

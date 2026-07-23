@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { Message } from '@/types/agent';
 import { useWebLLM } from '@/layers/apps/web/hooks/agent/useWebLLM';
 import { useAudioSourceResolver, useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
@@ -11,7 +11,14 @@ import type { IAudioSourceResolver } from '@/layers/audio-source-registry/i-audi
 import type { RegionState, TrackState } from '@/layers/session/session';
 import type { PluginCatalogEntry, PluginInstanceState } from '@/types/plugin-state';
 import type { AgentPromptPlugin, AgentPromptTrack } from './utils/getSystemPrompt';
+import { isAgentRequestCancelledError } from './utils/agent-request-cancelled-error';
 import { resolveAgentRunStatus } from './utils/resolve-agent-run-status';
+
+interface ActiveAgentRequest {
+  abortController: AbortController;
+  assistantMessageId: string;
+  phase: 'generating' | 'executing';
+}
 
 function hasAvailableAudioSource(region: RegionState, audioSourceResolver: IAudioSourceResolver): boolean {
   const audioSource = audioSourceResolver.resolve(region.sourceId);
@@ -63,7 +70,7 @@ export function createAgentPromptTracks(
 }
 
 export function useAgent() {
-  const { engine } = useWebLLM();
+  const { engine, interruptGeneration } = useWebLLM();
   const audioSourceResolver = useAudioSourceResolver();
   const trackMap = useSession(state => state.tracks);
   const pluginCatalog = useSession(state => state.pluginCatalog);
@@ -75,6 +82,7 @@ export function useAgent() {
   const setAgentRunStatus = useSession(state => state.setAgentRunStatus);
   const markAgentResultSuccessful = useSession(state => state.markAgentResultSuccessful);
   const commandExecutor = useCommandExecutor();
+  const activeAgentRequestRef = useRef<ActiveAgentRequest | null>(null);
 
   const tracks = useMemo(() => createAgentPromptTracks(trackMap, audioSourceResolver), [audioSourceResolver, trackMap]);
   const plugins = useMemo(() => createAgentPromptPlugins(pluginCatalog), [pluginCatalog]);
@@ -98,15 +106,38 @@ export function useAgent() {
     [updateAgentMessage]
   );
 
+  const stopGeneration = useCallback(() => {
+    const activeRequest = activeAgentRequestRef.current;
+    if (!activeRequest || activeRequest.phase !== 'generating') {
+      return;
+    }
+
+    activeAgentRequestRef.current = null;
+    activeRequest.abortController.abort();
+    try {
+      interruptGeneration();
+    } catch (error: unknown) {
+      console.error('[Agent] Failed to interrupt generation:', error);
+    }
+
+    updateMessage(activeRequest.assistantMessageId, '응답 생성을 중지했습니다.');
+    setAgentStatus('idle');
+    setAgentRunStatus('cancelled');
+  }, [interruptGeneration, setAgentRunStatus, setAgentStatus, updateMessage]);
+
+  useEffect(
+    () => () => {
+      stopGeneration();
+    },
+    [stopGeneration]
+  );
+
   const sendMessage = async (content: string) => {
     const trimmedContent = content.trim();
-    if (!trimmedContent) return;
+    if (!trimmedContent || activeAgentRequestRef.current) return;
 
     if (!engine) {
-      alert('Engine not initialized');
-      console.error('[Agent] Engine not initialized');
-      setAgentStatus('error');
-      setAgentRunStatus('failed');
+      console.warn('[Agent] Message ignored because the model is not ready');
       return;
     }
 
@@ -121,6 +152,12 @@ export function useAgent() {
     // 어시스턴트 메시지 생성 및 추가
     const assistantMsg = createAssistantMessage();
     addMessage(assistantMsg);
+    const abortController = new AbortController();
+    activeAgentRequestRef.current = {
+      abortController,
+      assistantMessageId: assistantMsg.id,
+      phase: 'generating',
+    };
 
     // AI 응답 처리
     try {
@@ -137,6 +174,16 @@ export function useAgent() {
         tracks,
         userInput: trimmedContent,
         executeMany,
+        signal: abortController.signal,
+        onGenerationFinished: () => {
+          const activeRequest = activeAgentRequestRef.current;
+          if (activeRequest?.abortController !== abortController) {
+            return;
+          }
+
+          activeRequest.phase = 'executing';
+          setAgentStatus('executing');
+        },
       });
       const responseTime = Date.now() - startTime;
       const commandTypes = (parsedCommands ?? []).map(command => command.type);
@@ -176,13 +223,21 @@ export function useAgent() {
         markAgentResultSuccessful();
       }
     } catch (error) {
+      if (isAgentRequestCancelledError(error)) {
+        return;
+      }
+
       const errorMessage = error instanceof Error ? error.message : 'Agent request failed';
       updateMessage(assistantMsg.id, errorMessage);
       setAgentStatus('error');
       setAgentRunStatus('failed');
       console.error('[Agent] Failed to process message:', error);
+    } finally {
+      if (activeAgentRequestRef.current?.abortController === abortController) {
+        activeAgentRequestRef.current = null;
+      }
     }
   };
 
-  return { messages, status, sendMessage, addMessage, updateMessage };
+  return { messages, status, sendMessage, stopGeneration, addMessage, updateMessage };
 }

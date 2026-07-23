@@ -84,6 +84,7 @@ describe('Session Store - Phase 1 검증', () => {
     });
 
     it('Agent 대화와 실행 상태는 비어 있는 상태로 초기화되어야 함', () => {
+      expect(store.getState().agentModelStatus).toBe('loading');
       expect(store.getState().agentMessages).toEqual([]);
       expect(store.getState().agentStatus).toBe('idle');
       expect(store.getState().agentRunStatus).toBe('idle');

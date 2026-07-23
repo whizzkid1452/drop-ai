@@ -4,11 +4,14 @@ import { queryToLLM as queryToLLM } from './queryToLLM';
 import type { AgentPromptPlugin, AgentPromptTrack } from './getSystemPrompt';
 import type { MLCEngine } from '@/types/webllm.types';
 import { trackAudioCommandExecuted } from '@/utils/analytics';
+import { throwIfAgentRequestCancelled } from './agent-request-cancelled-error';
 
 export interface AIResponseHandlerDependencies {
   executeMany: (commands: readonly AudioCommand[]) => Promise<CommandBatchExecutionResult>;
   engine: MLCEngine;
+  onGenerationFinished?: () => void;
   plugins: readonly AgentPromptPlugin[];
+  signal?: AbortSignal;
   tracks: readonly AgentPromptTrack[];
   userInput: string;
 }
@@ -57,14 +60,17 @@ async function executeAgentCommands({ commands, executeMany }: ExecuteAgentComma
  * @returns 처리 결과 (메시지 및 상태)
  */
 export async function handleAIResponse(deps: AIResponseHandlerDependencies) {
-  const { engine, plugins, tracks, userInput, executeMany } = deps;
+  const { engine, onGenerationFinished, plugins, signal, tracks, userInput, executeMany } = deps;
 
   const { fullResponse, error: llmResponseError } = await queryToLLM({
     engine,
     plugins,
+    signal,
     tracks,
     userInput,
   });
+  throwIfAgentRequestCancelled(signal);
+  onGenerationFinished?.();
 
   if (llmResponseError) {
     return {

@@ -1,6 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 import type { RegionStatus, TrackStatus } from '@/types/statusTypes';
-import type { AgentRunStatus, AgentStatus, Message } from '@/types/agent';
+import type { AgentModelStatus, AgentRunStatus, AgentStatus, Message } from '@/types/agent';
 import type { ProjectMetadata } from '../shared/types/project-document.schema';
 import type {
   PluginCatalogEntry,
@@ -100,7 +100,7 @@ export interface SessionState {
 
   // Actions (Setters)
   /* Agent State */
-  isModelReady: boolean;
+  agentModelStatus: AgentModelStatus;
   modelLoadingProgress: number;
   modelLoadingText: string;
   agentMessages: Message[];
@@ -130,7 +130,7 @@ export interface SessionState {
   setPluginInstanceEnabled: (request: SetPluginInstanceEnabledRequest) => void;
   setPluginParameterValue: (request: SetPluginParameterValueRequest) => void;
 
-  setAgentModelReady: (ready: boolean) => void;
+  setAgentModelStatus: (status: AgentModelStatus) => void;
   setAgentLoadingProgress: (progress: number, text: string) => void;
   addAgentMessage: (message: Message) => void;
   updateAgentMessage: (id: string, content: string) => void;
@@ -161,7 +161,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     pluginLogs: [],
 
     /* Agent State */
-    isModelReady: false,
+    agentModelStatus: 'loading',
     modelLoadingProgress: 0,
     modelLoadingText: 'Initializing...',
     agentMessages: [],
@@ -281,7 +281,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
       ),
 
     /* Agent Actions */
-    setAgentModelReady: ready => set({ isModelReady: ready }),
+    setAgentModelStatus: agentModelStatus => set({ agentModelStatus }),
     setAgentLoadingProgress: (progress, text) => set({ modelLoadingProgress: progress, modelLoadingText: text }),
     addAgentMessage: message => set(state => ({ agentMessages: [...state.agentMessages, message] })),
     updateAgentMessage: (id, content) =>

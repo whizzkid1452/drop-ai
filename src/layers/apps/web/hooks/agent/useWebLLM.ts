@@ -1,36 +1,46 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useSession } from '@/layers/apps/web/context/layer-hooks';
 import {
   disposeWebLLM,
   getWebLLMEngine,
   initializeWebLLM,
+  interruptWebLLMGeneration,
   purgeWebLLMCache,
 } from '@/layers/apps/web/hooks/agent/web-llm-engine';
 
 export function useWebLLM() {
-  const setModelReady = useSession(state => state.setAgentModelReady);
+  const setModelStatus = useSession(state => state.setAgentModelStatus);
   const setLoadingProgress = useSession(state => state.setAgentLoadingProgress);
 
-  useEffect(() => {
-    void initializeWebLLM({
-      onProgress: report => {
-        setLoadingProgress(report.progress, report.text);
-      },
-    })
-      .then(() => {
-        setModelReady(true);
-      })
-      .catch((error: unknown) => {
-        console.error('Failed to initialize WebLLM:', error);
-        setLoadingProgress(0, 'Failed to load model');
+  const initializeModel = useCallback(async () => {
+    setModelStatus('loading');
+    setLoadingProgress(0, 'Preparing AI model');
+
+    try {
+      await initializeWebLLM({
+        onProgress: report => {
+          setLoadingProgress(report.progress, report.text);
+        },
       });
-  }, [setModelReady, setLoadingProgress]);
+      setLoadingProgress(1, 'Model ready');
+      setModelStatus('ready');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown model loading error';
+      console.error('Failed to initialize WebLLM:', error);
+      setLoadingProgress(0, errorMessage);
+      setModelStatus('error');
+    }
+  }, [setLoadingProgress, setModelStatus]);
+
+  useEffect(() => {
+    void initializeModel();
+  }, [initializeModel]);
 
   const purgeCache = async () => {
     try {
       await disposeWebLLM();
       await purgeWebLLMCache();
-      setModelReady(false);
+      setModelStatus('loading');
       window.location.reload();
     } catch (error: unknown) {
       console.error('Failed to purge cache:', error);
@@ -44,12 +54,14 @@ export function useWebLLM() {
     }
 
     await disposeWebLLM();
-    setModelReady(false);
+    setModelStatus('loading');
     window.location.reload();
   };
 
   return {
     engine: getWebLLMEngine(),
+    interruptGeneration: interruptWebLLMGeneration,
+    retryInitialization: initializeModel,
     resetEngine,
     purgeCache,
   };

@@ -25,6 +25,15 @@ export function getWebLLMEngine(): MLCEngine | null {
   return engine;
 }
 
+export function interruptWebLLMGeneration(): boolean {
+  if (!engine) {
+    return false;
+  }
+
+  engine.interruptGenerate();
+  return true;
+}
+
 export function initializeWebLLM(options: InitializeWebLLMOptions = {}): Promise<MLCEngine> {
   if (engine) {
     return Promise.resolve(engine);

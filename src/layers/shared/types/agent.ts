@@ -7,6 +7,8 @@ export interface Message {
   timestamp: number;
 }
 
-export type AgentStatus = 'idle' | 'loading' | 'generating' | 'error';
+export type AgentModelStatus = 'loading' | 'ready' | 'error';
 
-export type AgentRunStatus = 'idle' | 'running' | 'succeeded' | 'failed';
+export type AgentStatus = 'idle' | 'generating' | 'executing' | 'error';
+
+export type AgentRunStatus = 'idle' | 'running' | 'succeeded' | 'failed' | 'cancelled';

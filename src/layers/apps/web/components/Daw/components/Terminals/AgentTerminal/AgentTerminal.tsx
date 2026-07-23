@@ -1,24 +1,26 @@
+import { useEffect, useRef, useState } from 'react';
+import { useSession } from '@/layers/apps/web/context/layer-hooks';
 import { useAgent } from '@/layers/apps/web/hooks/agent/useAgent/useAgent';
 import { useWebLLM } from '@/layers/apps/web/hooks/agent/useWebLLM';
-import { useSession } from '@/layers/apps/web/context/layer-hooks';
-import { useState, useRef, useEffect } from 'react';
 import * as styles from './ChatModalTerminal.css.ts';
 import { AgentTerminalHeader } from './components/AgentTerminalHeader';
+import { CommandComposer } from './components/CommandComposer';
+import { MessageList } from './components/MessageList';
 import { ModelLoadingOverlay } from './components/ModelLoadingOverlay';
 import { QuickGuide } from './components/QuickGuide';
-import { MessageList } from './components/MessageList';
-import { CommandComposer } from './components/CommandComposer';
 
 export function AgentTerminal() {
   const [input, setInput] = useState('');
-  const isModelReady = useSession(state => state.isModelReady);
+  const modelStatus = useSession(state => state.agentModelStatus);
   const modelLoadingProgress = useSession(state => state.modelLoadingProgress);
   const modelLoadingText = useSession(state => state.modelLoadingText);
 
-  const { sendMessage, messages, status } = useAgent();
-  const { resetEngine, purgeCache } = useWebLLM();
+  const { sendMessage, stopGeneration, messages, status } = useAgent();
+  const { resetEngine, purgeCache, retryInitialization } = useWebLLM();
 
   const isGenerating = status === 'generating';
+  const isBusy = isGenerating || status === 'executing';
+  const isModelReady = modelStatus === 'ready';
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -28,14 +30,20 @@ export function AgentTerminal() {
   }, [messages, status]);
 
   const handleSend = () => {
-    if (!input.trim() || isGenerating || !isModelReady) return;
-    sendMessage(input.trim());
+    if (!input.trim() || isBusy || !isModelReady) return;
+    void sendMessage(input.trim());
     setInput('');
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Escape' && isGenerating) {
+      event.preventDefault();
+      stopGeneration();
+      return;
+    }
+
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
       handleSend();
     }
   };
@@ -45,27 +53,35 @@ export function AgentTerminal() {
   };
 
   const handleReset = () => {
-    resetEngine(false);
+    void resetEngine(false);
   };
 
   return (
     <div className={styles.container}>
       <AgentTerminalHeader onReset={handleReset} onPurgeCache={purgeCache} />
 
-      {!isModelReady && <ModelLoadingOverlay progress={modelLoadingProgress} loadingText={modelLoadingText} />}
+      {modelStatus !== 'ready' && (
+        <ModelLoadingOverlay
+          status={modelStatus}
+          progress={modelLoadingProgress}
+          loadingText={modelLoadingText}
+          onRetry={() => void retryInitialization()}
+        />
+      )}
 
       <div className={styles.terminalBody} ref={scrollRef}>
         <div className={styles.gridBackground} />
         <QuickGuide isModelReady={isModelReady} onSuggestionClick={handleSuggestionClick} />
-        <MessageList messages={messages} isGenerating={isGenerating} />
+        <MessageList messages={messages} agentStatus={status} />
       </div>
 
       <CommandComposer
         input={input}
-        isModelReady={isModelReady}
-        isGenerating={isGenerating}
+        modelStatus={modelStatus}
+        agentStatus={status}
         onInputChange={setInput}
         onSend={handleSend}
+        onStop={stopGeneration}
         onKeyDown={handleKeyDown}
       />
     </div>

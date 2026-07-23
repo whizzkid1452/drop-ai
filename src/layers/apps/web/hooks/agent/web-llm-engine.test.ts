@@ -72,4 +72,31 @@ describe('web-llm-engine', () => {
 
     expect(webLLMMocks.deleteModelCache).toHaveBeenCalledWith(WEB_LLM_MODEL_ID, WEB_LLM_APP_CONFIG);
   });
+
+  it('응답 생성 중단 요청을 현재 엔진에 전달한다', async () => {
+    const interruptGenerate = vi.fn();
+    const engine = { interruptGenerate, unload: vi.fn() } as unknown as MLCEngine;
+    webLLMMocks.createEngine.mockResolvedValue(engine);
+    const { initializeWebLLM, interruptWebLLMGeneration } = await importEngineModule();
+    await initializeWebLLM();
+
+    expect(interruptWebLLMGeneration()).toBe(true);
+    expect(interruptGenerate).toHaveBeenCalledOnce();
+  });
+
+  it('초기화된 엔진이 없으면 생성 중단 요청을 보내지 않는다', async () => {
+    const { interruptWebLLMGeneration } = await importEngineModule();
+
+    expect(interruptWebLLMGeneration()).toBe(false);
+  });
+
+  it('초기화 실패 후 새 엔진 생성을 재시도할 수 있다', async () => {
+    const engine = { unload: vi.fn() } as unknown as MLCEngine;
+    webLLMMocks.createEngine.mockRejectedValueOnce(new Error('download failed')).mockResolvedValueOnce(engine);
+    const { initializeWebLLM } = await importEngineModule();
+
+    await expect(initializeWebLLM()).rejects.toThrow('download failed');
+    await expect(initializeWebLLM()).resolves.toBe(engine);
+    expect(webLLMMocks.createEngine).toHaveBeenCalledTimes(2);
+  });
 });

@@ -50,7 +50,50 @@ describe('Agent 응답 명령 검증', () => {
 
     await handleAIResponse({ engine, plugins, tracks: [], userInput: 'Plugin 추가', executeMany });
 
-    expect(mocks.queryToLLM).toHaveBeenCalledWith({ engine, plugins, tracks: [], userInput: 'Plugin 추가' });
+    expect(mocks.queryToLLM).toHaveBeenCalledWith(
+      expect.objectContaining({ engine, plugins, tracks: [], userInput: 'Plugin 추가' })
+    );
+  });
+
+  it('응답 생성 중 취소되면 명령을 실행하지 않는다', async () => {
+    const abortController = new AbortController();
+    const onGenerationFinished = vi.fn();
+    mocks.queryToLLM.mockImplementationOnce(async () => {
+      abortController.abort();
+      return { fullResponse: '[{"type":"PLAY"}]', error: null };
+    });
+
+    await expect(
+      handleAIResponse({
+        engine,
+        plugins: [],
+        tracks: [],
+        userInput: '재생',
+        executeMany,
+        signal: abortController.signal,
+        onGenerationFinished,
+      })
+    ).rejects.toMatchObject({ name: 'AgentRequestCancelledError' });
+
+    expect(onGenerationFinished).not.toHaveBeenCalled();
+    expect(executeMany).not.toHaveBeenCalled();
+  });
+
+  it('응답 생성이 끝나면 명령 실행 전에 알린다', async () => {
+    const onGenerationFinished = vi.fn();
+    mocks.queryToLLM.mockResolvedValueOnce({ fullResponse: '[{"type":"PLAY"}]', error: null });
+
+    await handleAIResponse({
+      engine,
+      plugins: [],
+      tracks: [],
+      userInput: '재생',
+      executeMany,
+      onGenerationFinished,
+    });
+
+    expect(onGenerationFinished).toHaveBeenCalledOnce();
+    expect(onGenerationFinished.mock.invocationCallOrder[0]).toBeLessThan(executeMany.mock.invocationCallOrder[0]);
   });
 
   it('추가 필드가 있는 명령을 실행하지 않는다', async () => {

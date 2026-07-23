@@ -146,6 +146,7 @@ export const statusInfo = style({
   display: 'flex',
   alignItems: 'center',
   gap: '12px',
+  minWidth: 0,
 });
 
 export const statusText = style({
@@ -159,6 +160,32 @@ export const statusLabel = style({
   fontFamily: '"Noto Sans Mono", monospace',
   fontSize: '10px',
   color: '#888',
+});
+
+export const statusDescription = style({
+  marginTop: '2px',
+  fontFamily: '"Noto Sans Mono", monospace',
+  fontSize: '10px',
+  color: '#999',
+  lineHeight: 1.4,
+});
+
+export const retryButton = style({
+  flexShrink: 0,
+  padding: '5px 10px',
+  border: `1px solid ${primaryColor}`,
+  backgroundColor: 'transparent',
+  color: primaryColor,
+  fontFamily: '"Noto Sans Mono", monospace',
+  fontSize: '10px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
+  selectors: {
+    '&:hover': {
+      backgroundColor: primaryColor,
+      color: '#111',
+    },
+  },
 });
 
 export const terminalBody = style({
@@ -443,6 +470,11 @@ export const inputField = style({
   fontSize: '14px',
   color: 'white',
   width: '100%',
+  height: '32px',
+  lineHeight: '16px',
+  padding: 0,
+  resize: 'none',
+  overflowY: 'auto',
   fontFamily: '"Noto Sans Mono", monospace',
   caretShape: 'block',
   caretColor: primaryColor,
@@ -469,12 +501,26 @@ export const executeButton = style({
   cursor: 'pointer',
   transition: 'all 0.2s',
   selectors: {
-    '&:hover': {
+    '&:hover:not(:disabled)': {
       backgroundColor: '#555',
     },
-    '&:active': {
+    '&:active:not(:disabled)': {
       backgroundColor: primaryColor,
       color: 'black',
+    },
+    '&:disabled': {
+      cursor: 'not-allowed',
+      opacity: 0.55,
+    },
+  },
+});
+
+export const stopButton = style({
+  borderColor: '#d75858',
+  backgroundColor: '#5a2929',
+  selectors: {
+    '&:hover:not(:disabled)': {
+      backgroundColor: '#733333',
     },
   },
 });
