@@ -319,6 +319,30 @@ describe('createApp', () => {
     expect(app.commandExecutor).toBeInstanceOf(CommandExecutor);
   });
 
+  it('내장 Gain manifest를 검증해 Session catalog에 요약만 공개한다', () => {
+    const app = createTestApp({ audioEngine: new MockAudioEngine() });
+
+    expect(app.session.getState().pluginCatalog.get('builtin.gain')).toEqual({
+      id: 'builtin.gain',
+      name: 'Gain',
+      version: '1.0.0',
+    });
+    expect(app.session.getState().pluginCatalog.get('builtin.gain')).not.toHaveProperty('dsp');
+    expect(app.session.getState().pluginValidationResults.get('builtin.gain')).toEqual({
+      manifestId: 'builtin.gain',
+      status: 'valid',
+      issues: [],
+    });
+  });
+
+  it('PluginHost와 전체 manifest를 App capability로 노출하지 않는다', () => {
+    const app = createTestApp({ audioEngine: new MockAudioEngine() });
+
+    expect('pluginHost' in app).toBe(false);
+    expect('pluginController' in app).toBe(false);
+    expect('pluginManifests' in app).toBe(false);
+  });
+
   it('Command History를 읽기 전용 capability로 노출한다', async () => {
     const app = createTestApp({ audioEngine: new MockAudioEngine() });
 

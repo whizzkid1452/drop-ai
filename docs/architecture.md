@@ -82,7 +82,9 @@ Agent 메시지와 업로드 파일 같은 앱 워크플로 상태는 Session Ac
 
 Session은 Plugin 기반 상태도 보관한다. Track에는 Plugin 인스턴스와 매개변수가 있고, 공통 상태에는 Plugin 카탈로그,
 manifest 검증 결과, 런타임 로그가 있다. 카탈로그·검증 결과·로그 Action과 프로젝트 상태 교체는 입력 객체의 필요한
-중첩 값까지 복제한다. 현재 단계는 상태 기반만 제공하며 Plugin 설치, 오디오 처리, AudioCommand, UI는 아직 제공하지 않는다.
+중첩 값까지 복제한다. `createApp`은 내장 Gain manifest의 공개 요약과 검증 결과를 한 번의 Session 상태 변경으로
+초기화한다. 이 동작은 카탈로그 선언만 등록하며 AudioWorklet 모듈을 불러오거나 오디오 효과를 연결하지 않는다. Plugin
+설치, 오디오 처리, AudioCommand, UI는 아직 제공하지 않는다.
 
 Plugin SDK는 manifest를 선언하는 독립 계약이다. v1은 effect 유형과 number·boolean·enum Parameter를 지원하고,
 slider·toggle·select control이 실제 Parameter ID와 맞는 type을 참조하는지 검사한다. 알 수 없는 필드, 중복 ID, 범위 밖
@@ -90,8 +92,10 @@ slider·toggle·select control이 실제 Parameter ID와 맞는 type을 참조�
 증명되지는 않는다. 실제 URL 확인과 모듈 로딩은 후속 모듈 로더 책임이다.
 
 `PluginHost`는 검증을 통과한 manifest를 메모리에 등록한다. 같은 ID의 재등록은 기존 값을 덮어쓰지 않고 오류로
-거부하며, 조회·목록은 깊게 복사한 값을 등록 순서대로 반환한다. 현재 단계에는 설치·활성화·해제 lifecycle, Session,
-AudioEngine, Composition Root 연결이 없다.
+거부하며, 조회·목록은 깊게 복사한 값을 등록 순서대로 반환한다. Composition Root가 하나의 비공개 PluginHost를 만들고
+PluginController에는 `IPluginHost`를 주입한다. Apps에는 Host, PluginController, 전체 manifest를 노출하지 않는다. 현재
+단계에는 설치·활성화·해제 lifecycle과 AudioEngine 연결이 없다. Plugin 구현은 Plugin SDK 외 프로젝트 계층을 import하지
+않는다.
 
 검증된 명령은 CommandExecutor의 단일 대기열에서 접수 순서대로 하나씩 실행한다. `executeMany`는 묶음 전체를
 먼저 검증한 후, 다른 요청이 끼어들지 않게 순서대로 실행한다. 실행 중 첫 오류가 나면 남은 명령은 실행하지
@@ -177,7 +181,8 @@ Region Controller도 추가·이동·분할의 Source 연결, AudioEngine 호출
 **Composition Root** — §1과 달리 **부팅·테스트 진입점**에서 한 번 객체 그래프를 만드는 흐름이다.
 
 `createApp`이 **Session**, **AudioEngine**, **AudioSourceRegistry**, **ProjectRepository**,
-**AudioSourceRepository**, **AppController**, **CommandExecutor**, **PlaybackClockQuery**, **ProjectCatalogQuery**를 한 번 조립한다.
+**AudioSourceRepository**, **PluginHost**, **AppController**, **CommandExecutor**, **PlaybackClockQuery**,
+**ProjectCatalogQuery**를 한 번 조립한다.
 AppController 자체는 Apps에 노출하지 않는다. CommandExecutor에는 AppController를, PlaybackClockQuery에는
 PlaybackController의 읽기 전용 계약을 주입한다. AudioSourceRegistry는 전체 변경 계약을 노출하지 않고 등록용
 `IAudioSourceStager`와 조회용 `IAudioSourceResolver`로 나눠 노출한다. 같은 Registry의 전체 계약은 Source 연결 수명을
@@ -197,6 +202,7 @@ flowchart TB
         REG["IAudioSourceRegistry\n(full, private)"]
         PR["IndexedDB Project Repository\n(private)"]
         AR["OPFS Audio Source Repository\n(private)"]
+        PH["PluginHost\n(full manifest, private)"]
     end
 
     subgraph out["결과"]
@@ -215,6 +221,7 @@ flowchart TB
     CA --> REG
     CA --> PR
     CA --> AR
+    CA --> PH
     CA --> SS
     CA --> AC
     CA --> CE
@@ -224,6 +231,7 @@ flowchart TB
     PR -.->|"ProjectController에 주입"| AC
     PR -.->|"목록 조회 계약 주입"| PCQ
     AR -.->|"ProjectController에 주입"| AC
+    PH -.->|"IPluginHost로 주입"| AC
     REG -.->|"좁은 계약으로 감쌈"| SR
     SS -.->|"같은 인스턴스 주입"| AC
     SS -.->|"같은 인스턴스 주입"| CE
@@ -271,6 +279,7 @@ sequenceDiagram
 | `layers/audio-source-registry/`   | 재생 Source URL의 런타임 소유권과 참조 관리 |
 | `layers/plugin-sdk/`              | Plugin manifest 선언과 검증 계약            |
 | `layers/plugin-host/`             | 검증된 Plugin manifest의 메모리 registry    |
+| `layers/plugins/`                 | Plugin SDK만 참조하는 내장 Plugin 선언      |
 | `layers/session/`                 | 화면에 표시할 상태 저장                     |
 | `layers/audio-engine/`            | Tone.js와 Web Audio 기반 오디오 처리        |
 
@@ -280,7 +289,8 @@ sequenceDiagram
 
 [`src/layers/architecture.test.ts`](../src/layers/architecture.test.ts)는 Apps의 Controller 직접 import, Command·Query의
 AudioEngine import, 계층의 역방향 참조, AudioEngine 밖의 Tone.js import와 대표 Web Audio 생성자·팩토리의 직접 호출을
-검사한다. 간접 별칭이나 동적 프로퍼티 접근은 코드 리뷰에서도 확인한다.
+검사한다. Plugin SDK의 독립성, PluginHost 공개 계약, 내장 Plugin의 Plugin SDK 전용 의존성도 검사한다. 간접 별칭이나
+동적 프로퍼티 접근은 코드 리뷰에서도 확인한다.
 
 ---
 

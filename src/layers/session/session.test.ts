@@ -95,7 +95,7 @@ describe('Session Store - Phase 1 검증', () => {
     it('Plugin catalog 입력과 Session이 객체 참조를 공유하지 않는다', () => {
       const manifest = { id: 'builtin.gain', name: 'Gain', version: '1.0.0' };
 
-      store.getState().replacePluginCatalog([manifest]);
+      store.getState().replacePluginCatalogState({ manifests: [manifest], validationResults: [] });
       manifest.name = '외부 변경';
 
       expect(store.getState().pluginCatalog.get('builtin.gain')).toEqual({
@@ -112,13 +112,27 @@ describe('Session Store - Phase 1 검증', () => {
         issues: [{ code: 'INVALID_RANGE', message: '범위 오류', path: ['parameters', 'gain'] }],
       };
 
-      store.getState().replacePluginValidationResults([validationResult]);
+      store.getState().replacePluginCatalogState({ manifests: [], validationResults: [validationResult] });
       validationResult.issues[0].path[0] = '외부 변경';
 
       expect(store.getState().pluginValidationResults.get('builtin.gain')?.issues[0]?.path).toEqual([
         'parameters',
         'gain',
       ]);
+    });
+
+    it('Plugin catalog와 검증 결과를 한 번의 상태 변경으로 교체한다', () => {
+      const listener = vi.fn();
+      store.subscribe(listener);
+
+      store.getState().replacePluginCatalogState({
+        manifests: [{ id: 'builtin.gain', name: 'Gain', version: '1.0.0' }],
+        validationResults: [{ manifestId: 'builtin.gain', status: 'valid', issues: [] }],
+      });
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(store.getState().pluginCatalog.has('builtin.gain')).toBe(true);
+      expect(store.getState().pluginValidationResults.get('builtin.gain')?.status).toBe('valid');
     });
 
     it('Plugin 로그를 입력과 객체 참조를 공유하지 않고 추가한다', () => {

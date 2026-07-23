@@ -59,7 +59,9 @@ Session과 AudioCommand에는 저장하지 않는다. API 존재 확인은 실�
 Session의 Plugin 런타임 상태는 Track별 Plugin 인스턴스, Plugin 카탈로그, manifest 검증 결과, 런타임 로그로 나눈다.
 Plugin 인스턴스는 ID, manifest 요약, 활성 여부, boolean·number·string 매개변수 값을 가진다. 카탈로그·검증 결과·로그
 Action은 입력 객체를 복제해 저장하며, 프로젝트 상태 교체 시 Track의 Plugin 인스턴스도 깊은 복사한다. 이 기반은 아직
-Plugin 설치, 오디오 처리, AudioCommand, UI를 제공하지 않는다.
+Plugin 설치, 오디오 처리, AudioCommand, UI를 제공하지 않는다. Composition Root는 시작할 때 내장 Gain manifest를
+PluginHost에 등록하고, 공개해도 되는 요약과 검증 결과만 Session에 한 번의 상태 변경으로 반영한다. 이 등록은 manifest
+선언을 카탈로그에 추가하는 동작이며 AudioWorklet 모듈을 불러오거나 효과를 오디오 신호에 연결하지 않는다.
 
 Plugin SDK는 다른 프로젝트 계층을 import하지 않는 선언 계약이다. manifest v1은 namespaced ID, Semantic Versioning 형식,
 effect 유형, number·boolean·enum 매개변수, AudioWorklet 모듈 상대 경로, slider·toggle·select UI control만 허용한다.
@@ -70,8 +72,10 @@ same-origin인지 여부는 후속 모듈 로더가 별도로 확인해야 한�
 `PluginHost`는 검증된 manifest를 ID로 보관하는 메모리 registry다. 등록 전에 전체 manifest를 검증하고, 같은 ID를
 조용히 교체하지 않고 typed 오류로 거부한다. 조회와 목록은 등록 순서를 유지한 복사본을 반환하므로 호출자의 변경이
 registry 내부 값에 영향을 주지 않는다. PluginHost production 코드는 Plugin SDK와 Shared만 의존한다. 구체 구현은
-Composition Root와 테스트에서만 import하고, 후속 Controller는 `IPluginHost` 계약에 의존한다. 현재 단계에는 Plugin
-lifecycle, Session 연결, AudioEngine 연결이 없다.
+Composition Root와 테스트에서만 import하고, PluginController는 `IPluginHost` 계약에 의존한다. Composition Root가 만든
+PluginHost와 전체 manifest는 Apps에 노출하지 않는다. 현재 연결 범위는 시작 시 카탈로그 등록과 조회이며, Plugin
+설치·활성화·해제 lifecycle과 AudioEngine 연결은 없다. `plugins/`의 production 코드는 Plugin SDK 외 프로젝트 계층을
+import하지 않는다.
 
 영구 저장 형식은 Shared의 `ProjectDocumentSchema`로 검증한다. v1은 Track·Region과 오디오 Source 메타데이터를
 절대 초 단위로 저장하고, Region은 임시 URL이 아닌 안정적인 Source ID를 참조한다. `File`, `Blob`, Object URL,
@@ -225,6 +229,7 @@ graph TD
     Session["Session (Zustand Vanilla Store)"]
     AudioEngine["Audio Engine"]
     AudioSourceRegistry["Audio Source Registry"]
+    PluginHost["Plugin Host"]
     ToneJS["Tone.js / WebAudio"]
     CreateApp["createApp (Composition Root)"]
 
@@ -240,6 +245,7 @@ graph TD
 
     Controllers -->|Use| AudioEngine
     Controllers -->|Attach / Detach / Resolve| AudioSourceRegistry
+    Controllers -->|Resolve Manifest via Interface| PluginHost
     Controllers -->|Update| Session
     Queries -->|Read Only| Controllers
 
@@ -247,6 +253,7 @@ graph TD
 
     CreateApp -->|Create| AudioEngine
     CreateApp -->|Create private registry and narrow contracts| AudioSourceRegistry
+    CreateApp -->|Create private registry| PluginHost
     CreateApp -->|Create| Session
     CreateApp -->|Create & Inject Deps| Controllers
     CreateApp -->|Create & Inject Deps| Commands
@@ -264,6 +271,8 @@ graph TD
 - ProjectRepository는 Shared 외 다른 계층을 import하지 않는다.
 - AudioSourceRegistry는 Shared 외 다른 계층을 import하지 않는다.
 - Audio Source 외부 소비자는 공개 계약과 오류 타입만 import하고, 구현체는 Composition Root에서만 import한다.
+- PluginHost 외부 소비자는 공개 계약만 import하고, 구현체는 Composition Root에서만 import한다.
+- Plugin 구현은 Plugin SDK 외 다른 프로젝트 계층을 import하지 않는다.
 - 하위 계층은 상위 계층을 역참조하지 않는다.
 - Tone.js import와 대표 Web Audio 생성자·팩토리의 직접 호출은 AudioEngine 계층에서만 수행한다.
 

@@ -6,6 +6,7 @@ import type { IAudioSourceRepository } from '../audio-source-repository/i-audio-
 import { AppController } from '../controllers/app-controller';
 import { createSessionStore } from '../session/session';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
+import { PluginHost } from '../plugin-host/plugin-host';
 import { AudioCommandType, type AudioCommand } from '../shared/types/audioCommand.schema';
 import { CommandHistory } from './command-history';
 import { CommandBatchExecutionError, CommandExecutor } from './command-executor';
@@ -41,6 +42,7 @@ function createTestContext() {
     audioSourceRegistry,
     audioSourceRepository,
     projectRepository,
+    pluginHost: new PluginHost(),
   });
   const commandExecutor = new CommandExecutor(session, controller, commandHistory);
 

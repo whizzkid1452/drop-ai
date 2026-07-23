@@ -5,6 +5,7 @@ import type { IAudioSourceRegistry } from '../audio-source-registry/i-audio-sour
 import type { IObjectUrlAdapter } from '../audio-source-registry/i-object-url-adapter';
 import type { IAudioSourceRepository } from '../audio-source-repository/i-audio-source-repository';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
+import { PluginHost } from '../plugin-host/plugin-host';
 import { AppController } from './app-controller';
 import { ProjectMutationCompensationError } from './project-mutation-compensation-error';
 import { createSessionStore, type SessionStore } from '../session/session';
@@ -105,6 +106,7 @@ describe('Controllers - Phase 3 검증', () => {
       audioSourceRegistry,
       audioSourceRepository,
       projectRepository: new InMemoryProjectRepository(),
+      pluginHost: new PluginHost(),
     });
   });
 

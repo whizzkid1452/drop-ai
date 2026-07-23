@@ -24,6 +24,7 @@ const projectDocumentMapperRoot = path.join(layersRoot, 'project-document-mapper
 const queriesRoot = path.join(layersRoot, 'queries');
 const projectRepositoryRoot = path.join(layersRoot, 'project-repository');
 const pluginSdkRoot = path.join(layersRoot, 'plugin-sdk');
+const pluginsRoot = path.join(layersRoot, 'plugins');
 const sessionRoot = path.join(layersRoot, 'session');
 const sharedRoot = path.join(layersRoot, 'shared');
 const compositionRootPath = path.join(appsRoot, 'create-app.ts');
@@ -640,6 +641,22 @@ describe('레이어 의존성 규칙', () => {
       }
 
       return !isInside(sourceImport.importerPath, controllersRoot) || !pluginHostPublicContractPaths.has(resolvedPath);
+    });
+
+    expect(formatViolations(violations)).toEqual([]);
+  });
+
+  it('Plugin 구현은 Plugin SDK 외 다른 계층을 import하지 않는다', () => {
+    const violations = sourceImports.filter(sourceImport => {
+      return (
+        isInside(sourceImport.importerPath, pluginsRoot) &&
+        !isTestFile(sourceImport.importerPath) &&
+        sourceImport.resolvedPath !== undefined &&
+        (isAppSource(sourceImport.resolvedPath) ||
+          (isInside(sourceImport.resolvedPath, layersRoot) &&
+            !isInside(sourceImport.resolvedPath, pluginsRoot) &&
+            !isInside(sourceImport.resolvedPath, pluginSdkRoot)))
+      );
     });
 
     expect(formatViolations(violations)).toEqual([]);

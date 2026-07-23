@@ -20,12 +20,17 @@ import { ProjectCatalogQuery, type IProjectCatalogQuery } from '../queries/proje
 import type { IProjectRepository } from '../project-repository/i-project-repository';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import { IndexedDbProjectRepository } from '../project-repository/indexed-db-project-repository';
+import type { IPluginHost } from '../plugin-host/i-plugin-host';
+import { PluginHost } from '../plugin-host/plugin-host';
+import { createPluginManifestSummary, type PluginManifest } from '../plugin-sdk/plugin-manifest.schema';
+import { gainPluginManifest } from '../plugins/builtin/gain/gain-plugin-manifest';
 import {
   resolveAudioRuntimeCapabilities,
   type AudioRuntimeCapabilities,
   type AudioRuntimeEnvironment,
 } from '../shared/utils/audio-runtime-capabilities';
 import type { ProjectMetadata } from '../shared/types/project-document.schema';
+import type { PluginValidationResult } from '../shared/types/plugin-state';
 
 const NEW_PROJECT_NAME = '새 프로젝트';
 
@@ -47,6 +52,13 @@ export interface CreateAppOptions {
   projectRepository?: IProjectRepository;
   audioRuntimeEnvironment?: AudioRuntimeEnvironment;
   initialProjectMetadata?: ProjectMetadata;
+  initialPluginManifests?: readonly unknown[];
+}
+
+interface InitialPluginRegistrationOptions {
+  readonly session: SessionStore;
+  readonly pluginHost: IPluginHost;
+  readonly pluginManifests: readonly unknown[];
 }
 
 function createNewProjectMetadata(): ProjectMetadata {
@@ -80,6 +92,26 @@ function createCommandHistoryQuery(commandHistory: CommandHistory): ICommandHist
   };
 }
 
+function registerInitialPluginManifests({
+  session,
+  pluginHost,
+  pluginManifests,
+}: InitialPluginRegistrationOptions): void {
+  const registeredManifests = pluginManifests.map(manifest => pluginHost.registerManifest(manifest));
+  session.getState().replacePluginCatalogState({
+    manifests: registeredManifests.map(createPluginManifestSummary),
+    validationResults: registeredManifests.map(createValidManifestResult),
+  });
+}
+
+function createValidManifestResult(manifest: PluginManifest): PluginValidationResult {
+  return {
+    manifestId: manifest.id,
+    status: 'valid' as const,
+    issues: [],
+  };
+}
+
 /**
  * Core Application Factory
  */
@@ -90,6 +122,12 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   const audioSourceRegistry = options.audioSourceRegistry ?? new AudioSourceRegistry(new BrowserObjectUrlAdapter());
   const audioSourceRepository = options.audioSourceRepository ?? new OpfsAudioSourceRepository();
   const projectRepository = options.projectRepository ?? new IndexedDbProjectRepository();
+  const pluginHost = new PluginHost();
+  registerInitialPluginManifests({
+    session,
+    pluginHost,
+    pluginManifests: options.initialPluginManifests ?? [gainPluginManifest],
+  });
   const audioSourceCapabilities = createAudioSourceCapabilities(audioSourceRegistry);
   const controller = new AppController({
     sessionStore: session,
@@ -97,6 +135,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     audioSourceRegistry,
     audioSourceRepository,
     projectRepository,
+    pluginHost,
   });
   const commandHistory = new CommandHistory();
   const commandExecutor = new CommandExecutor(session, controller, commandHistory);

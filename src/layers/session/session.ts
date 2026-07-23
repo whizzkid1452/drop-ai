@@ -46,6 +46,11 @@ export interface ProjectSessionState {
   readonly tracks: ReadonlyMap<string, TrackState>;
 }
 
+interface PluginCatalogStateInput {
+  readonly manifests: readonly PluginManifestSummary[];
+  readonly validationResults: readonly PluginValidationResult[];
+}
+
 export interface SessionState {
   project: ProjectMetadata;
   isPlaying: boolean;
@@ -83,8 +88,7 @@ export interface SessionState {
   updateTrack: (id: string, updates: Partial<TrackState>) => void;
   removeTrack: (id: string) => void;
 
-  replacePluginCatalog: (manifests: readonly PluginManifestSummary[]) => void;
-  replacePluginValidationResults: (results: readonly PluginValidationResult[]) => void;
+  replacePluginCatalogState: (pluginCatalogState: PluginCatalogStateInput) => void;
   addPluginLog: (entry: PluginLogEntry) => void;
 
   setAgentModelReady: (ready: boolean) => void;
@@ -168,8 +172,11 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
         return { tracks: newTracks };
       }),
 
-    replacePluginCatalog: manifests => set({ pluginCatalog: createPluginCatalog(manifests) }),
-    replacePluginValidationResults: results => set({ pluginValidationResults: createPluginValidationResults(results) }),
+    replacePluginCatalogState: ({ manifests, validationResults }) => {
+      const pluginCatalog = createPluginCatalog(manifests);
+      const pluginValidationResults = createPluginValidationResults(validationResults);
+      set({ pluginCatalog, pluginValidationResults });
+    },
     addPluginLog: entry => set(state => ({ pluginLogs: [...state.pluginLogs, { ...entry }] })),
 
     /* Agent Actions */
