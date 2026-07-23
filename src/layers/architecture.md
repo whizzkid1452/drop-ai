@@ -77,6 +77,11 @@ PluginHost와 전체 manifest는 Apps에 노출하지 않는다. 현재 연결 �
 설치·활성화·해제 lifecycle과 AudioEngine 연결은 없다. `plugins/`의 production 코드는 Plugin SDK 외 프로젝트 계층을
 import하지 않는다.
 
+AudioEngine 계층의 `ToneGainPluginRuntimeFactory`는 주입받은 manifest ID와 Gain Parameter 계약으로 Tone.js `Gain`
+runtime을 만든다. 초기값과 변경값의 type·유한성·범위를 검사하고, 변경은 0.01초 ramp로 적용한다. runtime은 후속
+AudioEngine chain 조립에 필요한 연결·해제·폐기 계약만 제공한다. 현재 단계에서는 Factory를 AudioEngine에 등록하거나
+Track input에 연결하지 않으므로 실제 재생 신호에는 아직 영향을 주지 않는다.
+
 영구 저장 형식은 Shared의 `ProjectDocumentSchema`로 검증한다. v1은 Track·Region과 오디오 Source 메타데이터를
 절대 초 단위로 저장하고, Region은 임시 URL이 아닌 안정적인 Source ID를 참조한다. `File`, `Blob`, Object URL,
 AudioBuffer, 함수, 재생 중 상태, Agent·UI 상태는 ProjectDocument에 넣지 않는다. `ProjectDocumentMapper`는 Store나

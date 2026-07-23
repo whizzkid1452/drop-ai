@@ -97,6 +97,11 @@ PluginController에는 `IPluginHost`를 주입한다. Apps에는 Host, PluginCon
 단계에는 설치·활성화·해제 lifecycle과 AudioEngine 연결이 없다. Plugin 구현은 Plugin SDK 외 프로젝트 계층을 import하지
 않는다.
 
+AudioEngine 계층의 `ToneGainPluginRuntimeFactory`는 주입받은 manifest ID와 Gain Parameter 계약으로 Tone.js `Gain`
+runtime을 만든다. 초기값과 변경값의 type·유한성·범위를 검사하고, 변경은 0.01초 ramp로 적용한다. runtime은 연결·해제·폐기
+계약을 제공하지만 아직 AudioEngine에 등록되거나 Track input에 연결되지 않는다. 따라서 이 단계만으로 재생 신호가
+바뀌지는 않는다.
+
 검증된 명령은 CommandExecutor의 단일 대기열에서 접수 순서대로 하나씩 실행한다. `executeMany`는 묶음 전체를
 먼저 검증한 후, 다른 요청이 끼어들지 않게 순서대로 실행한다. 실행 중 첫 오류가 나면 남은 명령은 실행하지
 않는다. 이미 완료된 변경은 되돌리지 않으므로 묶음 실행은 원자적 트랜잭션이 아니다. 실패한 실행이 있어도 그
