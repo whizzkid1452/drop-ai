@@ -1533,7 +1533,20 @@ export class AudioEngine implements IAudioEngine {
         volume: Tone.gainToDb(track.volume * request.masterVolume),
         pan: track.pan,
       }).toDestination();
-      const input = new Tone.Gain({ gain: 1 }).connect(channel);
+      const input = new Tone.Gain({ gain: 1 });
+      const pluginRuntimes = this.createPreparedPluginRuntimes({
+        trackId: track.id,
+        pluginInstances: track.pluginInstances,
+      });
+      const disabledPluginInstanceIds = new Set(
+        track.pluginInstances.filter(instance => !instance.isEnabled).map(instance => instance.instanceId)
+      );
+      this.connectPreparedPluginChain({
+        input,
+        channel,
+        runtimes: getEnabledPluginRuntimes(pluginRuntimes, disabledPluginInstanceIds),
+        trackId: track.id,
+      });
 
       for (const region of track.regions) {
         const params = RegionRenderer.adjustForExportRange(RegionRenderer.calculateRenderParams(region), request.range);

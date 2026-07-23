@@ -66,6 +66,12 @@ export class ExportController {
       pan: track.pan,
       isMuted: track.isMuted,
       isSoloed: track.isSoloed,
+      pluginInstances: track.pluginInstances.map(instance => ({
+        instanceId: instance.id,
+        manifestId: instance.manifestSummary.id,
+        isEnabled: instance.isEnabled,
+        parameterValues: new Map(instance.parameters.map(parameter => [parameter.id, parameter.value])),
+      })),
       regions: track.regions.flatMap(region => {
         const url = this.resolveRegionSourceUrl(region);
         return region.duration <= 0 ? [] : [this.createExportRegion(region, url)];

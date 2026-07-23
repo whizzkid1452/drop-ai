@@ -1749,6 +1749,7 @@ describe('AudioEngine Export 회귀', () => {
           pan: -0.25,
           isMuted: false,
           isSoloed: false,
+          pluginInstances: [],
           regions: [{ id: 'region-1', url: 'test.wav', startTime: 1, sourceStartTime: 1, duration: 10 }],
         },
       ],
@@ -1777,6 +1778,7 @@ describe('AudioEngine Export 회귀', () => {
       pan: 0,
       isMuted: false,
       isSoloed,
+      pluginInstances: [],
       regions: [{ id: `${id}-region`, url, startTime: 0, sourceStartTime: 0, duration: 1 }],
     });
 
@@ -1792,5 +1794,102 @@ describe('AudioEngine Export 회귀', () => {
 
     expect(toneMocks.playerLoad).toHaveBeenCalledOnce();
     expect(toneMocks.playerLoad).toHaveBeenCalledWith('solo.wav');
+  });
+
+  it('활성 Plugin을 오프라인 Track 체인에 연결한다', async () => {
+    const engine = createPluginAudioEngine();
+
+    await engine.exportProject({
+      tracks: [
+        {
+          id: 'track-1',
+          volume: 1,
+          pan: 0,
+          isMuted: false,
+          isSoloed: false,
+          pluginInstances: [
+            {
+              instanceId: 'plugin-1',
+              manifestId: 'builtin.gain',
+              isEnabled: true,
+              parameterValues: new Map([['gain', 0.5]]),
+            },
+          ],
+          regions: [{ id: 'region-1', url: 'test.wav', startTime: 0, sourceStartTime: 0, duration: 1 }],
+        },
+      ],
+      masterVolume: 1,
+      range: { startTime: 0, endTime: 1 },
+      sampleRate: 44100,
+    });
+
+    const trackInput = toneMocks.gains[1];
+    const pluginGain = toneMocks.gains[2];
+    expect(trackInput?.destination).toBe(pluginGain);
+    expect(pluginGain?.destination).toBe(toneMocks.channels[0]);
+    expect(pluginGain?.gain.value).toBe(0.5);
+  });
+
+  it('비활성 Plugin은 오프라인 Track 체인에서 우회한다', async () => {
+    const engine = createPluginAudioEngine();
+
+    await engine.exportProject({
+      tracks: [
+        {
+          id: 'track-1',
+          volume: 1,
+          pan: 0,
+          isMuted: false,
+          isSoloed: false,
+          pluginInstances: [
+            {
+              instanceId: 'plugin-1',
+              manifestId: 'builtin.gain',
+              isEnabled: false,
+              parameterValues: new Map([['gain', 0.5]]),
+            },
+          ],
+          regions: [{ id: 'region-1', url: 'test.wav', startTime: 0, sourceStartTime: 0, duration: 1 }],
+        },
+      ],
+      masterVolume: 1,
+      range: { startTime: 0, endTime: 1 },
+      sampleRate: 44100,
+    });
+
+    const trackInput = toneMocks.gains[1];
+    const disabledPluginGain = toneMocks.gains[2];
+    expect(trackInput?.destination).toBe(toneMocks.channels[0]);
+    expect(disabledPluginGain?.destination).toBeUndefined();
+  });
+
+  it('지원하지 않는 Plugin이 있으면 내보내기를 거부한다', async () => {
+    const engine = createPluginAudioEngine();
+
+    await expect(
+      engine.exportProject({
+        tracks: [
+          {
+            id: 'track-1',
+            volume: 1,
+            pan: 0,
+            isMuted: false,
+            isSoloed: false,
+            pluginInstances: [
+              {
+                instanceId: 'plugin-1',
+                manifestId: 'builtin.missing',
+                isEnabled: true,
+                parameterValues: new Map(),
+              },
+            ],
+            regions: [{ id: 'region-1', url: 'test.wav', startTime: 0, sourceStartTime: 0, duration: 1 }],
+          },
+        ],
+        masterVolume: 1,
+        range: { startTime: 0, endTime: 1 },
+        sampleRate: 44100,
+      })
+    ).rejects.toMatchObject({ code: AudioEngineErrorCode.PLUGIN_FACTORY_NOT_FOUND });
   });
 });

@@ -30,6 +30,7 @@ export interface ExportTrack {
   pan: number;
   isMuted: boolean;
   isSoloed: boolean;
+  pluginInstances: readonly AudioProjectGraphPluginInstance[];
   regions: ExportRegion[];
 }
 

@@ -255,6 +255,7 @@ describe('MockAudioEngine - Phase 2 검증', () => {
           pan: 0,
           isMuted: false,
           isSoloed: false,
+          pluginInstances: [],
           regions: [{ id: 'region-1', url: 'test.mp3', startTime: 0, sourceStartTime: 0, duration: 10 }],
         },
       ],

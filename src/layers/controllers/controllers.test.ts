@@ -1572,6 +1572,16 @@ describe('Controllers - Phase 3 검증', () => {
         sourceStartTime: 1,
         duration: 10,
       });
+      session.getState().updateTrack('track-1', {
+        pluginInstances: [
+          {
+            id: '55555555-5555-4555-8555-555555555555',
+            manifestSummary: { id: 'builtin.gain', name: 'Gain', version: '1.0.0' },
+            isEnabled: false,
+            parameters: [{ id: 'gain', value: 0.75 }],
+          },
+        ],
+      });
       const exportSpy = vi.spyOn(engine, 'exportProject');
 
       const blob = await controller.export.exportRange(2, 8);
@@ -1585,6 +1595,14 @@ describe('Controllers - Phase 3 검증', () => {
             pan: 0,
             isMuted: false,
             isSoloed: false,
+            pluginInstances: [
+              {
+                instanceId: '55555555-5555-4555-8555-555555555555',
+                manifestId: 'builtin.gain',
+                isEnabled: false,
+                parameterValues: new Map([['gain', 0.75]]),
+              },
+            ],
             regions: [
               {
                 id: SOURCE_REGION_ID,

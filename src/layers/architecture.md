@@ -191,8 +191,10 @@ Region 연결을 준비하고, `prepareProjectGraph`는 출력 gate가 닫힌 �
 실시간 재생은 `Player → Track input → 활성 Plugin runtime[] → Channel → output` 순서를 사용한다. 활성 Plugin이 없으면 Track input이
 Channel에 직접 연결된다. ProjectController는 v2 Mapper가 복원한 Session Plugin 상태를 준비 요청으로 바꾸므로 저장
 프로젝트를 불러올 때 Plugin chain이 반영된다. 프로젝트 그래프 계약 자체는 manifest version 호환성을 판단하지 않으며,
-v2 Mapper가 그래프 준비 전에 Shared 호환성 검증을 수행한다. Export는 아직 Plugin 상태를 입력으로 받지 않으므로 내보낸
-파일에는 Plugin chain이 반영되지 않는다. 준비 실패나
+v2 Mapper가 그래프 준비 전에 Shared 호환성 검증을 수행한다. ExportController는 Session의 Plugin 설치 순서·manifest ID·활성
+상태·Parameter 값을 Export 요청에 복사한다. AudioEngine은 오프라인 Tone.js context에서 별도 runtime을 만들고 활성 runtime만
+`Player → Track input → 활성 Plugin runtime[] → Channel` 순서로 연결한다. 비활성 runtime은 생성하되 chain에서 우회한다.
+오프라인 context에서 생성할 수 없는 runtime이나 등록되지 않은 manifest가 있으면 해당 Export를 명시적으로 거부한다. 준비 실패나
 active revision 변경에서는 기존 Registry와 AudioEngine 그래프를 유지한다. Controller는 두 prepared 대상의
 `assertActivatable`을 먼저 모두 통과시킨 뒤, 중간 `await` 없이 Engine → Registry → Session 순서로 활성화해야 한다.
 Engine 활성화 중 Transport나 출력 gate 변경이 실패하면 기존 재생 상태와 gate를 보상하고 교체를 거부한다. 이전 그래프와
