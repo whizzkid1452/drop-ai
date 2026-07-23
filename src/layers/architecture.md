@@ -85,9 +85,11 @@ Plugin SDK 외 프로젝트 계층을 import하지 않는다. PluginController�
 `isPluginParameterValueCompatible` 규칙을 사용한다.
 
 AudioEngine 계층의 `ToneGainPluginRuntimeFactory`는 주입받은 manifest ID와 Gain Parameter 계약으로 Tone.js `Gain`
-runtime을 만든다. 초기값과 변경값의 type·유한성·범위를 검사하고, 변경은 0.01초 ramp로 적용한다. runtime은 후속
-AudioEngine chain 조립에 필요한 연결·해제·폐기 계약을 제공한다. Composition Root는 브라우저 기본 AudioEngine에 내장
-Gain Factory를 등록한다. AudioEngine은 Plugin runtime을 설치 순서대로 보관하고, 활성 runtime만
+runtime을 만든다. `ToneSaturationPluginRuntimeFactory`는 0~1 범위의 Drive Parameter로 Tone.js `Distortion` runtime을
+만들고 `2x` 오버샘플링을 적용한다. 두 Factory는 초기값과 변경값의 type·유한성·범위를 검사한다. Gain 변경은 0.01초
+ramp로, Drive 변경은 Tone.js `Distortion.distortion` 값 교체로 적용한다. runtime은 AudioEngine chain 조립에 필요한
+연결·해제·폐기 계약을 제공한다. Composition Root는 브라우저 기본 AudioEngine과 Session catalog에 내장 Gain·Saturation을
+함께 등록한다. AudioEngine은 Plugin runtime을 설치 순서대로 보관하고, 활성 runtime만
 `Track input → Plugin runtime[] → Channel`에 직렬 연결한다. 비활성화는 runtime을 폐기하지 않고 chain에서 우회하는 hard
 bypass다. 활성화·비활성화와 제거는 남은 활성 chain을 다시 연결한다. 연결 변경 실패 시 이전 chain 복원을 시도하며,
 복원도 실패한 동안에는 다른 실시간 오디오 작업을 거부하고 다음 호출에서 복원을 먼저 재시도한다.

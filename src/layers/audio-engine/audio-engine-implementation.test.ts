@@ -26,9 +26,17 @@ interface GainMockState {
   };
 }
 
+interface DistortionMockState {
+  destination?: unknown;
+  disposed: boolean;
+  distortion: number;
+  oversample: 'none' | '2x' | '4x';
+}
+
 const toneMocks = vi.hoisted(() => ({
   channelOptions: [] as Array<{ volume: number; pan: number }>,
   channels: [] as ChannelMockState[],
+  distortions: [] as DistortionMockState[],
   gains: [] as GainMockState[],
   outputGains: [] as GainMockState[],
   playerInstances: [] as PlayerMockState[],
@@ -202,6 +210,34 @@ vi.mock('tone', () => {
     }
   }
 
+  class Distortion implements DistortionMockState {
+    destination?: unknown;
+    disposed = false;
+    distortion: number;
+    oversample: 'none' | '2x' | '4x';
+
+    constructor(options: { distortion: number; oversample: 'none' | '2x' | '4x' }) {
+      this.distortion = options.distortion;
+      this.oversample = options.oversample;
+      toneMocks.distortions.push(this);
+    }
+
+    connect(destination: unknown) {
+      this.destination = destination;
+      return this;
+    }
+
+    disconnect() {
+      this.destination = undefined;
+      return this;
+    }
+
+    dispose() {
+      this.disposed = true;
+      return this;
+    }
+  }
+
   class Player implements PlayerMockState {
     buffer = { duration: 10 };
     destination?: unknown;
@@ -315,6 +351,7 @@ vi.mock('tone', () => {
 
   return {
     Channel,
+    Distortion,
     Gain,
     Player,
     Transport: { bpm },
@@ -330,6 +367,7 @@ vi.mock('tone', () => {
 import { AudioEngine } from './audio-engine';
 import { AudioEngineErrorCode } from './errors';
 import { ToneGainPluginRuntimeFactory } from './plugins/tone-gain-plugin-runtime';
+import { ToneSaturationPluginRuntimeFactory } from './plugins/tone-saturation-plugin-runtime';
 
 const ORIGINAL_REGION = {
   id: 'region-1',
@@ -353,11 +391,26 @@ function createPluginAudioEngine(): AudioEngine {
   });
 }
 
+function createSaturationAudioEngine(): AudioEngine {
+  return new AudioEngine({
+    pluginRuntimeFactories: [
+      new ToneSaturationPluginRuntimeFactory({
+        manifestId: 'builtin.saturation',
+        parameterId: 'drive',
+        minValue: 0,
+        maxValue: 1,
+        defaultValue: 0.2,
+      }),
+    ],
+  });
+}
+
 describe('AudioEngine 실시간 상태 일관성', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     toneMocks.channelOptions.length = 0;
     toneMocks.channels.length = 0;
+    toneMocks.distortions.length = 0;
     toneMocks.gains.length = 0;
     toneMocks.outputGains.length = 0;
     toneMocks.playerInstances.length = 0;
@@ -508,6 +561,31 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     expect(trackInput?.destination).toBe(pluginGain);
     expect(pluginGain?.destination).toBe(toneMocks.channels[0]);
     expect(pluginGain?.gain.value).toBe(0.5);
+  });
+
+  it('Saturation Plugin을 Track 체인에 연결하고 drive를 변경한다', async () => {
+    const engine = createSaturationAudioEngine();
+    await engine.addTrack('track-1');
+    const trackInput = toneMocks.gains[1];
+
+    engine.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.saturation',
+      parameterValues: new Map([['drive', 0.4]]),
+    });
+    const saturation = toneMocks.distortions[0];
+
+    engine.setPluginParameter({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      parameterId: 'drive',
+      value: 0.7,
+    });
+
+    expect(trackInput?.destination).toBe(saturation);
+    expect(saturation?.destination).toBe(toneMocks.channels[0]);
+    expect(saturation).toMatchObject({ distortion: 0.7, oversample: '2x' });
   });
 
   it('여러 Plugin을 설치 순서대로 직렬 연결한다', async () => {
@@ -1728,6 +1806,7 @@ describe('AudioEngine Export 회귀', () => {
     vi.clearAllMocks();
     toneMocks.channelOptions.length = 0;
     toneMocks.channels.length = 0;
+    toneMocks.distortions.length = 0;
     toneMocks.gains.length = 0;
     toneMocks.outputGains.length = 0;
     toneMocks.playerInstances.length = 0;

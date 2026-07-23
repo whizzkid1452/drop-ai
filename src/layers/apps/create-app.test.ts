@@ -319,7 +319,7 @@ describe('createApp', () => {
     expect(app.commandExecutor).toBeInstanceOf(CommandExecutor);
   });
 
-  it('내장 Gain manifest를 검증해 Session catalog에 요약만 공개한다', () => {
+  it('내장 Plugin manifest를 검증해 Session catalog에 요약만 공개한다', () => {
     const app = createTestApp({ audioEngine: new MockAudioEngine() });
 
     expect(app.session.getState().pluginCatalog.get('builtin.gain')).toEqual({
@@ -344,6 +344,50 @@ describe('createApp', () => {
       status: 'valid',
       issues: [],
     });
+    expect(app.session.getState().pluginCatalog.get('builtin.saturation')).toEqual({
+      id: 'builtin.saturation',
+      name: 'Saturation',
+      version: '1.0.0',
+      parameters: [
+        {
+          id: 'drive',
+          name: 'Drive',
+          type: 'number',
+          minValue: 0,
+          maxValue: 1,
+          defaultValue: 0.2,
+          step: 0.01,
+        },
+      ],
+    });
+    expect(app.session.getState().pluginValidationResults.get('builtin.saturation')).toEqual({
+      manifestId: 'builtin.saturation',
+      status: 'valid',
+      issues: [],
+    });
+  });
+
+  it('Saturation을 공통 Command 경로로 설치한다', async () => {
+    const app = createTestApp({ audioEngine: new MockAudioEngine() });
+    const trackId = '11111111-1111-4111-8111-111111111111';
+    const instanceId = '22222222-2222-4222-8222-222222222222';
+
+    await app.commandExecutor.execute({ type: AudioCommandType.ADD_TRACK, trackId });
+    await app.commandExecutor.execute({
+      type: AudioCommandType.INSTALL_PLUGIN,
+      trackId,
+      instanceId,
+      manifestId: 'builtin.saturation',
+    });
+
+    expect(app.session.getState().tracks.get(trackId)?.pluginInstances).toEqual([
+      {
+        id: instanceId,
+        manifestSummary: { id: 'builtin.saturation', name: 'Saturation', version: '1.0.0' },
+        isEnabled: true,
+        parameters: [{ id: 'drive', value: 0.2 }],
+      },
+    ]);
   });
 
   it('PluginHost와 전체 manifest를 App capability로 노출하지 않는다', () => {

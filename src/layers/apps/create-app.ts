@@ -3,6 +3,7 @@ import { AudioEngine } from '../audio-engine/audio-engine';
 import { readAudioRuntimeEnvironment } from '../audio-engine/audio-runtime-environment';
 import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { ToneGainPluginRuntimeFactory } from '../audio-engine/plugins/tone-gain-plugin-runtime';
+import { ToneSaturationPluginRuntimeFactory } from '../audio-engine/plugins/tone-saturation-plugin-runtime';
 import { AudioSourceRegistry } from '../audio-source-registry/audio-source-registry';
 import { BrowserObjectUrlAdapter } from '../audio-source-registry/browser-object-url-adapter';
 import type {
@@ -25,6 +26,7 @@ import type { IPluginHost } from '../plugin-host/i-plugin-host';
 import { PluginHost } from '../plugin-host/plugin-host';
 import { createPluginCatalogEntry, type PluginManifest } from '../plugin-sdk/plugin-manifest.schema';
 import { gainPluginManifest } from '../plugins/builtin/gain/gain-plugin-manifest';
+import { saturationPluginManifest } from '../plugins/builtin/saturation/saturation-plugin-manifest';
 import {
   resolveAudioRuntimeCapabilities,
   type AudioRuntimeCapabilities,
@@ -115,6 +117,7 @@ function createValidManifestResult(manifest: PluginManifest): PluginValidationRe
 
 function createDefaultAudioEngine(): IAudioEngine {
   const [gainParameter] = gainPluginManifest.parameters;
+  const [saturationDriveParameter] = saturationPluginManifest.parameters;
   return new AudioEngine({
     pluginRuntimeFactories: [
       new ToneGainPluginRuntimeFactory({
@@ -123,6 +126,13 @@ function createDefaultAudioEngine(): IAudioEngine {
         minValue: gainParameter.minValue,
         maxValue: gainParameter.maxValue,
         defaultValue: gainParameter.defaultValue,
+      }),
+      new ToneSaturationPluginRuntimeFactory({
+        manifestId: saturationPluginManifest.id,
+        parameterId: saturationDriveParameter.id,
+        minValue: saturationDriveParameter.minValue,
+        maxValue: saturationDriveParameter.maxValue,
+        defaultValue: saturationDriveParameter.defaultValue,
       }),
     ],
   });
@@ -142,7 +152,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   registerInitialPluginManifests({
     session,
     pluginHost,
-    pluginManifests: options.initialPluginManifests ?? [gainPluginManifest],
+    pluginManifests: options.initialPluginManifests ?? [gainPluginManifest, saturationPluginManifest],
   });
   const audioSourceCapabilities = createAudioSourceCapabilities(audioSourceRegistry);
   const controller = new AppController({
