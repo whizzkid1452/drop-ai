@@ -7,6 +7,7 @@ import type { TrackState } from '@/layers/session/session';
 import { useTrackActions } from '@/layers/apps/web/hooks/useTrackActions';
 import { resolveSplitRegionId } from '@/layers/apps/web/hooks/resolve-split-region-id';
 import { TrackPanController } from './components/TrackPanController';
+import { TrackPluginControls } from './components/TrackPluginControls';
 import { TrackRegionImportControl } from './components/TrackRegionImportControl';
 import { TrackVolumeController } from './components/TrackVolumeController';
 import { RegionComponent } from './RegionComponent';
@@ -198,6 +199,7 @@ export const TrackComponent = memo(function TrackComponent({
           {isRemovingTrack ? '삭제 중…' : 'Track 삭제'}
         </button>
       </div>
+      <TrackPluginControls trackId={track.id} pluginInstances={track.pluginInstances} />
     </>
   );
 });

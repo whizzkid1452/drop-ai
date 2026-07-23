@@ -107,8 +107,10 @@ runtime을 만든다. 초기값과 변경값의 type·유한성·범위를 검�
 재시도한다. `INSTALL_PLUGIN`, `REMOVE_PLUGIN`, `SET_PLUGIN_PARAMETER`는 CommandExecutor와 PluginController를 거쳐 이 API를
 호출한다. Web JSON CLI는 이 공통 Schema를 사용할 수 있다. 이름 기반 내부 CLI도 `plugin install`, `plugin remove`,
 `plugin set`을 같은 CommandExecutor에 전달한다. `plugin set` 값은 `number`·`boolean`·`string` type을 명시해 변환한다.
-Agent도 제한된 Plugin catalog와 Track instance를 Prompt로 받아 같은 CommandExecutor 경로를 사용한다. Plugin UI는 아직
-제공하지 않는다.
+Agent도 제한된 Plugin catalog와 Track instance를 Prompt로 받아 같은 CommandExecutor 경로를 사용한다. Web Track UI는
+Session catalog의 Parameter type을 number slider·boolean checkbox·enum select로 표시한다. 설치·제거·Parameter 변경은
+UI에서 상태를 직접 바꾸지 않고 같은 AudioCommand와 CommandExecutor 경로를 사용한다. 현재 UI는 manifest가 선언한 별도
+배치 정보가 아니라 Parameter type 기반의 공통 배치를 사용한다.
 
 검증된 명령은 CommandExecutor의 단일 대기열에서 접수 순서대로 하나씩 실행한다. `executeMany`는 묶음 전체를
 먼저 검증한 후, 다른 요청이 끼어들지 않게 순서대로 실행한다. 실행 중 첫 오류가 나면 남은 명령은 실행하지

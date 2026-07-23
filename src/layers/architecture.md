@@ -91,7 +91,9 @@ Gain Factory를 등록한다. AudioEngine은 Plugin을 설치 순서대로 `Trac
 CommandExecutor와 PluginController를 거쳐 이 API를 호출한다. Web JSON CLI는 이 공통 Schema를 사용할 수 있다. 이름 기반
 내부 CLI도 `plugin install`, `plugin remove`, `plugin set`을 같은 CommandExecutor에 전달한다. `plugin set` 값은
 `number`·`boolean`·`string` type을 명시해 변환한다. Agent도 제한된 Plugin catalog와 Track instance를 Prompt로 받아 같은
-CommandExecutor 경로를 사용한다. Plugin UI는 아직 제공하지 않는다.
+CommandExecutor 경로를 사용한다. Web Track UI는 Session catalog의 Parameter type을 number slider·boolean checkbox·enum
+select로 표시한다. 설치·제거·Parameter 변경은 UI에서 상태를 직접 바꾸지 않고 같은 AudioCommand와 CommandExecutor 경로를
+사용한다. 현재 UI는 manifest가 선언한 별도 배치 정보가 아니라 Parameter type 기반의 공통 배치를 사용한다.
 
 영구 저장 형식은 Shared의 `ProjectDocumentSchema`로 검증한다. v1은 Track·Region과 오디오 Source 메타데이터를
 절대 초 단위로 저장하고, Region은 임시 URL이 아닌 안정적인 Source ID를 참조한다. `File`, `Blob`, Object URL,

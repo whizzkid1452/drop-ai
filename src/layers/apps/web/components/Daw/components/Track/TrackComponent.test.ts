@@ -4,6 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TrackState } from '@/layers/session/session';
+import type { PluginInstanceState } from '@/types/plugin-state';
 import type { TrackToggleResult } from '@/layers/apps/web/hooks/track-mute-solo-commands';
 import type { TrackRemovalResult } from '@/layers/apps/web/hooks/track-action-commands';
 import { TrackComponent } from './TrackComponent';
@@ -31,6 +32,25 @@ vi.mock('./components/TrackPanController', () => ({
 vi.mock('./components/TrackVolumeController', () => ({
   TrackVolumeController: () => null,
 }));
+
+vi.mock('./components/TrackPluginControls', async () => {
+  const { createElement: createMockElement } = await import('react');
+
+  return {
+    TrackPluginControls: ({
+      trackId,
+      pluginInstances,
+    }: {
+      trackId: string;
+      pluginInstances: readonly PluginInstanceState[];
+    }) =>
+      createMockElement('div', {
+        'data-plugin-count': pluginInstances.length,
+        'data-testid': 'track-plugin-controls',
+        'data-track-id': trackId,
+      }),
+  };
+});
 
 vi.mock('./components/TrackRegionImportControl', async () => {
   const { createElement: createMockElement } = await import('react');
@@ -84,6 +104,40 @@ afterEach(() => {
 });
 
 describe('TrackComponent 제어', () => {
+  it('현재 Track ID와 Plugin 인스턴스를 Plugin 제어에 전달한다', () => {
+    const pluginInstance: PluginInstanceState = {
+      id: '22222222-2222-4222-8222-222222222222',
+      manifestSummary: { id: 'builtin.gain', name: 'Gain', version: '1.0.0' },
+      isEnabled: true,
+      parameters: [{ id: 'gain', value: 1 }],
+    };
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    mountedRoots.push(root);
+
+    act(() => {
+      root.render(
+        createElement(TrackComponent, {
+          mediaElement: null,
+          track: { ...track, pluginInstances: [pluginInstance] },
+          pixelsPerSecond: 100,
+          onReady: vi.fn(),
+          onVolumeChange: vi.fn(),
+          onPanChange: vi.fn(),
+          onMuteChange: vi.fn().mockResolvedValue('updated'),
+          onSoloChange: vi.fn().mockResolvedValue('updated'),
+          onRemoveTrack: vi.fn().mockResolvedValue('cancelled'),
+        })
+      );
+    });
+
+    const controls = host.querySelector<HTMLElement>('[data-testid="track-plugin-controls"]');
+
+    expect(controls?.dataset.trackId).toBe(track.id);
+    expect(controls?.dataset.pluginCount).toBe('1');
+  });
+
   it('오디오가 없는 Track도 삭제할 수 있고 처리 중 중복 실행을 막는다', async () => {
     const removalResult = createDeferred<TrackRemovalResult>();
     const onRemoveTrack = vi.fn(() => removalResult.promise);
