@@ -19,12 +19,13 @@ Session / IAudioEngine
 ## 현재 기준
 
 - 확인 날짜: 2026-07-23
-- 브랜치: `feature/track-rename`
-- 최신 커밋: `056c565`
-- 비교 기준: `origin/main`
-- 누적 변경: 80개 커밋, 217개 파일
+- 브랜치: `main`
+- 병합 범위: `f48e919..e09eaea`
+- 병합된 커밋: 82개
+- 변경 파일: 222개
+- 원격 반영: 아직 Push하지 않음
 
-이 문서는 위 커밋까지 완료된 기능 코드를 기준으로 작성했다.
+이 문서는 위 병합 범위와 `main` 전체 검증 결과를 기준으로 작성했다.
 
 상태 표시는 다음 의미로 사용한다.
 
@@ -52,6 +53,7 @@ Session / IAudioEngine
 | Plugin 제어         | ✅   | 설치, 제거, 순서 변경, 활성화, Parameter 변경을 지원한다.               |
 | 오프라인 Export     | ✅   | 활성 Plugin chain과 Master Volume을 반영해 WAV를 만든다.                |
 | Web UI              | ✅   | 가져오기, 저장, 불러오기, Undo·Redo, Track·Plugin 제어를 연결했다.      |
+| WebLLM 사전 로딩    | ✅   | 앱 시작 시 모델 초기화를 시작하고 동시 요청은 같은 Promise를 사용한다.  |
 | 배포 전제조건       | ✅   | 브라우저 오디오 기능, 격리 헤더, WebAssembly CSP를 검사한다.            |
 
 ## Tone.js 사용 범위
@@ -85,6 +87,8 @@ Tone.js를 제외한 설계가 아니다. 현재 `tone` 15.1.22를 사용한다.
 | `28e3b71` | Plugin 처리 순서 변경            |
 | `2a2641d` | Master Volume 실시간 제어        |
 | `056c565` | Track 이름 변경                  |
+| `1203e41` | WebLLM 모델 사전 로딩            |
+| `e09eaea` | 마이그레이션 진행 현황 문서 추가 |
 
 전체 커밋은 다음 명령으로 확인한다.
 
@@ -139,10 +143,10 @@ VST와 Audio Unit은 운영체제의 네이티브 Plugin 규격이다. 현재 �
 
 ## 검증 결과
 
-최신 기능 커밋 직전에 다음 결과를 확인했다.
+`main` 병합 후 다음 결과를 확인했다.
 
-- Test Files: 79개 통과
-- Tests: 1,022개 통과
+- Test Files: 81개 통과
+- Tests: 1,026개 통과
 - ESLint: 통과
 - TypeScript 빌드 검사: 통과
 - 프로덕션 빌드: 통과
@@ -158,6 +162,7 @@ npx --yes -p node@22.12.0 -p pnpm@9.12.2 -- pnpm build
 
 ## 현재 결론
 
-기본 편집, 저장·불러오기, Plugin 처리, 오프라인 Export, Master Volume, Track 이름 변경까지 공통 아키텍처에 연결됐다.
+기본 편집, 저장·불러오기, Plugin 처리, 오프라인 Export, Master Volume, Track 이름 변경, WebLLM 사전 로딩까지
+`main`에 병합됐다.
 
 전체 데스크톱 DAW 기능 이식은 아직 완료되지 않았다. 다음 핵심 기반은 Routing이며, 이후 Automation, Recording, MIDI 순서로 확장해야 한다.
