@@ -71,6 +71,11 @@ export class TrackController {
     this.sessionStore.getState().updateTrack(trackId, { volume });
   }
 
+  setName(trackId: string, name: string): void {
+    this.getTrackOrThrow(trackId);
+    this.sessionStore.getState().updateTrack(trackId, { name });
+  }
+
   setPan(trackId: string, pan: number): void {
     console.log(`[TrackController] Setting pan for ${trackId}: ${pan}`);
 

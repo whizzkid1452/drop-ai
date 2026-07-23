@@ -7,6 +7,7 @@ import type { TrackState } from '@/layers/session/session';
 import { useTrackActions } from '@/layers/apps/web/hooks/useTrackActions';
 import { resolveSplitRegionId } from '@/layers/apps/web/hooks/resolve-split-region-id';
 import { TrackPanController } from './components/TrackPanController';
+import { TrackNameControl } from './components/TrackNameControl';
 import { TrackPluginControls } from './components/TrackPluginControls';
 import { TrackRegionImportControl } from './components/TrackRegionImportControl';
 import { TrackVolumeController } from './components/TrackVolumeController';
@@ -100,6 +101,7 @@ export const TrackComponent = memo(function TrackComponent({
 
   return (
     <>
+      <TrackNameControl trackId={track.id} name={track.name} />
       <div style={{ position: 'relative', height: '128px', width: '100%' }}>
         {track.regions.map(region => (
           <RegionComponent

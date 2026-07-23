@@ -158,6 +158,10 @@ export class CommandExecutor {
         this.controller.mixer.setMasterVolume(validatedCommand.volume);
         return;
 
+      case AudioCommandType.SET_TRACK_NAME:
+        this.controller.track.setName(validatedCommand.trackId, validatedCommand.name);
+        return;
+
       case AudioCommandType.SET_CURRENT_TIME:
         this.controller.playback.handleSeek(validatedCommand.time);
         return;

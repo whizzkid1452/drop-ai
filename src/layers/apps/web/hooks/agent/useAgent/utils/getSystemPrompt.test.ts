@@ -38,6 +38,7 @@ const tracks: AgentPromptTrack[] = [
   {
     id: TRACK_ID,
     index: 0,
+    name: '보컬',
     pluginInstances: [
       {
         id: PLUGIN_INSTANCE_ID,
@@ -71,6 +72,15 @@ describe('Agent 시스템 Prompt', () => {
     for (const commandType of Object.values(AudioCommandType)) {
       expect(prompt).toContain(`- ${commandType}:`);
     }
+  });
+
+  it('Track 이름과 이름 변경 예시를 제공한다', () => {
+    const prompt = getSystemPrompt({ tracks });
+
+    expect(prompt).toContain(`Track 1: id=${TRACK_ID}, name="보컬"`);
+    expect(prompt).toContain(
+      JSON.stringify([{ type: AudioCommandType.SET_TRACK_NAME, trackId: TRACK_ID, name: 'Lead Vocal' }])
+    );
   });
 
   it('Master Volume의 범위와 한국어·영어 변환 예시를 제공한다', () => {
@@ -287,6 +297,7 @@ describe('Agent 시스템 Prompt', () => {
       (_, index): AgentPromptTrack => ({
         id: `${index.toString(16).padStart(8, '0')}-1111-4111-8111-111111111111`,
         index,
+        name: `Track ${index + 1}`,
         pluginInstances: [],
         regions: [
           {

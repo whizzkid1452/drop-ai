@@ -33,6 +33,19 @@ vi.mock('./components/TrackVolumeController', () => ({
   TrackVolumeController: () => null,
 }));
 
+vi.mock('./components/TrackNameControl', async () => {
+  const { createElement: createMockElement } = await import('react');
+
+  return {
+    TrackNameControl: ({ trackId, name }: { trackId: string; name: string }) =>
+      createMockElement('div', {
+        'data-name': name,
+        'data-testid': 'track-name-control',
+        'data-track-id': trackId,
+      }),
+  };
+});
+
 vi.mock('./components/TrackPluginControls', async () => {
   const { createElement: createMockElement } = await import('react');
 
@@ -133,9 +146,12 @@ describe('TrackComponent 제어', () => {
     });
 
     const controls = host.querySelector<HTMLElement>('[data-testid="track-plugin-controls"]');
+    const nameControl = host.querySelector<HTMLElement>('[data-testid="track-name-control"]');
 
     expect(controls?.dataset.trackId).toBe(track.id);
     expect(controls?.dataset.pluginCount).toBe('1');
+    expect(nameControl?.dataset.trackId).toBe(track.id);
+    expect(nameControl?.dataset.name).toBe(track.name);
   });
 
   it('오디오가 없는 Track도 삭제할 수 있고 처리 중 중복 실행을 막는다', async () => {

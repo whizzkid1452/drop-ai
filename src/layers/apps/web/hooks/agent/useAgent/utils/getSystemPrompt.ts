@@ -20,6 +20,7 @@ export interface AgentPromptRegion {
 export interface AgentPromptTrack {
   id: string;
   index: number;
+  name: string;
   pluginInstances: readonly PluginInstanceState[];
   regions: readonly AgentPromptRegion[];
 }
@@ -59,6 +60,8 @@ const COMMAND_REFERENCE = {
   [AudioCommandType.STOP]: '{"type":"STOP"} - 정지하고 0초로 이동',
   [AudioCommandType.SET_TEMPO]: '{"type":"SET_TEMPO","tempo":<number greater than 0>} - 프로젝트 tempo 메타데이터 변경',
   [AudioCommandType.SET_MASTER_VOLUME]: '{"type":"SET_MASTER_VOLUME","volume":<0..1>} - 전체 출력 볼륨 변경',
+  [AudioCommandType.SET_TRACK_NAME]:
+    '{"type":"SET_TRACK_NAME","trackId":"<existing Track UUID>","name":"<1..255 non-blank characters>"} - Track 이름 변경',
   [AudioCommandType.SET_TRACK_VOLUME]:
     '{"type":"SET_TRACK_VOLUME","trackId":"<existing Track UUID>","volume":<0..1>} - Track 볼륨 변경',
   [AudioCommandType.SET_TRACK_PAN]:
@@ -185,7 +188,7 @@ function createProjectContext(tracks: readonly AgentPromptTrack[]): AgentProject
   };
 
   for (const track of tracks) {
-    if (!tryAddLine(`Track ${track.index + 1}: id=${track.id}`)) {
+    if (!tryAddLine(`Track ${track.index + 1}: id=${track.id}, name=${JSON.stringify(track.name)}`)) {
       break;
     }
 
@@ -313,6 +316,14 @@ function createTargetExamples(tracks: readonly AgentPromptTrack[]): AgentPromptE
   }
 
   const examples: AgentPromptExample[] = [
+    {
+      request: '첫 번째 Track 이름을 Lead Vocal로 바꿔줘',
+      commands: [{ type: AudioCommandType.SET_TRACK_NAME, trackId: firstTrack.id, name: 'Lead Vocal' }],
+    },
+    {
+      request: 'rename the first track to Lead Vocal',
+      commands: [{ type: AudioCommandType.SET_TRACK_NAME, trackId: firstTrack.id, name: 'Lead Vocal' }],
+    },
     {
       request: '첫 번째 트랙을 음소거해줘',
       commands: [{ type: AudioCommandType.SET_TRACK_MUTE, trackId: firstTrack.id, muted: true }],

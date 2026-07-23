@@ -87,6 +87,8 @@ describe('Agent 프로젝트 컨텍스트', () => {
     const resolver: IAudioSourceResolver = { resolve, listCommittedMetadata: () => [] };
 
     const promptTracks = createAgentPromptTracks(createTrackMap(), resolver);
+
+    expect(promptTracks[0]?.name).toBe('Track 1');
     const promptRegions = promptTracks[0].regions;
 
     expect(promptRegions).toEqual([

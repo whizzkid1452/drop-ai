@@ -58,7 +58,7 @@ function parseBoolean(rawValue: string): boolean | null {
 }
 
 async function executeTrackCommand(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
-  const [subcommand, trackId] = args;
+  const [subcommand, trackId, ...remainingArgs] = args;
 
   if (subcommand === 'add') {
     if (!trackId) {
@@ -76,7 +76,19 @@ async function executeTrackCommand(commandExecutor: CliCommandExecutor, args: st
     return `Track ${trackId} removed.`;
   }
 
-  return 'Usage: track add <trackId> OR track remove <trackId>';
+  if (subcommand === 'rename') {
+    if (!trackId || remainingArgs.length === 0) {
+      return 'Error: Usage: track rename <trackId> <name>';
+    }
+    const name = remainingArgs.join(' ').trim();
+    if (name === '') {
+      return 'Error: Usage: track rename <trackId> <name>';
+    }
+    await commandExecutor.execute({ type: AudioCommandType.SET_TRACK_NAME, trackId, name });
+    return `Track ${trackId} renamed to ${name}.`;
+  }
+
+  return 'Usage: track add <trackId> OR track remove <trackId> OR track rename <trackId> <name>';
 }
 
 async function executeRegionCommand(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
@@ -406,7 +418,7 @@ export const createCliCommands = (commandExecutor: CliCommandExecutor, state: Cl
     },
     track: {
       description: 'Track management',
-      usage: 'track add <trackId> | track remove <trackId>',
+      usage: 'track add <trackId> | track remove <trackId> | track rename <trackId> <name>',
       fn: (...args: string[]) => executeTrackCommand(commandExecutor, args),
     },
     plugin: {

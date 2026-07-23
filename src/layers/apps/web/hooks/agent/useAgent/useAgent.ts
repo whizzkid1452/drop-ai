@@ -48,6 +48,7 @@ export function createAgentPromptTracks(
   return Array.from(trackMap.values()).map((track, index) => ({
     id: track.id,
     index,
+    name: track.name,
     pluginInstances: track.pluginInstances.map(clonePluginInstance),
     regions: track.regions.map(region => ({
       id: region.id,

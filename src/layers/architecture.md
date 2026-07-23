@@ -23,7 +23,7 @@ AudioEngine 객체를 노출하지 않는다. 현재 `PlaybackClockQuery`는 `Pl
 `CommandHistory`는 현재 앱 실행 중에만 유지하는 최대 100개의 역명령 기록이다. `CommandExecutor`가 성공한 편집의 실행 전후
 Session을 비교해 Undo·Redo 명령을 만들고, `UNDO`와 `REDO`도 같은 대기열에서 실행한다. Undo·Redo가 실패하면 해당 기록을
 반대쪽 스택으로 옮기지 않는다. 새 편집은 Redo 기록을 제거한다. 지원 범위는 Track 추가, Region 추가·삭제·이동, tempo,
-Master Volume, Track volume·pan·mute·solo, Export 범위 설정·해제, Plugin 설치·제거·처리 순서·활성화 상태·Parameter 변경이다. Plugin 기록은 같은
+Master Volume, Track name·volume·pan·mute·solo, Export 범위 설정·해제, Plugin 설치·제거·처리 순서·활성화 상태·Parameter 변경이다. Plugin 기록은 같은
 인스턴스 ID, manifest ID, 설치 위치, 활성화 상태, Parameter 값을 사용해 상태를 복원한다. 제거 Undo도 원래 설치 위치를 복원한다.
 재생·playhead·저장·내보내기는 기록하지 않는다. Track 삭제와 Region
 분할은 손실 없는 복원 명령이 아직 없으므로 Session 변경이 확인되면 기존 기록을 제거한다. 프로젝트 불러오기도 다른
@@ -37,7 +37,7 @@ Agent 응답은 JSON 배열 전체를 엄격하게 검증한다. 빈 배열은 �
 실행하지 않는다.
 편집과 저장을 함께 요청하면 `SAVE_PROJECT`를 편집 명령 뒤에 둔다.
 
-Agent Prompt는 현재 AudioCommand 전체의 필드와 범위를 설명하고 실제 Track·Region ID, 시간 범위, 오디오 소스
+Agent Prompt는 현재 AudioCommand 전체의 필드와 범위를 설명하고 실제 Track ID·name, Region ID, 시간 범위, 오디오 소스
 사용 가능 여부를 전달한다. 예시 출력은 엄격한 Agent Schema로 테스트한다. 앱이 예약한 새 ID와 허용 파일 목록이
 아직 없으므로 Agent는 `ADD_TRACK`을 만들지 않는다. `LOAD_REGION`은 기존 Track의 첫 등록 Source Region을 재사용할 수
 있을 때만 제한적으로 사용한다. 등록 Source Region은 목록의 실제 `sourceId`를 사용한다. Agent 명령의 `url` 필드는
@@ -250,6 +250,9 @@ Web UI의 Tempo 입력은 `SET_TEMPO`로 Session 메타데이터만 변경한다
 오디오 Source를 연결한다. 첫 명령이 실패하면 pending Source를 정리한다. 두 번째 명령이 실패하면 `REMOVE_TRACK`을
 CommandExecutor로 실행한 뒤 pending Source 정리를 시도한다. 보상도 실패하면 Web workflow 전용
 `AudioImportCompensationError`에 원래 오류와 각 보상 오류를 함께 보존한다.
+Web Track 이름 입력, 내부 CLI의 `track rename <trackId> <name>`, Agent의 이름 변경 요청은 모두 실제 Track ID와
+앞뒤 공백을 제거한 1자부터 255자까지의 이름을 `SET_TRACK_NAME`으로 CommandExecutor에 전달한다. 공백만 있는 이름은 거부한다. 이 명령은 Session만 변경하며
+AudioEngine에는 전달하지 않는다. 저장할 때 ProjectDocument Mapper가 변경된 이름을 포함한다.
 Web 헤더의 Master 입력, 내부 CLI의 `master-volume <value>`, Agent의 전체 출력 볼륨 요청은 모두 0부터 1 사이의
 `SET_MASTER_VOLUME`을 CommandExecutor에 전달한다. Web 입력은 처리 중 중복 실행을 막고 실패 시 최신 Session 값으로 되돌린다.
 Web 헤더의 저장 버튼과 내부 CLI의 `save`, Agent의 저장 요청은 모두 인자 없는 `SAVE_PROJECT`를 CommandExecutor에

@@ -154,6 +154,28 @@ describe('내부 CLI 명령 변환', () => {
     expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.REMOVE_TRACK, trackId: TRACK_ID });
   });
 
+  it('track rename의 여러 단어를 SET_TRACK_NAME 명령으로 변환한다', async () => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    const result = await commands.track.fn('rename', TRACK_ID, 'Lead', 'Vocal');
+
+    expect(execute).toHaveBeenCalledWith({
+      type: AudioCommandType.SET_TRACK_NAME,
+      trackId: TRACK_ID,
+      name: 'Lead Vocal',
+    });
+    expect(result).toBe(`Track ${TRACK_ID} renamed to Lead Vocal.`);
+  });
+
+  it('track rename의 이름이 없으면 실행 전에 거부한다', async () => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    const result = await commands.track.fn('rename', TRACK_ID);
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(result).toBe('Error: Usage: track rename <trackId> <name>');
+  });
+
   it('plugin install 인자를 INSTALL_PLUGIN 명령으로 변환한다', async () => {
     const commands = createCliCommands(commandExecutor, defaultState);
 
@@ -475,6 +497,7 @@ describe('내부 CLI 명령 변환', () => {
     const result = await commands.help.fn();
 
     expect(result).toContain('track add <trackId>');
+    expect(result).toContain('track rename <trackId> <name>');
     expect(result).not.toContain('track add <trackId> <url>');
     expect(result).toContain('region add-source <trackId> <regionId> <sourceId>');
     expect(result).not.toContain('region add <trackId> <regionId> <url>');

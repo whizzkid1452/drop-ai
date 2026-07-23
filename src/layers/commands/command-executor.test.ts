@@ -265,6 +265,37 @@ describe('CommandExecutor', () => {
     expect(session.getState().tracks.has(TRACK_ID)).toBe(true);
   });
 
+  it('Track 이름 변경을 Undo하고 같은 이름으로 Redo한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    const originalName = session.getState().tracks.get(TRACK_ID)?.name;
+
+    await commandExecutor.execute({
+      type: AudioCommandType.SET_TRACK_NAME,
+      trackId: TRACK_ID,
+      name: '보컬',
+    });
+    expect(session.getState().tracks.get(TRACK_ID)?.name).toBe('보컬');
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.name).toBe(originalName);
+
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.name).toBe('보컬');
+  });
+
+  it('없는 Track의 이름 변경을 거부한다', async () => {
+    const { commandExecutor } = createTestContext();
+
+    await expect(
+      commandExecutor.execute({
+        type: AudioCommandType.SET_TRACK_NAME,
+        trackId: TRACK_ID,
+        name: '보컬',
+      })
+    ).rejects.toThrow('트랙을 찾을 수 없습니다');
+  });
+
   it('Region 추가를 Undo하고 정규화된 Source 범위로 Redo한다', async () => {
     const { audioSourceRegistry, commandExecutor, session } = createTestContext();
     await addTrack(commandExecutor);

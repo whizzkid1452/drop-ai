@@ -44,6 +44,35 @@ describe('ADD_TRACK 계약', () => {
   });
 });
 
+describe('SET_TRACK_NAME 계약', () => {
+  it('앞뒤 공백을 제거한 1자부터 255자까지의 이름을 허용한다', () => {
+    expect(
+      StrictAudioCommandSchema.parse({
+        type: AudioCommandType.SET_TRACK_NAME,
+        trackId: TRACK_ID,
+        name: '  보컬  ',
+      })
+    ).toEqual({ type: AudioCommandType.SET_TRACK_NAME, trackId: TRACK_ID, name: '보컬' });
+    expect(
+      StrictAudioCommandSchema.safeParse({
+        type: AudioCommandType.SET_TRACK_NAME,
+        trackId: TRACK_ID,
+        name: 'a'.repeat(255),
+      }).success
+    ).toBe(true);
+  });
+
+  it.each(['', '   ', 'a'.repeat(256)])('잘못된 Track 이름을 거부한다', name => {
+    expect(
+      StrictAudioCommandSchema.safeParse({
+        type: AudioCommandType.SET_TRACK_NAME,
+        trackId: TRACK_ID,
+        name,
+      }).success
+    ).toBe(false);
+  });
+});
+
 describe('LOAD_REGION 오디오 식별자 계약', () => {
   it('sourceId를 보존한다', () => {
     const command = {

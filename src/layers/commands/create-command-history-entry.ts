@@ -134,6 +134,20 @@ export function createCommandHistoryEntry({
         redoCommand: command,
       });
 
+    case AudioCommandType.SET_TRACK_NAME: {
+      const beforeTrack = beforeSession.tracks.get(command.trackId);
+      const afterTrack = afterSession.tracks.get(command.trackId);
+      if (!beforeTrack || !afterTrack || beforeTrack.name === afterTrack.name || afterTrack.name !== command.name) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        undoCommand: { ...command, name: beforeTrack.name },
+        redoCommand: command,
+      });
+    }
+
     case AudioCommandType.SET_TEMPO:
       if (beforeSession.tempo === afterSession.tempo || afterSession.tempo !== command.tempo) {
         return null;
