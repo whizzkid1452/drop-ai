@@ -1,19 +1,55 @@
 import { describe, expect, it } from 'vitest';
 import { AgentAudioCommandBatchSchema, AudioCommandType } from '@/types/audioCommand.schema';
 import {
+  AGENT_PLUGIN_CONTEXT_MAX_CHARACTERS,
   AGENT_PROJECT_CONTEXT_MAX_CHARACTERS,
   AGENT_PROMPT_EXAMPLES,
   getSystemPrompt,
+  type AgentPromptPlugin,
   type AgentPromptTrack,
 } from './getSystemPrompt';
 
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
 const SOURCE_ID = '33333333-3333-4333-8333-333333333333';
+const PLUGIN_INSTANCE_ID = '44444444-4444-4444-8444-444444444444';
+const plugins: AgentPromptPlugin[] = [
+  {
+    id: 'builtin.channel-tools',
+    name: 'Channel Tools',
+    version: '1.0.0',
+    parameters: [
+      { id: 'gain', name: 'Gain', type: 'number', minValue: 0, maxValue: 2, defaultValue: 1, step: 0.01 },
+      { id: 'bypass', name: 'Bypass', type: 'boolean', defaultValue: false },
+      {
+        id: 'mode',
+        name: 'Mode',
+        type: 'enum',
+        defaultValue: 'clean',
+        options: [
+          { value: 'clean', name: 'Clean' },
+          { value: 'warm', name: 'Warm' },
+        ],
+      },
+    ],
+  },
+];
 const tracks: AgentPromptTrack[] = [
   {
     id: TRACK_ID,
     index: 0,
+    pluginInstances: [
+      {
+        id: PLUGIN_INSTANCE_ID,
+        manifestSummary: { id: 'builtin.channel-tools', name: 'Channel Tools', version: '1.0.0' },
+        isEnabled: true,
+        parameters: [
+          { id: 'gain', value: 0.75 },
+          { id: 'bypass', value: false },
+          { id: 'mode', value: 'warm' },
+        ],
+      },
+    ],
     regions: [
       {
         id: REGION_ID,
@@ -65,7 +101,7 @@ describe('Agent 시스템 Prompt', () => {
       expect(AgentAudioCommandBatchSchema.safeParse(example.commands).success).toBe(true);
     }
 
-    const renderedExamples = getSystemPrompt({ tracks }).split('# 예시\n')[1].trim().split('\n');
+    const renderedExamples = getSystemPrompt({ plugins, tracks }).split('# 예시\n')[1].trim().split('\n');
     for (const renderedExample of renderedExamples) {
       const commandJson = renderedExample.split(' → ')[1];
       expect(AgentAudioCommandBatchSchema.safeParse(JSON.parse(commandJson)).success).toBe(true);
@@ -158,6 +194,32 @@ describe('Agent 시스템 Prompt', () => {
     expect(prompt).toContain('SET_PLUGIN_PARAMETER');
   });
 
+  it('Plugin catalog와 Track의 설치 인스턴스·현재 값을 전달한다', () => {
+    const prompt = getSystemPrompt({ plugins, tracks });
+
+    expect(prompt).toContain('manifestId=builtin.channel-tools, name=Channel Tools, version=1.0.0');
+    expect(prompt).toContain('id=gain, name=Gain, type=number, default=1, range=0..2, step=0.01');
+    expect(prompt).toContain('id=bypass, name=Bypass, type=boolean, default=false');
+    expect(prompt).toContain('id=mode, name=Mode, type=enum, default=clean, options=[clean,warm]');
+    expect(prompt).toContain(
+      `instanceId=${PLUGIN_INSTANCE_ID}, manifestId=builtin.channel-tools, enabled=true, ` +
+        'parameters=[gain=0.75,bypass=false,mode="warm"]'
+    );
+  });
+
+  it('목록에 있는 Plugin과 Parameter만 사용하도록 제한한다', () => {
+    const prompt = getSystemPrompt({ plugins, tracks });
+
+    expect(prompt).not.toContain('현재 Agent 사용 금지');
+    expect(prompt).not.toContain('INSTALL_PLUGIN, REMOVE_PLUGIN, SET_PLUGIN_PARAMETER 요청은 []를 반환한다');
+    expect(prompt).toContain('INSTALL_PLUGIN은 위 catalog의 manifestId만 사용한다');
+    expect(prompt).toContain('instanceId는 생략해 실행기가 생성하게 한다');
+    expect(prompt).toContain('REMOVE_PLUGIN은 위 Track에 표시된 instanceId만 사용한다');
+    expect(prompt).toContain('SET_PLUGIN_PARAMETER는 해당 manifest에 표시된 Parameter 계약을 지킨다');
+    expect(prompt).toContain(`"manifestId":"builtin.channel-tools"`);
+    expect(prompt).toContain(`"instanceId":"${PLUGIN_INSTANCE_ID}"`);
+  });
+
   it('모든 시간 필드의 음수 금지 범위를 명시한다', () => {
     const prompt = getSystemPrompt({ tracks });
 
@@ -176,6 +238,7 @@ describe('Agent 시스템 Prompt', () => {
       (_, index): AgentPromptTrack => ({
         id: `${index.toString(16).padStart(8, '0')}-1111-4111-8111-111111111111`,
         index,
+        pluginInstances: [],
         regions: [
           {
             id: `${index.toString(16).padStart(8, '0')}-2222-4222-8222-222222222222`,
@@ -195,5 +258,30 @@ describe('Agent 시스템 Prompt', () => {
 
     expect(projectContext).toContain('Project context truncated');
     expect(projectContext.length).toBeLessThanOrEqual(AGENT_PROJECT_CONTEXT_MAX_CHARACTERS + 120);
+  });
+
+  it('큰 Plugin catalog 컨텍스트를 제한하고 잘림을 표시한다', () => {
+    const manyPlugins = Array.from(
+      { length: 40 },
+      (_, index): AgentPromptPlugin => ({
+        id: `vendor.effect-${index}`,
+        name: `Effect ${index}`,
+        version: '1.0.0',
+        parameters: Array.from({ length: 5 }, (__, parameterIndex) => ({
+          id: `gain-${parameterIndex}`,
+          name: `Gain ${parameterIndex}`,
+          type: 'number',
+          minValue: 0,
+          maxValue: 2,
+          defaultValue: 1,
+        })),
+      })
+    );
+
+    const prompt = getSystemPrompt({ plugins: manyPlugins });
+    const pluginContext = prompt.split('# 사용 가능한 Plugin\n')[1].split('\n\n# 지원 명령')[0];
+
+    expect(pluginContext).toContain('Plugin context truncated');
+    expect(pluginContext.length).toBeLessThanOrEqual(AGENT_PLUGIN_CONTEXT_MAX_CHARACTERS + 120);
   });
 });

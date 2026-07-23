@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createPluginManifestSummary, PluginManifestSchema, validatePluginManifest } from './plugin-manifest.schema';
+import {
+  createPluginCatalogEntry,
+  createPluginManifestSummary,
+  PluginManifestSchema,
+  validatePluginManifest,
+} from './plugin-manifest.schema';
 
 function createValidManifest() {
   return {
@@ -178,5 +183,41 @@ describe('Plugin Manifest 판독', () => {
 
     expect(summary).toEqual({ id: 'builtin.channel-tools', name: 'Channel Tools', version: '1.0.0' });
     expect(summary).not.toBe(parsedManifest);
+  });
+
+  it('Session catalog용 Parameter 계약에서 DSP와 UI 구현을 제외한다', () => {
+    const parsedManifest = PluginManifestSchema.parse(createValidManifest());
+
+    const catalogEntry = createPluginCatalogEntry(parsedManifest);
+
+    expect(catalogEntry).toEqual({
+      id: 'builtin.channel-tools',
+      name: 'Channel Tools',
+      version: '1.0.0',
+      parameters: [
+        {
+          id: 'gain',
+          name: 'Gain',
+          type: 'number',
+          minValue: 0,
+          maxValue: 2,
+          defaultValue: 1,
+          step: 0.01,
+        },
+        { id: 'bypass', name: 'Bypass', type: 'boolean', defaultValue: false },
+        {
+          id: 'mode',
+          name: 'Mode',
+          type: 'enum',
+          defaultValue: 'clean',
+          options: [
+            { value: 'clean', name: 'Clean' },
+            { value: 'warm', name: 'Warm' },
+          ],
+        },
+      ],
+    });
+    expect(catalogEntry).not.toHaveProperty('dsp');
+    expect(catalogEntry).not.toHaveProperty('ui');
   });
 });

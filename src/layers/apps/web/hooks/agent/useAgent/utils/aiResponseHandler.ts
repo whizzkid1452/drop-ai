@@ -1,13 +1,14 @@
 import { CommandBatchExecutionError, type CommandBatchExecutionResult } from '@/layers/commands/command-executor';
 import { parseAgentAudioCommandBatch, type AudioCommand } from '@/types/audioCommand.schema';
 import { queryToLLM as queryToLLM } from './queryToLLM';
-import type { AgentPromptTrack } from './getSystemPrompt';
+import type { AgentPromptPlugin, AgentPromptTrack } from './getSystemPrompt';
 import type { MLCEngine } from '@/types/webllm.types';
 import { trackAudioCommandExecuted } from '@/utils/analytics';
 
 export interface AIResponseHandlerDependencies {
   executeMany: (commands: readonly AudioCommand[]) => Promise<CommandBatchExecutionResult>;
   engine: MLCEngine;
+  plugins: readonly AgentPromptPlugin[];
   tracks: readonly AgentPromptTrack[];
   userInput: string;
 }
@@ -56,10 +57,11 @@ async function executeAgentCommands({ commands, executeMany }: ExecuteAgentComma
  * @returns 처리 결과 (메시지 및 상태)
  */
 export async function handleAIResponse(deps: AIResponseHandlerDependencies) {
-  const { engine, tracks, userInput, executeMany } = deps;
+  const { engine, plugins, tracks, userInput, executeMany } = deps;
 
   const { fullResponse, error: llmResponseError } = await queryToLLM({
     engine,
+    plugins,
     tracks,
     userInput,
   });

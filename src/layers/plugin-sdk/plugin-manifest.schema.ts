@@ -285,3 +285,15 @@ export function createPluginManifestSummary(manifest: PluginManifest) {
     version: manifest.version,
   };
 }
+
+export function createPluginCatalogEntry(manifest: PluginManifest) {
+  return {
+    ...createPluginManifestSummary(manifest),
+    parameters: manifest.parameters.map(parameter => {
+      if (parameter.type !== 'enum') {
+        return { ...parameter };
+      }
+      return { ...parameter, options: parameter.options.map(option => ({ ...option })) };
+    }),
+  };
+}

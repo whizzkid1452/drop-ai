@@ -326,6 +326,17 @@ describe('createApp', () => {
       id: 'builtin.gain',
       name: 'Gain',
       version: '1.0.0',
+      parameters: [
+        {
+          id: 'gain',
+          name: 'Gain',
+          type: 'number',
+          minValue: 0,
+          maxValue: 2,
+          defaultValue: 1,
+          step: 0.01,
+        },
+      ],
     });
     expect(app.session.getState().pluginCatalog.get('builtin.gain')).not.toHaveProperty('dsp');
     expect(app.session.getState().pluginValidationResults.get('builtin.gain')).toEqual({

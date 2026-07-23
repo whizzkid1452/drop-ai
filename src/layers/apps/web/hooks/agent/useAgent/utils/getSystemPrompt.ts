@@ -3,6 +3,9 @@ import {
   type AudioCommand,
   type AudioCommandType as AudioCommandName,
 } from '@/types/audioCommand.schema';
+import type { PluginCatalogEntry, PluginInstanceState, PluginParameterDefinition } from '@/types/plugin-state';
+
+export type AgentPromptPlugin = PluginCatalogEntry;
 
 export interface AgentPromptRegion {
   id: string;
@@ -17,6 +20,7 @@ export interface AgentPromptRegion {
 export interface AgentPromptTrack {
   id: string;
   index: number;
+  pluginInstances: readonly PluginInstanceState[];
   regions: readonly AgentPromptRegion[];
 }
 
@@ -30,7 +34,13 @@ interface AgentProjectContext {
   visibleTracks: readonly AgentPromptTrack[];
 }
 
+interface AgentPluginContext {
+  text: string;
+  visiblePlugins: readonly AgentPromptPlugin[];
+}
+
 export const AGENT_PROJECT_CONTEXT_MAX_CHARACTERS = 1600;
+export const AGENT_PLUGIN_CONTEXT_MAX_CHARACTERS = 1200;
 const EXAMPLE_PROJECT_ID = '99999999-9999-4999-8999-999999999999';
 
 const COMMAND_REFERENCE = {
@@ -52,11 +62,11 @@ const COMMAND_REFERENCE = {
   [AudioCommandType.SET_TRACK_SOLO]:
     '{"type":"SET_TRACK_SOLO","trackId":"<existing Track UUID>","soloed":<boolean>} - Track solo 변경',
   [AudioCommandType.INSTALL_PLUGIN]:
-    '{"type":"INSTALL_PLUGIN","trackId":"<existing Track UUID>","manifestId":"<listed manifest ID>"} - Plugin 설치. 현재 Agent 사용 금지',
+    '{"type":"INSTALL_PLUGIN","trackId":"<existing Track UUID>","manifestId":"<listed manifest ID>"} - Plugin 설치',
   [AudioCommandType.REMOVE_PLUGIN]:
-    '{"type":"REMOVE_PLUGIN","trackId":"<existing Track UUID>","instanceId":"<existing Plugin instance UUID>"} - Plugin 제거. 현재 Agent 사용 금지',
+    '{"type":"REMOVE_PLUGIN","trackId":"<existing Track UUID>","instanceId":"<existing Plugin instance UUID>"} - Plugin 제거',
   [AudioCommandType.SET_PLUGIN_PARAMETER]:
-    '{"type":"SET_PLUGIN_PARAMETER","trackId":"<existing Track UUID>","instanceId":"<existing Plugin instance UUID>","parameterId":"<listed Parameter ID>","value":<boolean|number|string>} - Plugin Parameter 변경. 현재 Agent 사용 금지',
+    '{"type":"SET_PLUGIN_PARAMETER","trackId":"<existing Track UUID>","instanceId":"<existing Plugin instance UUID>","parameterId":"<listed Parameter ID>","value":<boolean|number|string>} - Plugin Parameter 변경',
   [AudioCommandType.LOAD_REGION]:
     '{"type":"LOAD_REGION","trackId":"<existing Track UUID>","regionId":"<new UUID optional>","sourceId":"<listed Source UUID>","startTime":<seconds >= 0>,"startOffset":<seconds >= 0 optional>,"duration":<seconds >= 0 optional>} - Region 추가. Agent 복제에서는 duration > 0',
   [AudioCommandType.UNLOAD_REGION]:
@@ -122,6 +132,16 @@ export const AGENT_PROMPT_EXAMPLES = [
   },
 ] satisfies readonly AgentPromptExample[];
 
+function renderPluginInstance(instance: PluginInstanceState, index: number): string {
+  const parameters = instance.parameters
+    .map(parameter => `${parameter.id}=${JSON.stringify(parameter.value)}`)
+    .join(',');
+  return (
+    `  Plugin ${index + 1}: instanceId=${instance.id}, manifestId=${instance.manifestSummary.id}, ` +
+    `enabled=${instance.isEnabled}, parameters=[${parameters}]`
+  );
+}
+
 function createProjectContext(tracks: readonly AgentPromptTrack[]): AgentProjectContext {
   if (tracks.length === 0) {
     return { text: '(No tracks)', visibleTracks: [] };
@@ -130,7 +150,9 @@ function createProjectContext(tracks: readonly AgentPromptTrack[]): AgentProject
   const lines: string[] = [];
   const visibleTracks: AgentPromptTrack[] = [];
   let characterCount = 0;
+  let visiblePluginInstanceCount = 0;
   let visibleRegionCount = 0;
+  const totalPluginInstanceCount = tracks.reduce((count, track) => count + track.pluginInstances.length, 0);
   const totalRegionCount = tracks.reduce((count, track) => count + track.regions.length, 0);
 
   const tryAddLine = (line: string) => {
@@ -149,35 +171,115 @@ function createProjectContext(tracks: readonly AgentPromptTrack[]): AgentProject
       break;
     }
 
-    const visibleRegions: AgentPromptRegion[] = [];
-    for (const [index, region] of track.regions.entries()) {
-      const regionLine =
-        `  Region ${index + 1}: id=${region.id}, startTime=${region.startTime}, endTime=${region.endTime}, ` +
-        `sourceStartTime=${region.sourceStartTime}, duration=${region.duration}, ` +
-        `sourceId=${region.sourceId}, ` +
-        `source=${region.hasAudioSource ? 'available' : 'unavailable'}`;
-      if (!tryAddLine(regionLine)) {
+    const visiblePluginInstances: PluginInstanceState[] = [];
+    for (const [index, instance] of track.pluginInstances.entries()) {
+      if (!tryAddLine(renderPluginInstance(instance, index))) {
         break;
       }
-
-      visibleRegions.push(region);
-      visibleRegionCount += 1;
+      visiblePluginInstances.push(instance);
+      visiblePluginInstanceCount += 1;
     }
-    visibleTracks.push({ ...track, regions: visibleRegions });
 
-    if (visibleRegions.length < track.regions.length) {
+    const visibleRegions: AgentPromptRegion[] = [];
+    if (visiblePluginInstances.length === track.pluginInstances.length) {
+      for (const [index, region] of track.regions.entries()) {
+        const regionLine =
+          `  Region ${index + 1}: id=${region.id}, startTime=${region.startTime}, endTime=${region.endTime}, ` +
+          `sourceStartTime=${region.sourceStartTime}, duration=${region.duration}, ` +
+          `sourceId=${region.sourceId}, ` +
+          `source=${region.hasAudioSource ? 'available' : 'unavailable'}`;
+        if (!tryAddLine(regionLine)) {
+          break;
+        }
+
+        visibleRegions.push(region);
+        visibleRegionCount += 1;
+      }
+    }
+    visibleTracks.push({ ...track, pluginInstances: visiblePluginInstances, regions: visibleRegions });
+
+    if (visiblePluginInstances.length < track.pluginInstances.length || visibleRegions.length < track.regions.length) {
       break;
     }
   }
 
-  if (visibleTracks.length < tracks.length || visibleRegionCount < totalRegionCount) {
+  if (
+    visibleTracks.length < tracks.length ||
+    visiblePluginInstanceCount < totalPluginInstanceCount ||
+    visibleRegionCount < totalRegionCount
+  ) {
     lines.push(
       `(Project context truncated: shown ${visibleTracks.length}/${tracks.length} Tracks, ` +
+        `${visiblePluginInstanceCount}/${totalPluginInstanceCount} Plugin instances, ` +
         `${visibleRegionCount}/${totalRegionCount} Regions)`
     );
   }
 
   return { text: lines.join('\n'), visibleTracks };
+}
+
+function renderPluginParameter(parameter: PluginParameterDefinition, index: number): string {
+  const prefix = `  Parameter ${index + 1}: id=${parameter.id}, name=${parameter.name}, type=${parameter.type}`;
+  if (parameter.type === 'number') {
+    const step = parameter.step === undefined ? '' : `, step=${parameter.step}`;
+    return `${prefix}, default=${parameter.defaultValue}, range=${parameter.minValue}..${parameter.maxValue}` + step;
+  }
+  if (parameter.type === 'boolean') {
+    return `${prefix}, default=${parameter.defaultValue}`;
+  }
+  return (
+    `${prefix}, default=${parameter.defaultValue}, ` +
+    `options=[${parameter.options.map(option => option.value).join(',')}]`
+  );
+}
+
+function createPluginContext(plugins: readonly AgentPromptPlugin[]): AgentPluginContext {
+  if (plugins.length === 0) {
+    return { text: '(No Plugin manifests)', visiblePlugins: [] };
+  }
+
+  const lines: string[] = [];
+  const visiblePlugins: AgentPromptPlugin[] = [];
+  let characterCount = 0;
+  let visibleParameterCount = 0;
+  const totalParameterCount = plugins.reduce((count, plugin) => count + plugin.parameters.length, 0);
+  const tryAddLine = (line: string) => {
+    const separatorLength = lines.length === 0 ? 0 : 1;
+    if (characterCount + separatorLength + line.length > AGENT_PLUGIN_CONTEXT_MAX_CHARACTERS) {
+      return false;
+    }
+    lines.push(line);
+    characterCount += separatorLength + line.length;
+    return true;
+  };
+
+  for (const [pluginIndex, plugin] of plugins.entries()) {
+    if (
+      !tryAddLine(`Plugin ${pluginIndex + 1}: manifestId=${plugin.id}, name=${plugin.name}, version=${plugin.version}`)
+    ) {
+      break;
+    }
+    const visibleParameters: PluginParameterDefinition[] = [];
+    for (const [parameterIndex, parameter] of plugin.parameters.entries()) {
+      if (!tryAddLine(renderPluginParameter(parameter, parameterIndex))) {
+        break;
+      }
+      visibleParameters.push(parameter);
+      visibleParameterCount += 1;
+    }
+    visiblePlugins.push({ ...plugin, parameters: visibleParameters });
+    if (visibleParameters.length < plugin.parameters.length) {
+      break;
+    }
+  }
+
+  if (visiblePlugins.length < plugins.length || visibleParameterCount < totalParameterCount) {
+    lines.push(
+      `(Plugin context truncated: shown ${visiblePlugins.length}/${plugins.length} manifests, ` +
+        `${visibleParameterCount}/${totalParameterCount} Parameters)`
+    );
+  }
+  return { text: lines.join('\n'), visiblePlugins };
 }
 
 function renderCommandReference(): string {
@@ -233,20 +335,104 @@ function createTargetExamples(tracks: readonly AgentPromptTrack[]): AgentPromptE
   return examples;
 }
 
-function renderExamples(tracks: readonly AgentPromptTrack[]): string {
-  return [...AGENT_PROMPT_EXAMPLES, ...createTargetExamples(tracks)]
+function createPluginExamples(
+  tracks: readonly AgentPromptTrack[],
+  plugins: readonly AgentPromptPlugin[]
+): AgentPromptExample[] {
+  const firstTrack = tracks[0];
+  const firstPlugin = plugins[0];
+  if (!firstTrack || !firstPlugin) {
+    return [];
+  }
+
+  const examples: AgentPromptExample[] = [
+    {
+      request: `첫 번째 트랙에 ${firstPlugin.name} Plugin을 설치해줘`,
+      commands: [
+        {
+          type: AudioCommandType.INSTALL_PLUGIN,
+          trackId: firstTrack.id,
+          manifestId: firstPlugin.id,
+        },
+      ],
+    },
+  ];
+  const trackWithInstance = tracks.find(track => track.pluginInstances.length > 0);
+  const instance = trackWithInstance?.pluginInstances[0];
+  if (!trackWithInstance || !instance) {
+    return examples;
+  }
+
+  examples.push({
+    request: `Plugin instance ${instance.id}를 제거해줘`,
+    commands: [
+      {
+        type: AudioCommandType.REMOVE_PLUGIN,
+        trackId: trackWithInstance.id,
+        instanceId: instance.id,
+      },
+    ],
+  });
+  const manifest = plugins.find(plugin => plugin.id === instance.manifestSummary.id);
+  const parameter = manifest?.parameters[0];
+  if (!parameter) {
+    return examples;
+  }
+  examples.push({
+    request: `${instance.id} Plugin의 ${parameter.name} 값을 기본값으로 바꿔줘`,
+    commands: [
+      {
+        type: AudioCommandType.SET_PLUGIN_PARAMETER,
+        trackId: trackWithInstance.id,
+        instanceId: instance.id,
+        parameterId: parameter.id,
+        value: parameter.defaultValue,
+      },
+    ],
+  });
+  return examples;
+}
+
+function renderExamples(tracks: readonly AgentPromptTrack[], plugins: readonly AgentPromptPlugin[]): string {
+  return [...AGENT_PROMPT_EXAMPLES, ...createTargetExamples(tracks), ...createPluginExamples(tracks, plugins)]
     .map(example => `"${example.request}" → ${JSON.stringify(example.commands)}`)
     .join('\n');
 }
 
-export function getSystemPrompt({ tracks = [] }: { tracks?: readonly AgentPromptTrack[] }) {
+function createPluginSafetyRules(projectContext: AgentProjectContext, pluginContext: AgentPluginContext): string {
+  const hasVisiblePluginInstance = projectContext.visibleTracks.some(track => track.pluginInstances.length > 0);
+  if (pluginContext.visiblePlugins.length > 0) {
+    return `14. INSTALL_PLUGIN은 위 catalog의 manifestId만 사용한다. instanceId는 생략해 실행기가 생성하게 한다.
+15. REMOVE_PLUGIN은 위 Track에 표시된 instanceId만 사용한다. 그 instance가 표시된 trackId를 함께 쓴다.
+16. SET_PLUGIN_PARAMETER는 해당 manifest에 표시된 Parameter 계약을 지킨다. number는 범위 안의 number, boolean은 boolean, enum은 options 중 string을 쓴다.
+17. 목록에 없는 manifestId, instanceId, Parameter ID나 값을 만들거나 추측하지 않는다.`;
+  }
+  if (hasVisiblePluginInstance) {
+    return `14. Plugin manifest 목록이 없으므로 INSTALL_PLUGIN과 SET_PLUGIN_PARAMETER 요청은 []를 반환한다.
+15. REMOVE_PLUGIN은 위 Track에 표시된 instanceId만 사용한다. 그 instance가 표시된 trackId를 함께 쓴다.`;
+  }
+  return '14. 현재 Plugin manifest와 instance 목록은 제공되지 않는다. INSTALL_PLUGIN, REMOVE_PLUGIN, SET_PLUGIN_PARAMETER 요청은 []를 반환한다.';
+}
+
+export function getSystemPrompt({
+  plugins = [],
+  tracks = [],
+}: {
+  plugins?: readonly AgentPromptPlugin[];
+  tracks?: readonly AgentPromptTrack[];
+}) {
   const projectContext = createProjectContext(tracks);
+  const pluginContext = createPluginContext(plugins);
+  const pluginSafetyRules = createPluginSafetyRules(projectContext, pluginContext);
 
   return `# 역할
 사용자 요청을 DAW AudioCommand JSON 배열로 변환한다.
 
 # 현재 Track과 Region
 ${projectContext.text}
+
+# 사용 가능한 Plugin
+${pluginContext.text}
 
 # 지원 명령
 ${renderCommandReference()}
@@ -265,10 +451,10 @@ ${renderCommandReference()}
 11. 편집과 저장을 함께 요청하면 SAVE_PROJECT를 해당 편집 명령 뒤에 둔다.
 12. LOAD_PROJECT는 사용자가 Project UUID를 명시했을 때만 사용한다. Project UUID를 임의로 만들지 않고, 다른 명령과 같은 배열에 넣지 않는다.
 13. UNDO와 REDO는 사용자가 명시적으로 요청했을 때만 사용한다. UNDO와 REDO는 다른 명령과 같은 배열에 넣지 않는다.
-14. 현재 Plugin manifest와 instance 목록은 제공되지 않는다. INSTALL_PLUGIN, REMOVE_PLUGIN, SET_PLUGIN_PARAMETER 요청은 []를 반환한다.
-15. 요청을 안전하게 실행할 정보가 부족하면 []를 반환한다. 지원하지 않는 요청도 []를 반환한다.
+${pluginSafetyRules}
+18. 요청을 안전하게 실행할 정보가 부족하면 []를 반환한다. 지원하지 않는 요청도 []를 반환한다.
 
 # 예시
-${renderExamples(projectContext.visibleTracks)}
+${renderExamples(projectContext.visibleTracks, pluginContext.visiblePlugins)}
 `;
 }

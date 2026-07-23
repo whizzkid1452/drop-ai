@@ -23,7 +23,7 @@ import { InMemoryProjectRepository } from '../project-repository/in-memory-proje
 import { IndexedDbProjectRepository } from '../project-repository/indexed-db-project-repository';
 import type { IPluginHost } from '../plugin-host/i-plugin-host';
 import { PluginHost } from '../plugin-host/plugin-host';
-import { createPluginManifestSummary, type PluginManifest } from '../plugin-sdk/plugin-manifest.schema';
+import { createPluginCatalogEntry, type PluginManifest } from '../plugin-sdk/plugin-manifest.schema';
 import { gainPluginManifest } from '../plugins/builtin/gain/gain-plugin-manifest';
 import {
   resolveAudioRuntimeCapabilities,
@@ -100,7 +100,7 @@ function registerInitialPluginManifests({
 }: InitialPluginRegistrationOptions): void {
   const registeredManifests = pluginManifests.map(manifest => pluginHost.registerManifest(manifest));
   session.getState().replacePluginCatalogState({
-    manifests: registeredManifests.map(createPluginManifestSummary),
+    manifests: registeredManifests.map(createPluginCatalogEntry),
     validationResults: registeredManifests.map(createValidManifestResult),
   });
 }

@@ -107,15 +107,42 @@ describe('Session Store - Phase 1 검증', () => {
     }
 
     it('Plugin catalog 입력과 Session이 객체 참조를 공유하지 않는다', () => {
-      const manifest = { id: 'builtin.gain', name: 'Gain', version: '1.0.0' };
+      const manifest = {
+        id: 'builtin.gain',
+        name: 'Gain',
+        version: '1.0.0',
+        parameters: [
+          {
+            id: 'gain',
+            name: 'Gain',
+            type: 'number' as const,
+            minValue: 0,
+            maxValue: 2,
+            defaultValue: 1,
+            step: 0.01,
+          },
+        ],
+      };
 
       store.getState().replacePluginCatalogState({ manifests: [manifest], validationResults: [] });
       manifest.name = '외부 변경';
+      manifest.parameters[0].name = '외부 Parameter 변경';
 
       expect(store.getState().pluginCatalog.get('builtin.gain')).toEqual({
         id: 'builtin.gain',
         name: 'Gain',
         version: '1.0.0',
+        parameters: [
+          {
+            id: 'gain',
+            name: 'Gain',
+            type: 'number',
+            minValue: 0,
+            maxValue: 2,
+            defaultValue: 1,
+            step: 0.01,
+          },
+        ],
       });
     });
 
@@ -140,7 +167,7 @@ describe('Session Store - Phase 1 검증', () => {
       store.subscribe(listener);
 
       store.getState().replacePluginCatalogState({
-        manifests: [{ id: 'builtin.gain', name: 'Gain', version: '1.0.0' }],
+        manifests: [{ id: 'builtin.gain', name: 'Gain', version: '1.0.0', parameters: [] }],
         validationResults: [{ manifestId: 'builtin.gain', status: 'valid', issues: [] }],
       });
 

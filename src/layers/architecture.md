@@ -40,9 +40,10 @@ Agent Prompt는 현재 AudioCommand 전체의 필드와 범위를 설명하고 �
 사용 가능 여부를 전달한다. 예시 출력은 엄격한 Agent Schema로 테스트한다. 앱이 예약한 새 ID와 허용 파일 목록이
 아직 없으므로 Agent는 `ADD_TRACK`을 만들지 않는다. `LOAD_REGION`은 기존 Track의 첫 등록 Source Region을 재사용할 수
 있을 때만 제한적으로 사용한다. 등록 Source Region은 목록의 실제 `sourceId`를 사용한다. Agent 명령의 `url` 필드는
-금지하며 `sourceId`를 만들거나 추측하지 않는다. Plugin 명령 Schema는 공유하지만, Prompt에 manifest·instance·Parameter
-목록을 아직 제공하지 않으므로 Agent의 Plugin 명령 생성은 막는다. 프로젝트 컨텍스트는 모델 입력 한도를 넘길 위험을
-줄이도록 길이를 제한하고 잘림 여부를 표시한다.
+금지하며 `sourceId`를 만들거나 추측하지 않는다. Agent Prompt는 Session이 공개한 Plugin catalog의 Parameter 계약과 Track별
+instance·현재 값을 전달한다. Agent는 목록의 manifest·instance·Parameter만 사용하며 number 범위, boolean type, enum option을
+지켜야 한다. catalog가 없으면 설치와 Parameter 변경을 막고, instance도 없으면 Plugin 명령 전체를 막는다. 프로젝트와 Plugin
+컨텍스트는 모델 입력 한도를 넘길 위험을 줄이도록 각각 길이를 제한하고 잘림 여부를 표시한다.
 
 현재 Region의 `startTime`과 `endTime`은 절대 초 단위다. 음악 시간(musical time) 모델을 도입하기 전까지 Session의
 tempo 변경은 AudioEngine의 Transport BPM과 Region 예약을 변경하지 않는다.
@@ -61,9 +62,10 @@ Session과 AudioCommand에는 저장하지 않는다. API 존재 확인은 실�
 Session의 Plugin 런타임 상태는 Track별 Plugin 인스턴스, Plugin 카탈로그, manifest 검증 결과, 런타임 로그로 나눈다.
 Plugin 인스턴스는 ID, manifest 요약, 활성 여부, boolean·number·string 매개변수 값을 가진다. 카탈로그·검증 결과·로그
 Action과 Plugin 설치·제거·Parameter 변경 Action은 입력 객체를 복제해 저장하며, 프로젝트 상태 교체 시 Track의 Plugin
-인스턴스도 깊은 복사한다. Composition Root는 시작할 때 내장 Gain manifest를 PluginHost에 등록하고, 공개해도 되는 요약과
-검증 결과만 Session에 한 번의 상태 변경으로 반영한다. 이 등록은 manifest 선언을 카탈로그에 추가하는 동작이며
-AudioWorklet 모듈을 불러오지 않는다.
+인스턴스도 깊은 복사한다. Composition Root는 시작할 때 내장 Gain manifest를 PluginHost에 등록하고, Apps에 공개해도 되는
+ID·이름·버전·Parameter 계약과 검증 결과만 Session에 한 번의 상태 변경으로 반영한다. Parameter 계약은 number 범위·step,
+boolean 기본값, enum option을 포함하지만 DSP와 UI 구현은 포함하지 않는다. 이 등록은 manifest 선언을 카탈로그에 추가하는
+동작이며 AudioWorklet 모듈을 불러오지 않는다.
 
 Plugin SDK는 다른 프로젝트 계층을 import하지 않는 선언 계약이다. manifest v1은 namespaced ID, Semantic Versioning 형식,
 effect 유형, number·boolean·enum 매개변수, AudioWorklet 모듈 상대 경로, slider·toggle·select UI control만 허용한다.
@@ -88,7 +90,8 @@ Gain Factory를 등록한다. AudioEngine은 Plugin을 설치 순서대로 `Trac
 오디오 작업을 거부하고 다음 호출에서 복원을 먼저 재시도한다. `INSTALL_PLUGIN`, `REMOVE_PLUGIN`, `SET_PLUGIN_PARAMETER`는
 CommandExecutor와 PluginController를 거쳐 이 API를 호출한다. Web JSON CLI는 이 공통 Schema를 사용할 수 있다. 이름 기반
 내부 CLI도 `plugin install`, `plugin remove`, `plugin set`을 같은 CommandExecutor에 전달한다. `plugin set` 값은
-`number`·`boolean`·`string` type을 명시해 변환한다. Agent용 Plugin 컨텍스트와 Plugin UI는 아직 제공하지 않는다.
+`number`·`boolean`·`string` type을 명시해 변환한다. Agent도 제한된 Plugin catalog와 Track instance를 Prompt로 받아 같은
+CommandExecutor 경로를 사용한다. Plugin UI는 아직 제공하지 않는다.
 
 영구 저장 형식은 Shared의 `ProjectDocumentSchema`로 검증한다. v1은 Track·Region과 오디오 Source 메타데이터를
 절대 초 단위로 저장하고, Region은 임시 URL이 아닌 안정적인 Source ID를 참조한다. `File`, `Blob`, Object URL,

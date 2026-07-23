@@ -9,12 +9,36 @@ import { trackAIResponseReceived, trackChatMessageSent, trackPromptImprovementSe
 import type { AudioCommand } from '@/types/audioCommand.schema';
 import type { IAudioSourceResolver } from '@/layers/audio-source-registry/i-audio-source-registry';
 import type { RegionState, TrackState } from '@/layers/session/session';
-import type { AgentPromptTrack } from './utils/getSystemPrompt';
+import type { PluginCatalogEntry, PluginInstanceState } from '@/types/plugin-state';
+import type { AgentPromptPlugin, AgentPromptTrack } from './utils/getSystemPrompt';
 import { resolveAgentRunStatus } from './utils/resolve-agent-run-status';
 
 function hasAvailableAudioSource(region: RegionState, audioSourceResolver: IAudioSourceResolver): boolean {
   const audioSource = audioSourceResolver.resolve(region.sourceId);
   return audioSource?.regionIds.includes(region.id) ?? false;
+}
+
+function clonePluginInstance(instance: PluginInstanceState): PluginInstanceState {
+  return {
+    ...instance,
+    manifestSummary: { ...instance.manifestSummary },
+    parameters: instance.parameters.map(parameter => ({ ...parameter })),
+  };
+}
+
+function clonePluginCatalogEntry(plugin: PluginCatalogEntry): AgentPromptPlugin {
+  return {
+    ...plugin,
+    parameters: plugin.parameters.map(parameter =>
+      parameter.type === 'enum'
+        ? { ...parameter, options: parameter.options.map(option => ({ ...option })) }
+        : { ...parameter }
+    ),
+  };
+}
+
+export function createAgentPromptPlugins(pluginCatalog: ReadonlyMap<string, PluginCatalogEntry>): AgentPromptPlugin[] {
+  return Array.from(pluginCatalog.values(), clonePluginCatalogEntry);
 }
 
 export function createAgentPromptTracks(
@@ -24,6 +48,7 @@ export function createAgentPromptTracks(
   return Array.from(trackMap.values()).map((track, index) => ({
     id: track.id,
     index,
+    pluginInstances: track.pluginInstances.map(clonePluginInstance),
     regions: track.regions.map(region => ({
       id: region.id,
       startTime: region.startTime,
@@ -40,6 +65,7 @@ export function useAgent() {
   const { engine } = useWebLLM();
   const audioSourceResolver = useAudioSourceResolver();
   const trackMap = useSession(state => state.tracks);
+  const pluginCatalog = useSession(state => state.pluginCatalog);
   const messages = useSession(state => state.agentMessages);
   const status = useSession(state => state.agentStatus);
   const addAgentMessage = useSession(state => state.addAgentMessage);
@@ -50,6 +76,7 @@ export function useAgent() {
   const commandExecutor = useCommandExecutor();
 
   const tracks = useMemo(() => createAgentPromptTracks(trackMap, audioSourceResolver), [audioSourceResolver, trackMap]);
+  const plugins = useMemo(() => createAgentPromptPlugins(pluginCatalog), [pluginCatalog]);
 
   const executeMany = useCallback(
     (commands: readonly AudioCommand[]) => commandExecutor.executeMany(commands),
@@ -105,6 +132,7 @@ export function useAgent() {
         commandOutputs,
       } = await handleAIResponse({
         engine,
+        plugins,
         tracks,
         userInput: trimmedContent,
         executeMany,

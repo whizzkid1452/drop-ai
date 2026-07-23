@@ -3,9 +3,9 @@ import type { RegionStatus, TrackStatus } from '@/types/statusTypes';
 import type { AgentRunStatus, AgentStatus, Message } from '@/types/agent';
 import type { ProjectMetadata } from '../shared/types/project-document.schema';
 import type {
+  PluginCatalogEntry,
   PluginInstanceState,
   PluginLogEntry,
-  PluginManifestSummary,
   PluginParameterState,
   PluginValidationResult,
 } from '../shared/types/plugin-state';
@@ -48,7 +48,7 @@ export interface ProjectSessionState {
 }
 
 interface PluginCatalogStateInput {
-  readonly manifests: readonly PluginManifestSummary[];
+  readonly manifests: readonly PluginCatalogEntry[];
   readonly validationResults: readonly PluginValidationResult[];
 }
 
@@ -84,7 +84,7 @@ export interface SessionState {
   exportStartTime: number | null;
   exportEndTime: number | null;
   tracks: Map<string, TrackState>;
-  pluginCatalog: Map<string, PluginManifestSummary>;
+  pluginCatalog: Map<string, PluginCatalogEntry>;
   pluginValidationResults: Map<string, PluginValidationResult>;
   pluginLogs: PluginLogEntry[];
 
@@ -300,8 +300,20 @@ function updateTrackPluginInstances({
   return { tracks };
 }
 
-function createPluginCatalog(manifests: readonly PluginManifestSummary[]): Map<string, PluginManifestSummary> {
-  return new Map(manifests.map(manifest => [manifest.id, { ...manifest }]));
+function createPluginCatalog(manifests: readonly PluginCatalogEntry[]): Map<string, PluginCatalogEntry> {
+  return new Map(
+    manifests.map(manifest => [
+      manifest.id,
+      {
+        ...manifest,
+        parameters: manifest.parameters.map(parameter =>
+          parameter.type === 'enum'
+            ? { ...parameter, options: parameter.options.map(option => ({ ...option })) }
+            : { ...parameter }
+        ),
+      },
+    ])
+  );
 }
 
 function createPluginValidationResults(

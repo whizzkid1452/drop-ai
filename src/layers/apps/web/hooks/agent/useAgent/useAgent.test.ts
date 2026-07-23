@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { IAudioSourceResolver, RuntimeAudioSource } from '@/layers/audio-source-registry/i-audio-source-registry';
 import type { TrackState } from '@/layers/session/session';
-import { createAgentPromptTracks } from './useAgent';
+import { createAgentPromptPlugins, createAgentPromptTracks } from './useAgent';
 
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const ATTACHED_REGION_ID = '22222222-2222-4222-8222-222222222222';
@@ -95,5 +95,56 @@ describe('Agent 프로젝트 컨텍스트', () => {
       expect.objectContaining({ id: MISSING_REGION_ID, sourceId: MISSING_SOURCE_ID, hasAudioSource: false }),
     ]);
     expect(resolve).toHaveBeenCalledTimes(3);
+  });
+
+  it('Track에 설치된 Plugin instance와 Parameter 값을 복제한다', () => {
+    const trackMap = createTrackMap();
+    const track = trackMap.get(TRACK_ID);
+    if (!track) {
+      throw new Error('테스트 Track이 없습니다.');
+    }
+    track.pluginInstances.push({
+      id: '55555555-5555-4555-8555-555555555555',
+      manifestSummary: { id: 'builtin.gain', name: 'Gain', version: '1.0.0' },
+      isEnabled: true,
+      parameters: [{ id: 'gain', value: 0.75 }],
+    });
+    const resolver: IAudioSourceResolver = { resolve: () => null, listCommittedMetadata: () => [] };
+
+    const promptTracks = createAgentPromptTracks(trackMap, resolver);
+
+    expect(promptTracks[0].pluginInstances).toEqual(track.pluginInstances);
+    expect(promptTracks[0].pluginInstances).not.toBe(track.pluginInstances);
+    expect(promptTracks[0].pluginInstances[0].parameters).not.toBe(track.pluginInstances[0].parameters);
+  });
+
+  it('Session Plugin catalog를 Agent용 독립 객체로 복제한다', () => {
+    const pluginCatalog = new Map([
+      [
+        'builtin.gain',
+        {
+          id: 'builtin.gain',
+          name: 'Gain',
+          version: '1.0.0',
+          parameters: [
+            {
+              id: 'gain',
+              name: 'Gain',
+              type: 'number' as const,
+              minValue: 0,
+              maxValue: 2,
+              defaultValue: 1,
+              step: 0.01,
+            },
+          ],
+        },
+      ],
+    ]);
+
+    const promptPlugins = createAgentPromptPlugins(pluginCatalog);
+
+    expect(promptPlugins).toEqual([pluginCatalog.get('builtin.gain')]);
+    expect(promptPlugins[0]).not.toBe(pluginCatalog.get('builtin.gain'));
+    expect(promptPlugins[0].parameters).not.toBe(pluginCatalog.get('builtin.gain')?.parameters);
   });
 });

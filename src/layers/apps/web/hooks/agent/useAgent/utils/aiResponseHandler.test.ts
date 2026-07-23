@@ -21,7 +21,7 @@ const executeMany = vi.fn(
 
 function handleResponse(fullResponse: string) {
   mocks.queryToLLM.mockResolvedValueOnce({ fullResponse, error: null });
-  return handleAIResponse({ engine, tracks: [], userInput: '요청', executeMany });
+  return handleAIResponse({ engine, plugins: [], tracks: [], userInput: '요청', executeMany });
 }
 
 describe('Agent 응답 명령 검증', () => {
@@ -35,6 +35,22 @@ describe('Agent 응답 명령 검증', () => {
     expect(executeMany).not.toHaveBeenCalled();
     expect(result.status).toBe('error');
     expect(result.parsedCommands).toBeNull();
+  });
+
+  it('Plugin context를 LLM 요청에 그대로 전달한다', async () => {
+    const plugins = [
+      {
+        id: 'builtin.gain',
+        name: 'Gain',
+        version: '1.0.0',
+        parameters: [{ id: 'gain', name: 'Gain', type: 'number' as const, minValue: 0, maxValue: 2, defaultValue: 1 }],
+      },
+    ];
+    mocks.queryToLLM.mockResolvedValueOnce({ fullResponse: '[]', error: null });
+
+    await handleAIResponse({ engine, plugins, tracks: [], userInput: 'Plugin 추가', executeMany });
+
+    expect(mocks.queryToLLM).toHaveBeenCalledWith({ engine, plugins, tracks: [], userInput: 'Plugin 추가' });
   });
 
   it('추가 필드가 있는 명령을 실행하지 않는다', async () => {

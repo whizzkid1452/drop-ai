@@ -82,9 +82,10 @@ Agent 메시지와 업로드 파일 같은 앱 워크플로 상태는 Session Ac
 
 Session은 Plugin 기반 상태도 보관한다. Track에는 Plugin 인스턴스와 매개변수가 있고, 공통 상태에는 Plugin 카탈로그,
 manifest 검증 결과, 런타임 로그가 있다. 카탈로그·검증 결과·로그 Action, Plugin 설치·제거·Parameter 변경 Action과 프로젝트
-상태 교체는 입력 객체의 필요한 중첩 값까지 복제한다. `createApp`은 내장 Gain manifest의 공개 요약과 검증 결과를 한 번의
-Session 상태 변경으로 초기화한다. 이 동작은 카탈로그 선언만 등록하며 AudioWorklet 모듈을 불러오거나 오디오 효과를
-연결하지 않는다.
+상태 교체는 입력 객체의 필요한 중첩 값까지 복제한다. `createApp`은 내장 Gain manifest의 ID·이름·버전·Parameter 계약과
+검증 결과를 한 번의 Session 상태 변경으로 초기화한다. 공개 Parameter 계약은 number 범위·step, boolean 기본값, enum
+option을 포함하지만 DSP와 UI 구현은 포함하지 않는다. 이 동작은 카탈로그 선언만 등록하며 AudioWorklet 모듈을 불러오거나
+오디오 효과를 연결하지 않는다.
 
 Plugin SDK는 manifest를 선언하는 독립 계약이다. v1은 effect 유형과 number·boolean·enum Parameter를 지원하고,
 slider·toggle·select control이 실제 Parameter ID와 맞는 type을 참조하는지 검사한다. 알 수 없는 필드, 중복 ID, 범위 밖
@@ -106,7 +107,8 @@ runtime을 만든다. 초기값과 변경값의 type·유한성·범위를 검�
 재시도한다. `INSTALL_PLUGIN`, `REMOVE_PLUGIN`, `SET_PLUGIN_PARAMETER`는 CommandExecutor와 PluginController를 거쳐 이 API를
 호출한다. Web JSON CLI는 이 공통 Schema를 사용할 수 있다. 이름 기반 내부 CLI도 `plugin install`, `plugin remove`,
 `plugin set`을 같은 CommandExecutor에 전달한다. `plugin set` 값은 `number`·`boolean`·`string` type을 명시해 변환한다.
-Agent용 Plugin 컨텍스트와 Plugin UI는 아직 제공하지 않는다.
+Agent도 제한된 Plugin catalog와 Track instance를 Prompt로 받아 같은 CommandExecutor 경로를 사용한다. Plugin UI는 아직
+제공하지 않는다.
 
 검증된 명령은 CommandExecutor의 단일 대기열에서 접수 순서대로 하나씩 실행한다. `executeMany`는 묶음 전체를
 먼저 검증한 후, 다른 요청이 끼어들지 않게 순서대로 실행한다. 실행 중 첫 오류가 나면 남은 명령은 실행하지
@@ -134,9 +136,10 @@ Agent Prompt는 AudioCommand 전체의 정확한 필드와 범위를 안내한�
 범위, 오디오 소스 사용 가능 여부도 함께 전달하며, Prompt 예시는 엄격한 Agent Schema를 통과해야 한다. 아직 앱이
 예약한 새 ID와 허용 파일 목록을 제공하지 않으므로 Agent의 `ADD_TRACK` 생성은 막는다. `LOAD_REGION`은 기존
 Track의 첫 등록 Source Region을 재사용하는 경우에만 제한적으로 허용한다. 등록 Source Region은 목록의 실제
-`sourceId`만 사용한다. Agent 명령의 `url` 필드는 금지하며 Object URL을 노출하지 않는다. Plugin 명령 Schema는 공유하지만,
-Prompt에 manifest·instance·Parameter 목록을 아직 제공하지 않으므로 Agent의 Plugin 명령 생성은 막는다. 프로젝트 컨텍스트는
-모델 입력 한도를 넘길 위험을 줄이도록 길이를 제한하고 잘림 여부를 표시한다.
+`sourceId`만 사용한다. Agent 명령의 `url` 필드는 금지하며 Object URL을 노출하지 않는다. Agent Prompt는 Session의 제한된
+Plugin catalog와 Track별 instance·현재 Parameter 값을 전달한다. Agent는 표시된 ID와 Parameter type·범위·option만 사용한다.
+catalog가 없으면 설치와 Parameter 변경을 막고, instance도 없으면 Plugin 명령 전체를 막는다. 프로젝트와 Plugin 컨텍스트는
+모델 입력 한도를 넘길 위험을 줄이도록 각각 길이를 제한하고 잘림 여부를 표시한다.
 
 ```mermaid
 flowchart LR

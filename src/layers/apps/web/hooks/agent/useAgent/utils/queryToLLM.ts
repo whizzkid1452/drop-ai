@@ -1,17 +1,19 @@
 import { generateErrorDiagnostic } from './errorHandler';
-import { getSystemPrompt, type AgentPromptTrack } from './getSystemPrompt';
+import { getSystemPrompt, type AgentPromptPlugin, type AgentPromptTrack } from './getSystemPrompt';
 import type { MLCEngine } from '@/types/webllm.types';
 
 export async function queryToLLM({
   engine,
+  plugins,
   tracks,
   userInput,
 }: {
   engine: MLCEngine;
+  plugins: readonly AgentPromptPlugin[];
   tracks: readonly AgentPromptTrack[];
   userInput: string;
 }) {
-  const systemPrompt = getSystemPrompt({ tracks });
+  const systemPrompt = getSystemPrompt({ plugins, tracks });
 
   try {
     const completion = await engine.chat.completions.create({

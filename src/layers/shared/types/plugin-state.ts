@@ -6,6 +6,43 @@ export interface PluginManifestSummary {
   readonly version: string;
 }
 
+export interface PluginNumberParameterDefinition {
+  readonly id: string;
+  readonly name: string;
+  readonly type: 'number';
+  readonly minValue: number;
+  readonly maxValue: number;
+  readonly defaultValue: number;
+  readonly step?: number;
+}
+
+export interface PluginBooleanParameterDefinition {
+  readonly id: string;
+  readonly name: string;
+  readonly type: 'boolean';
+  readonly defaultValue: boolean;
+}
+
+export interface PluginEnumParameterDefinition {
+  readonly id: string;
+  readonly name: string;
+  readonly type: 'enum';
+  readonly defaultValue: string;
+  readonly options: readonly {
+    readonly value: string;
+    readonly name: string;
+  }[];
+}
+
+export type PluginParameterDefinition =
+  | PluginNumberParameterDefinition
+  | PluginBooleanParameterDefinition
+  | PluginEnumParameterDefinition;
+
+export interface PluginCatalogEntry extends PluginManifestSummary {
+  readonly parameters: readonly PluginParameterDefinition[];
+}
+
 export interface PluginParameterState {
   readonly id: string;
   readonly value: PluginParameterValue;
