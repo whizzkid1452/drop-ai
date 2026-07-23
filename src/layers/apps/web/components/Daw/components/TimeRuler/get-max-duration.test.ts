@@ -23,6 +23,7 @@ function createTrack(id: string, regions: RegionState[]): TrackState {
     isMuted: false,
     isSoloed: false,
     status: [],
+    pluginInstances: [],
     regions,
   };
 }

@@ -71,6 +71,12 @@ describe('Session Store - Phase 1 검증', () => {
       expect(store.getState().tracks.size).toBe(0);
     });
 
+    it('Plugin catalog, 검증 결과, 로그는 빈 상태로 초기화한다', () => {
+      expect(store.getState().pluginCatalog).toEqual(new Map());
+      expect(store.getState().pluginValidationResults).toEqual(new Map());
+      expect(store.getState().pluginLogs).toEqual([]);
+    });
+
     it('재생 URL 기반 호환 파일 목록을 Session에 두지 않는다', () => {
       expect(store.getState()).not.toHaveProperty('audioFiles');
       expect(store.getState()).not.toHaveProperty('addAudioFile');
@@ -82,6 +88,60 @@ describe('Session Store - Phase 1 검증', () => {
       expect(store.getState().agentStatus).toBe('idle');
       expect(store.getState().agentRunStatus).toBe('idle');
       expect(store.getState().hasSuccessfulAgentResult).toBe(false);
+    });
+  });
+
+  describe('Plugin Runtime 상태 관리', () => {
+    it('Plugin catalog 입력과 Session이 객체 참조를 공유하지 않는다', () => {
+      const manifest = { id: 'builtin.gain', name: 'Gain', version: '1.0.0' };
+
+      store.getState().replacePluginCatalog([manifest]);
+      manifest.name = '외부 변경';
+
+      expect(store.getState().pluginCatalog.get('builtin.gain')).toEqual({
+        id: 'builtin.gain',
+        name: 'Gain',
+        version: '1.0.0',
+      });
+    });
+
+    it('Plugin 검증 결과의 issue 경로를 복제해 저장한다', () => {
+      const validationResult = {
+        manifestId: 'builtin.gain',
+        status: 'invalid' as const,
+        issues: [{ code: 'INVALID_RANGE', message: '범위 오류', path: ['parameters', 'gain'] }],
+      };
+
+      store.getState().replacePluginValidationResults([validationResult]);
+      validationResult.issues[0].path[0] = '외부 변경';
+
+      expect(store.getState().pluginValidationResults.get('builtin.gain')?.issues[0]?.path).toEqual([
+        'parameters',
+        'gain',
+      ]);
+    });
+
+    it('Plugin 로그를 입력과 객체 참조를 공유하지 않고 추가한다', () => {
+      const logEntry = {
+        id: 'log-1',
+        pluginInstanceId: 'plugin-1',
+        level: 'info' as const,
+        message: '활성화 완료',
+        createdAtEpochMs: 1,
+      };
+
+      store.getState().addPluginLog(logEntry);
+      logEntry.message = '외부 변경';
+
+      expect(store.getState().pluginLogs).toEqual([
+        {
+          id: 'log-1',
+          pluginInstanceId: 'plugin-1',
+          level: 'info',
+          message: '활성화 완료',
+          createdAtEpochMs: 1,
+        },
+      ]);
     });
   });
 
@@ -123,6 +183,7 @@ describe('Session Store - Phase 1 검증', () => {
         isMuted: true,
         isSoloed: false,
         status: [],
+        pluginInstances: [],
         regions: [],
       };
       store.getState().setPlaying(true);
@@ -180,6 +241,14 @@ describe('Session Store - Phase 1 검증', () => {
               isMuted: false,
               isSoloed: false,
               status: [],
+              pluginInstances: [
+                {
+                  id: 'plugin-1',
+                  manifestSummary: { id: 'builtin.gain', name: 'Gain', version: '1.0.0' },
+                  isEnabled: true,
+                  parameters: [{ id: 'gain', value: 0.5 }],
+                },
+              ],
               regions: [
                 {
                   id: regionId,
@@ -199,10 +268,16 @@ describe('Session Store - Phase 1 검증', () => {
       store.getState().replaceProjectState(projectState);
       projectState.project.name = '입력 변경';
       projectState.tracks.get(trackId)!.name = '입력 트랙 변경';
+      projectState.tracks.get(trackId)!.pluginInstances[0].manifestSummary.name = '입력 Plugin 변경';
+      projectState.tracks.get(trackId)!.pluginInstances[0].parameters[0].value = 1;
       projectState.tracks.get(trackId)!.regions[0].duration = 9;
 
       expect(store.getState().project.name).toBe('복원 프로젝트');
       expect(store.getState().tracks.get(trackId)?.name).toBe('복원 트랙');
+      expect(store.getState().tracks.get(trackId)?.pluginInstances[0]).toMatchObject({
+        manifestSummary: { name: 'Gain' },
+        parameters: [{ id: 'gain', value: 0.5 }],
+      });
       expect(store.getState().tracks.get(trackId)?.regions[0].duration).toBe(1);
     });
 
@@ -215,6 +290,7 @@ describe('Session Store - Phase 1 검증', () => {
         isMuted: false,
         isSoloed: false,
         status: [],
+        pluginInstances: [],
         regions: [],
       });
       store.getState().setExportRange(1, 4);
@@ -357,6 +433,7 @@ describe('Session Store - Phase 1 검증', () => {
         isMuted: false,
         isSoloed: false,
         status: [],
+        pluginInstances: [],
         regions: [],
       };
 
@@ -374,6 +451,7 @@ describe('Session Store - Phase 1 검증', () => {
         isMuted: false,
         isSoloed: false,
         status: [],
+        pluginInstances: [],
         regions: [],
       };
 
@@ -385,6 +463,7 @@ describe('Session Store - Phase 1 검증', () => {
         isMuted: true,
         isSoloed: false,
         status: [],
+        pluginInstances: [],
         regions: [],
       };
 
@@ -405,6 +484,7 @@ describe('Session Store - Phase 1 검증', () => {
         isMuted: false,
         isSoloed: false,
         status: [],
+        pluginInstances: [],
         regions: [],
       };
 
@@ -432,6 +512,7 @@ describe('Session Store - Phase 1 검증', () => {
         isMuted: false,
         isSoloed: false,
         status: [],
+        pluginInstances: [],
         regions: [],
       };
 
@@ -454,6 +535,7 @@ describe('Session Store - Phase 1 검증', () => {
         isMuted: false,
         isSoloed: false,
         status: [],
+        pluginInstances: [],
         regions: [],
       };
 
@@ -481,6 +563,7 @@ describe('Session Store - Phase 1 검증', () => {
         isMuted: false,
         isSoloed: false,
         status: [],
+        pluginInstances: [],
         regions: [region1], // Phase 1에서 추가된 속성
       };
 
@@ -501,6 +584,7 @@ describe('Session Store - Phase 1 검증', () => {
         isMuted: false,
         isSoloed: false,
         status: [],
+        pluginInstances: [],
         regions: [],
       };
 
@@ -521,6 +605,7 @@ describe('Session Store - Phase 1 검증', () => {
         isMuted: false,
         isSoloed: false,
         status: [],
+        pluginInstances: [],
         regions: [],
       };
 

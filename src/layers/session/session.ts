@@ -2,6 +2,12 @@ import { createStore } from 'zustand/vanilla';
 import type { RegionStatus, TrackStatus } from '@/types/statusTypes';
 import type { AgentRunStatus, AgentStatus, Message } from '@/types/agent';
 import type { ProjectMetadata } from '../shared/types/project-document.schema';
+import type {
+  PluginInstanceState,
+  PluginLogEntry,
+  PluginManifestSummary,
+  PluginValidationResult,
+} from '../shared/types/plugin-state';
 
 interface RegionCommonState {
   id: string;
@@ -27,6 +33,7 @@ export interface TrackState {
   isMuted: boolean;
   isSoloed: boolean;
   status: TrackStatus[];
+  pluginInstances: PluginInstanceState[];
   regions: RegionState[];
 }
 
@@ -48,6 +55,9 @@ export interface SessionState {
   exportStartTime: number | null;
   exportEndTime: number | null;
   tracks: Map<string, TrackState>;
+  pluginCatalog: Map<string, PluginManifestSummary>;
+  pluginValidationResults: Map<string, PluginValidationResult>;
+  pluginLogs: PluginLogEntry[];
 
   // Actions (Setters)
   /* Agent State */
@@ -72,6 +82,10 @@ export interface SessionState {
   addTrack: (track: TrackState) => void;
   updateTrack: (id: string, updates: Partial<TrackState>) => void;
   removeTrack: (id: string) => void;
+
+  replacePluginCatalog: (manifests: readonly PluginManifestSummary[]) => void;
+  replacePluginValidationResults: (results: readonly PluginValidationResult[]) => void;
+  addPluginLog: (entry: PluginLogEntry) => void;
 
   setAgentModelReady: (ready: boolean) => void;
   setAgentLoadingProgress: (progress: number, text: string) => void;
@@ -99,6 +113,9 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     exportStartTime: null,
     exportEndTime: null,
     tracks: new Map(),
+    pluginCatalog: new Map(),
+    pluginValidationResults: new Map(),
+    pluginLogs: [],
 
     /* Agent State */
     isModelReady: false,
@@ -151,6 +168,10 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
         return { tracks: newTracks };
       }),
 
+    replacePluginCatalog: manifests => set({ pluginCatalog: createPluginCatalog(manifests) }),
+    replacePluginValidationResults: results => set({ pluginValidationResults: createPluginValidationResults(results) }),
+    addPluginLog: entry => set(state => ({ pluginLogs: [...state.pluginLogs, { ...entry }] })),
+
     /* Agent Actions */
     setAgentModelReady: ready => set({ isModelReady: ready }),
     setAgentLoadingProgress: (progress, text) => set({ modelLoadingProgress: progress, modelLoadingText: text }),
@@ -180,7 +201,34 @@ function cloneProjectTracks(tracks: ReadonlyMap<string, TrackState>): Map<string
       {
         ...track,
         status: [...track.status],
+        pluginInstances: track.pluginInstances.map(clonePluginInstance),
         regions: track.regions.map(region => ({ ...region, status: [...region.status] })),
+      },
+    ])
+  );
+}
+
+function clonePluginInstance(instance: PluginInstanceState): PluginInstanceState {
+  return {
+    ...instance,
+    manifestSummary: { ...instance.manifestSummary },
+    parameters: instance.parameters.map(parameter => ({ ...parameter })),
+  };
+}
+
+function createPluginCatalog(manifests: readonly PluginManifestSummary[]): Map<string, PluginManifestSummary> {
+  return new Map(manifests.map(manifest => [manifest.id, { ...manifest }]));
+}
+
+function createPluginValidationResults(
+  results: readonly PluginValidationResult[]
+): Map<string, PluginValidationResult> {
+  return new Map(
+    results.map(result => [
+      result.manifestId,
+      {
+        ...result,
+        issues: result.issues.map(issue => ({ ...issue, path: [...issue.path] })),
       },
     ])
   );

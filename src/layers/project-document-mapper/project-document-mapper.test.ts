@@ -59,6 +59,14 @@ function createSessionSnapshot(): SessionProjectSnapshot {
           isMuted: true,
           isSoloed: false,
           status: [TRACK_STATUS.RECORD_ARMED],
+          pluginInstances: [
+            {
+              id: 'plugin-1',
+              manifestSummary: { id: 'builtin.gain', name: 'Gain', version: '1.0.0' },
+              isEnabled: true,
+              parameters: [{ id: 'gain', value: 0.5 }],
+            },
+          ],
           regions: [
             {
               id: REGION_ID,
@@ -91,6 +99,7 @@ function createSessionSnapshot(): SessionProjectSnapshot {
           isMuted: false,
           isSoloed: true,
           status: [TRACK_STATUS.SOLOED],
+          pluginInstances: [],
           regions: [],
         },
       ],
@@ -175,6 +184,12 @@ describe('ProjectDocument mapper', () => {
     expect(document.tracks[0]).not.toHaveProperty('status');
     expect(document.tracks[0].regions[0]).not.toHaveProperty('status');
     expect(document.tracks[0].regions[0]).not.toHaveProperty('endTime');
+  });
+
+  it('ProjectDocument v1에는 Plugin Runtime 상태를 저장하지 않는다', () => {
+    const document = createProjectDocument();
+
+    expect(document.tracks[0]).not.toHaveProperty('pluginInstances');
   });
 
   it('참조되지 않은 committed Source와 입력 순서를 보존한다', () => {
@@ -354,6 +369,7 @@ describe('ProjectDocument mapper', () => {
             isMuted: true,
             isSoloed: false,
             status: [],
+            pluginInstances: [],
             regions: [
               {
                 id: REGION_ID,
@@ -386,6 +402,7 @@ describe('ProjectDocument mapper', () => {
             isMuted: false,
             isSoloed: true,
             status: [],
+            pluginInstances: [],
             regions: [],
           },
         ],

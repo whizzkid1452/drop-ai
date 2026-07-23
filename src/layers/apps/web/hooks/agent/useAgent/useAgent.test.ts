@@ -38,6 +38,7 @@ function createTrackMap(): ReadonlyMap<string, TrackState> {
         isMuted: false,
         isSoloed: false,
         status: [],
+        pluginInstances: [],
         regions: [
           {
             id: ATTACHED_REGION_ID,

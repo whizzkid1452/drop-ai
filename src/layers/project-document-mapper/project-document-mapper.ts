@@ -224,6 +224,7 @@ function createSessionTrack(track: ProjectTrack): TrackState {
     isMuted: track.isMuted,
     isSoloed: track.isSoloed,
     status: [],
+    pluginInstances: [],
     regions: track.regions.map(createSessionRegion),
   };
 }

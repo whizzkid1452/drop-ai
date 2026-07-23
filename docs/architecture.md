@@ -80,6 +80,10 @@ UI는 **Session을 읽어** 그리고, AudioCommand는 **CommandExecutor**에 �
 CommandExecutor는 명령을 검증하고 Controller에 실행을 위임한다.
 Agent 메시지와 업로드 파일 같은 앱 워크플로 상태는 Session Action으로 갱신한다.
 
+Session은 Plugin 기반 상태도 보관한다. Track에는 Plugin 인스턴스와 매개변수가 있고, 공통 상태에는 Plugin 카탈로그,
+manifest 검증 결과, 런타임 로그가 있다. 카탈로그·검증 결과·로그 Action과 프로젝트 상태 교체는 입력 객체의 필요한
+중첩 값까지 복제한다. 현재 단계는 상태 기반만 제공하며 Plugin 설치, 오디오 처리, AudioCommand, UI는 아직 제공하지 않는다.
+
 검증된 명령은 CommandExecutor의 단일 대기열에서 접수 순서대로 하나씩 실행한다. `executeMany`는 묶음 전체를
 먼저 검증한 후, 다른 요청이 끼어들지 않게 순서대로 실행한다. 실행 중 첫 오류가 나면 남은 명령은 실행하지
 않는다. 이미 완료된 변경은 되돌리지 않으므로 묶음 실행은 원자적 트랜잭션이 아니다. 실패한 실행이 있어도 그
@@ -348,6 +352,11 @@ v1은 이 상태를 손실 없이 저장하기 위해 길이 0과 `startTimeSeco
 - 재생 여부와 현재 playhead
 - 선택·드래그 상태
 - Agent 대화, 모델 로딩, 모달과 zoom 같은 앱 상태
+- Plugin 카탈로그, manifest 검증 결과, 런타임 로그
+
+ProjectDocument v1에는 Track의 Plugin 인스턴스와 매개변수 필드도 없다. Mapper는 저장할 때 이 값을 포함하지 않고,
+v1 문서를 복원할 때 각 Track의 Plugin 인스턴스를 빈 배열로 초기화한다. 이 값의 영구 저장에는 새 문서 버전과 명시적
+마이그레이션이 필요하다.
 
 원본 오디오 바이트는 Source UUID를 키로 사용하는 별도 저장소에 둔다. 프로젝트를 다시 열 때 새 Object URL을 만들고
 런타임 Source Registry에서 관리한다. 현재 Session은 ProjectDocument의 `project` 형식과 같은 프로젝트 metadata를

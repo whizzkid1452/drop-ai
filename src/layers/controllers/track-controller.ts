@@ -36,6 +36,7 @@ export class TrackController {
       isMuted: false,
       isSoloed: false,
       status: [],
+      pluginInstances: [],
       regions: [],
     });
   }

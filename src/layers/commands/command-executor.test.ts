@@ -443,6 +443,7 @@ describe('CommandExecutor', () => {
     await addTrack(commandExecutor);
 
     expect(session.getState().tracks.has(TRACK_ID)).toBe(true);
+    expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances).toEqual([]);
   });
 
   it('trackId를 생략하면 실행 시점의 첫 번째 트랙을 사용한다', async () => {

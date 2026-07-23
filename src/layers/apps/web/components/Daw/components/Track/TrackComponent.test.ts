@@ -62,6 +62,7 @@ const track: TrackState = {
   isMuted: false,
   isSoloed: false,
   status: [],
+  pluginInstances: [],
   regions: [],
 };
 

@@ -56,6 +56,11 @@ Session에 저장된 `endTime`은 이 합과 일치해야 하며, 비교할 때�
 Session과 AudioCommand에는 저장하지 않는다. API 존재 확인은 실제 AudioWorklet 모듈 로딩이나 WebAssembly 컴파일
 성공을 보장하지 않는다.
 
+Session의 Plugin 런타임 상태는 Track별 Plugin 인스턴스, Plugin 카탈로그, manifest 검증 결과, 런타임 로그로 나눈다.
+Plugin 인스턴스는 ID, manifest 요약, 활성 여부, boolean·number·string 매개변수 값을 가진다. 카탈로그·검증 결과·로그
+Action은 입력 객체를 복제해 저장하며, 프로젝트 상태 교체 시 Track의 Plugin 인스턴스도 깊은 복사한다. 이 기반은 아직
+Plugin 설치, 오디오 처리, AudioCommand, UI를 제공하지 않는다.
+
 영구 저장 형식은 Shared의 `ProjectDocumentSchema`로 검증한다. v1은 Track·Region과 오디오 Source 메타데이터를
 절대 초 단위로 저장하고, Region은 임시 URL이 아닌 안정적인 Source ID를 참조한다. `File`, `Blob`, Object URL,
 AudioBuffer, 함수, 재생 중 상태, Agent·UI 상태는 ProjectDocument에 넣지 않는다. `ProjectDocumentMapper`는 Store나
@@ -65,6 +70,8 @@ Repository를 호출하지 않고 Session의 저장 대상 snapshot과 committed
 배열로 초기화한다. Export 범위의 한쪽만 `null`인 상태, Track Map key와 Track ID 불일치, 유한한 `endTime`을 만들 수 없는
 Region, 허용 오차를 초과한 Region 끝 시각 불일치는 손실을 숨기지 않고 오류로 거부한다. Mapper는 Session과 Shared만
 의존하며 Controllers 밖의 production 계층에서 직접 사용하지 않는다.
+ProjectDocument v1에는 Plugin 런타임 상태 필드가 없다. Mapper는 저장할 때 해당 상태를 포함하지 않고, v1 복원 Track의
+Plugin 인스턴스를 빈 배열로 초기화한다. Plugin 상태 영구 저장은 새 문서 버전과 명시적 마이그레이션이 필요하다.
 
 `createApp`은 새 프로젝트의 UUID·이름·revision 0을 만들거나 검증을 마친 기존 metadata를 Session에 주입한다.
 `project.revision`은 편집 횟수나 저장 여부가 아니라 마지막 성공 저장 snapshot의 동시성 제어 값이다. 일반 편집과
