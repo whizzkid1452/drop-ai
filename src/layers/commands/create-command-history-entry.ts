@@ -86,6 +86,7 @@ function createInstallPluginCommand(trackId: string, instance: PluginInstanceSta
     trackId,
     instanceId: instance.id,
     manifestId: instance.manifestSummary.id,
+    isEnabled: instance.isEnabled,
     parameterValues: Object.fromEntries(instance.parameters.map(parameter => [parameter.id, parameter.value])),
   };
 }
@@ -289,6 +290,33 @@ export function createCommandHistoryEntry({
         executeCommand,
         label: command.type,
         undoCommand: { ...command, value: beforeParameter.value },
+        redoCommand: command,
+      });
+    }
+
+    case AudioCommandType.SET_PLUGIN_ENABLED: {
+      const beforeInstance = findPluginInstance({
+        session: beforeSession,
+        trackId: command.trackId,
+        instanceId: command.instanceId,
+      });
+      const afterInstance = findPluginInstance({
+        session: afterSession,
+        trackId: command.trackId,
+        instanceId: command.instanceId,
+      });
+      if (
+        !beforeInstance ||
+        !afterInstance ||
+        beforeInstance.instance.isEnabled === afterInstance.instance.isEnabled ||
+        afterInstance.instance.isEnabled !== command.isEnabled
+      ) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        undoCommand: { ...command, isEnabled: beforeInstance.instance.isEnabled },
         redoCommand: command,
       });
     }

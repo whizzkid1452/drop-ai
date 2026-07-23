@@ -17,6 +17,7 @@ export const AudioCommandType = {
   SET_TRACK_SOLO: 'SET_TRACK_SOLO',
   INSTALL_PLUGIN: 'INSTALL_PLUGIN',
   REMOVE_PLUGIN: 'REMOVE_PLUGIN',
+  SET_PLUGIN_ENABLED: 'SET_PLUGIN_ENABLED',
   SET_PLUGIN_PARAMETER: 'SET_PLUGIN_PARAMETER',
   LOAD_REGION: 'LOAD_REGION',
   UNLOAD_REGION: 'UNLOAD_REGION',
@@ -145,12 +146,19 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
     trackId: z.uuid('Invalid track ID format'),
     instanceId: z.uuid('Invalid Plugin instance ID format').optional(),
     manifestId: pluginMemberIdSchema,
+    isEnabled: z.boolean().optional(),
     parameterValues: z.record(pluginMemberIdSchema, pluginParameterValueSchema).optional(),
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.REMOVE_PLUGIN),
     trackId: z.uuid('Invalid track ID format'),
     instanceId: z.uuid('Invalid Plugin instance ID format'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_PLUGIN_ENABLED),
+    trackId: z.uuid('Invalid track ID format'),
+    instanceId: z.uuid('Invalid Plugin instance ID format'),
+    isEnabled: z.boolean(),
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.SET_PLUGIN_PARAMETER),

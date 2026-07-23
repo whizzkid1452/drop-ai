@@ -60,6 +60,8 @@ export const removeButton = style([
   },
 ]);
 
+export const toggleButton = style([button]);
+
 export const instanceList = style({
   display: 'flex',
   flexDirection: 'column',
@@ -81,6 +83,11 @@ export const instanceHeader = style({
   justifyContent: 'space-between',
   color: '#dddddd',
   fontSize: '0.78rem',
+});
+
+export const instanceActions = style({
+  display: 'flex',
+  gap: '4px',
 });
 
 export const parameter = style({

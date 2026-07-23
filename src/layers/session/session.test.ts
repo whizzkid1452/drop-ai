@@ -270,6 +270,32 @@ describe('Session Store - Phase 1 검증', () => {
         { id: 'mix', value: 1 },
       ]);
     });
+
+    it('지정한 Plugin instance의 활성화 상태만 변경한다', () => {
+      addTrack();
+      store.getState().addPluginInstance({
+        trackId: 'track-1',
+        instance: {
+          id: 'plugin-1',
+          manifestSummary: { id: 'builtin.gain', name: 'Gain', version: '1.0.0' },
+          isEnabled: true,
+          parameters: [{ id: 'gain', value: 1 }],
+        },
+      });
+
+      store.getState().setPluginInstanceEnabled({
+        trackId: 'track-1',
+        instanceId: 'plugin-1',
+        isEnabled: false,
+      });
+
+      expect(store.getState().tracks.get('track-1')?.pluginInstances[0]).toEqual({
+        id: 'plugin-1',
+        manifestSummary: { id: 'builtin.gain', name: 'Gain', version: '1.0.0' },
+        isEnabled: false,
+        parameters: [{ id: 'gain', value: 1 }],
+      });
+    });
   });
 
   describe('프로젝트 metadata 관리', () => {

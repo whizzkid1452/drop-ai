@@ -17,6 +17,7 @@ const REGION_ADD_SOURCE_USAGE =
   'region add-source <trackId> <regionId> <sourceId> <startTime> <duration> [startOffset]';
 const PLUGIN_INSTALL_USAGE = 'plugin install <trackId> <manifestId> [instanceId]';
 const PLUGIN_REMOVE_USAGE = 'plugin remove <trackId> <instanceId>';
+const PLUGIN_ENABLE_USAGE = 'plugin enable <trackId> <instanceId> <true|false>';
 const PLUGIN_SET_USAGE = 'plugin set <trackId> <instanceId> <parameterId> <number|boolean|string> <value>';
 
 interface CliState {
@@ -46,6 +47,13 @@ function parsePluginParameterValue(valueType: string, rawValue: string): PluginP
     return rawValue === 'false' ? false : null;
   }
   return rawValue;
+}
+
+function parseBoolean(rawValue: string): boolean | null {
+  if (rawValue === 'true') {
+    return true;
+  }
+  return rawValue === 'false' ? false : null;
 }
 
 async function executeTrackCommand(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
@@ -194,6 +202,24 @@ async function executePluginSet(commandExecutor: CliCommandExecutor, args: strin
   return `Plugin ${instanceId} Parameter ${parameterId} set to ${rawValue}`;
 }
 
+async function executePluginEnable(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
+  const [trackId, instanceId, rawValue] = args;
+  if (!trackId || !instanceId || rawValue === undefined) {
+    return `Error: Usage: ${PLUGIN_ENABLE_USAGE}`;
+  }
+  const isEnabled = parseBoolean(rawValue);
+  if (isEnabled === null) {
+    return 'Error: Plugin enabled state must be true or false.';
+  }
+  await commandExecutor.execute({
+    type: AudioCommandType.SET_PLUGIN_ENABLED,
+    trackId,
+    instanceId,
+    isEnabled,
+  });
+  return `Plugin ${instanceId} enabled state set to ${rawValue}`;
+}
+
 async function executePluginCommand(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
   const [subcommand, ...subcommandArgs] = args;
   if (subcommand === 'install') {
@@ -202,10 +228,13 @@ async function executePluginCommand(commandExecutor: CliCommandExecutor, args: s
   if (subcommand === 'remove') {
     return executePluginRemove(commandExecutor, subcommandArgs);
   }
+  if (subcommand === 'enable') {
+    return executePluginEnable(commandExecutor, subcommandArgs);
+  }
   if (subcommand === 'set') {
     return executePluginSet(commandExecutor, subcommandArgs);
   }
-  return ['Usage:', PLUGIN_INSTALL_USAGE, PLUGIN_REMOVE_USAGE, PLUGIN_SET_USAGE].join('\n');
+  return ['Usage:', PLUGIN_INSTALL_USAGE, PLUGIN_REMOVE_USAGE, PLUGIN_ENABLE_USAGE, PLUGIN_SET_USAGE].join('\n');
 }
 
 async function executeExportCommand(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
@@ -341,7 +370,7 @@ export const createCliCommands = (commandExecutor: CliCommandExecutor, state: Cl
     },
     plugin: {
       description: 'Plugin management',
-      usage: [PLUGIN_INSTALL_USAGE, PLUGIN_REMOVE_USAGE, PLUGIN_SET_USAGE].join(' | '),
+      usage: [PLUGIN_INSTALL_USAGE, PLUGIN_REMOVE_USAGE, PLUGIN_ENABLE_USAGE, PLUGIN_SET_USAGE].join(' | '),
       fn: (...args: string[]) => executePluginCommand(commandExecutor, args),
     },
     volume: {

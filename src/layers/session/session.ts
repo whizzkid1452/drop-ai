@@ -69,6 +69,10 @@ interface SetPluginParameterValueRequest {
   readonly value: PluginParameterState['value'];
 }
 
+interface SetPluginInstanceEnabledRequest extends RemovePluginInstanceRequest {
+  readonly isEnabled: boolean;
+}
+
 interface UpdateTrackPluginInstancesRequest {
   readonly state: SessionState;
   readonly trackId: string;
@@ -116,6 +120,7 @@ export interface SessionState {
   addPluginLog: (entry: PluginLogEntry) => void;
   addPluginInstance: (request: AddPluginInstanceRequest) => void;
   removePluginInstance: (request: RemovePluginInstanceRequest) => void;
+  setPluginInstanceEnabled: (request: SetPluginInstanceEnabledRequest) => void;
   setPluginParameterValue: (request: SetPluginParameterValueRequest) => void;
 
   setAgentModelReady: (ready: boolean) => void;
@@ -219,6 +224,15 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
           state,
           trackId,
           updatePluginInstances: pluginInstances => pluginInstances.filter(instance => instance.id !== instanceId),
+        })
+      ),
+    setPluginInstanceEnabled: ({ trackId, instanceId, isEnabled }) =>
+      set(state =>
+        updateTrackPluginInstances({
+          state,
+          trackId,
+          updatePluginInstances: pluginInstances =>
+            pluginInstances.map(instance => (instance.id === instanceId ? { ...instance, isEnabled } : instance)),
         })
       ),
     setPluginParameterValue: ({ trackId, instanceId, parameterId, value }) =>

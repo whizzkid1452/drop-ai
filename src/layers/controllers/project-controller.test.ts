@@ -137,7 +137,7 @@ function createLoadedDocument({
   };
 }
 
-function createLoadedDocumentV2(): ProjectDocumentV2 {
+function createLoadedDocumentV2(isEnabled = true): ProjectDocumentV2 {
   const document = createLoadedDocument();
 
   return {
@@ -150,7 +150,7 @@ function createLoadedDocumentV2(): ProjectDocumentV2 {
           id: PLUGIN_INSTANCE_ID,
           manifestId: gainPluginManifest.id,
           manifestVersion: gainPluginManifest.version,
-          isEnabled: true,
+          isEnabled,
           parameters: [{ id: gainPluginManifest.parameters[0].id, value: 0.75 }],
         },
       ],
@@ -466,6 +466,20 @@ describe('ProjectController', () => {
         }),
       ],
     });
+  });
+
+  it('v2의 비활성 Plugin 상태를 Session과 AudioEngine에 복원한다', async () => {
+    const context = createTestContext();
+    const registration = createSourceRegistration();
+    context.projectRepository.load.mockResolvedValue(createLoadedDocumentV2(false));
+    context.audioSourceRepository.load.mockResolvedValue(registration.blob);
+
+    await context.controller.loadProject(LOADED_PROJECT_ID);
+
+    expect(context.sessionStore.getState().tracks.get(TRACK_ID)?.pluginInstances[0]?.isEnabled).toBe(false);
+    expect(() =>
+      context.audioEngine.setPluginEnabled({ trackId: TRACK_ID, instanceId: PLUGIN_INSTANCE_ID, isEnabled: true })
+    ).not.toThrow();
   });
 
   it('두 prepared 대상을 먼저 검사하고 Engine→Registry→Session 순서로 교체한다', async () => {

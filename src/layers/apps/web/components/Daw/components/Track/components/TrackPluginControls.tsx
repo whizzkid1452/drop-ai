@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
 import {
+  executePluginEnabledChange,
   executePluginInstall,
   executePluginParameterChange,
   executePluginRemoval,
@@ -157,6 +158,18 @@ export function TrackPluginControls({ trackId, pluginInstances }: TrackPluginCon
     );
   };
 
+  const handleEnabledChange = async (instanceId: string, isEnabled: boolean) => {
+    await runAction(`enabled:${instanceId}`, () =>
+      executePluginEnabledChange({
+        trackId,
+        instanceId,
+        isEnabled,
+        executeCommand: command => commandExecutor.execute(command),
+        notifyFailure: message => window.alert(message),
+      })
+    );
+  };
+
   const handleParameterChange = ({ instanceId, parameterId, value }: PluginParameterChangeRequest) => {
     void runAction(`parameter:${instanceId}:${parameterId}`, () =>
       executePluginParameterChange({
@@ -211,15 +224,27 @@ export function TrackPluginControls({ trackId, pluginInstances }: TrackPluginCon
             <article className={styles.instance} key={instance.id}>
               <div className={styles.instanceHeader}>
                 <span>{instance.manifestSummary.name}</span>
-                <button
-                  className={styles.removeButton}
-                  type="button"
-                  aria-label={`${instance.manifestSummary.name} Plugin 삭제`}
-                  disabled={isPending}
-                  onClick={() => void handleRemove(instance.id)}
-                >
-                  {pendingActionId === `remove:${instance.id}` ? '삭제 중…' : '삭제'}
-                </button>
+                <div className={styles.instanceActions}>
+                  <button
+                    className={styles.toggleButton}
+                    type="button"
+                    aria-label={`${instance.manifestSummary.name} Plugin ${instance.isEnabled ? '비활성화' : '활성화'}`}
+                    aria-pressed={instance.isEnabled}
+                    disabled={isPending}
+                    onClick={() => void handleEnabledChange(instance.id, !instance.isEnabled)}
+                  >
+                    {pendingActionId === `enabled:${instance.id}` ? '변경 중…' : instance.isEnabled ? '켜짐' : '꺼짐'}
+                  </button>
+                  <button
+                    className={styles.removeButton}
+                    type="button"
+                    aria-label={`${instance.manifestSummary.name} Plugin 삭제`}
+                    disabled={isPending}
+                    onClick={() => void handleRemove(instance.id)}
+                  >
+                    {pendingActionId === `remove:${instance.id}` ? '삭제 중…' : '삭제'}
+                  </button>
+                </div>
               </div>
               {manifest ? (
                 manifest.parameters.map(definition => (

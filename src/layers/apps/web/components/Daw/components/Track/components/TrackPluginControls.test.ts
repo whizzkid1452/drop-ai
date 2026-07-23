@@ -73,12 +73,14 @@ vi.mock('./TrackPluginControls.css.ts', () => ({
   emptyMessage: 'emptyMessage',
   header: 'header',
   instance: 'instance',
+  instanceActions: 'instanceActions',
   instanceHeader: 'instanceHeader',
   instanceList: 'instanceList',
   parameter: 'parameter',
   parameterName: 'parameterName',
   parameterValue: 'parameterValue',
   removeButton: 'removeButton',
+  toggleButton: 'toggleButton',
   select: 'select',
   title: 'title',
 }));
@@ -209,6 +211,25 @@ describe('TrackPluginControls', () => {
       type: AudioCommandType.REMOVE_PLUGIN,
       trackId,
       instanceId,
+    });
+  });
+
+  it('Plugin 끄기 버튼을 SET_PLUGIN_ENABLED 명령으로 실행한다', async () => {
+    layerMocks.pluginCatalog = pluginCatalog;
+    layerMocks.execute.mockResolvedValue(undefined);
+    const host = renderControls(pluginInstances);
+    const toggleButton = host.querySelector<HTMLButtonElement>('button[aria-label="Multi Effect Plugin 비활성화"]');
+    if (!toggleButton) {
+      throw new Error('Plugin 끄기 버튼을 찾지 못했습니다.');
+    }
+
+    await act(async () => toggleButton.click());
+
+    expect(layerMocks.execute).toHaveBeenCalledWith({
+      type: AudioCommandType.SET_PLUGIN_ENABLED,
+      trackId,
+      instanceId,
+      isEnabled: false,
     });
   });
 

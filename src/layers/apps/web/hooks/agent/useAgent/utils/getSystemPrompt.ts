@@ -65,6 +65,8 @@ const COMMAND_REFERENCE = {
     '{"type":"INSTALL_PLUGIN","trackId":"<existing Track UUID>","manifestId":"<listed manifest ID>"} - Plugin 설치',
   [AudioCommandType.REMOVE_PLUGIN]:
     '{"type":"REMOVE_PLUGIN","trackId":"<existing Track UUID>","instanceId":"<existing Plugin instance UUID>"} - Plugin 제거',
+  [AudioCommandType.SET_PLUGIN_ENABLED]:
+    '{"type":"SET_PLUGIN_ENABLED","trackId":"<existing Track UUID>","instanceId":"<existing Plugin instance UUID>","isEnabled":<boolean>} - Plugin 활성화 상태 변경',
   [AudioCommandType.SET_PLUGIN_PARAMETER]:
     '{"type":"SET_PLUGIN_PARAMETER","trackId":"<existing Track UUID>","instanceId":"<existing Plugin instance UUID>","parameterId":"<listed Parameter ID>","value":<boolean|number|string>} - Plugin Parameter 변경',
   [AudioCommandType.LOAD_REGION]:
@@ -373,6 +375,17 @@ function createPluginExamples(
       },
     ],
   });
+  examples.push({
+    request: `Plugin instance ${instance.id}를 ${instance.isEnabled ? '꺼줘' : '켜줘'}`,
+    commands: [
+      {
+        type: AudioCommandType.SET_PLUGIN_ENABLED,
+        trackId: trackWithInstance.id,
+        instanceId: instance.id,
+        isEnabled: !instance.isEnabled,
+      },
+    ],
+  });
   const manifest = plugins.find(plugin => plugin.id === instance.manifestSummary.id);
   const parameter = manifest?.parameters[0];
   if (!parameter) {
@@ -403,15 +416,17 @@ function createPluginSafetyRules(projectContext: AgentProjectContext, pluginCont
   const hasVisiblePluginInstance = projectContext.visibleTracks.some(track => track.pluginInstances.length > 0);
   if (pluginContext.visiblePlugins.length > 0) {
     return `14. INSTALL_PLUGIN은 위 catalog의 manifestId만 사용한다. instanceId는 생략해 실행기가 생성하게 한다.
-15. REMOVE_PLUGIN은 위 Track에 표시된 instanceId만 사용한다. 그 instance가 표시된 trackId를 함께 쓴다.
-16. SET_PLUGIN_PARAMETER는 해당 manifest에 표시된 Parameter 계약을 지킨다. number는 범위 안의 number, boolean은 boolean, enum은 options 중 string을 쓴다.
-17. 목록에 없는 manifestId, instanceId, Parameter ID나 값을 만들거나 추측하지 않는다.`;
+15. REMOVE_PLUGIN과 SET_PLUGIN_ENABLED는 위 Track에 표시된 instanceId만 사용한다. 그 instance가 표시된 trackId를 함께 쓴다.
+16. SET_PLUGIN_ENABLED의 isEnabled는 boolean만 쓴다.
+17. SET_PLUGIN_PARAMETER는 해당 manifest에 표시된 Parameter 계약을 지킨다. number는 범위 안의 number, boolean은 boolean, enum은 options 중 string을 쓴다.
+18. 목록에 없는 manifestId, instanceId, Parameter ID나 값을 만들거나 추측하지 않는다.`;
   }
   if (hasVisiblePluginInstance) {
     return `14. Plugin manifest 목록이 없으므로 INSTALL_PLUGIN과 SET_PLUGIN_PARAMETER 요청은 []를 반환한다.
-15. REMOVE_PLUGIN은 위 Track에 표시된 instanceId만 사용한다. 그 instance가 표시된 trackId를 함께 쓴다.`;
+15. REMOVE_PLUGIN과 SET_PLUGIN_ENABLED는 위 Track에 표시된 instanceId만 사용한다. 그 instance가 표시된 trackId를 함께 쓴다.
+16. SET_PLUGIN_ENABLED의 isEnabled는 boolean만 쓴다.`;
   }
-  return '14. 현재 Plugin manifest와 instance 목록은 제공되지 않는다. INSTALL_PLUGIN, REMOVE_PLUGIN, SET_PLUGIN_PARAMETER 요청은 []를 반환한다.';
+  return '14. 현재 Plugin manifest와 instance 목록은 제공되지 않는다. INSTALL_PLUGIN, REMOVE_PLUGIN, SET_PLUGIN_ENABLED, SET_PLUGIN_PARAMETER 요청은 []를 반환한다.';
 }
 
 export function getSystemPrompt({

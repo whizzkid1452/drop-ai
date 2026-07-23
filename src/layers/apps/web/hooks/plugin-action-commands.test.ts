@@ -3,7 +3,9 @@ import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema
 import {
   createInstallPluginCommand,
   createRemovePluginCommand,
+  createSetPluginEnabledCommand,
   createSetPluginParameterCommand,
+  executePluginEnabledChange,
   executePluginInstall,
   executePluginParameterChange,
   executePluginRemoval,
@@ -36,6 +38,15 @@ describe('Plugin UI 명령 변환', () => {
       instanceId,
       parameterId: 'gain',
       value: 1.25,
+    });
+  });
+
+  it('활성화 요청을 SET_PLUGIN_ENABLED 명령으로 변환한다', () => {
+    expect(createSetPluginEnabledCommand({ trackId, instanceId, isEnabled: false })).toEqual({
+      type: AudioCommandType.SET_PLUGIN_ENABLED,
+      trackId,
+      instanceId,
+      isEnabled: false,
     });
   });
 
@@ -85,6 +96,23 @@ describe('Plugin UI 명령 변환', () => {
     expect(executeCommand).toHaveBeenCalledTimes(1);
     expect(executeCommand).toHaveBeenCalledWith(
       createSetPluginParameterCommand({ trackId, instanceId, parameterId: 'gain', value: 0.75 })
+    );
+  });
+
+  it('활성화 명령을 정확히 한 번 실행한다', async () => {
+    const executeCommand = vi.fn<(command: AudioCommand) => Promise<unknown>>().mockResolvedValue(undefined);
+
+    const result = await executePluginEnabledChange({
+      trackId,
+      instanceId,
+      isEnabled: false,
+      executeCommand,
+      notifyFailure: vi.fn(),
+    });
+
+    expect(result).toBe('updated');
+    expect(executeCommand).toHaveBeenCalledWith(
+      createSetPluginEnabledCommand({ trackId, instanceId, isEnabled: false })
     );
   });
 

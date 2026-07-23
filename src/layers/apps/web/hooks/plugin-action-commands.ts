@@ -18,18 +18,23 @@ interface SetPluginParameterOptions extends PluginInstanceTarget {
   value: PluginParameterValue;
 }
 
+interface SetPluginEnabledOptions extends PluginInstanceTarget {
+  isEnabled: boolean;
+}
+
 interface CommandExecutionOptions {
   executeCommand: (command: AudioCommand) => Promise<unknown>;
   notifyFailure: (message: string) => void;
 }
 
 interface PluginActionExecutionOptions extends CommandExecutionOptions {
-  command: InstallPluginCommand | RemovePluginCommand | SetPluginParameterCommand;
+  command: InstallPluginCommand | RemovePluginCommand | SetPluginEnabledCommand | SetPluginParameterCommand;
   failureMessage: string;
 }
 
 type InstallPluginCommand = Extract<AudioCommand, { type: typeof AudioCommandType.INSTALL_PLUGIN }>;
 type RemovePluginCommand = Extract<AudioCommand, { type: typeof AudioCommandType.REMOVE_PLUGIN }>;
+type SetPluginEnabledCommand = Extract<AudioCommand, { type: typeof AudioCommandType.SET_PLUGIN_ENABLED }>;
 type SetPluginParameterCommand = Extract<AudioCommand, { type: typeof AudioCommandType.SET_PLUGIN_PARAMETER }>;
 export type PluginActionResult = 'updated' | 'failed';
 
@@ -83,6 +88,19 @@ export function createSetPluginParameterCommand({
   };
 }
 
+export function createSetPluginEnabledCommand({
+  trackId,
+  instanceId,
+  isEnabled,
+}: SetPluginEnabledOptions): SetPluginEnabledCommand {
+  return {
+    type: AudioCommandType.SET_PLUGIN_ENABLED,
+    trackId,
+    instanceId,
+    isEnabled,
+  };
+}
+
 export function executePluginInstall({
   trackId,
   manifestId,
@@ -122,6 +140,21 @@ export function executePluginParameterChange({
   return executePluginAction({
     command: createSetPluginParameterCommand({ trackId, instanceId, parameterId, value }),
     failureMessage: 'Plugin Parameter를 변경하지 못했습니다',
+    executeCommand,
+    notifyFailure,
+  });
+}
+
+export function executePluginEnabledChange({
+  trackId,
+  instanceId,
+  isEnabled,
+  executeCommand,
+  notifyFailure,
+}: SetPluginEnabledOptions & CommandExecutionOptions): Promise<PluginActionResult> {
+  return executePluginAction({
+    command: createSetPluginEnabledCommand({ trackId, instanceId, isEnabled }),
+    failureMessage: 'Plugin 활성화 상태를 변경하지 못했습니다',
     executeCommand,
     notifyFailure,
   });

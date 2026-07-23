@@ -15,6 +15,7 @@ import type {
   RegionData,
   ReplaceRegionRequest,
   RescheduleRegionRequest,
+  SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
 } from './i-audio-engine';
 import type { IAudioPluginRuntime, IAudioPluginRuntimeFactory } from './plugins/audio-plugin-runtime';
@@ -41,6 +42,7 @@ interface AudioProjectGraphState {
   readonly soloedTrackIds: Set<string>;
   readonly players: Map<string, Map<string, RegionPlayerEntry>>;
   readonly pluginRuntimes: Map<string, IAudioPluginRuntime[]>;
+  readonly disabledPluginInstanceIds: Map<string, Set<string>>;
 }
 
 interface AudioEngineOptions {
@@ -105,6 +107,7 @@ export class AudioEngine implements IAudioEngine {
   private soloedTrackIds: Set<string> = new Set();
   private players: Map<string, Map<string, RegionPlayerEntry>> = new Map();
   private pluginRuntimes: Map<string, IAudioPluginRuntime[]> = new Map();
+  private disabledPluginInstanceIds: Map<string, Set<string>> = new Map();
   private readonly pluginRuntimeFactories: ReadonlyMap<string, IAudioPluginRuntimeFactory>;
   private graphRevision = 0;
   private readonly mutedOutputs = new WeakSet<Tone.Gain>();
@@ -184,6 +187,7 @@ export class AudioEngine implements IAudioEngine {
       .get(trackId)
       ?.forEach(runtime => this.disposePluginRuntimeSafely(runtime, '제거한 Track의 Plugin 정리에 실패했습니다.'));
     this.pluginRuntimes.delete(trackId);
+    this.disabledPluginInstanceIds.delete(trackId);
 
     const input = this.trackInputs.get(trackId);
     if (input) {
@@ -284,15 +288,21 @@ export class AudioEngine implements IAudioEngine {
 
     const runtime = this.createPluginRuntime(factory, request);
     const nextRuntimes = [...currentRuntimes, runtime];
+    const currentDisabledIds = this.getTrackDisabledPluginInstanceIds(request.trackId);
+    const nextDisabledIds = new Set(currentDisabledIds);
+    if (request.isEnabled === false) {
+      nextDisabledIds.add(request.instanceId);
+    }
     this.replacePluginChainConnections({
       trackId: request.trackId,
       input,
       channel,
-      previousRuntimes: currentRuntimes,
-      nextRuntimes,
+      previousRuntimes: getEnabledPluginRuntimes(currentRuntimes, currentDisabledIds),
+      nextRuntimes: getEnabledPluginRuntimes(nextRuntimes, nextDisabledIds),
       runtimesToDisposeOnRollback: [runtime],
     });
     this.pluginRuntimes.set(request.trackId, nextRuntimes);
+    this.disabledPluginInstanceIds.set(request.trackId, nextDisabledIds);
     this.graphRevision += 1;
   }
 
@@ -312,15 +322,19 @@ export class AudioEngine implements IAudioEngine {
 
     const runtime = currentRuntimes[runtimeIndex];
     const nextRuntimes = currentRuntimes.filter((_, index) => index !== runtimeIndex);
+    const currentDisabledIds = this.getTrackDisabledPluginInstanceIds(trackId);
+    const nextDisabledIds = new Set(currentDisabledIds);
+    nextDisabledIds.delete(instanceId);
     this.replacePluginChainConnections({
       trackId,
       input,
       channel,
-      previousRuntimes: currentRuntimes,
-      nextRuntimes,
+      previousRuntimes: getEnabledPluginRuntimes(currentRuntimes, currentDisabledIds),
+      nextRuntimes: getEnabledPluginRuntimes(nextRuntimes, nextDisabledIds),
       runtimesToDisposeOnRollback: [],
     });
     this.pluginRuntimes.set(trackId, nextRuntimes);
+    this.disabledPluginInstanceIds.set(trackId, nextDisabledIds);
     this.graphRevision += 1;
     if (runtime) {
       this.disposePluginRuntimeSafely(runtime, '제거한 Plugin runtime 정리에 실패했습니다.');
@@ -355,6 +369,43 @@ export class AudioEngine implements IAudioEngine {
         }
       );
     }
+    this.graphRevision += 1;
+  }
+
+  setPluginEnabled(request: SetAudioPluginEnabledRequest): void {
+    this.ensureRuntimeReady();
+    const input = this.getExistingInput(request.trackId);
+    const channel = this.getExistingChannel(request.trackId);
+    const runtimes = this.getTrackPluginRuntimes(request.trackId);
+    if (!runtimes.some(runtime => runtime.instanceId === request.instanceId)) {
+      throw new AudioEngineError(
+        AudioEngineErrorCode.PLUGIN_INSTANCE_NOT_FOUND,
+        ERROR_MESSAGES.PLUGIN_INSTANCE_NOT_FOUND,
+        { instanceId: request.instanceId, trackId: request.trackId }
+      );
+    }
+
+    const currentDisabledIds = this.getTrackDisabledPluginInstanceIds(request.trackId);
+    const isCurrentlyEnabled = !currentDisabledIds.has(request.instanceId);
+    if (isCurrentlyEnabled === request.isEnabled) {
+      return;
+    }
+
+    const nextDisabledIds = new Set(currentDisabledIds);
+    if (request.isEnabled) {
+      nextDisabledIds.delete(request.instanceId);
+    } else {
+      nextDisabledIds.add(request.instanceId);
+    }
+    this.replacePluginChainConnections({
+      trackId: request.trackId,
+      input,
+      channel,
+      previousRuntimes: getEnabledPluginRuntimes(runtimes, currentDisabledIds),
+      nextRuntimes: getEnabledPluginRuntimes(runtimes, nextDisabledIds),
+      runtimesToDisposeOnRollback: [],
+    });
+    this.disabledPluginInstanceIds.set(request.trackId, nextDisabledIds);
     this.graphRevision += 1;
   }
 
@@ -594,14 +645,6 @@ export class AudioEngine implements IAudioEngine {
         }
         instanceIds.add(instance.instanceId);
 
-        if (!instance.isEnabled) {
-          throw new AudioEngineError(
-            AudioEngineErrorCode.PLUGIN_BYPASS_UNSUPPORTED,
-            ERROR_MESSAGES.PLUGIN_BYPASS_UNSUPPORTED,
-            { instanceId: instance.instanceId, trackId }
-          );
-        }
-
         const factory = this.pluginRuntimeFactories.get(instance.manifestId);
         if (!factory) {
           throw new AudioEngineError(
@@ -758,6 +801,7 @@ export class AudioEngine implements IAudioEngine {
     this.desiredTrackVolumes.set(trackId, 1);
     this.players.set(trackId, new Map());
     this.pluginRuntimes.set(trackId, []);
+    this.disabledPluginInstanceIds.set(trackId, new Set());
     this.graphRevision += 1;
     this.applyGraphAudibility(this.captureActiveGraph());
     return { input, channel };
@@ -790,7 +834,16 @@ export class AudioEngine implements IAudioEngine {
           pluginInstances: track.pluginInstances,
         });
         graph.pluginRuntimes.set(track.id, pluginRuntimes);
-        this.connectPreparedPluginChain({ input, channel, runtimes: pluginRuntimes, trackId: track.id });
+        const disabledPluginInstanceIds = new Set(
+          track.pluginInstances.filter(instance => !instance.isEnabled).map(instance => instance.instanceId)
+        );
+        graph.disabledPluginInstanceIds.set(track.id, disabledPluginInstanceIds);
+        this.connectPreparedPluginChain({
+          input,
+          channel,
+          runtimes: getEnabledPluginRuntimes(pluginRuntimes, disabledPluginInstanceIds),
+          trackId: track.id,
+        });
         channel.connect(graph.output);
         channel.volume.value = Tone.gainToDb(track.volume);
         channel.pan.value = track.pan;
@@ -851,6 +904,7 @@ export class AudioEngine implements IAudioEngine {
       soloedTrackIds: new Set(),
       players: new Map(),
       pluginRuntimes: new Map(),
+      disabledPluginInstanceIds: new Map(),
     };
   }
 
@@ -864,6 +918,7 @@ export class AudioEngine implements IAudioEngine {
       soloedTrackIds: this.soloedTrackIds,
       players: this.players,
       pluginRuntimes: this.pluginRuntimes,
+      disabledPluginInstanceIds: this.disabledPluginInstanceIds,
     };
   }
 
@@ -876,6 +931,7 @@ export class AudioEngine implements IAudioEngine {
     this.soloedTrackIds = graph.soloedTrackIds;
     this.players = graph.players;
     this.pluginRuntimes = graph.pluginRuntimes;
+    this.disabledPluginInstanceIds = graph.disabledPluginInstanceIds;
   }
 
   private createRetiredGraph(graph: AudioProjectGraphState): IRetiredAudioProjectGraph {
@@ -905,6 +961,7 @@ export class AudioEngine implements IAudioEngine {
       const remainingRuntimes = runtimes.filter(runtime => !this.disposePluginRuntimeSafely(runtime, errorMessage));
       if (remainingRuntimes.length === 0) {
         graph.pluginRuntimes.delete(trackId);
+        graph.disabledPluginInstanceIds.delete(trackId);
         return;
       }
       graph.pluginRuntimes.set(trackId, remainingRuntimes);
@@ -1310,6 +1367,14 @@ export class AudioEngine implements IAudioEngine {
     return runtimes;
   }
 
+  private getTrackDisabledPluginInstanceIds(trackId: string): Set<string> {
+    const instanceIds = this.disabledPluginInstanceIds.get(trackId);
+    if (!instanceIds) {
+      throw new AudioEngineError(AudioEngineErrorCode.TRACK_NOT_FOUND, ERROR_MESSAGES.TRACK_NOT_FOUND, { trackId });
+    }
+    return instanceIds;
+  }
+
   private getRegionEntry(request: RescheduleRegionRequest): RegionPlayerEntry {
     const entry = this.players.get(request.trackId)?.get(request.regionId);
     if (!entry) {
@@ -1511,4 +1576,11 @@ function createPluginRuntimeFactoryMap(
 
 function getUniquePluginRuntimes(runtimes: readonly IAudioPluginRuntime[]): IAudioPluginRuntime[] {
   return [...new Set(runtimes)];
+}
+
+function getEnabledPluginRuntimes(
+  runtimes: readonly IAudioPluginRuntime[],
+  disabledInstanceIds: ReadonlySet<string>
+): IAudioPluginRuntime[] {
+  return runtimes.filter(runtime => !disabledInstanceIds.has(runtime.instanceId));
 }

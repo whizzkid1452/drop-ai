@@ -188,9 +188,12 @@ describe('Agent 시스템 Prompt', () => {
   it('Plugin context가 없을 때 Plugin 변경 명령을 금지한다', () => {
     const prompt = getSystemPrompt({});
 
-    expect(prompt).toContain('INSTALL_PLUGIN, REMOVE_PLUGIN, SET_PLUGIN_PARAMETER 요청은 []를 반환한다');
+    expect(prompt).toContain(
+      'INSTALL_PLUGIN, REMOVE_PLUGIN, SET_PLUGIN_ENABLED, SET_PLUGIN_PARAMETER 요청은 []를 반환한다'
+    );
     expect(prompt).toContain('INSTALL_PLUGIN');
     expect(prompt).toContain('REMOVE_PLUGIN');
+    expect(prompt).toContain('SET_PLUGIN_ENABLED');
     expect(prompt).toContain('SET_PLUGIN_PARAMETER');
   });
 
@@ -211,13 +214,17 @@ describe('Agent 시스템 Prompt', () => {
     const prompt = getSystemPrompt({ plugins, tracks });
 
     expect(prompt).not.toContain('현재 Agent 사용 금지');
-    expect(prompt).not.toContain('INSTALL_PLUGIN, REMOVE_PLUGIN, SET_PLUGIN_PARAMETER 요청은 []를 반환한다');
+    expect(prompt).not.toContain(
+      'INSTALL_PLUGIN, REMOVE_PLUGIN, SET_PLUGIN_ENABLED, SET_PLUGIN_PARAMETER 요청은 []를 반환한다'
+    );
     expect(prompt).toContain('INSTALL_PLUGIN은 위 catalog의 manifestId만 사용한다');
     expect(prompt).toContain('instanceId는 생략해 실행기가 생성하게 한다');
-    expect(prompt).toContain('REMOVE_PLUGIN은 위 Track에 표시된 instanceId만 사용한다');
+    expect(prompt).toContain('REMOVE_PLUGIN과 SET_PLUGIN_ENABLED는 위 Track에 표시된 instanceId만 사용한다');
+    expect(prompt).toContain('SET_PLUGIN_ENABLED의 isEnabled는 boolean만 쓴다');
     expect(prompt).toContain('SET_PLUGIN_PARAMETER는 해당 manifest에 표시된 Parameter 계약을 지킨다');
     expect(prompt).toContain(`"manifestId":"builtin.channel-tools"`);
     expect(prompt).toContain(`"instanceId":"${PLUGIN_INSTANCE_ID}"`);
+    expect(prompt).toContain('"type":"SET_PLUGIN_ENABLED"');
   });
 
   it('모든 시간 필드의 음수 금지 범위를 명시한다', () => {

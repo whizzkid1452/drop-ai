@@ -141,11 +141,36 @@ describe('Plugin 명령 계약', () => {
       type: AudioCommandType.INSTALL_PLUGIN,
       trackId: TRACK_ID,
       manifestId: 'builtin.gain',
+      isEnabled: false,
       parameterValues: { gain: 0.5 },
     };
 
     expect(AudioCommandSchema.parse(command)).toEqual(command);
     expect(StrictAudioCommandSchema.parse(command)).toEqual(command);
+  });
+
+  it('Plugin 활성화 상태 변경 명령을 허용한다', () => {
+    const command = {
+      type: AudioCommandType.SET_PLUGIN_ENABLED,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      isEnabled: false,
+    };
+
+    expect(AudioCommandSchema.parse(command)).toEqual(command);
+    expect(StrictAudioCommandSchema.parse(command)).toEqual(command);
+  });
+
+  it('Plugin 활성화 상태는 boolean만 허용한다', () => {
+    const command = {
+      type: AudioCommandType.SET_PLUGIN_ENABLED,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      isEnabled: 'false',
+    };
+
+    expect(AudioCommandSchema.safeParse(command).success).toBe(false);
+    expect(StrictAudioCommandSchema.safeParse(command).success).toBe(false);
   });
 
   it('Plugin 제거와 Parameter 변경 명령을 허용한다', () => {

@@ -170,6 +170,23 @@ describe('내부 CLI 명령 변환', () => {
   });
 
   it.each([
+    ['true', true],
+    ['false', false],
+  ] as const)('plugin enable의 %s 값을 SET_PLUGIN_ENABLED 명령으로 변환한다', async (rawValue, isEnabled) => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    const result = await commands.plugin.fn('enable', TRACK_ID, PLUGIN_INSTANCE_ID, rawValue);
+
+    expect(execute).toHaveBeenCalledWith({
+      type: AudioCommandType.SET_PLUGIN_ENABLED,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      isEnabled,
+    });
+    expect(result).toBe(`Plugin ${PLUGIN_INSTANCE_ID} enabled state set to ${rawValue}`);
+  });
+
+  it.each([
     ['number', '0.5', 0.5],
     ['boolean', 'true', true],
     ['boolean', 'false', false],
@@ -192,6 +209,7 @@ describe('내부 CLI 명령 변환', () => {
   it.each([
     [['install', TRACK_ID], 'Error: Usage: plugin install <trackId> <manifestId> [instanceId]'],
     [['remove', TRACK_ID], 'Error: Usage: plugin remove <trackId> <instanceId>'],
+    [['enable', TRACK_ID, PLUGIN_INSTANCE_ID, 'yes'], 'Error: Plugin enabled state must be true or false.'],
     [
       ['set', TRACK_ID, PLUGIN_INSTANCE_ID, 'gain', 'boolean', 'yes'],
       'Error: Plugin Parameter value must match its declared CLI type.',
@@ -419,6 +437,7 @@ describe('내부 CLI 명령 변환', () => {
     expect(result).not.toContain('region add <trackId> <regionId> <url>');
     expect(result).toContain('region split <trackId> <regionId> <time>');
     expect(result).toContain('plugin install <trackId> <manifestId> [instanceId]');
+    expect(result).toContain('plugin enable <trackId> <instanceId> <true|false>');
     expect(result).toContain('plugin set <trackId> <instanceId> <parameterId> <number|boolean|string> <value>');
     expect(result).toContain('save');
     expect(result).not.toContain('--help');

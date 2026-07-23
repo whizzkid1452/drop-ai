@@ -10,6 +10,7 @@ import type {
   RegionData,
   ReplaceRegionRequest,
   RescheduleRegionRequest,
+  SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
 } from './i-audio-engine';
 import type { PluginParameterValue } from '../shared/types/plugin-state';
@@ -23,6 +24,7 @@ interface MockTrackState {
 
 interface MockPluginState {
   readonly manifestId: string;
+  isEnabled: boolean;
   readonly parameters: Map<string, PluginParameterValue>;
 }
 
@@ -119,6 +121,7 @@ export class MockAudioEngine implements IAudioEngine {
     }
     trackPlugins.set(request.instanceId, {
       manifestId: request.manifestId,
+      isEnabled: request.isEnabled ?? true,
       parameters: new Map(request.parameterValues),
     });
     this.graphRevision += 1;
@@ -138,6 +141,15 @@ export class MockAudioEngine implements IAudioEngine {
       throw this.createPluginInstanceNotFoundError(request.trackId, request.instanceId);
     }
     plugin.parameters.set(request.parameterId, request.value);
+    this.graphRevision += 1;
+  }
+
+  setPluginEnabled(request: SetAudioPluginEnabledRequest): void {
+    const plugin = this.getTrackPlugins(request.trackId).get(request.instanceId);
+    if (!plugin) {
+      throw this.createPluginInstanceNotFoundError(request.trackId, request.instanceId);
+    }
+    plugin.isEnabled = request.isEnabled;
     this.graphRevision += 1;
   }
 
@@ -220,16 +232,9 @@ export class MockAudioEngine implements IAudioEngine {
             { instanceId: instance.instanceId, trackId: track.id }
           );
         }
-        if (!instance.isEnabled) {
-          throw new AudioEngineError(
-            AudioEngineErrorCode.PLUGIN_BYPASS_UNSUPPORTED,
-            ERROR_MESSAGES.PLUGIN_BYPASS_UNSUPPORTED,
-            { instanceId: instance.instanceId, trackId: track.id }
-          );
-        }
-
         trackPlugins.set(instance.instanceId, {
           manifestId: instance.manifestId,
+          isEnabled: instance.isEnabled,
           parameters: new Map(instance.parameterValues),
         });
       });

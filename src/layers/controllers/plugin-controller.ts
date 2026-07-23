@@ -20,6 +20,7 @@ export interface InstallPluginRequest {
   readonly trackId: string;
   readonly instanceId: string;
   readonly manifestId: string;
+  readonly isEnabled?: boolean;
   readonly parameterValues: Readonly<Record<string, PluginParameterValue>>;
 }
 
@@ -31,6 +32,10 @@ export interface RemovePluginRequest {
 export interface SetPluginParameterRequest extends RemovePluginRequest {
   readonly parameterId: string;
   readonly value: PluginParameterValue;
+}
+
+export interface SetPluginEnabledRequest extends RemovePluginRequest {
+  readonly isEnabled: boolean;
 }
 
 interface CreateParameterStatesRequest {
@@ -71,16 +76,18 @@ export class PluginController {
 
     const manifest = this.getManifestOrThrow(request.manifestId);
     const parameters = this.createParameterStates({ manifest, parameterValues: request.parameterValues });
+    const isEnabled = request.isEnabled ?? true;
     const instance: PluginInstanceState = {
       id: request.instanceId,
       manifestSummary: createPluginManifestSummary(manifest),
-      isEnabled: true,
+      isEnabled,
       parameters,
     };
     this.audioEngine.installPlugin({
       trackId: request.trackId,
       instanceId: request.instanceId,
       manifestId: request.manifestId,
+      isEnabled,
       parameterValues: new Map(parameters.map(parameter => [parameter.id, parameter.value])),
     });
     this.sessionStore.getState().addPluginInstance({ trackId: request.trackId, instance });
@@ -106,6 +113,15 @@ export class PluginController {
     this.validateParameterValue({ manifestId: manifest.id, parameter, value: request.value });
     this.audioEngine.setPluginParameter(request);
     this.sessionStore.getState().setPluginParameterValue(request);
+  }
+
+  setPluginEnabled(request: SetPluginEnabledRequest): void {
+    const instance = this.getPluginInstanceOrThrow(request);
+    if (instance.isEnabled === request.isEnabled) {
+      return;
+    }
+    this.audioEngine.setPluginEnabled(request);
+    this.sessionStore.getState().setPluginInstanceEnabled(request);
   }
 
   private createParameterStates({ manifest, parameterValues }: CreateParameterStatesRequest): PluginParameterState[] {

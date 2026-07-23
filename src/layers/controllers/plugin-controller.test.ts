@@ -90,6 +90,7 @@ describe('PluginController', () => {
       trackId: 'track-1',
       instanceId: 'plugin-1',
       manifestId: 'builtin.gain',
+      isEnabled: true,
       parameterValues: new Map([['gain', 1]]),
     });
     expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances).toEqual([
@@ -100,6 +101,22 @@ describe('PluginController', () => {
         parameters: [{ id: 'gain', value: 1 }],
       },
     ]);
+  });
+
+  it('비활성화된 Plugin을 AudioEngine과 Session에 같은 상태로 설치한다', () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    const installPlugin = vi.spyOn(audioEngine, 'installPlugin');
+
+    controller.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      isEnabled: false,
+      parameterValues: {},
+    });
+
+    expect(installPlugin).toHaveBeenCalledWith(expect.objectContaining({ instanceId: 'plugin-1', isEnabled: false }));
+    expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances[0]?.isEnabled).toBe(false);
   });
 
   it('AudioEngine 설치가 실패하면 Session에 Plugin을 추가하지 않는다', () => {
@@ -193,6 +210,44 @@ describe('PluginController', () => {
     expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances[0]?.parameters).toEqual([
       { id: 'gain', value: 1 },
     ]);
+  });
+
+  it('Plugin 활성화 상태를 AudioEngine 성공 후 Session에 반영한다', () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    controller.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: {},
+    });
+    const setPluginEnabled = vi.spyOn(audioEngine, 'setPluginEnabled');
+
+    controller.setPluginEnabled({ trackId: 'track-1', instanceId: 'plugin-1', isEnabled: false });
+
+    expect(setPluginEnabled).toHaveBeenCalledWith({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      isEnabled: false,
+    });
+    expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances[0]?.isEnabled).toBe(false);
+  });
+
+  it('AudioEngine 활성화 상태 변경이 실패하면 Session 상태를 유지한다', () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    controller.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: {},
+    });
+    vi.spyOn(audioEngine, 'setPluginEnabled').mockImplementation(() => {
+      throw new Error('enable failed');
+    });
+
+    expect(() => controller.setPluginEnabled({ trackId: 'track-1', instanceId: 'plugin-1', isEnabled: false })).toThrow(
+      'enable failed'
+    );
+    expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances[0]?.isEnabled).toBe(true);
   });
 
   it('중복 instance와 없는 Parameter를 AudioEngine 호출 전에 거부한다', () => {

@@ -452,6 +452,52 @@ describe('CommandExecutor', () => {
     expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances).toEqual([]);
   });
 
+  it('SET_PLUGIN_ENABLED 명령을 실행하고 Undo와 Redo로 복원한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await commandExecutor.execute({
+      type: AudioCommandType.INSTALL_PLUGIN,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      manifestId: 'builtin.gain',
+    });
+
+    await commandExecutor.execute({
+      type: AudioCommandType.SET_PLUGIN_ENABLED,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      isEnabled: false,
+    });
+    expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances[0]?.isEnabled).toBe(false);
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances[0]?.isEnabled).toBe(true);
+
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances[0]?.isEnabled).toBe(false);
+  });
+
+  it('비활성화된 Plugin을 제거한 뒤 Undo하면 비활성 상태로 복원한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await commandExecutor.execute({
+      type: AudioCommandType.INSTALL_PLUGIN,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      manifestId: 'builtin.gain',
+      isEnabled: false,
+    });
+
+    await commandExecutor.execute({
+      type: AudioCommandType.REMOVE_PLUGIN,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+    });
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances[0]?.isEnabled).toBe(false);
+  });
+
   it('INSTALL_PLUGIN 명령으로 기본값을 가진 Plugin을 설치한다', async () => {
     const { commandExecutor, session } = createTestContext();
     await addTrack(commandExecutor);

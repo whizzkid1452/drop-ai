@@ -552,6 +552,52 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     expect(toneMocks.gainRampTo).toHaveBeenCalledWith(0.25, 0.01);
   });
 
+  it('비활성 Plugin은 체인에서 우회하고 다시 활성화할 수 있다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('track-1');
+    const trackInput = toneMocks.gains[1];
+
+    engine.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      isEnabled: false,
+      parameterValues: new Map(),
+    });
+    const pluginGain = toneMocks.gains[2];
+
+    expect(trackInput?.destination).toBe(toneMocks.channels[0]);
+    expect(pluginGain?.destination).toBeUndefined();
+
+    engine.setPluginEnabled({ trackId: 'track-1', instanceId: 'plugin-1', isEnabled: true });
+    expect(trackInput?.destination).toBe(pluginGain);
+    expect(pluginGain?.destination).toBe(toneMocks.channels[0]);
+
+    engine.setPluginEnabled({ trackId: 'track-1', instanceId: 'plugin-1', isEnabled: false });
+    expect(trackInput?.destination).toBe(toneMocks.channels[0]);
+    expect(pluginGain?.destination).toBeUndefined();
+  });
+
+  it('Plugin 활성화 연결이 실패하면 이전 우회 연결을 복원한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('track-1');
+    engine.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      isEnabled: false,
+      parameterValues: new Map(),
+    });
+    toneMocks.gainConnectFailures.push(new Error('connect failed'));
+
+    expect(() => engine.setPluginEnabled({ trackId: 'track-1', instanceId: 'plugin-1', isEnabled: true })).toThrowError(
+      expect.objectContaining({ code: AudioEngineErrorCode.PLUGIN_CHAIN_UPDATE_FAILED })
+    );
+
+    expect(toneMocks.gains[1]?.destination).toBe(toneMocks.channels[0]);
+    expect(toneMocks.gains[2]?.destination).toBeUndefined();
+  });
+
   it('Plugin을 제거하고 남은 체인을 다시 연결한다', async () => {
     const engine = createPluginAudioEngine();
     await engine.addTrack('track-1');
@@ -1175,33 +1221,38 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     ).rejects.toMatchObject({ code: AudioEngineErrorCode.PLUGIN_INSTANCE_ID_CONFLICT });
   });
 
-  it('bypass 구현 전에는 비활성 Plugin runtime을 만들지 않는다', async () => {
+  it('프로젝트의 비활성 Plugin runtime을 만들고 체인에서는 우회한다', async () => {
     const engine = createPluginAudioEngine();
 
-    await expect(
-      engine.prepareProjectGraph({
-        tracks: [
-          {
-            id: 'replacement-track',
-            volume: 1,
-            pan: 0,
-            isMuted: false,
-            isSoloed: false,
-            pluginInstances: [
-              {
-                instanceId: 'plugin-1',
-                manifestId: 'builtin.gain',
-                isEnabled: false,
-                parameterValues: new Map(),
-              },
-            ],
-            regions: [],
-          },
-        ],
-      })
-    ).rejects.toMatchObject({ code: AudioEngineErrorCode.PLUGIN_BYPASS_UNSUPPORTED });
+    const preparedGraph = await engine.prepareProjectGraph({
+      tracks: [
+        {
+          id: 'replacement-track',
+          volume: 1,
+          pan: 0,
+          isMuted: false,
+          isSoloed: false,
+          pluginInstances: [
+            {
+              instanceId: 'plugin-1',
+              manifestId: 'builtin.gain',
+              isEnabled: false,
+              parameterValues: new Map(),
+            },
+          ],
+          regions: [],
+        },
+      ],
+    });
+    preparedGraph.activate();
 
-    expect(toneMocks.gains).toHaveLength(3);
+    expect(toneMocks.gains).toHaveLength(4);
+    expect(toneMocks.gains[2]?.destination).toBe(toneMocks.channels[0]);
+    expect(toneMocks.gains[3]?.destination).toBeUndefined();
+
+    engine.setPluginEnabled({ trackId: 'replacement-track', instanceId: 'plugin-1', isEnabled: true });
+    expect(toneMocks.gains[2]?.destination).toBe(toneMocks.gains[3]);
+    expect(toneMocks.gains[3]?.destination).toBe(toneMocks.channels[0]);
   });
 
   it('새 프로젝트 Region 로드 실패 시 준비 그래프만 정리하고 기존 그래프를 유지한다', async () => {

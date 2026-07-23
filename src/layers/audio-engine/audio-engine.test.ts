@@ -100,6 +100,9 @@ describe('MockAudioEngine - Phase 2 검증', () => {
           value: 0.5,
         })
       ).not.toThrow();
+      expect(() =>
+        engine.setPluginEnabled({ trackId: 'track-1', instanceId: 'plugin-1', isEnabled: false })
+      ).not.toThrow();
       expect(() => engine.removePlugin('track-1', 'plugin-1')).not.toThrow();
     });
 
@@ -130,6 +133,9 @@ describe('MockAudioEngine - Phase 2 검증', () => {
           parameterId: 'gain',
           value: 0.5,
         })
+      ).toThrowError(expect.objectContaining({ code: AudioEngineErrorCode.PLUGIN_INSTANCE_NOT_FOUND }));
+      expect(() =>
+        engine.setPluginEnabled({ trackId: 'track-1', instanceId: 'missing-plugin', isEnabled: false })
       ).toThrowError(expect.objectContaining({ code: AudioEngineErrorCode.PLUGIN_INSTANCE_NOT_FOUND }));
     });
   });
@@ -225,15 +231,18 @@ describe('MockAudioEngine - Phase 2 검증', () => {
       expect(engine.getTrackParams(replacementTrack.id)).toBeNull();
     });
 
-    it('bypass 구현 전에는 비활성 Plugin 복원을 명시적으로 거부한다', async () => {
+    it('비활성 Plugin을 포함한 프로젝트 그래프를 복원한다', async () => {
       const disabledTrack = {
         ...replacementTrack,
         pluginInstances: replacementTrack.pluginInstances.map(instance => ({ ...instance, isEnabled: false })),
       };
 
-      await expect(engine.prepareProjectGraph({ tracks: [disabledTrack] })).rejects.toMatchObject({
-        code: AudioEngineErrorCode.PLUGIN_BYPASS_UNSUPPORTED,
-      });
+      const preparedGraph = await engine.prepareProjectGraph({ tracks: [disabledTrack] });
+      preparedGraph.activate();
+
+      expect(() =>
+        engine.setPluginEnabled({ trackId: disabledTrack.id, instanceId: 'plugin-1', isEnabled: true })
+      ).not.toThrow();
     });
   });
 
