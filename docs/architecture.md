@@ -369,6 +369,12 @@ Region의 끝 시각은 `startTimeSeconds + durationSeconds`로 계산하므로 
 0에서 시작하고, 후속 저장소는 교체 저장에 성공할 때 1씩 증가시킨다. 이 값은 편집 횟수, Undo 번호, 저장되지 않은 변경
 여부가 아니다. 일반 편집과 Undo에서는 유지하고, 저장 성공 후 Repository가 반환한 값으로만 교체한다.
 
+`ProjectDocumentV2Schema`는 Plugin 저장 전환을 위한 별도 계약이다. Track의 설치 순서를 보존하는 배열에 instance UUID,
+manifest ID·version, 활성 상태, Parameter ID·값을 저장한다. Parameter 값은 boolean, 유한 number, 앞뒤 공백이 없는
+255자 이하 string만 허용한다. Plugin instance UUID는 문서 전체에서, Parameter ID는 각 instance 안에서 중복될 수 없다.
+함수, DSP node, runtime 같은 실행 객체는 엄격한 객체 검증으로 거부한다. 현재 `ProjectDocumentSchema`, Reader, Mapper는
+계속 v1을 사용한다. v2 활성화와 v1→v2 마이그레이션은 소비자 전환 단계에서 수행한다.
+
 `readProjectDocument`는 신뢰할 수 없는 입력에서 문서 식별자와 정수 `schemaVersion`을 먼저 읽고, 지원하는 버전의 전체
 Schema를 적용한다. `readProjectDocumentJson`은 JSON 문법 오류를 문서 구조 오류와 구분한다. 현재 실제로 정의된 형식은
 v1뿐이다. v0은 유효하지 않은 버전으로, v2 이상은 `UNSUPPORTED_SCHEMA_VERSION`으로 거부한다. 과거 형식의 필드를

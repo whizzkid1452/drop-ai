@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { PROJECT_DOCUMENT_SCHEMA_VERSION, ProjectDocumentSchema } from './project-document.schema';
+import {
+  PROJECT_DOCUMENT_SCHEMA_VERSION,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
+  ProjectDocumentSchema,
+  ProjectDocumentV2Schema,
+} from './project-document.schema';
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
 const SOURCE_ID = '22222222-2222-4222-8222-222222222222';
 const TRACK_ID = '33333333-3333-4333-8333-333333333333';
 const REGION_ID = '44444444-4444-4444-8444-444444444444';
+const PLUGIN_INSTANCE_ID = '55555555-5555-4555-8555-555555555555';
 
 function createValidProjectDocument() {
   return {
@@ -54,6 +60,26 @@ function createValidProjectDocument() {
         ],
       },
     ],
+  };
+}
+
+function createValidProjectDocumentV2() {
+  const document = createValidProjectDocument();
+  return {
+    ...document,
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
+    tracks: document.tracks.map(track => ({
+      ...track,
+      pluginInstances: [
+        {
+          id: PLUGIN_INSTANCE_ID,
+          manifestId: 'builtin.gain',
+          manifestVersion: '1.0.0',
+          isEnabled: true,
+          parameters: [{ id: 'gain', value: 1.25 }],
+        },
+      ],
+    })),
   };
 }
 
@@ -301,3 +327,134 @@ describe('ProjectDocumentSchema', () => {
     });
   });
 });
+
+describe('ProjectDocumentV2Schema', () => {
+  it('Plugin 인스턴스와 Parameter 값을 JSON 왕복 가능한 값으로 검증한다', () => {
+    const document = createValidProjectDocumentV2();
+
+    const parsed = ProjectDocumentV2Schema.parse(JSON.parse(JSON.stringify(document)));
+
+    expect(parsed).toEqual(document);
+  });
+
+  it('v1은 Plugin 필드를 거부하고 v2는 Track별 Plugin 배열을 요구한다', () => {
+    const v1WithPluginState = {
+      ...createValidProjectDocument(),
+      tracks: createValidProjectDocumentV2().tracks,
+    };
+    const v2WithoutPluginState = {
+      ...createValidProjectDocumentV2(),
+      tracks: createValidProjectDocument().tracks,
+    };
+
+    expect(ProjectDocumentSchema.safeParse(v1WithPluginState).success).toBe(false);
+    expect(ProjectDocumentV2Schema.safeParse(v2WithoutPluginState).success).toBe(false);
+  });
+
+  it('boolean·유한 number·문자열 Parameter 값만 허용한다', () => {
+    const document = createValidProjectDocumentV2();
+    const instance = document.tracks[0].pluginInstances[0];
+    const validValues = [false, 0.5, 'warm'];
+
+    validValues.forEach(value => {
+      const candidate = {
+        ...document,
+        tracks: [
+          {
+            ...document.tracks[0],
+            pluginInstances: [{ ...instance, parameters: [{ id: 'value', value }] }],
+          },
+        ],
+      };
+      expect(ProjectDocumentV2Schema.safeParse(candidate).success).toBe(true);
+    });
+
+    ['', Number.NaN, Number.POSITIVE_INFINITY, 'x'.repeat(256), null, { value: 1 }].forEach(value => {
+      const candidate = {
+        ...document,
+        tracks: [
+          {
+            ...document.tracks[0],
+            pluginInstances: [{ ...instance, parameters: [{ id: 'value', value }] }],
+          },
+        ],
+      };
+      expect(ProjectDocumentV2Schema.safeParse(candidate).success).toBe(false);
+    });
+  });
+
+  it('Plugin instance ID와 instance 내부 Parameter ID 중복을 거부한다', () => {
+    const document = createValidProjectDocumentV2();
+    const instance = document.tracks[0].pluginInstances[0];
+    const duplicateInstanceDocument = {
+      ...document,
+      tracks: [
+        {
+          ...document.tracks[0],
+          pluginInstances: [instance, { ...instance }],
+        },
+      ],
+    };
+    const duplicateParameterDocument = {
+      ...document,
+      tracks: [
+        {
+          ...document.tracks[0],
+          pluginInstances: [
+            {
+              ...instance,
+              parameters: [instance.parameters[0], { ...instance.parameters[0] }],
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(getV2ValidationIssuePaths(duplicateInstanceDocument)).toContain('tracks.0.pluginInstances.1.id');
+    expect(getV2ValidationIssuePaths(duplicateParameterDocument)).toContain(
+      'tracks.0.pluginInstances.0.parameters.1.id'
+    );
+  });
+
+  it('다른 Track에서도 같은 Plugin instance ID를 다시 사용할 수 없다', () => {
+    const document = createValidProjectDocumentV2();
+    const duplicateTrackDocument = {
+      ...document,
+      tracks: [
+        document.tracks[0],
+        {
+          ...document.tracks[0],
+          id: '66666666-6666-4666-8666-666666666666',
+          regions: [],
+        },
+      ],
+    };
+
+    expect(getV2ValidationIssuePaths(duplicateTrackDocument)).toContain('tracks.1.pluginInstances.0.id');
+  });
+
+  it('Plugin Runtime 구현 필드를 문서에 저장하지 못하게 한다', () => {
+    const document = createValidProjectDocumentV2();
+    const instance = document.tracks[0].pluginInstances[0];
+    const runtimeFieldDocument = {
+      ...document,
+      tracks: [
+        {
+          ...document.tracks[0],
+          pluginInstances: [{ ...instance, runtime: { connect: 'function' } }],
+        },
+      ],
+    };
+
+    expect(ProjectDocumentV2Schema.safeParse(runtimeFieldDocument).success).toBe(false);
+  });
+});
+
+function getV2ValidationIssuePaths(document: unknown): string[] {
+  const result = ProjectDocumentV2Schema.safeParse(document);
+  if (result.success) {
+    throw new Error('검증 실패를 예상했지만 v2 문서가 통과했습니다.');
+  }
+
+  return result.error.issues.map(issue => issue.path.join('.'));
+}
