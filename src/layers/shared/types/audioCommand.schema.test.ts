@@ -537,8 +537,14 @@ describe('Agent AudioCommand 묶음 파싱', () => {
     expect(result.error).toBeDefined();
   });
 
-  it('배열이 아닌 단일 명령 객체를 거부한다', () => {
+  it('유효한 단일 명령 객체를 한 개짜리 명령 묶음으로 정규화한다', () => {
     const result = parseAgentAudioCommandBatch({ commandString: '{"type":"PLAY"}' });
+
+    expect(result).toEqual({ commands: [{ type: AudioCommandType.PLAY }] });
+  });
+
+  it('추가 필드가 있는 단일 명령 객체를 거부한다', () => {
+    const result = parseAgentAudioCommandBatch({ commandString: '{"type":"EXPORT_AUDIO","startTime":1}' });
 
     expect(result.commands).toBeNull();
     expect(result.error).toBeDefined();

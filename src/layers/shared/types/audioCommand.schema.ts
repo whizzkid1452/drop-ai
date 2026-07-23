@@ -236,6 +236,12 @@ export const AudioCommandSchema = z.discriminatedUnion('type', [
 export type AudioCommand = z.infer<typeof AudioCommandSchema>;
 export const AudioCommandBatchSchema = z.array(AudioCommandSchema);
 export const AgentAudioCommandBatchSchema = z.array(StrictAudioCommandSchema);
+export const AGENT_AUDIO_COMMAND_BATCH_JSON_SCHEMA = JSON.stringify({
+  type: 'array',
+  items: {
+    type: 'object',
+  },
+});
 
 export function parseAgentAudioCommandBatch({ commandString }: { commandString: string }): {
   commands: AudioCommand[] | null;
@@ -249,11 +255,12 @@ export function parseAgentAudioCommandBatch({ commandString }: { commandString: 
     return { commands: null, error: `Agent response is not valid JSON: ${message}` };
   }
 
-  if (!Array.isArray(parsedResponse)) {
-    return { commands: null, error: 'Agent response must be a JSON array.' };
+  if (typeof parsedResponse !== 'object' || parsedResponse === null) {
+    return { commands: null, error: 'Agent response must be a JSON command or command array.' };
   }
 
-  const validatedBatch = AgentAudioCommandBatchSchema.safeParse(parsedResponse);
+  const commandBatch = Array.isArray(parsedResponse) ? parsedResponse : [parsedResponse];
+  const validatedBatch = AgentAudioCommandBatchSchema.safeParse(commandBatch);
   if (!validatedBatch.success) {
     const message = validatedBatch.error.issues.map(issue => issue.message).join(', ');
     return { commands: null, error: `Invalid command batch: ${message}` };

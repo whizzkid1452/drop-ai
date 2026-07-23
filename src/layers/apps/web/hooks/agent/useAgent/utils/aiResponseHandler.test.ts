@@ -35,6 +35,14 @@ describe('Agent 응답 명령 검증', () => {
     expect(executeMany).not.toHaveBeenCalled();
     expect(result.status).toBe('error');
     expect(result.parsedCommands).toBeNull();
+    expect(result.message).toContain('Invalid command batch');
+  });
+
+  it('단일 명령 객체 응답을 실행한다', async () => {
+    const result = await handleResponse('{"type":"PLAY"}');
+
+    expect(executeMany).toHaveBeenCalledWith([{ type: AudioCommandType.PLAY }]);
+    expect(result.executionResults).toEqual([{ commandType: AudioCommandType.PLAY, success: true }]);
   });
 
   it('Plugin context를 LLM 요청에 그대로 전달한다', async () => {

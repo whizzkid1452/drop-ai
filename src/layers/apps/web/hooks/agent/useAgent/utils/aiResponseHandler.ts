@@ -111,7 +111,7 @@ export async function handleAIResponse(deps: AIResponseHandlerDependencies) {
   }
 
   return {
-    message: fullResponse || 'no response',
+    message: error ?? fullResponse,
     status: error ? 'error' : 'idle',
     parsedCommands: commands,
     executionResults: [],

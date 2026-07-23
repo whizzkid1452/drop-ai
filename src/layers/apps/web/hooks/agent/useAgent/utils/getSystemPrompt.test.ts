@@ -291,6 +291,13 @@ describe('Agent 시스템 Prompt', () => {
     expect(prompt).toContain('"endTime":<seconds >= 0>');
   });
 
+  it('MM:SS 내보내기 범위를 초로 변환한 예시를 제공한다', () => {
+    const prompt = getSystemPrompt({ tracks });
+
+    expect(prompt).toContain('"set export range from 0:00 to 1:30"');
+    expect(prompt).toContain('"type":"SET_EXPORT_RANGE","startTime":0,"endTime":90');
+  });
+
   it('큰 프로젝트 컨텍스트를 제한하고 잘림을 표시한다', () => {
     const manyTracks = Array.from(
       { length: 40 },

@@ -1,6 +1,8 @@
 import { generateErrorDiagnostic } from './errorHandler';
 import { getSystemPrompt, type AgentPromptPlugin, type AgentPromptTrack } from './getSystemPrompt';
+import { createAgentUserPrompt } from './create-agent-user-prompt';
 import type { MLCEngine } from '@/types/webllm.types';
+import { AGENT_AUDIO_COMMAND_BATCH_JSON_SCHEMA } from '@/types/audioCommand.schema';
 import { throwIfAgentRequestCancelled } from './agent-request-cancelled-error';
 
 export async function queryToLLM({
@@ -17,16 +19,21 @@ export async function queryToLLM({
   userInput: string;
 }) {
   const systemPrompt = getSystemPrompt({ plugins, tracks });
+  const agentUserPrompt = createAgentUserPrompt(userInput);
 
   try {
     throwIfAgentRequestCancelled(signal);
     const completion = await engine.chat.completions.create({
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: userInput },
+        { role: 'user', content: agentUserPrompt },
       ],
       max_tokens: 200,
       temperature: 0.1,
+      response_format: {
+        type: 'json_object',
+        schema: AGENT_AUDIO_COMMAND_BATCH_JSON_SCHEMA,
+      },
     });
     throwIfAgentRequestCancelled(signal);
 
