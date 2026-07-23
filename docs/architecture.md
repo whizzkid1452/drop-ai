@@ -97,7 +97,7 @@ slider·toggle·select control이 실제 Parameter ID와 맞는 type을 참조�
 PluginController에는 `IPluginHost`를 주입한다. Apps에는 Host, PluginController, 전체 manifest를 노출하지 않는다.
 PluginController는 manifest·인스턴스·Parameter를 검증하고 AudioEngine 변경이 성공한 뒤 Session을 변경한다. 현재 지원하는
 lifecycle은 설치·제거·Parameter 변경이며 활성화·비활성화는 아직 지원하지 않는다. Plugin 구현은 Plugin SDK 외 프로젝트
-계층을 import하지 않는다.
+계층을 import하지 않는다. PluginController와 프로젝트 Plugin 호환성 경계는 같은 Shared Parameter 값 검증 규칙을 사용한다.
 
 AudioEngine 계층의 `ToneGainPluginRuntimeFactory`는 주입받은 manifest ID와 Gain Parameter 계약으로 Tone.js `Gain`
 runtime을 만든다. 초기값과 변경값의 type·유한성·범위를 검사하고, 변경은 0.01초 ramp로 적용한다. runtime은 연결·해제·폐기
@@ -375,7 +375,10 @@ manifest ID·version, 활성 상태, Parameter ID·값을 저장한다. Paramete
 함수, DSP node, runtime 같은 실행 객체는 엄격한 객체 검증으로 거부한다. 현재 `ProjectDocumentSchema`, Reader, Mapper는
 계속 v1을 사용한다. 별도 `readProjectDocumentV2`는 v1과 v2를 입력으로 받고 항상 검증·복제된 v2를 반환한다. v1 Track에는
 빈 `pluginInstances`를 추가하고, v2 Plugin 상태는 그대로 보존한다. `readProjectDocumentJsonV2`도 같은 규칙을 적용한다.
-아직 Mapper와 Repository는 이 경계를 호출하지 않으므로 활성 저장 형식 전환은 후속 소비자 변경이다.
+`validateProjectPluginCompatibility`는 저장 manifest ID·version을 현재 Plugin catalog와 정확히 비교하고, Parameter ID
+집합·number 범위·boolean type·enum option을 검증한다. 성공 시 catalog 정의 순서의 Session Plugin 상태를 반환하고,
+실패 시 manifest 누락·version 불일치·Parameter 누락·알 수 없는 Parameter·값 오류를 issue로 구분한다. 아직 Mapper와
+Repository는 두 경계를 호출하지 않으므로 활성 저장 형식 전환은 후속 소비자 변경이다.
 
 `readProjectDocument`는 신뢰할 수 없는 입력에서 문서 식별자와 정수 `schemaVersion`을 먼저 읽고, 지원하는 버전의 전체
 Schema를 적용한다. `readProjectDocumentJson`은 JSON 문법 오류를 문서 구조 오류와 구분한다. 현재 실제로 정의된 형식은
@@ -528,8 +531,8 @@ runtime과 그래프만 정리하고 기존 그래프를 유지한다. 현재 �
 재생은 `Player → Track input → Plugin runtime[] → Channel → output` 순서를 사용하며 Plugin이 없으면 input과 Channel을
 직접 연결한다. ProjectController는 Session Plugin 상태를 준비 요청으로 변환한다. 다만 현재 활성 Mapper는 v1 문서를 읽어
 Plugin 배열을 비우므로 저장 프로젝트 복원에는 아직 Plugin이 전달되지 않는다. Export도 Plugin 상태를 입력으로 받지 않는다.
-프로젝트 그래프 계약 자체는 manifest version 호환성을 판단하지 않는다. v2 Mapper 전환 전에 등록 manifest와 저장 version의
-정확한 호환성 검증을 별도 경계에 추가해야 한다. v2 Mapper 전환과 Export Plugin 처리를 추가하기 전까지 불러온 프로젝트와
+프로젝트 그래프 계약 자체는 manifest version 호환성을 판단하지 않는다. Shared 호환성 검증 경계는 준비됐지만 v2 Mapper가
+그래프 준비 전에 이를 호출하도록 연결해야 한다. v2 Mapper 전환과 Export Plugin 처리를 추가하기 전까지 불러온 프로젝트와
 내보낸 파일에는 Plugin chain이 반영되지 않는다. 각 프로젝트 그래프는
 전용 출력 gate를 가지며, prepared 그래프는 gate를 닫은 상태로 Region 디코딩과 예약을 끝낸다. Solo는 Tone.js
 Channel에 `solo=true`를 설정하지 않고 현재 프로젝트의 `isSoloed` 집합에서 각 Channel의 실제 mute를 계산한다. 따라서

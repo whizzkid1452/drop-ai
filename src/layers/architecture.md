@@ -80,7 +80,8 @@ Composition Root와 테스트에서만 import하고, PluginController는 `IPlugi
 PluginHost와 전체 manifest는 Apps에 노출하지 않는다. PluginController는 설치 전에 manifest·인스턴스·Parameter를 검증하고,
 AudioEngine 변경이 성공한 뒤 Session을 변경한다. 따라서 AudioEngine 호출이 실패하면 Session은 바뀌지 않는다. 현재
 지원하는 lifecycle은 설치·제거·Parameter 변경이며 활성화·비활성화는 아직 지원하지 않는다. `plugins/`의 production 코드는
-Plugin SDK 외 프로젝트 계층을 import하지 않는다.
+Plugin SDK 외 프로젝트 계층을 import하지 않는다. PluginController의 값 검증과 프로젝트 호환성 검증은 Shared의 같은
+`isPluginParameterValueCompatible` 규칙을 사용한다.
 
 AudioEngine 계층의 `ToneGainPluginRuntimeFactory`는 주입받은 manifest ID와 Gain Parameter 계약으로 Tone.js `Gain`
 runtime을 만든다. 초기값과 변경값의 type·유한성·범위를 검사하고, 변경은 0.01초 ramp로 적용한다. runtime은 후속
@@ -110,6 +111,9 @@ Track별 Plugin 설치 순서, instance UUID, manifest ID·version, 활성 상�
 저장한다. instance UUID는 문서 전체에서, Parameter ID는 instance 안에서 중복될 수 없다. 현재 Mapper와 Reader의 활성
 형식은 아직 v1이다. `readProjectDocumentV2`는 v1을 검증한 뒤 각 Track에 빈 Plugin 배열을 넣어 v2로 바꾸고, 이미 v2인
 입력은 Plugin 상태를 보존해 검증·복제한다. 이 함수는 아직 Mapper·Repository에서 사용하지 않는 명시적 전환 경계다.
+Shared의 `validateProjectPluginCompatibility`는 저장 manifest ID·version을 현재 Plugin catalog와 정확히 비교하고,
+Parameter ID 집합·number 범위·boolean type·enum option을 검증한다. 성공하면 catalog 정의 순서의 Session Plugin 상태를
+반환하고, 실패하면 원인을 구분한 issue를 반환한다. 현재 v1 Mapper는 아직 이 함수를 호출하지 않는다.
 
 `createApp`은 새 프로젝트의 UUID·이름·revision 0을 만들거나 검증을 마친 기존 metadata를 Session에 주입한다.
 `project.revision`은 편집 횟수나 저장 여부가 아니라 마지막 성공 저장 snapshot의 동시성 제어 값이다. 일반 편집과
@@ -179,9 +183,9 @@ Region 연결을 준비하고, `prepareProjectGraph`는 출력 gate가 닫힌 �
 실시간 재생은 `Player → Track input → Plugin runtime[] → Channel → output` 순서를 사용한다. Plugin이 없으면 Track input이
 Channel에 직접 연결된다. ProjectController도 Session Plugin 상태를 준비 요청으로 바꾸지만 현재 활성 Mapper가 v1 문서의
 Plugin 배열을 비워 두므로 저장 프로젝트에는 아직 이 경로가 사용되지 않는다. Export도 Plugin 상태를 입력으로 받지 않는다.
-프로젝트 그래프 계약은 manifest version 호환성을 판단하지 않는다. v2 Mapper 전환 전 등록 manifest와 저장 version의 정확한
-호환성 검증을 별도로 추가해야 한다. v2 Mapper 전환과 Export Plugin 처리를 추가하기 전까지 불러온 프로젝트와 내보낸 파일에는
-Plugin chain이 반영되지 않는다. 준비 실패나
+프로젝트 그래프 계약은 manifest version 호환성을 판단하지 않는다. Shared 호환성 검증 경계는 준비됐지만 v2 Mapper 전환에서
+반드시 먼저 호출해야 한다. v2 Mapper 전환과 Export Plugin 처리를 추가하기 전까지 불러온 프로젝트와 내보낸 파일에는 Plugin
+chain이 반영되지 않는다. 준비 실패나
 active revision 변경에서는 기존 Registry와 AudioEngine 그래프를 유지한다. Controller는 두 prepared 대상의
 `assertActivatable`을 먼저 모두 통과시킨 뒤, 중간 `await` 없이 Engine → Registry → Session 순서로 활성화해야 한다.
 Engine 활성화 중 Transport나 출력 gate 변경이 실패하면 기존 재생 상태와 gate를 보상하고 교체를 거부한다. 이전 그래프와

@@ -6,6 +6,7 @@ import {
   type PluginParameterManifest,
 } from '../plugin-sdk/plugin-manifest.schema';
 import type { SessionStore, TrackState } from '../session/session';
+import { isPluginParameterValueCompatible } from '../shared/project-plugin-compatibility';
 import type { PluginInstanceState, PluginParameterState, PluginParameterValue } from '../shared/types/plugin-state';
 import { ProjectStateError, ProjectStateErrorCode } from './project-state-error';
 
@@ -128,7 +129,7 @@ export class PluginController {
   }
 
   private validateParameterValue({ manifestId, parameter, value }: ValidateParameterValueRequest): void {
-    if (isValidParameterValue(parameter, value)) {
+    if (isPluginParameterValueCompatible(parameter, value)) {
       return;
     }
 
@@ -174,16 +175,4 @@ export class PluginController {
       { manifestId }
     );
   }
-}
-
-function isValidParameterValue(parameter: PluginParameterManifest, value: PluginParameterValue): boolean {
-  if (parameter.type === 'boolean') {
-    return typeof value === 'boolean';
-  }
-  if (parameter.type === 'enum') {
-    return typeof value === 'string' && parameter.options.some(option => option.value === value);
-  }
-  return (
-    typeof value === 'number' && Number.isFinite(value) && value >= parameter.minValue && value <= parameter.maxValue
-  );
 }
