@@ -1,9 +1,11 @@
 import { AudioEngineError, AudioEngineErrorCode, ERROR_MESSAGES } from './errors';
 import { COMPLETE_RESOURCE_CLEANUP } from '../shared/types/resource-cleanup';
+import { insertArrayEntry, moveArrayEntry } from '../shared/array-order';
 import type {
   ExportRequest,
   IAudioEngine,
   InstallAudioPluginRequest,
+  MoveAudioPluginRequest,
   IPreparedAudioProjectGraph,
   IRetiredAudioProjectGraph,
   PrepareAudioProjectGraphRequest,
@@ -119,11 +121,20 @@ export class MockAudioEngine implements IAudioEngine {
         { instanceId: request.instanceId, trackId: request.trackId }
       );
     }
-    trackPlugins.set(request.instanceId, {
-      manifestId: request.manifestId,
-      isEnabled: request.isEnabled ?? true,
-      parameters: new Map(request.parameterValues),
-    });
+    const targetIndex = request.targetIndex ?? trackPlugins.size;
+    this.validatePluginTargetIndex({ ...request, targetIndex, maximumIndex: trackPlugins.size });
+    const pluginEntry: [string, MockPluginState] = [
+      request.instanceId,
+      {
+        manifestId: request.manifestId,
+        isEnabled: request.isEnabled ?? true,
+        parameters: new Map(request.parameterValues),
+      },
+    ];
+    this.mockPlugins.set(
+      request.trackId,
+      new Map(insertArrayEntry({ entries: [...trackPlugins.entries()], entry: pluginEntry, targetIndex }))
+    );
     this.graphRevision += 1;
   }
 
@@ -132,6 +143,22 @@ export class MockAudioEngine implements IAudioEngine {
     if (!trackPlugins.delete(instanceId)) {
       throw this.createPluginInstanceNotFoundError(trackId, instanceId);
     }
+    this.graphRevision += 1;
+  }
+
+  movePlugin(request: MoveAudioPluginRequest): void {
+    const trackPlugins = this.getTrackPlugins(request.trackId);
+    const pluginEntries = [...trackPlugins.entries()];
+    const sourceIndex = pluginEntries.findIndex(([instanceId]) => instanceId === request.instanceId);
+    if (sourceIndex < 0) {
+      throw this.createPluginInstanceNotFoundError(request.trackId, request.instanceId);
+    }
+    this.validatePluginTargetIndex({ ...request, maximumIndex: pluginEntries.length - 1 });
+    if (sourceIndex === request.targetIndex) {
+      return;
+    }
+    const nextEntries = moveArrayEntry({ entries: pluginEntries, sourceIndex, targetIndex: request.targetIndex });
+    this.mockPlugins.set(request.trackId, new Map(nextEntries));
     this.graphRevision += 1;
   }
 
@@ -328,6 +355,22 @@ export class MockAudioEngine implements IAudioEngine {
       AudioEngineErrorCode.PLUGIN_INSTANCE_NOT_FOUND,
       ERROR_MESSAGES.PLUGIN_INSTANCE_NOT_FOUND,
       { instanceId, trackId }
+    );
+  }
+
+  private validatePluginTargetIndex({
+    trackId,
+    instanceId,
+    targetIndex,
+    maximumIndex,
+  }: MoveAudioPluginRequest & { readonly maximumIndex: number }): void {
+    if (Number.isInteger(targetIndex) && targetIndex >= 0 && targetIndex <= maximumIndex) {
+      return;
+    }
+    throw new AudioEngineError(
+      AudioEngineErrorCode.PLUGIN_TARGET_INDEX_OUT_OF_RANGE,
+      ERROR_MESSAGES.PLUGIN_TARGET_INDEX_OUT_OF_RANGE,
+      { instanceId, maximumIndex, targetIndex, trackId }
     );
   }
 

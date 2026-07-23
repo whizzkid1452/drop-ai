@@ -23,8 +23,9 @@ AudioEngine 객체를 노출하지 않는다. 현재 `PlaybackClockQuery`는 `Pl
 `CommandHistory`는 현재 앱 실행 중에만 유지하는 최대 100개의 역명령 기록이다. `CommandExecutor`가 성공한 편집의 실행 전후
 Session을 비교해 Undo·Redo 명령을 만들고, `UNDO`와 `REDO`도 같은 대기열에서 실행한다. Undo·Redo가 실패하면 해당 기록을
 반대쪽 스택으로 옮기지 않는다. 새 편집은 Redo 기록을 제거한다. 지원 범위는 Track 추가, Region 추가·삭제·이동, tempo,
-Track volume·pan·mute·solo, Export 범위 설정·해제, Plugin 설치·제거·활성화 상태·Parameter 변경이다. Plugin 기록은 같은
-인스턴스 ID, manifest ID, 활성화 상태, Parameter 값을 사용해 상태를 복원한다. 재생·playhead·저장·내보내기는 기록하지 않는다. Track 삭제와 Region
+Track volume·pan·mute·solo, Export 범위 설정·해제, Plugin 설치·제거·처리 순서·활성화 상태·Parameter 변경이다. Plugin 기록은 같은
+인스턴스 ID, manifest ID, 설치 위치, 활성화 상태, Parameter 값을 사용해 상태를 복원한다. 제거 Undo도 원래 설치 위치를 복원한다.
+재생·playhead·저장·내보내기는 기록하지 않는다. Track 삭제와 Region
 분할은 손실 없는 복원 명령이 아직 없으므로 Session 변경이 확인되면 기존 기록을 제거한다. 프로젝트 불러오기도 다른
 프로젝트의 명령을 재사용하지 않도록 기록을 제거한다. Session 구독자 예외가 상태 반영 뒤 발생한 경우에는 반영된 편집을
 기록하고 원래 예외를 호출자에게 전달한다. Apps에는 `canUndo`·`canRedo` 조회와 구독만 노출한다. 이 기록은
@@ -41,7 +42,7 @@ Agent Prompt는 현재 AudioCommand 전체의 필드와 범위를 설명하고 �
 아직 없으므로 Agent는 `ADD_TRACK`을 만들지 않는다. `LOAD_REGION`은 기존 Track의 첫 등록 Source Region을 재사용할 수
 있을 때만 제한적으로 사용한다. 등록 Source Region은 목록의 실제 `sourceId`를 사용한다. Agent 명령의 `url` 필드는
 금지하며 `sourceId`를 만들거나 추측하지 않는다. Agent Prompt는 Session이 공개한 Plugin catalog의 Parameter 계약과 Track별
-instance·현재 값을 전달한다. Agent는 목록의 manifest·instance·Parameter만 사용하며 활성화 상태와 Parameter boolean은
+instance·현재 값·0부터 시작하는 `chainIndex`를 전달한다. Agent는 목록의 manifest·instance·Parameter만 사용하며 활성화 상태와 Parameter boolean은
 boolean type을, number는 범위를, enum은 option을 지켜야 한다. catalog가 없으면 설치와 Parameter 변경을 막고, instance도
 없으면 Plugin 명령 전체를 막는다. 프로젝트와 Plugin
 컨텍스트는 모델 입력 한도를 넘길 위험을 줄이도록 각각 길이를 제한하고 잘림 여부를 표시한다.
@@ -62,7 +63,7 @@ Session과 AudioCommand에는 저장하지 않는다. API 존재 확인은 실�
 
 Session의 Plugin 런타임 상태는 Track별 Plugin 인스턴스, Plugin 카탈로그, manifest 검증 결과, 런타임 로그로 나눈다.
 Plugin 인스턴스는 ID, manifest 요약, 활성 여부, boolean·number·string 매개변수 값을 가진다. 카탈로그·검증 결과·로그
-Action과 Plugin 설치·제거·활성화 상태·Parameter 변경 Action은 입력 객체를 복제해 저장하며, 프로젝트 상태 교체 시 Track의 Plugin
+Action과 Plugin 설치·제거·처리 순서·활성화 상태·Parameter 변경 Action은 입력 객체를 복제해 저장하며, 프로젝트 상태 교체 시 Track의 Plugin
 인스턴스도 깊은 복사한다. Composition Root는 시작할 때 내장 Gain manifest를 PluginHost에 등록하고, Apps에 공개해도 되는
 ID·이름·버전·Parameter 계약과 검증 결과만 Session에 한 번의 상태 변경으로 반영한다. Parameter 계약은 number 범위·step,
 boolean 기본값, enum option을 포함하지만 DSP와 UI 구현은 포함하지 않는다. 이 등록은 manifest 선언을 카탈로그에 추가하는
@@ -80,7 +81,7 @@ registry 내부 값에 영향을 주지 않는다. PluginHost production 코드�
 Composition Root와 테스트에서만 import하고, PluginController는 `IPluginHost` 계약에 의존한다. Composition Root가 만든
 PluginHost와 전체 manifest는 Apps에 노출하지 않는다. PluginController는 설치 전에 manifest·인스턴스·Parameter를 검증하고,
 AudioEngine 변경이 성공한 뒤 Session을 변경한다. 따라서 AudioEngine 호출이 실패하면 Session은 바뀌지 않는다. 지원하는
-lifecycle은 설치·제거·활성화 상태·Parameter 변경이다. `plugins/`의 production 코드는
+lifecycle은 설치·제거·처리 순서·활성화 상태·Parameter 변경이다. `plugins/`의 production 코드는
 Plugin SDK 외 프로젝트 계층을 import하지 않는다. PluginController의 값 검증과 프로젝트 호환성 검증은 Shared의 같은
 `isPluginParameterValueCompatible` 규칙을 사용한다.
 
@@ -91,15 +92,17 @@ ramp로, Drive 변경은 Tone.js `Distortion.distortion` 값 교체로 적용한
 연결·해제·폐기 계약을 제공한다. Composition Root는 브라우저 기본 AudioEngine과 Session catalog에 내장 Gain·Saturation을
 함께 등록한다. AudioEngine은 Plugin runtime을 설치 순서대로 보관하고, 활성 runtime만
 `Track input → Plugin runtime[] → Channel`에 직렬 연결한다. 비활성화는 runtime을 폐기하지 않고 chain에서 우회하는 hard
-bypass다. 활성화·비활성화와 제거는 남은 활성 chain을 다시 연결한다. 연결 변경 실패 시 이전 chain 복원을 시도하며,
+bypass다. 활성화·비활성화·제거·순서 변경은 남은 활성 chain을 다시 연결한다. 순서 변경은 runtime을 새로 만들지 않는다.
+연결 변경 실패 시 이전 순서와 chain 복원을 시도하며,
 복원도 실패한 동안에는 다른 실시간 오디오 작업을 거부하고 다음 호출에서 복원을 먼저 재시도한다.
-`INSTALL_PLUGIN`, `REMOVE_PLUGIN`, `SET_PLUGIN_ENABLED`, `SET_PLUGIN_PARAMETER`는
+`INSTALL_PLUGIN`, `REMOVE_PLUGIN`, `MOVE_PLUGIN`, `SET_PLUGIN_ENABLED`, `SET_PLUGIN_PARAMETER`는
 CommandExecutor와 PluginController를 거쳐 이 API를 호출한다. Web JSON CLI는 이 공통 Schema를 사용할 수 있다. 이름 기반
-내부 CLI도 `plugin install`, `plugin remove`, `plugin enable`, `plugin set`을 같은 CommandExecutor에 전달한다. `plugin enable`은
+내부 CLI도 `plugin install`, `plugin remove`, `plugin move`, `plugin enable`, `plugin set`을 같은 CommandExecutor에 전달한다.
+`plugin move`의 `targetIndex`는 0부터 시작한다. `plugin enable`은
 `true`·`false`만 받고, `plugin set` 값은
 `number`·`boolean`·`string` type을 명시해 변환한다. Agent도 제한된 Plugin catalog와 Track instance를 Prompt로 받아 같은
 CommandExecutor 경로를 사용한다. Web Track UI는 Session catalog의 Parameter type을 number slider·boolean checkbox·enum
-select로 표시한다. 설치·제거·활성화 상태·Parameter 변경은 UI에서 상태를 직접 바꾸지 않고 같은 AudioCommand와 CommandExecutor 경로를
+select로 표시하고, 위·아래 버튼은 처리 순서를 한 칸씩 바꾼다. 설치·제거·처리 순서·활성화 상태·Parameter 변경은 UI에서 상태를 직접 바꾸지 않고 같은 AudioCommand와 CommandExecutor 경로를
 사용한다. 현재 UI는 manifest가 선언한 별도 배치 정보가 아니라 Parameter type 기반의 공통 배치를 사용한다.
 
 영구 저장 형식은 Shared의 `ProjectDocumentSchema`와 `ProjectDocumentV2Schema`로 검증한다. v1은 Track·Region과 오디오

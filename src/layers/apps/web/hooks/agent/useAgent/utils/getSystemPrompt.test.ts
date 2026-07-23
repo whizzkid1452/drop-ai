@@ -189,7 +189,7 @@ describe('Agent 시스템 Prompt', () => {
     const prompt = getSystemPrompt({});
 
     expect(prompt).toContain(
-      'INSTALL_PLUGIN, REMOVE_PLUGIN, SET_PLUGIN_ENABLED, SET_PLUGIN_PARAMETER 요청은 []를 반환한다'
+      'INSTALL_PLUGIN, REMOVE_PLUGIN, MOVE_PLUGIN, SET_PLUGIN_ENABLED, SET_PLUGIN_PARAMETER 요청은 []를 반환한다'
     );
     expect(prompt).toContain('INSTALL_PLUGIN');
     expect(prompt).toContain('REMOVE_PLUGIN');
@@ -205,9 +205,28 @@ describe('Agent 시스템 Prompt', () => {
     expect(prompt).toContain('id=bypass, name=Bypass, type=boolean, default=false');
     expect(prompt).toContain('id=mode, name=Mode, type=enum, default=clean, options=[clean,warm]');
     expect(prompt).toContain(
-      `instanceId=${PLUGIN_INSTANCE_ID}, manifestId=builtin.channel-tools, enabled=true, ` +
+      `chainIndex=0, instanceId=${PLUGIN_INSTANCE_ID}, manifestId=builtin.channel-tools, enabled=true, ` +
         'parameters=[gain=0.75,bypass=false,mode="warm"]'
     );
+  });
+
+  it('Plugin 처리 순서 변경에 표시된 0부터 시작하는 위치를 사용한다', () => {
+    const secondInstanceId = '55555555-5555-4555-8555-555555555555';
+    const prompt = getSystemPrompt({
+      plugins,
+      tracks: [
+        {
+          ...tracks[0],
+          pluginInstances: [tracks[0].pluginInstances[0], { ...tracks[0].pluginInstances[0], id: secondInstanceId }],
+        },
+      ],
+    });
+
+    expect(prompt).toContain(`chainIndex=1, instanceId=${secondInstanceId}`);
+    expect(prompt).toContain(
+      `{"type":"MOVE_PLUGIN","trackId":"${TRACK_ID}","instanceId":"${PLUGIN_INSTANCE_ID}","targetIndex":1}`
+    );
+    expect(prompt).toContain('MOVE_PLUGIN은 같은 Track에 표시된 chainIndex만 targetIndex로 사용한다');
   });
 
   it('목록에 있는 Plugin과 Parameter만 사용하도록 제한한다', () => {
@@ -215,11 +234,12 @@ describe('Agent 시스템 Prompt', () => {
 
     expect(prompt).not.toContain('현재 Agent 사용 금지');
     expect(prompt).not.toContain(
-      'INSTALL_PLUGIN, REMOVE_PLUGIN, SET_PLUGIN_ENABLED, SET_PLUGIN_PARAMETER 요청은 []를 반환한다'
+      'INSTALL_PLUGIN, REMOVE_PLUGIN, MOVE_PLUGIN, SET_PLUGIN_ENABLED, SET_PLUGIN_PARAMETER 요청은 []를 반환한다'
     );
     expect(prompt).toContain('INSTALL_PLUGIN은 위 catalog의 manifestId만 사용한다');
     expect(prompt).toContain('instanceId는 생략해 실행기가 생성하게 한다');
     expect(prompt).toContain('REMOVE_PLUGIN과 SET_PLUGIN_ENABLED는 위 Track에 표시된 instanceId만 사용한다');
+    expect(prompt).toContain('MOVE_PLUGIN은 같은 Track에 표시된 chainIndex만 targetIndex로 사용한다');
     expect(prompt).toContain('SET_PLUGIN_ENABLED의 isEnabled는 boolean만 쓴다');
     expect(prompt).toContain('SET_PLUGIN_PARAMETER는 해당 manifest에 표시된 Parameter 계약을 지킨다');
     expect(prompt).toContain(`"manifestId":"builtin.channel-tools"`);

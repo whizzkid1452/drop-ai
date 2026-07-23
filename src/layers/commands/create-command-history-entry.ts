@@ -33,6 +33,12 @@ interface FindPluginInstanceRequest {
   readonly instanceId: string;
 }
 
+interface CreateInstallPluginCommandRequest {
+  readonly trackId: string;
+  readonly instance: PluginInstanceState;
+  readonly targetIndex: number;
+}
+
 function createEntry({ executeCommand, label, redoCommand, undoCommand }: CreateEntryOptions): CommandHistoryEntry {
   return {
     label,
@@ -80,13 +86,18 @@ function findPluginInstance({ session, trackId, instanceId }: FindPluginInstance
   return track && instance ? { instance, track } : null;
 }
 
-function createInstallPluginCommand(trackId: string, instance: PluginInstanceState): AudioCommand {
+function createInstallPluginCommand({
+  trackId,
+  instance,
+  targetIndex,
+}: CreateInstallPluginCommandRequest): AudioCommand {
   return {
     type: AudioCommandType.INSTALL_PLUGIN,
     trackId,
     instanceId: instance.id,
     manifestId: instance.manifestSummary.id,
     isEnabled: instance.isEnabled,
+    targetIndex,
     parameterValues: Object.fromEntries(instance.parameters.map(parameter => [parameter.id, parameter.value])),
   };
 }
@@ -239,7 +250,13 @@ export function createCommandHistoryEntry({
           trackId: command.trackId,
           instanceId: installedInstance.instance.id,
         },
-        redoCommand: createInstallPluginCommand(command.trackId, installedInstance.instance),
+        redoCommand: createInstallPluginCommand({
+          trackId: command.trackId,
+          instance: installedInstance.instance,
+          targetIndex: installedInstance.track.pluginInstances.findIndex(
+            instance => instance.id === installedInstance.instance.id
+          ),
+        }),
       });
     }
 
@@ -258,7 +275,45 @@ export function createCommandHistoryEntry({
       return createEntry({
         executeCommand,
         label: command.type,
-        undoCommand: createInstallPluginCommand(command.trackId, removedInstance.instance),
+        undoCommand: createInstallPluginCommand({
+          trackId: command.trackId,
+          instance: removedInstance.instance,
+          targetIndex: removedInstance.track.pluginInstances.findIndex(
+            instance => instance.id === removedInstance.instance.id
+          ),
+        }),
+        redoCommand: command,
+      });
+    }
+
+    case AudioCommandType.MOVE_PLUGIN: {
+      const beforeInstance = findPluginInstance({
+        session: beforeSession,
+        trackId: command.trackId,
+        instanceId: command.instanceId,
+      });
+      const afterInstance = findPluginInstance({
+        session: afterSession,
+        trackId: command.trackId,
+        instanceId: command.instanceId,
+      });
+      const beforeIndex = beforeInstance?.track.pluginInstances.findIndex(
+        instance => instance.id === command.instanceId
+      );
+      const afterIndex = afterInstance?.track.pluginInstances.findIndex(instance => instance.id === command.instanceId);
+      if (
+        beforeIndex === undefined ||
+        afterIndex === undefined ||
+        beforeIndex < 0 ||
+        beforeIndex === afterIndex ||
+        afterIndex !== command.targetIndex
+      ) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        undoCommand: { ...command, targetIndex: beforeIndex },
         redoCommand: command,
       });
     }

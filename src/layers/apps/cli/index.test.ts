@@ -169,6 +169,20 @@ describe('내부 CLI 명령 변환', () => {
     expect(result).toBe(`Plugin ${PLUGIN_INSTANCE_ID} removed from track ${TRACK_ID}`);
   });
 
+  it('plugin move 인자를 MOVE_PLUGIN 명령으로 변환한다', async () => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    const result = await commands.plugin.fn('move', TRACK_ID, PLUGIN_INSTANCE_ID, '1');
+
+    expect(execute).toHaveBeenCalledWith({
+      type: AudioCommandType.MOVE_PLUGIN,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      targetIndex: 1,
+    });
+    expect(result).toBe(`Plugin ${PLUGIN_INSTANCE_ID} moved to index 1 on track ${TRACK_ID}`);
+  });
+
   it.each([
     ['true', true],
     ['false', false],
@@ -209,6 +223,10 @@ describe('내부 CLI 명령 변환', () => {
   it.each([
     [['install', TRACK_ID], 'Error: Usage: plugin install <trackId> <manifestId> [instanceId]'],
     [['remove', TRACK_ID], 'Error: Usage: plugin remove <trackId> <instanceId>'],
+    [['move', TRACK_ID, PLUGIN_INSTANCE_ID], 'Error: Usage: plugin move <trackId> <instanceId> <targetIndex>'],
+    [['move', TRACK_ID, PLUGIN_INSTANCE_ID, '-1'], 'Error: Plugin target index must be a non-negative integer.'],
+    [['move', TRACK_ID, PLUGIN_INSTANCE_ID, '0.5'], 'Error: Plugin target index must be a non-negative integer.'],
+    [['move', TRACK_ID, PLUGIN_INSTANCE_ID, 'Infinity'], 'Error: Plugin target index must be a non-negative integer.'],
     [['enable', TRACK_ID, PLUGIN_INSTANCE_ID, 'yes'], 'Error: Plugin enabled state must be true or false.'],
     [
       ['set', TRACK_ID, PLUGIN_INSTANCE_ID, 'gain', 'boolean', 'yes'],
@@ -437,6 +455,7 @@ describe('내부 CLI 명령 변환', () => {
     expect(result).not.toContain('region add <trackId> <regionId> <url>');
     expect(result).toContain('region split <trackId> <regionId> <time>');
     expect(result).toContain('plugin install <trackId> <manifestId> [instanceId]');
+    expect(result).toContain('plugin move <trackId> <instanceId> <targetIndex>');
     expect(result).toContain('plugin enable <trackId> <instanceId> <true|false>');
     expect(result).toContain('plugin set <trackId> <instanceId> <parameterId> <number|boolean|string> <value>');
     expect(result).toContain('save');

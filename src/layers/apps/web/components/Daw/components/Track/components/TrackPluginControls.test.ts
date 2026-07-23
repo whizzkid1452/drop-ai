@@ -10,6 +10,7 @@ import { TrackPluginControls } from './TrackPluginControls';
 
 const trackId = '11111111-1111-4111-8111-111111111111';
 const instanceId = '22222222-2222-4222-8222-222222222222';
+const secondInstanceId = '33333333-3333-4333-8333-333333333333';
 const pluginCatalog = new Map<string, PluginCatalogEntry>([
   [
     'builtin.multi',
@@ -52,6 +53,13 @@ const pluginInstances: PluginInstanceState[] = [
       { id: 'enabled', value: true },
       { id: 'mode', value: 'clean' },
     ],
+  },
+];
+const orderedPluginInstances: PluginInstanceState[] = [
+  pluginInstances[0],
+  {
+    ...pluginInstances[0],
+    id: secondInstanceId,
   },
 ];
 
@@ -231,6 +239,43 @@ describe('TrackPluginControls', () => {
       instanceId,
       isEnabled: false,
     });
+  });
+
+  it('Plugin 아래 이동 버튼을 MOVE_PLUGIN 명령으로 실행한다', async () => {
+    layerMocks.pluginCatalog = pluginCatalog;
+    layerMocks.execute.mockResolvedValue(undefined);
+    const host = renderControls(orderedPluginInstances);
+    const moveDownButtons = host.querySelectorAll<HTMLButtonElement>(
+      'button[aria-label="Multi Effect Plugin 아래로 이동"]'
+    );
+    if (!moveDownButtons[0]) {
+      throw new Error('Plugin 아래 이동 버튼을 찾지 못했습니다.');
+    }
+
+    await act(async () => moveDownButtons[0].click());
+
+    expect(layerMocks.execute).toHaveBeenCalledWith({
+      type: AudioCommandType.MOVE_PLUGIN,
+      trackId,
+      instanceId,
+      targetIndex: 1,
+    });
+  });
+
+  it('Plugin 순서의 양 끝에서는 바깥 방향 이동을 막는다', () => {
+    layerMocks.pluginCatalog = pluginCatalog;
+    const host = renderControls(orderedPluginInstances);
+    const moveUpButtons = host.querySelectorAll<HTMLButtonElement>(
+      'button[aria-label="Multi Effect Plugin 위로 이동"]'
+    );
+    const moveDownButtons = host.querySelectorAll<HTMLButtonElement>(
+      'button[aria-label="Multi Effect Plugin 아래로 이동"]'
+    );
+
+    expect(moveUpButtons[0]?.disabled).toBe(true);
+    expect(moveDownButtons[0]?.disabled).toBe(false);
+    expect(moveUpButtons[1]?.disabled).toBe(false);
+    expect(moveDownButtons[1]?.disabled).toBe(true);
   });
 
   it('명령 처리 중에는 중복 실행을 막는다', async () => {

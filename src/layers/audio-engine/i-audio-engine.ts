@@ -58,7 +58,14 @@ export interface InstallAudioPluginRequest {
   readonly instanceId: string;
   readonly manifestId: string;
   readonly isEnabled?: boolean;
+  readonly targetIndex?: number;
   readonly parameterValues: ReadonlyMap<string, PluginParameterValue>;
+}
+
+export interface MoveAudioPluginRequest {
+  readonly trackId: string;
+  readonly instanceId: string;
+  readonly targetIndex: number;
 }
 
 export interface SetAudioPluginEnabledRequest {
@@ -125,6 +132,7 @@ export interface IAudioEngine {
   // Plugin Management
   installPlugin(request: InstallAudioPluginRequest): void;
   removePlugin(trackId: string, instanceId: string): void;
+  movePlugin(request: MoveAudioPluginRequest): void;
   setPluginEnabled(request: SetAudioPluginEnabledRequest): void;
   setPluginParameter(request: SetAudioPluginParameterRequest): void;
 

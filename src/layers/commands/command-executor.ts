@@ -183,12 +183,17 @@ export class CommandExecutor {
           instanceId: validatedCommand.instanceId ?? crypto.randomUUID(),
           manifestId: validatedCommand.manifestId,
           isEnabled: validatedCommand.isEnabled,
+          targetIndex: validatedCommand.targetIndex,
           parameterValues: validatedCommand.parameterValues ?? {},
         });
         return;
 
       case AudioCommandType.REMOVE_PLUGIN:
         this.controller.plugin.removePlugin(validatedCommand);
+        return;
+
+      case AudioCommandType.MOVE_PLUGIN:
+        this.controller.plugin.movePlugin(validatedCommand);
         return;
 
       case AudioCommandType.SET_PLUGIN_ENABLED:

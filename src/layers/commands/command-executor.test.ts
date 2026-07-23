@@ -18,6 +18,7 @@ const SECOND_REGION_ID = '33333333-3333-4333-8333-333333333333';
 const SOURCE_ID = '55555555-5555-4555-8555-555555555555';
 const SOURCE_OBJECT_URL = 'blob:command-source';
 const PLUGIN_INSTANCE_ID = '66666666-6666-4666-8666-666666666666';
+const SECOND_PLUGIN_INSTANCE_ID = '77777777-7777-4777-8777-777777777777';
 const INITIAL_PROJECT_METADATA = {
   id: '44444444-4444-4444-8444-444444444444',
   name: '테스트 프로젝트',
@@ -496,6 +497,75 @@ describe('CommandExecutor', () => {
     await commandExecutor.execute({ type: AudioCommandType.UNDO });
 
     expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances[0]?.isEnabled).toBe(false);
+  });
+
+  it('MOVE_PLUGIN으로 순서를 바꾸고 Undo와 Redo로 복원한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    for (const instanceId of [PLUGIN_INSTANCE_ID, SECOND_PLUGIN_INSTANCE_ID]) {
+      await commandExecutor.execute({
+        type: AudioCommandType.INSTALL_PLUGIN,
+        trackId: TRACK_ID,
+        instanceId,
+        manifestId: 'builtin.gain',
+      });
+    }
+
+    await commandExecutor.execute({
+      type: AudioCommandType.MOVE_PLUGIN,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      targetIndex: 1,
+    });
+    expect(
+      session
+        .getState()
+        .tracks.get(TRACK_ID)
+        ?.pluginInstances.map(instance => instance.id)
+    ).toEqual([SECOND_PLUGIN_INSTANCE_ID, PLUGIN_INSTANCE_ID]);
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(
+      session
+        .getState()
+        .tracks.get(TRACK_ID)
+        ?.pluginInstances.map(instance => instance.id)
+    ).toEqual([PLUGIN_INSTANCE_ID, SECOND_PLUGIN_INSTANCE_ID]);
+
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(
+      session
+        .getState()
+        .tracks.get(TRACK_ID)
+        ?.pluginInstances.map(instance => instance.id)
+    ).toEqual([SECOND_PLUGIN_INSTANCE_ID, PLUGIN_INSTANCE_ID]);
+  });
+
+  it('Plugin 제거를 Undo하면 원래 index에 복원한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    for (const instanceId of [PLUGIN_INSTANCE_ID, SECOND_PLUGIN_INSTANCE_ID]) {
+      await commandExecutor.execute({
+        type: AudioCommandType.INSTALL_PLUGIN,
+        trackId: TRACK_ID,
+        instanceId,
+        manifestId: 'builtin.gain',
+      });
+    }
+
+    await commandExecutor.execute({
+      type: AudioCommandType.REMOVE_PLUGIN,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+    });
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+
+    expect(
+      session
+        .getState()
+        .tracks.get(TRACK_ID)
+        ?.pluginInstances.map(instance => instance.id)
+    ).toEqual([PLUGIN_INSTANCE_ID, SECOND_PLUGIN_INSTANCE_ID]);
   });
 
   it('INSTALL_PLUGIN 명령으로 기본값을 가진 Plugin을 설치한다', async () => {

@@ -142,11 +142,36 @@ describe('Plugin 명령 계약', () => {
       trackId: TRACK_ID,
       manifestId: 'builtin.gain',
       isEnabled: false,
+      targetIndex: 0,
       parameterValues: { gain: 0.5 },
     };
 
     expect(AudioCommandSchema.parse(command)).toEqual(command);
     expect(StrictAudioCommandSchema.parse(command)).toEqual(command);
+  });
+
+  it('Plugin 순서 변경 명령을 허용한다', () => {
+    const command = {
+      type: AudioCommandType.MOVE_PLUGIN,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      targetIndex: 0,
+    };
+
+    expect(AudioCommandSchema.parse(command)).toEqual(command);
+    expect(StrictAudioCommandSchema.parse(command)).toEqual(command);
+  });
+
+  it.each([-1, 0.5, Number.POSITIVE_INFINITY])('유효하지 않은 Plugin targetIndex %s를 거부한다', targetIndex => {
+    const command = {
+      type: AudioCommandType.MOVE_PLUGIN,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      targetIndex,
+    };
+
+    expect(AudioCommandSchema.safeParse(command).success).toBe(false);
+    expect(StrictAudioCommandSchema.safeParse(command).success).toBe(false);
   });
 
   it('Plugin 활성화 상태 변경 명령을 허용한다', () => {

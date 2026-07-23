@@ -18,6 +18,10 @@ interface SetPluginParameterOptions extends PluginInstanceTarget {
   value: PluginParameterValue;
 }
 
+interface MovePluginOptions extends PluginInstanceTarget {
+  targetIndex: number;
+}
+
 interface SetPluginEnabledOptions extends PluginInstanceTarget {
   isEnabled: boolean;
 }
@@ -28,11 +32,17 @@ interface CommandExecutionOptions {
 }
 
 interface PluginActionExecutionOptions extends CommandExecutionOptions {
-  command: InstallPluginCommand | RemovePluginCommand | SetPluginEnabledCommand | SetPluginParameterCommand;
+  command:
+    | InstallPluginCommand
+    | MovePluginCommand
+    | RemovePluginCommand
+    | SetPluginEnabledCommand
+    | SetPluginParameterCommand;
   failureMessage: string;
 }
 
 type InstallPluginCommand = Extract<AudioCommand, { type: typeof AudioCommandType.INSTALL_PLUGIN }>;
+type MovePluginCommand = Extract<AudioCommand, { type: typeof AudioCommandType.MOVE_PLUGIN }>;
 type RemovePluginCommand = Extract<AudioCommand, { type: typeof AudioCommandType.REMOVE_PLUGIN }>;
 type SetPluginEnabledCommand = Extract<AudioCommand, { type: typeof AudioCommandType.SET_PLUGIN_ENABLED }>;
 type SetPluginParameterCommand = Extract<AudioCommand, { type: typeof AudioCommandType.SET_PLUGIN_PARAMETER }>;
@@ -70,6 +80,15 @@ export function createRemovePluginCommand({ trackId, instanceId }: PluginInstanc
     type: AudioCommandType.REMOVE_PLUGIN,
     trackId,
     instanceId,
+  };
+}
+
+export function createMovePluginCommand({ trackId, instanceId, targetIndex }: MovePluginOptions): MovePluginCommand {
+  return {
+    type: AudioCommandType.MOVE_PLUGIN,
+    trackId,
+    instanceId,
+    targetIndex,
   };
 }
 
@@ -124,6 +143,21 @@ export function executePluginRemoval({
   return executePluginAction({
     command: createRemovePluginCommand({ trackId, instanceId }),
     failureMessage: 'Plugin을 삭제하지 못했습니다',
+    executeCommand,
+    notifyFailure,
+  });
+}
+
+export function executePluginMove({
+  trackId,
+  instanceId,
+  targetIndex,
+  executeCommand,
+  notifyFailure,
+}: MovePluginOptions & CommandExecutionOptions): Promise<PluginActionResult> {
+  return executePluginAction({
+    command: createMovePluginCommand({ trackId, instanceId, targetIndex }),
+    failureMessage: 'Plugin 순서를 변경하지 못했습니다',
     executeCommand,
     notifyFailure,
   });

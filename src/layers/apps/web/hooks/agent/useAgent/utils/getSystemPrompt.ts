@@ -39,6 +39,11 @@ interface AgentPluginContext {
   visiblePlugins: readonly AgentPromptPlugin[];
 }
 
+interface PluginSafetyRules {
+  text: string;
+  nextRuleNumber: number;
+}
+
 export const AGENT_PROJECT_CONTEXT_MAX_CHARACTERS = 1600;
 export const AGENT_PLUGIN_CONTEXT_MAX_CHARACTERS = 1200;
 const EXAMPLE_PROJECT_ID = '99999999-9999-4999-8999-999999999999';
@@ -65,6 +70,8 @@ const COMMAND_REFERENCE = {
     '{"type":"INSTALL_PLUGIN","trackId":"<existing Track UUID>","manifestId":"<listed manifest ID>"} - Plugin 설치',
   [AudioCommandType.REMOVE_PLUGIN]:
     '{"type":"REMOVE_PLUGIN","trackId":"<existing Track UUID>","instanceId":"<existing Plugin instance UUID>"} - Plugin 제거',
+  [AudioCommandType.MOVE_PLUGIN]:
+    '{"type":"MOVE_PLUGIN","trackId":"<existing Track UUID>","instanceId":"<existing Plugin instance UUID>","targetIndex":<listed zero-based chain index>} - Plugin 처리 순서 변경',
   [AudioCommandType.SET_PLUGIN_ENABLED]:
     '{"type":"SET_PLUGIN_ENABLED","trackId":"<existing Track UUID>","instanceId":"<existing Plugin instance UUID>","isEnabled":<boolean>} - Plugin 활성화 상태 변경',
   [AudioCommandType.SET_PLUGIN_PARAMETER]:
@@ -139,7 +146,7 @@ function renderPluginInstance(instance: PluginInstanceState, index: number): str
     .map(parameter => `${parameter.id}=${JSON.stringify(parameter.value)}`)
     .join(',');
   return (
-    `  Plugin ${index + 1}: instanceId=${instance.id}, manifestId=${instance.manifestSummary.id}, ` +
+    `  Plugin ${index + 1}: chainIndex=${index}, instanceId=${instance.id}, manifestId=${instance.manifestSummary.id}, ` +
     `enabled=${instance.isEnabled}, parameters=[${parameters}]`
   );
 }
@@ -386,6 +393,19 @@ function createPluginExamples(
       },
     ],
   });
+  if (trackWithInstance.pluginInstances.length > 1) {
+    examples.push({
+      request: `Plugin instance ${instance.id}를 두 번째 순서로 이동해줘`,
+      commands: [
+        {
+          type: AudioCommandType.MOVE_PLUGIN,
+          trackId: trackWithInstance.id,
+          instanceId: instance.id,
+          targetIndex: 1,
+        },
+      ],
+    });
+  }
   const manifest = plugins.find(plugin => plugin.id === instance.manifestSummary.id);
   const parameter = manifest?.parameters[0];
   if (!parameter) {
@@ -412,21 +432,35 @@ function renderExamples(tracks: readonly AgentPromptTrack[], plugins: readonly A
     .join('\n');
 }
 
-function createPluginSafetyRules(projectContext: AgentProjectContext, pluginContext: AgentPluginContext): string {
+function createPluginSafetyRules(
+  projectContext: AgentProjectContext,
+  pluginContext: AgentPluginContext
+): PluginSafetyRules {
   const hasVisiblePluginInstance = projectContext.visibleTracks.some(track => track.pluginInstances.length > 0);
   if (pluginContext.visiblePlugins.length > 0) {
-    return `14. INSTALL_PLUGIN은 위 catalog의 manifestId만 사용한다. instanceId는 생략해 실행기가 생성하게 한다.
+    return {
+      text: `14. INSTALL_PLUGIN은 위 catalog의 manifestId만 사용한다. instanceId는 생략해 실행기가 생성하게 한다.
 15. REMOVE_PLUGIN과 SET_PLUGIN_ENABLED는 위 Track에 표시된 instanceId만 사용한다. 그 instance가 표시된 trackId를 함께 쓴다.
-16. SET_PLUGIN_ENABLED의 isEnabled는 boolean만 쓴다.
-17. SET_PLUGIN_PARAMETER는 해당 manifest에 표시된 Parameter 계약을 지킨다. number는 범위 안의 number, boolean은 boolean, enum은 options 중 string을 쓴다.
-18. 목록에 없는 manifestId, instanceId, Parameter ID나 값을 만들거나 추측하지 않는다.`;
+16. MOVE_PLUGIN은 같은 Track에 표시된 chainIndex만 targetIndex로 사용한다.
+17. SET_PLUGIN_ENABLED의 isEnabled는 boolean만 쓴다.
+18. SET_PLUGIN_PARAMETER는 해당 manifest에 표시된 Parameter 계약을 지킨다. number는 범위 안의 number, boolean은 boolean, enum은 options 중 string을 쓴다.
+19. 목록에 없는 manifestId, instanceId, Parameter ID나 값을 만들거나 추측하지 않는다.`,
+      nextRuleNumber: 20,
+    };
   }
   if (hasVisiblePluginInstance) {
-    return `14. Plugin manifest 목록이 없으므로 INSTALL_PLUGIN과 SET_PLUGIN_PARAMETER 요청은 []를 반환한다.
+    return {
+      text: `14. Plugin manifest 목록이 없으므로 INSTALL_PLUGIN과 SET_PLUGIN_PARAMETER 요청은 []를 반환한다.
 15. REMOVE_PLUGIN과 SET_PLUGIN_ENABLED는 위 Track에 표시된 instanceId만 사용한다. 그 instance가 표시된 trackId를 함께 쓴다.
-16. SET_PLUGIN_ENABLED의 isEnabled는 boolean만 쓴다.`;
+16. MOVE_PLUGIN은 같은 Track에 표시된 chainIndex만 targetIndex로 사용한다.
+17. SET_PLUGIN_ENABLED의 isEnabled는 boolean만 쓴다.`,
+      nextRuleNumber: 18,
+    };
   }
-  return '14. 현재 Plugin manifest와 instance 목록은 제공되지 않는다. INSTALL_PLUGIN, REMOVE_PLUGIN, SET_PLUGIN_ENABLED, SET_PLUGIN_PARAMETER 요청은 []를 반환한다.';
+  return {
+    text: '14. 현재 Plugin manifest와 instance 목록은 제공되지 않는다. INSTALL_PLUGIN, REMOVE_PLUGIN, MOVE_PLUGIN, SET_PLUGIN_ENABLED, SET_PLUGIN_PARAMETER 요청은 []를 반환한다.',
+    nextRuleNumber: 15,
+  };
 }
 
 export function getSystemPrompt({
@@ -466,8 +500,8 @@ ${renderCommandReference()}
 11. 편집과 저장을 함께 요청하면 SAVE_PROJECT를 해당 편집 명령 뒤에 둔다.
 12. LOAD_PROJECT는 사용자가 Project UUID를 명시했을 때만 사용한다. Project UUID를 임의로 만들지 않고, 다른 명령과 같은 배열에 넣지 않는다.
 13. UNDO와 REDO는 사용자가 명시적으로 요청했을 때만 사용한다. UNDO와 REDO는 다른 명령과 같은 배열에 넣지 않는다.
-${pluginSafetyRules}
-18. 요청을 안전하게 실행할 정보가 부족하면 []를 반환한다. 지원하지 않는 요청도 []를 반환한다.
+${pluginSafetyRules.text}
+${pluginSafetyRules.nextRuleNumber}. 요청을 안전하게 실행할 정보가 부족하면 []를 반환한다. 지원하지 않는 요청도 []를 반환한다.
 
 # 예시
 ${renderExamples(projectContext.visibleTracks, pluginContext.visiblePlugins)}

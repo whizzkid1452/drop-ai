@@ -17,6 +17,7 @@ const REGION_ADD_SOURCE_USAGE =
   'region add-source <trackId> <regionId> <sourceId> <startTime> <duration> [startOffset]';
 const PLUGIN_INSTALL_USAGE = 'plugin install <trackId> <manifestId> [instanceId]';
 const PLUGIN_REMOVE_USAGE = 'plugin remove <trackId> <instanceId>';
+const PLUGIN_MOVE_USAGE = 'plugin move <trackId> <instanceId> <targetIndex>';
 const PLUGIN_ENABLE_USAGE = 'plugin enable <trackId> <instanceId> <true|false>';
 const PLUGIN_SET_USAGE = 'plugin set <trackId> <instanceId> <parameterId> <number|boolean|string> <value>';
 
@@ -180,6 +181,24 @@ async function executePluginRemove(commandExecutor: CliCommandExecutor, args: st
   return `Plugin ${instanceId} removed from track ${trackId}`;
 }
 
+async function executePluginMove(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
+  const [trackId, instanceId, targetIndexValue] = args;
+  if (!trackId || !instanceId || targetIndexValue === undefined) {
+    return `Error: Usage: ${PLUGIN_MOVE_USAGE}`;
+  }
+  const targetIndex = parseFiniteNumber(targetIndexValue);
+  if (targetIndex === null || !Number.isInteger(targetIndex) || targetIndex < 0) {
+    return 'Error: Plugin target index must be a non-negative integer.';
+  }
+  await commandExecutor.execute({
+    type: AudioCommandType.MOVE_PLUGIN,
+    trackId,
+    instanceId,
+    targetIndex,
+  });
+  return `Plugin ${instanceId} moved to index ${targetIndex} on track ${trackId}`;
+}
+
 async function executePluginSet(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
   const [trackId, instanceId, parameterId, valueType, rawValue] = args;
   if (!trackId || !instanceId || !parameterId || !valueType || rawValue === undefined) {
@@ -228,13 +247,23 @@ async function executePluginCommand(commandExecutor: CliCommandExecutor, args: s
   if (subcommand === 'remove') {
     return executePluginRemove(commandExecutor, subcommandArgs);
   }
+  if (subcommand === 'move') {
+    return executePluginMove(commandExecutor, subcommandArgs);
+  }
   if (subcommand === 'enable') {
     return executePluginEnable(commandExecutor, subcommandArgs);
   }
   if (subcommand === 'set') {
     return executePluginSet(commandExecutor, subcommandArgs);
   }
-  return ['Usage:', PLUGIN_INSTALL_USAGE, PLUGIN_REMOVE_USAGE, PLUGIN_ENABLE_USAGE, PLUGIN_SET_USAGE].join('\n');
+  return [
+    'Usage:',
+    PLUGIN_INSTALL_USAGE,
+    PLUGIN_REMOVE_USAGE,
+    PLUGIN_MOVE_USAGE,
+    PLUGIN_ENABLE_USAGE,
+    PLUGIN_SET_USAGE,
+  ].join('\n');
 }
 
 async function executeExportCommand(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
@@ -370,7 +399,9 @@ export const createCliCommands = (commandExecutor: CliCommandExecutor, state: Cl
     },
     plugin: {
       description: 'Plugin management',
-      usage: [PLUGIN_INSTALL_USAGE, PLUGIN_REMOVE_USAGE, PLUGIN_ENABLE_USAGE, PLUGIN_SET_USAGE].join(' | '),
+      usage: [PLUGIN_INSTALL_USAGE, PLUGIN_REMOVE_USAGE, PLUGIN_MOVE_USAGE, PLUGIN_ENABLE_USAGE, PLUGIN_SET_USAGE].join(
+        ' | '
+      ),
       fn: (...args: string[]) => executePluginCommand(commandExecutor, args),
     },
     volume: {

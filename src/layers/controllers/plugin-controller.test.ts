@@ -91,6 +91,7 @@ describe('PluginController', () => {
       instanceId: 'plugin-1',
       manifestId: 'builtin.gain',
       isEnabled: true,
+      targetIndex: 0,
       parameterValues: new Map([['gain', 1]]),
     });
     expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances).toEqual([
@@ -117,6 +118,49 @@ describe('PluginController', () => {
 
     expect(installPlugin).toHaveBeenCalledWith(expect.objectContaining({ instanceId: 'plugin-1', isEnabled: false }));
     expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances[0]?.isEnabled).toBe(false);
+  });
+
+  it('Plugin을 지정한 index에 설치한다', () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    controller.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: {},
+    });
+    const installPlugin = vi.spyOn(audioEngine, 'installPlugin');
+
+    controller.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-2',
+      manifestId: 'builtin.gain',
+      targetIndex: 0,
+      parameterValues: {},
+    });
+
+    expect(installPlugin).toHaveBeenCalledWith(expect.objectContaining({ instanceId: 'plugin-2', targetIndex: 0 }));
+    expect(
+      sessionStore
+        .getState()
+        .tracks.get('track-1')
+        ?.pluginInstances.map(instance => instance.id)
+    ).toEqual(['plugin-2', 'plugin-1']);
+  });
+
+  it('Plugin 설치 index가 범위를 벗어나면 AudioEngine 호출 전에 거부한다', () => {
+    const { audioEngine, controller } = createTestContext();
+    const installPlugin = vi.spyOn(audioEngine, 'installPlugin');
+
+    expect(() =>
+      controller.installPlugin({
+        trackId: 'track-1',
+        instanceId: 'plugin-1',
+        manifestId: 'builtin.gain',
+        targetIndex: 1,
+        parameterValues: {},
+      })
+    ).toThrowError(expect.objectContaining({ code: ProjectStateErrorCode.PLUGIN_TARGET_INDEX_OUT_OF_RANGE }));
+    expect(installPlugin).not.toHaveBeenCalled();
   });
 
   it('AudioEngine 설치가 실패하면 Session에 Plugin을 추가하지 않는다', () => {
@@ -311,5 +355,69 @@ describe('PluginController', () => {
 
     expect(() => controller.removePlugin({ trackId: 'track-1', instanceId: 'plugin-1' })).toThrow('remove failed');
     expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances).toHaveLength(1);
+  });
+
+  it('Plugin 순서를 AudioEngine 성공 뒤 Session에 반영한다', () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    ['plugin-1', 'plugin-2'].forEach(instanceId =>
+      controller.installPlugin({
+        trackId: 'track-1',
+        instanceId,
+        manifestId: 'builtin.gain',
+        parameterValues: {},
+      })
+    );
+    const movePlugin = vi.spyOn(audioEngine, 'movePlugin');
+
+    controller.movePlugin({ trackId: 'track-1', instanceId: 'plugin-1', targetIndex: 1 });
+
+    expect(movePlugin).toHaveBeenCalledWith({ trackId: 'track-1', instanceId: 'plugin-1', targetIndex: 1 });
+    expect(
+      sessionStore
+        .getState()
+        .tracks.get('track-1')
+        ?.pluginInstances.map(instance => instance.id)
+    ).toEqual(['plugin-2', 'plugin-1']);
+  });
+
+  it('범위 밖 index를 AudioEngine 호출 전에 거부한다', () => {
+    const { audioEngine, controller } = createTestContext();
+    controller.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: {},
+    });
+    const movePlugin = vi.spyOn(audioEngine, 'movePlugin');
+
+    expect(() => controller.movePlugin({ trackId: 'track-1', instanceId: 'plugin-1', targetIndex: 1 })).toThrowError(
+      expect.objectContaining({ code: ProjectStateErrorCode.PLUGIN_TARGET_INDEX_OUT_OF_RANGE })
+    );
+    expect(movePlugin).not.toHaveBeenCalled();
+  });
+
+  it('AudioEngine 순서 변경이 실패하면 Session 순서를 유지한다', () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    ['plugin-1', 'plugin-2'].forEach(instanceId =>
+      controller.installPlugin({
+        trackId: 'track-1',
+        instanceId,
+        manifestId: 'builtin.gain',
+        parameterValues: {},
+      })
+    );
+    vi.spyOn(audioEngine, 'movePlugin').mockImplementation(() => {
+      throw new Error('move failed');
+    });
+
+    expect(() => controller.movePlugin({ trackId: 'track-1', instanceId: 'plugin-1', targetIndex: 1 })).toThrow(
+      'move failed'
+    );
+    expect(
+      sessionStore
+        .getState()
+        .tracks.get('track-1')
+        ?.pluginInstances.map(instance => instance.id)
+    ).toEqual(['plugin-1', 'plugin-2']);
   });
 });

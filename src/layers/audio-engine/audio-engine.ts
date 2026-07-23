@@ -1,4 +1,5 @@
 import * as Tone from 'tone';
+import { insertArrayEntry, moveArrayEntry } from '../shared/array-order';
 import { COMPLETE_RESOURCE_CLEANUP, type ResourceCleanupResult } from '../shared/types/resource-cleanup';
 import { startPlayer } from './config/player-config';
 import { encodeAudioBufferToWav } from './encoders/wav-encoder';
@@ -9,6 +10,7 @@ import type {
   ExportTrack,
   IAudioEngine,
   InstallAudioPluginRequest,
+  MoveAudioPluginRequest,
   IPreparedAudioProjectGraph,
   IRetiredAudioProjectGraph,
   PrepareAudioProjectGraphRequest,
@@ -52,6 +54,10 @@ interface AudioEngineOptions {
 interface CreatePreparedPluginRuntimesRequest {
   readonly trackId: string;
   readonly pluginInstances: readonly AudioProjectGraphPluginInstance[];
+}
+
+interface ValidatePluginTargetIndexRequest extends MoveAudioPluginRequest {
+  readonly maximumIndex: number;
 }
 
 interface ConnectPreparedPluginChainRequest {
@@ -277,6 +283,9 @@ export class AudioEngine implements IAudioEngine {
       );
     }
 
+    const targetIndex = request.targetIndex ?? currentRuntimes.length;
+    this.validatePluginTargetIndex({ ...request, targetIndex, maximumIndex: currentRuntimes.length });
+
     const factory = this.pluginRuntimeFactories.get(request.manifestId);
     if (!factory) {
       throw new AudioEngineError(
@@ -287,7 +296,7 @@ export class AudioEngine implements IAudioEngine {
     }
 
     const runtime = this.createPluginRuntime(factory, request);
-    const nextRuntimes = [...currentRuntimes, runtime];
+    const nextRuntimes = insertArrayEntry({ entries: currentRuntimes, entry: runtime, targetIndex });
     const currentDisabledIds = this.getTrackDisabledPluginInstanceIds(request.trackId);
     const nextDisabledIds = new Set(currentDisabledIds);
     if (request.isEnabled === false) {
@@ -339,6 +348,38 @@ export class AudioEngine implements IAudioEngine {
     if (runtime) {
       this.disposePluginRuntimeSafely(runtime, '제거한 Plugin runtime 정리에 실패했습니다.');
     }
+  }
+
+  movePlugin(request: MoveAudioPluginRequest): void {
+    this.ensureRuntimeReady();
+    const input = this.getExistingInput(request.trackId);
+    const channel = this.getExistingChannel(request.trackId);
+    const currentRuntimes = this.getTrackPluginRuntimes(request.trackId);
+    const sourceIndex = currentRuntimes.findIndex(runtime => runtime.instanceId === request.instanceId);
+    if (sourceIndex < 0) {
+      throw new AudioEngineError(
+        AudioEngineErrorCode.PLUGIN_INSTANCE_NOT_FOUND,
+        ERROR_MESSAGES.PLUGIN_INSTANCE_NOT_FOUND,
+        { instanceId: request.instanceId, trackId: request.trackId }
+      );
+    }
+    this.validatePluginTargetIndex({ ...request, maximumIndex: currentRuntimes.length - 1 });
+    if (sourceIndex === request.targetIndex) {
+      return;
+    }
+
+    const nextRuntimes = moveArrayEntry({ entries: currentRuntimes, sourceIndex, targetIndex: request.targetIndex });
+    const disabledInstanceIds = this.getTrackDisabledPluginInstanceIds(request.trackId);
+    this.replacePluginChainConnections({
+      trackId: request.trackId,
+      input,
+      channel,
+      previousRuntimes: getEnabledPluginRuntimes(currentRuntimes, disabledInstanceIds),
+      nextRuntimes: getEnabledPluginRuntimes(nextRuntimes, disabledInstanceIds),
+      runtimesToDisposeOnRollback: [],
+    });
+    this.pluginRuntimes.set(request.trackId, nextRuntimes);
+    this.graphRevision += 1;
   }
 
   setPluginParameter(request: SetAudioPluginParameterRequest): void {
@@ -1523,6 +1564,22 @@ export class AudioEngine implements IAudioEngine {
 
   private describeError(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+  }
+
+  private validatePluginTargetIndex({
+    trackId,
+    instanceId,
+    targetIndex,
+    maximumIndex,
+  }: ValidatePluginTargetIndexRequest): void {
+    if (Number.isInteger(targetIndex) && targetIndex >= 0 && targetIndex <= maximumIndex) {
+      return;
+    }
+    throw new AudioEngineError(
+      AudioEngineErrorCode.PLUGIN_TARGET_INDEX_OUT_OF_RANGE,
+      ERROR_MESSAGES.PLUGIN_TARGET_INDEX_OUT_OF_RANGE,
+      { instanceId, maximumIndex, targetIndex, trackId }
+    );
   }
 
   private async scheduleExport(request: ExportRequest): Promise<void> {

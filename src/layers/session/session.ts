@@ -9,6 +9,7 @@ import type {
   PluginParameterState,
   PluginValidationResult,
 } from '../shared/types/plugin-state';
+import { insertArrayEntry, moveArrayEntry } from '../shared/array-order';
 
 interface RegionCommonState {
   id: string;
@@ -55,11 +56,16 @@ interface PluginCatalogStateInput {
 interface AddPluginInstanceRequest {
   readonly trackId: string;
   readonly instance: PluginInstanceState;
+  readonly targetIndex?: number;
 }
 
 interface RemovePluginInstanceRequest {
   readonly trackId: string;
   readonly instanceId: string;
+}
+
+interface MovePluginInstanceRequest extends RemovePluginInstanceRequest {
+  readonly targetIndex: number;
 }
 
 interface SetPluginParameterValueRequest {
@@ -120,6 +126,7 @@ export interface SessionState {
   addPluginLog: (entry: PluginLogEntry) => void;
   addPluginInstance: (request: AddPluginInstanceRequest) => void;
   removePluginInstance: (request: RemovePluginInstanceRequest) => void;
+  movePluginInstance: (request: MovePluginInstanceRequest) => void;
   setPluginInstanceEnabled: (request: SetPluginInstanceEnabledRequest) => void;
   setPluginParameterValue: (request: SetPluginParameterValueRequest) => void;
 
@@ -210,12 +217,17 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
       set({ pluginCatalog, pluginValidationResults });
     },
     addPluginLog: entry => set(state => ({ pluginLogs: [...state.pluginLogs, { ...entry }] })),
-    addPluginInstance: ({ trackId, instance }) =>
+    addPluginInstance: ({ trackId, instance, targetIndex }) =>
       set(state =>
         updateTrackPluginInstances({
           state,
           trackId,
-          updatePluginInstances: pluginInstances => [...pluginInstances, clonePluginInstance(instance)],
+          updatePluginInstances: pluginInstances =>
+            insertArrayEntry({
+              entries: pluginInstances,
+              entry: clonePluginInstance(instance),
+              targetIndex: targetIndex ?? pluginInstances.length,
+            }),
         })
       ),
     removePluginInstance: ({ trackId, instanceId }) =>
@@ -224,6 +236,19 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
           state,
           trackId,
           updatePluginInstances: pluginInstances => pluginInstances.filter(instance => instance.id !== instanceId),
+        })
+      ),
+    movePluginInstance: ({ trackId, instanceId, targetIndex }) =>
+      set(state =>
+        updateTrackPluginInstances({
+          state,
+          trackId,
+          updatePluginInstances: pluginInstances =>
+            moveArrayEntry({
+              entries: pluginInstances,
+              sourceIndex: pluginInstances.findIndex(instance => instance.id === instanceId),
+              targetIndex,
+            }),
         })
       ),
     setPluginInstanceEnabled: ({ trackId, instanceId, isEnabled }) =>

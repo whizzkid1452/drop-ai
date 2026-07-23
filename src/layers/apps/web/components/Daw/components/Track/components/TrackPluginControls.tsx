@@ -3,6 +3,7 @@ import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-
 import {
   executePluginEnabledChange,
   executePluginInstall,
+  executePluginMove,
   executePluginParameterChange,
   executePluginRemoval,
   type PluginActionResult,
@@ -158,6 +159,18 @@ export function TrackPluginControls({ trackId, pluginInstances }: TrackPluginCon
     );
   };
 
+  const handleMove = async (instanceId: string, targetIndex: number) => {
+    await runAction(`move:${instanceId}`, () =>
+      executePluginMove({
+        trackId,
+        instanceId,
+        targetIndex,
+        executeCommand: command => commandExecutor.execute(command),
+        notifyFailure: message => window.alert(message),
+      })
+    );
+  };
+
   const handleEnabledChange = async (instanceId: string, isEnabled: boolean) => {
     await runAction(`enabled:${instanceId}`, () =>
       executePluginEnabledChange({
@@ -218,13 +231,31 @@ export function TrackPluginControls({ trackId, pluginInstances }: TrackPluginCon
       </div>
 
       <div className={styles.instanceList}>
-        {pluginInstances.map(instance => {
+        {pluginInstances.map((instance, index) => {
           const manifest = pluginCatalog.get(instance.manifestSummary.id);
           return (
             <article className={styles.instance} key={instance.id}>
               <div className={styles.instanceHeader}>
                 <span>{instance.manifestSummary.name}</span>
                 <div className={styles.instanceActions}>
+                  <button
+                    className={styles.toggleButton}
+                    type="button"
+                    aria-label={`${instance.manifestSummary.name} Plugin 위로 이동`}
+                    disabled={isPending || index === 0}
+                    onClick={() => void handleMove(instance.id, index - 1)}
+                  >
+                    위
+                  </button>
+                  <button
+                    className={styles.toggleButton}
+                    type="button"
+                    aria-label={`${instance.manifestSummary.name} Plugin 아래로 이동`}
+                    disabled={isPending || index === pluginInstances.length - 1}
+                    onClick={() => void handleMove(instance.id, index + 1)}
+                  >
+                    아래
+                  </button>
                   <button
                     className={styles.toggleButton}
                     type="button"

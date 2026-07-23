@@ -21,6 +21,7 @@ export interface InstallPluginRequest {
   readonly instanceId: string;
   readonly manifestId: string;
   readonly isEnabled?: boolean;
+  readonly targetIndex?: number;
   readonly parameterValues: Readonly<Record<string, PluginParameterValue>>;
 }
 
@@ -36,6 +37,14 @@ export interface SetPluginParameterRequest extends RemovePluginRequest {
 
 export interface SetPluginEnabledRequest extends RemovePluginRequest {
   readonly isEnabled: boolean;
+}
+
+export interface MovePluginRequest extends RemovePluginRequest {
+  readonly targetIndex: number;
+}
+
+interface ValidatePluginTargetIndexRequest extends MovePluginRequest {
+  readonly maximumIndex: number;
 }
 
 interface CreateParameterStatesRequest {
@@ -74,6 +83,9 @@ export class PluginController {
       );
     }
 
+    const targetIndex = request.targetIndex ?? track.pluginInstances.length;
+    this.validatePluginTargetIndex({ ...request, targetIndex, maximumIndex: track.pluginInstances.length });
+
     const manifest = this.getManifestOrThrow(request.manifestId);
     const parameters = this.createParameterStates({ manifest, parameterValues: request.parameterValues });
     const isEnabled = request.isEnabled ?? true;
@@ -88,15 +100,34 @@ export class PluginController {
       instanceId: request.instanceId,
       manifestId: request.manifestId,
       isEnabled,
+      targetIndex,
       parameterValues: new Map(parameters.map(parameter => [parameter.id, parameter.value])),
     });
-    this.sessionStore.getState().addPluginInstance({ trackId: request.trackId, instance });
+    this.sessionStore.getState().addPluginInstance({ trackId: request.trackId, instance, targetIndex });
   }
 
   removePlugin(request: RemovePluginRequest): void {
     this.getPluginInstanceOrThrow(request);
     this.audioEngine.removePlugin(request.trackId, request.instanceId);
     this.sessionStore.getState().removePluginInstance(request);
+  }
+
+  movePlugin(request: MovePluginRequest): void {
+    const track = this.getTrackOrThrow(request.trackId);
+    const currentIndex = track.pluginInstances.findIndex(instance => instance.id === request.instanceId);
+    if (currentIndex < 0) {
+      throw new ProjectStateError(
+        ProjectStateErrorCode.PLUGIN_INSTANCE_NOT_FOUND,
+        `Plugin instance를 찾을 수 없습니다: ${request.instanceId}`,
+        { instanceId: request.instanceId, trackId: request.trackId }
+      );
+    }
+    this.validatePluginTargetIndex({ ...request, maximumIndex: track.pluginInstances.length - 1 });
+    if (currentIndex === request.targetIndex) {
+      return;
+    }
+    this.audioEngine.movePlugin(request);
+    this.sessionStore.getState().movePluginInstance(request);
   }
 
   setPluginParameter(request: SetPluginParameterRequest): void {
@@ -153,6 +184,22 @@ export class PluginController {
       ProjectStateErrorCode.INVALID_PLUGIN_PARAMETER_VALUE,
       `Plugin Parameter 값이 유효하지 않습니다: ${parameter.id}`,
       { manifestId, parameterId: parameter.id, value }
+    );
+  }
+
+  private validatePluginTargetIndex({
+    trackId,
+    instanceId,
+    targetIndex,
+    maximumIndex,
+  }: ValidatePluginTargetIndexRequest): void {
+    if (Number.isInteger(targetIndex) && targetIndex >= 0 && targetIndex <= maximumIndex) {
+      return;
+    }
+    throw new ProjectStateError(
+      ProjectStateErrorCode.PLUGIN_TARGET_INDEX_OUT_OF_RANGE,
+      `Plugin 대상 index가 범위를 벗어났습니다: ${targetIndex}`,
+      { instanceId, maximumIndex, targetIndex, trackId }
     );
   }
 

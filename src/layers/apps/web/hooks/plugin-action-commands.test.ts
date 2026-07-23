@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
 import {
   createInstallPluginCommand,
+  createMovePluginCommand,
   createRemovePluginCommand,
   createSetPluginEnabledCommand,
   createSetPluginParameterCommand,
   executePluginEnabledChange,
   executePluginInstall,
+  executePluginMove,
   executePluginParameterChange,
   executePluginRemoval,
 } from './plugin-action-commands';
@@ -28,6 +30,15 @@ describe('Plugin UI 명령 변환', () => {
       type: AudioCommandType.REMOVE_PLUGIN,
       trackId,
       instanceId,
+    });
+  });
+
+  it('순서 변경 요청을 MOVE_PLUGIN 명령으로 변환한다', () => {
+    expect(createMovePluginCommand({ trackId, instanceId, targetIndex: 1 })).toEqual({
+      type: AudioCommandType.MOVE_PLUGIN,
+      trackId,
+      instanceId,
+      targetIndex: 1,
     });
   });
 
@@ -78,6 +89,22 @@ describe('Plugin UI 명령 변환', () => {
     expect(result).toBe('updated');
     expect(executeCommand).toHaveBeenCalledTimes(1);
     expect(executeCommand).toHaveBeenCalledWith(createRemovePluginCommand({ trackId, instanceId }));
+  });
+
+  it('순서 변경 명령을 정확히 한 번 실행한다', async () => {
+    const executeCommand = vi.fn<(command: AudioCommand) => Promise<unknown>>().mockResolvedValue(undefined);
+
+    const result = await executePluginMove({
+      trackId,
+      instanceId,
+      targetIndex: 1,
+      executeCommand,
+      notifyFailure: vi.fn(),
+    });
+
+    expect(result).toBe('updated');
+    expect(executeCommand).toHaveBeenCalledTimes(1);
+    expect(executeCommand).toHaveBeenCalledWith(createMovePluginCommand({ trackId, instanceId, targetIndex: 1 }));
   });
 
   it('파라미터 명령을 정확히 한 번 실행한다', async () => {

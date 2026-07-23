@@ -243,6 +243,27 @@ describe('Session Store - Phase 1 검증', () => {
       ).toEqual(['plugin-2']);
     });
 
+    it('Plugin instance를 지정한 index에 추가하고 기존 instance를 이동한다', () => {
+      addTrack();
+      const createInstance = (id: string) => ({
+        id,
+        manifestSummary: { id: 'builtin.gain', name: 'Gain', version: '1.0.0' },
+        isEnabled: true,
+        parameters: [{ id: 'gain', value: 1 }],
+      });
+      store.getState().addPluginInstance({ trackId: 'track-1', instance: createInstance('plugin-1') });
+      store.getState().addPluginInstance({ trackId: 'track-1', instance: createInstance('plugin-2'), targetIndex: 0 });
+
+      store.getState().movePluginInstance({ trackId: 'track-1', instanceId: 'plugin-2', targetIndex: 1 });
+
+      expect(
+        store
+          .getState()
+          .tracks.get('track-1')
+          ?.pluginInstances.map(instance => instance.id)
+      ).toEqual(['plugin-1', 'plugin-2']);
+    });
+
     it('지정한 Plugin Parameter 값만 변경한다', () => {
       addTrack();
       store.getState().addPluginInstance({

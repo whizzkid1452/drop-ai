@@ -610,6 +610,101 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     expect(toneMocks.gains[3]?.destination).toBe(toneMocks.channels[0]);
   });
 
+  it('Plugin을 지정한 index에 설치한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('track-1');
+
+    engine.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: new Map(),
+    });
+    engine.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-2',
+      manifestId: 'builtin.gain',
+      targetIndex: 0,
+      parameterValues: new Map(),
+    });
+
+    expect(toneMocks.gains[1]?.destination).toBe(toneMocks.gains[3]);
+    expect(toneMocks.gains[3]?.destination).toBe(toneMocks.gains[2]);
+    expect(toneMocks.gains[2]?.destination).toBe(toneMocks.channels[0]);
+  });
+
+  it('Plugin 설치 index가 범위를 벗어나면 runtime 생성 전에 거부한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('track-1');
+
+    expect(() =>
+      engine.installPlugin({
+        trackId: 'track-1',
+        instanceId: 'plugin-1',
+        manifestId: 'builtin.gain',
+        targetIndex: 1,
+        parameterValues: new Map(),
+      })
+    ).toThrowError(expect.objectContaining({ code: AudioEngineErrorCode.PLUGIN_TARGET_INDEX_OUT_OF_RANGE }));
+  });
+
+  it('Plugin runtime 순서를 바꾸고 Track 체인을 다시 연결한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('track-1');
+    ['plugin-1', 'plugin-2'].forEach(instanceId =>
+      engine.installPlugin({
+        trackId: 'track-1',
+        instanceId,
+        manifestId: 'builtin.gain',
+        parameterValues: new Map(),
+      })
+    );
+
+    engine.movePlugin({ trackId: 'track-1', instanceId: 'plugin-1', targetIndex: 1 });
+
+    expect(toneMocks.gains[1]?.destination).toBe(toneMocks.gains[3]);
+    expect(toneMocks.gains[3]?.destination).toBe(toneMocks.gains[2]);
+    expect(toneMocks.gains[2]?.destination).toBe(toneMocks.channels[0]);
+  });
+
+  it('Plugin 순서 연결이 실패하면 이전 체인을 복원한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('track-1');
+    ['plugin-1', 'plugin-2'].forEach(instanceId =>
+      engine.installPlugin({
+        trackId: 'track-1',
+        instanceId,
+        manifestId: 'builtin.gain',
+        parameterValues: new Map(),
+      })
+    );
+    toneMocks.gainConnectFailures.push(new Error('move failed'));
+
+    expect(() => engine.movePlugin({ trackId: 'track-1', instanceId: 'plugin-1', targetIndex: 1 })).toThrowError(
+      expect.objectContaining({ code: AudioEngineErrorCode.PLUGIN_CHAIN_UPDATE_FAILED })
+    );
+    expect(toneMocks.gains[1]?.destination).toBe(toneMocks.gains[2]);
+    expect(toneMocks.gains[2]?.destination).toBe(toneMocks.gains[3]);
+    expect(toneMocks.gains[3]?.destination).toBe(toneMocks.channels[0]);
+  });
+
+  it('Plugin 이동 index가 범위를 벗어나면 체인을 유지한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('track-1');
+    engine.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: new Map(),
+    });
+
+    expect(() => engine.movePlugin({ trackId: 'track-1', instanceId: 'plugin-1', targetIndex: 1 })).toThrowError(
+      expect.objectContaining({ code: AudioEngineErrorCode.PLUGIN_TARGET_INDEX_OUT_OF_RANGE })
+    );
+    expect(toneMocks.gains[1]?.destination).toBe(toneMocks.gains[2]);
+    expect(toneMocks.gains[2]?.destination).toBe(toneMocks.channels[0]);
+  });
+
   it('설치한 Gain Plugin Parameter를 변경한다', async () => {
     const engine = createPluginAudioEngine();
     await engine.addTrack('track-1');
