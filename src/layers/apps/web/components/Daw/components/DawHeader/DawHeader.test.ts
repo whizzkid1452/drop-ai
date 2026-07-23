@@ -8,6 +8,7 @@ import { DawHeader } from './DawHeader';
 const componentMocks = vi.hoisted(() => ({
   audioRuntimeStatus: vi.fn(() => null),
   saveProjectButton: vi.fn(() => null),
+  loadProjectControl: vi.fn(() => null),
 }));
 
 vi.mock('./AudioRuntimeStatus', () => ({
@@ -20,6 +21,10 @@ vi.mock('../ExportButton/ExportButton', () => ({
 
 vi.mock('../SaveProjectButton/SaveProjectButton', () => ({
   SaveProjectButton: componentMocks.saveProjectButton,
+}));
+
+vi.mock('../LoadProjectControl/LoadProjectControl', () => ({
+  LoadProjectControl: componentMocks.loadProjectControl,
 }));
 
 vi.mock('./TempoMetadataControl', () => ({
@@ -48,6 +53,7 @@ afterEach(() => {
   document.body.replaceChildren();
   componentMocks.audioRuntimeStatus.mockClear();
   componentMocks.saveProjectButton.mockClear();
+  componentMocks.loadProjectControl.mockClear();
 });
 
 describe('DawHeader', () => {
@@ -61,5 +67,6 @@ describe('DawHeader', () => {
 
     expect(componentMocks.audioRuntimeStatus).toHaveBeenCalledTimes(1);
     expect(componentMocks.saveProjectButton).toHaveBeenCalledTimes(1);
+    expect(componentMocks.loadProjectControl).toHaveBeenCalledTimes(1);
   });
 });

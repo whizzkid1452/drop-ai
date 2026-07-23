@@ -16,7 +16,8 @@ AudioCommand 실행 방향은 아래와 같다.
 아래 그림은 **실행 시점** 레이어만 보여 준다. 객체 조립(`createApp`)은 **§3**에서 따로 그린다.
 
 재생 중 현재 시각은 상태 변경이 아니라 조회이므로 `PlaybackClockQuery`가 PlaybackController의 조회 메서드만 호출한다.
-Apps에는 Controller와 AudioEngine 객체를 노출하지 않는다.
+저장된 프로젝트 목록은 `ProjectCatalogQuery`가 ProjectRepository의 목록 메서드만 호출한다. Apps에는 Controller,
+AudioEngine, Repository 객체를 노출하지 않는다.
 
 ```mermaid
 flowchart TB
@@ -31,6 +32,7 @@ flowchart TB
 
     subgraph query["② Read-only Queries"]
         Q["PlaybackClockQuery"]
+        CQ["ProjectCatalogQuery"]
     end
 
     subgraph ctrl["③ Controllers"]
@@ -53,6 +55,7 @@ flowchart TB
 
     A -->|"AudioCommand 실행"| CE
     A -->|"현재 재생 시각 조회"| Q
+    A -->|"저장 프로젝트 목록 조회"| CQ
     A -->|"구독·워크플로 상태"| SS
 
     CE -->|"검증 후 위임"| AC
@@ -62,6 +65,7 @@ flowchart TB
     AC -->|"ProjectDocument 저장"| PR
     AC -->|"오디오 원본 저장·확인"| AR
     Q -->|"getCurrentTime만 조회"| AC
+    CQ -->|"list만 조회"| PR
     IAE --> T
 ```
 
@@ -78,7 +82,8 @@ Agent 메시지와 업로드 파일 같은 앱 워크플로 상태는 Session Ac
 않는다. 이미 완료된 변경은 되돌리지 않으므로 묶음 실행은 원자적 트랜잭션이 아니다. 실패한 실행이 있어도 그
 오류는 0부터 시작하는 실패 위치, 실패 명령, 앞선 실행 결과와 원인을 보존한다. 뒤에 대기 중인 요청은 계속
 실행한다.
-`EXPORT_AUDIO`와 `SAVE_PROJECT`는 현재 완료될 때까지 대기열을 점유한다. 별도 작업 모델을 도입하기 전의 알려진 제한이다.
+`EXPORT_AUDIO`, `SAVE_PROJECT`, `LOAD_PROJECT`는 현재 완료될 때까지 대기열을 점유한다. 별도 작업 모델을 도입하기
+전의 알려진 제한이다.
 
 Agent 응답은 JSON 배열 전체를 엄격하게 검증한다. 빈 배열은 명령 없음으로 허용한다. 알 수 없는 명령, 잘못된
 필드, 누락·추가 필드, JSON 밖의 텍스트가 하나라도 있으면 전체를 실행하지 않는다. Agent 응답에 없는 명령을
@@ -149,11 +154,11 @@ Region Controller도 추가·이동·분할의 Source 연결, AudioEngine 호출
 **Composition Root** — §1과 달리 **부팅·테스트 진입점**에서 한 번 객체 그래프를 만드는 흐름이다.
 
 `createApp`이 **Session**, **AudioEngine**, **AudioSourceRegistry**, **ProjectRepository**,
-**AudioSourceRepository**, **AppController**, **CommandExecutor**, **PlaybackClockQuery**를 한 번 조립한다.
+**AudioSourceRepository**, **AppController**, **CommandExecutor**, **PlaybackClockQuery**, **ProjectCatalogQuery**를 한 번 조립한다.
 AppController 자체는 Apps에 노출하지 않는다. CommandExecutor에는 AppController를, PlaybackClockQuery에는
 PlaybackController의 읽기 전용 계약을 주입한다. AudioSourceRegistry는 전체 변경 계약을 노출하지 않고 등록용
 `IAudioSourceStager`와 조회용 `IAudioSourceResolver`로 나눠 노출한다. 같은 Registry의 전체 계약은 Source 연결 수명을
-관리하는 Controller에만 주입한다.
+관리하는 Controller에만 주입한다. ProjectCatalogQuery는 ProjectRepository의 목록 조회만 Apps에 노출한다.
 
 ```mermaid
 flowchart TB
@@ -176,6 +181,7 @@ flowchart TB
         AC["AppController\n(runtime + persistence contracts)"]
         CE["CommandExecutor\n(session, controller)"]
         Q["PlaybackClockQuery\n(playback controller read-only)"]
+        PCQ["ProjectCatalogQuery\n(project list read-only)"]
         SR["Audio Source capabilities\n(stager / resolver only)"]
     end
 
@@ -190,8 +196,10 @@ flowchart TB
     CA --> AC
     CA --> CE
     CA --> Q
+    CA --> PCQ
     REG -.->|"같은 인스턴스 주입"| AC
     PR -.->|"ProjectController에 주입"| AC
+    PR -.->|"목록 조회 계약 주입"| PCQ
     AR -.->|"ProjectController에 주입"| AC
     REG -.->|"좁은 계약으로 감쌈"| SR
     SS -.->|"같은 인스턴스 주입"| AC
@@ -344,10 +352,9 @@ metadata, tempo, master volume, Export 범위, Track·Region과 호출자가 전
 
 Mapper는 Export 범위의 부분 `null`, Track Map key와 Track ID 불일치, 유한한 끝 시각을 만들 수 없는 Region, 허용 오차를
 초과한 Region 끝 시각 불일치를 거부한다. 끝 시각 비교는 위 공통 Region 타임라인 규칙을 사용한다.
-최종 문서는 기존 `ProjectDocumentSchema`로 검증하고, 역변환 입력은 `readProjectDocument`로 다시 검증·복제한다. 현재
-화면 저장은 `SAVE_PROJECT`로 연결했다. 불러오기용 Session 전체 교체 Action과 Runtime 준비 계약은 추가했지만 실제
-LOAD Command와 화면 진입점은 아직 연결하지 않았다. Undo 이력은 snapshot 문서에 넣지 않고 후속 Undo Journal에서
-별도로 관리한다.
+최종 문서는 기존 `ProjectDocumentSchema`로 검증하고, 역변환 입력은 `readProjectDocument`로 다시 검증·복제한다. 화면
+저장은 `SAVE_PROJECT`로, 불러오기는 `LOAD_PROJECT`로 연결한다. 불러오기는 Source와 오디오 그래프를 분리된 Runtime에
+먼저 준비한 뒤 Session 전체를 교체한다. Undo 이력은 snapshot 문서에 넣지 않고 후속 Undo Journal에서 별도로 관리한다.
 
 ---
 
@@ -455,7 +462,7 @@ Channel에 `solo=true`를 설정하지 않고 현재 프로젝트의 `isSoloed` 
 prepared나 retired 그래프가 active 그래프의 Solo 결과를 바꾸지 않는다. 준비 중 active 그래프가 바뀌거나 먼저 시작한
 비동기 Region 작업이 나중에 완료되면 revision 검사가 교체를 거부한다.
 
-후속 LOAD Controller는 Registry와 AudioEngine의 `assertActivatable`을 먼저 모두 실행한다. 그 뒤 활성화 임계 구간은 중간
+LOAD Controller는 Registry와 AudioEngine의 `assertActivatable`을 먼저 모두 실행한다. 그 뒤 활성화 임계 구간은 중간
 `await` 없이 아래 순서를 따라야 한다.
 
 ```text
@@ -471,8 +478,10 @@ Engine이 목표 상태를 보관하고 즉시 한 번 재시도한다. 계속 �
 Runtime이 완전히 복원됐다고 간주하면 안 된다. 활성화가 성공하면 retired 출력 gate는 이미 닫혀 있으므로 Player·Channel 정리 실패가
 다음 재생에 이전 오디오를 섞지 않는다. Tone.js `dispose` 성공은 연결 해제를 포함하므로 폐기 완료로 처리한다. `dispose`가 실패한
 자원만 Engine이 보관하고 다음 정리에서 재시도한다. 활성화 후 이전 Player·Channel·Object URL 정리 실패는 새 프로젝트를 실패 상태로 되돌리지 않는다.
-이미 공개된 새 상태와 자원 정리 실패를 구분하기 위해서다. 실제 LOAD Command와 사용자 진입점은 다음 목적 단위에서
-연결한다.
+이미 공개된 새 상태와 자원 정리 실패를 구분하기 위해서다. Engine 활성화 자체가 실패하면 prepared 그래프와 Registry를
+모두 폐기하고 Session·Registry는 교체하지 않는다. Engine 오류가 Runtime 복원 대기 상태를 표시하면 기존 오디오 그래프
+복원은 아직 완료되지 않은 상태다. Session 구독자 예외는 Zustand 상태 반영 뒤에 발생하므로 Runtime을 되돌리지 않고
+이전 Runtime 정리를 끝낸 뒤 그대로 전달한다.
 
 ### 11.2. Region Source 경로
 
@@ -491,7 +500,7 @@ Controller는 Source 길이와 무관하게 `sourceStartTime`과 `duration`이 �
 `Number.EPSILON * magnitude * 4` 중 큰 값을 허용한다. Region 분할도 기존 Region과 두 결과 Region의 원본 범위를 Source
 연결과 AudioEngine 교체 전에 같은 규칙으로 검증한다.
 
-### 11.2. 실패 보상
+### 11.3. 실패 보상
 
 등록 Source Region의 Controller 변경은 한 저장소 transaction이 아니라 다음 작업을 순서대로 조정하는 절차다.
 
@@ -517,16 +526,18 @@ Command Schema 검증이나 dispatch 전에 실패한 경우는 Controller가 So
 교체 계약을 사용해야 한다.
 
 `restoreCommitted`는 Blob 하나를 committed 상태로 복원하는 동작일 뿐 프로젝트 전체를 원자적으로 불러오는 API가 아니다.
-후속 불러오기 Controller는 `beginReplacement`로 분리된 Registry에서 모든 Source 복원과 Region 연결을 준비하고,
-`prepareProjectGraph`로 분리된 오디오 그래프 준비를 끝낸 뒤 기존 프로젝트를 교체해야 한다. 중간 실패 시 준비한 대상만
+불러오기 Controller는 `beginReplacement`로 분리된 Registry에서 모든 Source 복원과 Region 연결을 준비하고,
+`prepareProjectGraph`로 분리된 오디오 그래프 준비를 끝낸 뒤 기존 프로젝트를 교체한다. 활성화 전 실패 시 준비한 대상만
 `discard`하고 기존 Session·Registry·AudioEngine을 유지한다.
 
 Registry는 영구 저장소가 아니다. OPFS Repository가 Source UUID를 키로 원본 바이트를 보존하고, Registry는 현재 실행의
 Object URL과 Region 연결을 관리한다. 현재 단계에서는 Registry 계약·브라우저 URL Adapter·메모리 구현을 Composition
 Root에서 한 번 조립한다. Apps에는 `IAudioSourceStager`와 `IAudioSourceResolver`만 제공하며, 전체 Registry 변경 계약과
 구체 구현은 노출하지 않는다. 연결 수명을 바꾸는 Track·Region Controller만 전체 Registry 계약을 받고, 조회만 하는
-Export는 `IAudioSourceResolver`를 받는다. ProjectDocument Mapper와 저장은 연결됐으며, 불러오기 Command와 사용자
-진입점은 별도 기능 단위로 진행한다.
+Export는 `IAudioSourceResolver`를 받는다. ProjectDocument Mapper와 저장·불러오기 Command가 연결되어 있다. Web은
+`ProjectCatalogQuery`로 저장된 프로젝트 목록을 읽고 선택한 ID를 `LOAD_PROJECT`로 실행한다. 내부 CLI의
+`load-project <projectId>`와 Agent의 불러오기 요청도 같은 CommandExecutor 경로를 사용한다. Agent는 사용자가 제공한
+Project UUID만 사용하며 `LOAD_PROJECT`를 다른 명령과 한 배열에 섞지 않는다.
 
 production Web 파일 가져오기는 파일 metadata를 만든 뒤 Blob을 Registry에 `stage`한다. metadata 변환 단계는 재생용
 Object URL을 만들지 않는다. Web Adapter가 Source UUID를 만들고, Registry가 이를 검증·등록하면서 Object URL을 만든다.

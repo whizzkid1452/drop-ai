@@ -177,6 +177,10 @@ export class CommandExecutor {
       case AudioCommandType.SAVE_PROJECT:
         await this.controller.project.saveProject();
         return;
+
+      case AudioCommandType.LOAD_PROJECT:
+        await this.controller.project.loadProject(validatedCommand.projectId);
+        return;
     }
 
     return throwUnsupportedCommand(validatedCommand);

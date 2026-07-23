@@ -137,6 +137,7 @@ describe('LOAD_REGION 오디오 식별자 계약', () => {
 describe('AudioCommandSchema 프로젝트 변경 명령', () => {
   it.each([
     { type: AudioCommandType.SAVE_PROJECT },
+    { type: AudioCommandType.LOAD_PROJECT, projectId: TRACK_ID },
     { type: AudioCommandType.SET_TEMPO, tempo: 120 },
     { type: AudioCommandType.REMOVE_TRACK, trackId: TRACK_ID },
     { type: AudioCommandType.SET_TRACK_MUTE, trackId: TRACK_ID, muted: true },
@@ -194,6 +195,7 @@ describe('AudioCommandSchema 프로젝트 변경 명령', () => {
   });
 
   it.each([
+    { type: AudioCommandType.LOAD_PROJECT, projectId: 'project-1' },
     { type: AudioCommandType.REMOVE_TRACK, trackId: 'track-1' },
     { type: AudioCommandType.SET_TRACK_MUTE, trackId: 'track-1', muted: true },
     { type: AudioCommandType.SET_TRACK_SOLO, trackId: 'track-1', soloed: true },
@@ -233,6 +235,7 @@ describe('AudioCommandSchema 프로젝트 변경 명령', () => {
   });
 
   it.each([
+    { type: AudioCommandType.LOAD_PROJECT },
     { type: AudioCommandType.REMOVE_TRACK },
     { type: AudioCommandType.SET_TEMPO },
     { type: AudioCommandType.SET_TRACK_MUTE, trackId: TRACK_ID },

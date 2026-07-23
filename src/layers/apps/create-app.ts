@@ -15,6 +15,7 @@ import { createSessionStore, type SessionStore } from '../session/session';
 import { AppController } from '../controllers/app-controller';
 import { CommandExecutor } from '../commands/command-executor';
 import { PlaybackClockQuery, type IPlaybackClockQuery } from '../queries/playback-clock-query';
+import { ProjectCatalogQuery, type IProjectCatalogQuery } from '../queries/project-catalog-query';
 import type { IProjectRepository } from '../project-repository/i-project-repository';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import { IndexedDbProjectRepository } from '../project-repository/indexed-db-project-repository';
@@ -34,6 +35,7 @@ export interface AppInstance {
   session: SessionStore;
   commandExecutor: CommandExecutor;
   playbackClock: IPlaybackClockQuery;
+  projectCatalog: IProjectCatalogQuery;
 }
 
 export interface CreateAppOptions {
@@ -89,6 +91,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   });
   const commandExecutor = new CommandExecutor(session, controller);
   const playbackClock = new PlaybackClockQuery(controller.playback);
+  const projectCatalog = new ProjectCatalogQuery(projectRepository);
   const audioRuntimeEnvironment = options.audioRuntimeEnvironment ?? readAudioRuntimeEnvironment();
   const audioRuntimeCapabilities = resolveAudioRuntimeCapabilities(audioRuntimeEnvironment);
 
@@ -98,6 +101,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     session,
     commandExecutor,
     playbackClock,
+    projectCatalog,
   };
 }
 

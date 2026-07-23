@@ -2,6 +2,7 @@ import { useStore } from 'zustand';
 import type { IAudioSourceResolver, IAudioSourceStager } from '../../../audio-source-registry/i-audio-source-registry';
 import type { CommandExecutor } from '../../../commands/command-executor';
 import type { IPlaybackClockQuery } from '../../../queries/playback-clock-query';
+import type { IProjectCatalogQuery } from '../../../queries/project-catalog-query';
 import type { SessionState } from '../../../session/session';
 import type { AudioRuntimeCapabilities } from '../../../shared/utils/audio-runtime-capabilities';
 import { useLayer } from './layer-context';
@@ -24,6 +25,10 @@ export function useCommandExecutor(): CommandExecutor {
 
 export function usePlaybackClock(): IPlaybackClockQuery {
   return useLayer().playbackClock;
+}
+
+export function useProjectCatalog(): IProjectCatalogQuery {
+  return useLayer().projectCatalog;
 }
 
 export function useSession<T>(selector: (state: SessionState) => T): T {

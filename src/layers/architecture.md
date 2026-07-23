@@ -17,7 +17,8 @@ AudioEngine 객체를 노출하지 않는다. 현재 `PlaybackClockQuery`는 `Pl
 남은 명령은 실행하지 않는다. 이미 완료된 변경은 되돌리지 않으므로 묶음 실행은 원자적 트랜잭션이 아니다.
 실패 오류는 0부터 시작하는 실패 위치, 실패 명령, 앞선 실행 결과와 원인을 보존한다. 실패한 실행 뒤에 대기 중인
 요청은 계속 실행한다.
-`EXPORT_AUDIO`와 `SAVE_PROJECT`는 현재 완료될 때까지 대기열을 점유한다. 별도 작업 모델을 도입하기 전의 알려진 제한이다.
+`EXPORT_AUDIO`, `SAVE_PROJECT`, `LOAD_PROJECT`는 현재 완료될 때까지 대기열을 점유한다. 별도 작업 모델을 도입하기
+전의 알려진 제한이다.
 
 Agent 응답은 JSON 배열 전체를 엄격하게 검증한다. 빈 배열은 명령 없음으로 허용한다. 알 수 없는 명령, 잘못된
 필드, 누락·추가 필드, JSON 밖의 텍스트가 하나라도 있으면 전체를 실행하지 않는다. Agent 응답에 없는 명령을
@@ -125,7 +126,11 @@ URL은 성공 상태를 공개한 뒤 정리하며, 정리 실패는 새 프로�
 시작한 prepared 대상은 정리가 일부 실패해도 다시 활성화할 수 없다. 실패 자원은 소유자가 보관하고 다음 정리에서 재시도한다.
 보상도 실패하면 Engine이 즉시 재시도한다. 계속 실패하는 동안은 `PROJECT_RUNTIME_RECOVERY_PENDING`을 반환하고 실시간 오디오
 변경을 중단한 뒤 다음 호출에서 복원을 먼저 재시도한다. 이 오류 상태는 기존 Runtime이 아직 완전히 복원되지 않았음을 뜻한다.
-실제 LOAD Command와 Controller 연결은 후속 목적 단위다. Registry는 영구 저장소가 아니다.
+`LOAD_PROJECT`는 ProjectDocument와 모든 Source Blob을 읽어 분리된 Registry·AudioEngine 그래프를 준비한다. Engine
+활성화가 실패하면 두 prepared 대상을 폐기하고 Session·Registry는 교체하지 않는다. Engine 오류가 Runtime 복원 대기
+상태를 표시하면 기존 오디오 그래프의 복원이 아직 완료되지 않은 상태다. Session 구독자 예외는 Zustand 상태 반영 뒤에
+발생하므로 이미 활성화한 Runtime을 되돌리지 않고 이전 Runtime 정리를 끝낸 뒤 그대로 전달한다. Registry는 영구 저장소가
+아니다.
 `OpfsAudioSourceRepository`는 Source UUID를 키로 `drop-ai/audio-sources/v1/<Source UUID>`에 원본 바이트를 보존한다.
 `create`는 metadata와 Blob 크기를 확인하고 쓰기를 닫은 뒤 저장 크기를 다시 확인한다. `load`도 ProjectDocument metadata의
 크기를 확인하고 `mimeType`을 Blob 생성 옵션으로 전달한다. 반환된 Blob의 `type`은 브라우저 Blob 규칙에 따라 정규화될 수
@@ -166,6 +171,10 @@ CommandExecutor로 실행한 뒤 pending Source 정리를 시도한다. 보상�
 Web 헤더의 저장 버튼과 내부 CLI의 `save`, Agent의 저장 요청은 모두 인자 없는 `SAVE_PROJECT`를 CommandExecutor에
 전달한다. Web 버튼은 처리 중 중복 입력을 막고 성공 또는 실패 결과를 표시한다. Agent는 편집과 저장을 함께 요청받으면
 저장 명령을 편집 명령 뒤에 둔다.
+Web 헤더의 프로젝트 목록은 읽기 전용 `ProjectCatalogQuery`로 조회한다. 사용자가 목록에서 선택하면 Web은
+`LOAD_PROJECT`를 CommandExecutor에 전달한다. 내부 CLI의 `load-project <projectId>`와 Agent의 불러오기 요청도 같은
+Command를 사용한다. Agent는 사용자가 제공한 Project UUID만 사용할 수 있고, `LOAD_PROJECT`를 다른 명령과 같은 배열에
+넣지 않는다.
 Web JSON CLI도 파싱된 명령 배열을 `executeMany` 한 번으로 실행하고, 중간 실패 전 결과만 후처리한다. 기존 Track의
 `Region 추가`는 길이를 확인한 뒤 Blob을 stage하고 선택한 Track ID와 현재 시각으로 `sourceId` 기반 `LOAD_REGION`을 한 번
 실행한다. Command가 실패하면 stage 호출자가 `discardPending`을 실행한다. Session은 재생 URL 기반 파일 목록을 보관하지

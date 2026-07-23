@@ -109,6 +109,15 @@ describe('CommandExecutor', () => {
     expect(saveProject).toHaveBeenCalledTimes(1);
   });
 
+  it('LOAD_PROJECT를 ProjectController에 위임한다', async () => {
+    const { commandExecutor, controller } = createTestContext();
+    const loadProject = vi.spyOn(controller.project, 'loadProject').mockResolvedValue(undefined);
+
+    await commandExecutor.execute({ type: AudioCommandType.LOAD_PROJECT, projectId: INITIAL_PROJECT_METADATA.id });
+
+    expect(loadProject).toHaveBeenCalledWith(INITIAL_PROJECT_METADATA.id);
+  });
+
   it('앞선 편집 결과를 포함한 snapshot을 저장한다', async () => {
     const { commandExecutor, projectRepository } = createTestContext();
 

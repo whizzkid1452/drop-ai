@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { CommandExecutor } from '../../commands/command-executor';
-import { AudioCommandType } from '../../shared/types/audioCommand.schema';
+import { AudioCommandSchema, AudioCommandType } from '../../shared/types/audioCommand.schema';
 import { useCommandExecutor, useSession } from '../web/context/layer-hooks';
 
 export interface CliCommand {
@@ -189,6 +189,19 @@ export const createCliCommands = (commandExecutor: CliCommandExecutor, state: Cl
       fn: async () => {
         await commandExecutor.execute({ type: AudioCommandType.SAVE_PROJECT });
         return 'Project saved.';
+      },
+    },
+    'load-project': {
+      description: 'Load a saved project',
+      usage: 'load-project <projectId>',
+      fn: async (projectId?: string) => {
+        const command = { type: AudioCommandType.LOAD_PROJECT, projectId };
+        const validatedCommand = AudioCommandSchema.safeParse(command);
+        if (!validatedCommand.success || validatedCommand.data.type !== AudioCommandType.LOAD_PROJECT) {
+          return 'Error: Usage: load-project <projectId>';
+        }
+        await commandExecutor.execute(validatedCommand.data);
+        return `Project ${validatedCommand.data.projectId} loaded.`;
       },
     },
     seek: {

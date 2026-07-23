@@ -40,7 +40,8 @@ export class AppController {
     this.export = new ExportController({ sessionStore, audioEngine, audioSourceResolver: audioSourceRegistry });
     this.project = new ProjectController({
       sessionStore,
-      audioSourceReader: audioSourceRegistry,
+      audioEngine,
+      audioSourceRegistry,
       audioSourceRepository,
       projectRepository,
     });

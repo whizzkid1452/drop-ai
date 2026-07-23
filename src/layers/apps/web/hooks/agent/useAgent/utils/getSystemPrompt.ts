@@ -31,6 +31,7 @@ interface AgentProjectContext {
 }
 
 export const AGENT_PROJECT_CONTEXT_MAX_CHARACTERS = 1600;
+const EXAMPLE_PROJECT_ID = '99999999-9999-4999-8999-999999999999';
 
 const COMMAND_REFERENCE = {
   [AudioCommandType.ADD_TRACK]: '{"type":"ADD_TRACK","trackId":"<new UUID>"} - 빈 Track 추가. 현재 Agent 생성은 금지',
@@ -63,6 +64,8 @@ const COMMAND_REFERENCE = {
   [AudioCommandType.EXPORT_AUDIO]:
     '{"type":"EXPORT_AUDIO","filename":"<optional filename>"} - 현재 선택 범위 또는 전체를 WAV로 내보내기',
   [AudioCommandType.SAVE_PROJECT]: '{"type":"SAVE_PROJECT"} - 현재 프로젝트와 오디오 원본 저장',
+  [AudioCommandType.LOAD_PROJECT]:
+    '{"type":"LOAD_PROJECT","projectId":"<user-provided Project UUID>"} - 저장된 프로젝트 불러오기',
 } satisfies Record<AudioCommandName, string>;
 
 export const AGENT_PROMPT_EXAMPLES = [
@@ -88,6 +91,14 @@ export const AGENT_PROMPT_EXAMPLES = [
   {
     request: 'save the current project',
     commands: [{ type: AudioCommandType.SAVE_PROJECT }],
+  },
+  {
+    request: `${EXAMPLE_PROJECT_ID} 프로젝트 불러와줘`,
+    commands: [{ type: AudioCommandType.LOAD_PROJECT, projectId: EXAMPLE_PROJECT_ID }],
+  },
+  {
+    request: `load project ${EXAMPLE_PROJECT_ID}`,
+    commands: [{ type: AudioCommandType.LOAD_PROJECT, projectId: EXAMPLE_PROJECT_ID }],
   },
   {
     request: '안녕',
@@ -236,7 +247,8 @@ ${renderCommandReference()}
 9. 범위를 실제로 내보내려면 SET_EXPORT_RANGE 다음에 EXPORT_AUDIO를 둔다. endTime은 startTime보다 커야 한다.
 10. 입력 의존 순서를 유지한다. EXPORT_AUDIO는 해당 묶음의 마지막에 둔다.
 11. 편집과 저장을 함께 요청하면 SAVE_PROJECT를 해당 편집 명령 뒤에 둔다.
-12. 요청을 안전하게 실행할 정보가 부족하면 []를 반환한다. 지원하지 않는 요청도 []를 반환한다.
+12. LOAD_PROJECT는 사용자가 Project UUID를 명시했을 때만 사용한다. Project UUID를 임의로 만들지 않고, 다른 명령과 같은 배열에 넣지 않는다.
+13. 요청을 안전하게 실행할 정보가 부족하면 []를 반환한다. 지원하지 않는 요청도 []를 반환한다.
 
 # 예시
 ${renderExamples(projectContext.visibleTracks)}

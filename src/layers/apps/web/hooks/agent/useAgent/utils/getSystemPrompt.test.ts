@@ -103,6 +103,19 @@ describe('Agent 시스템 Prompt', () => {
     expect(prompt).toContain('SAVE_PROJECT를 해당 편집 명령 뒤에 둔다');
   });
 
+  it('프로젝트 불러오기의 한국어·영어 예시와 Project ID 안전 규칙을 제공한다', () => {
+    const prompt = getSystemPrompt({ tracks });
+    const loadExamples = AGENT_PROMPT_EXAMPLES.filter(example =>
+      example.commands.some(command => command.type === AudioCommandType.LOAD_PROJECT)
+    );
+
+    expect(loadExamples.some(example => /[가-힣]/.test(example.request))).toBe(true);
+    expect(loadExamples.some(example => /^load project /.test(example.request))).toBe(true);
+    expect(prompt).toContain('{"type":"LOAD_PROJECT","projectId":"<user-provided Project UUID>"}');
+    expect(prompt).toContain('Project UUID를 임의로 만들지 않고');
+    expect(prompt).toContain('다른 명령과 같은 배열에 넣지 않는다');
+  });
+
   it('출력 형식과 식별자, Source ID 안전 규칙을 명시한다', () => {
     const prompt = getSystemPrompt({ tracks });
 

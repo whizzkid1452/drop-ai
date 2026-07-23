@@ -10,6 +10,7 @@ import { createCliCommands } from './index';
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
 const SOURCE_ID = '33333333-3333-4333-8333-333333333333';
+const PROJECT_ID = '44444444-4444-4444-8444-444444444444';
 
 type CliCommandExecutor = Pick<CommandExecutor, 'execute' | 'executeMany'>;
 
@@ -56,6 +57,24 @@ describe('내부 CLI 명령 변환', () => {
 
     expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.SAVE_PROJECT });
     expect(result).toBe('Project saved.');
+  });
+
+  it('load-project의 Project ID를 LOAD_PROJECT 명령으로 변환한다', async () => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    const result = await commands['load-project'].fn(PROJECT_ID);
+
+    expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.LOAD_PROJECT, projectId: PROJECT_ID });
+    expect(result).toBe(`Project ${PROJECT_ID} loaded.`);
+  });
+
+  it.each([undefined, 'project-1'])('load-project의 잘못된 Project ID %s를 실행 전에 거부한다', async projectId => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    const result = projectId ? await commands['load-project'].fn(projectId) : await commands['load-project'].fn();
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(result).toBe('Error: Usage: load-project <projectId>');
   });
 
   it('seek 인자를 SET_CURRENT_TIME 명령으로 변환한다', async () => {

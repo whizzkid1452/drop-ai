@@ -7,6 +7,7 @@ import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { PlaybackClockQuery } from '../queries/playback-clock-query';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import { AudioCommandType } from '../shared/types/audioCommand.schema';
+import type { ProjectDocument } from '../shared/types/project-document.schema';
 import { createApp, createCliTestApp, type CreateAppOptions } from './create-app';
 
 function createTestAudioSourceRepository(): IAudioSourceRepository {
@@ -155,6 +156,88 @@ describe('createApp', () => {
       audioSources: [registration.metadata],
       tracks: [expect.objectContaining({ id: trackId })],
     });
+    expect('projectRepository' in app).toBe(false);
+    expect('audioSourceRepository' in app).toBe(false);
+  });
+
+  it('LOAD_PROJECT가 저장소의 문서를 Session·AudioEngine·Source Registry에 함께 반영한다', async () => {
+    const projectId = '44444444-4444-4444-8444-444444444444';
+    const sourceId = '11111111-1111-4111-8111-111111111111';
+    const trackId = '22222222-2222-4222-8222-222222222222';
+    const regionId = '33333333-3333-4333-8333-333333333333';
+    const projectRepository = new InMemoryProjectRepository();
+    const audioEngine = new MockAudioEngine();
+    const audioSourceRepository = createTestAudioSourceRepository();
+    const audioSourceRegistry = new AudioSourceRegistry({
+      createObjectUrl: () => 'blob:loaded-source',
+      revokeObjectUrl: vi.fn(),
+    });
+    const projectDocument: ProjectDocument = {
+      documentType: 'drop-ai-project',
+      schemaVersion: 1,
+      project: { id: projectId, name: '불러오기 통합 테스트', revision: 0 },
+      timeline: { timeUnit: 'seconds', tempoBpm: 128 },
+      mixer: { masterVolume: 0.75 },
+      exportRange: { startTimeSeconds: 1, endTimeSeconds: 3 },
+      audioSources: [
+        {
+          id: sourceId,
+          fileName: 'loaded.wav',
+          mimeType: 'audio/wav',
+          byteLength: 4,
+          durationSeconds: 4,
+        },
+      ],
+      tracks: [
+        {
+          id: trackId,
+          name: '불러온 트랙',
+          volume: 0.5,
+          pan: -0.25,
+          isMuted: true,
+          isSoloed: false,
+          regions: [
+            {
+              id: regionId,
+              sourceId,
+              startTimeSeconds: 1,
+              sourceStartTimeSeconds: 0.5,
+              durationSeconds: 2,
+            },
+          ],
+        },
+      ],
+    };
+    await projectRepository.create(projectDocument);
+    vi.mocked(audioSourceRepository.load).mockResolvedValue(new Blob(['test'], { type: 'audio/wav' }));
+    const app = createTestApp({
+      audioEngine,
+      audioSourceRegistry,
+      audioSourceRepository,
+      projectRepository,
+    });
+
+    await app.commandExecutor.execute({ type: AudioCommandType.LOAD_PROJECT, projectId });
+
+    expect(app.session.getState()).toMatchObject({
+      project: projectDocument.project,
+      tempo: 128,
+      masterVolume: 0.75,
+      exportStartTime: 1,
+      exportEndTime: 3,
+    });
+    expect(app.session.getState().tracks.get(trackId)?.regions).toEqual([
+      expect.objectContaining({ id: regionId, sourceId, startTime: 1, sourceStartTime: 0.5, duration: 2 }),
+    ]);
+    expect(audioEngine.getTrackParams(trackId)).toEqual({ volume: 0.5, pan: -0.25 });
+    expect(app.audioSourceResolver.resolve(sourceId)).toMatchObject({
+      isCommitted: true,
+      objectUrl: 'blob:loaded-source',
+      regionIds: [regionId],
+    });
+    await expect(app.projectCatalog.listProjects()).resolves.toEqual([
+      expect.objectContaining({ projectId, name: '불러오기 통합 테스트', revision: 0 }),
+    ]);
     expect('projectRepository' in app).toBe(false);
     expect('audioSourceRepository' in app).toBe(false);
   });
