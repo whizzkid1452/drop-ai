@@ -15,6 +15,9 @@ export const AudioCommandType = {
   SET_TRACK_PAN: 'SET_TRACK_PAN',
   SET_TRACK_MUTE: 'SET_TRACK_MUTE',
   SET_TRACK_SOLO: 'SET_TRACK_SOLO',
+  INSTALL_PLUGIN: 'INSTALL_PLUGIN',
+  REMOVE_PLUGIN: 'REMOVE_PLUGIN',
+  SET_PLUGIN_PARAMETER: 'SET_PLUGIN_PARAMETER',
   LOAD_REGION: 'LOAD_REGION',
   UNLOAD_REGION: 'UNLOAD_REGION',
   SPLIT_REGION: 'SPLIT_REGION',
@@ -42,6 +45,9 @@ const SetExportRangeCommandSchema = z
     message: 'End time must be greater than or equal to start time',
     path: ['endTime'],
   });
+
+const pluginMemberIdSchema = z.string().min(1).max(255);
+const pluginParameterValueSchema = z.union([z.boolean(), z.number().finite(), z.string()]);
 
 const LoadRegionCommandSchema = z
   .strictObject({
@@ -133,6 +139,25 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
     type: z.literal(AudioCommandType.SET_TRACK_SOLO),
     trackId: z.uuid('Invalid track ID format'),
     soloed: z.boolean(),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.INSTALL_PLUGIN),
+    trackId: z.uuid('Invalid track ID format'),
+    instanceId: z.uuid('Invalid Plugin instance ID format').optional(),
+    manifestId: pluginMemberIdSchema,
+    parameterValues: z.record(pluginMemberIdSchema, pluginParameterValueSchema).optional(),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.REMOVE_PLUGIN),
+    trackId: z.uuid('Invalid track ID format'),
+    instanceId: z.uuid('Invalid Plugin instance ID format'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_PLUGIN_PARAMETER),
+    trackId: z.uuid('Invalid track ID format'),
+    instanceId: z.uuid('Invalid Plugin instance ID format'),
+    parameterId: pluginMemberIdSchema,
+    value: pluginParameterValueSchema,
   }),
   LoadRegionCommandSchema,
   z.strictObject({

@@ -7,6 +7,7 @@ import { AppController } from '../controllers/app-controller';
 import { createSessionStore } from '../session/session';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import { PluginHost } from '../plugin-host/plugin-host';
+import { gainPluginManifest } from '../plugins/builtin/gain/gain-plugin-manifest';
 import { AudioCommandType, type AudioCommand } from '../shared/types/audioCommand.schema';
 import { CommandHistory } from './command-history';
 import { CommandBatchExecutionError, CommandExecutor } from './command-executor';
@@ -16,6 +17,7 @@ const REGION_ID = '22222222-2222-4222-8222-222222222222';
 const SECOND_REGION_ID = '33333333-3333-4333-8333-333333333333';
 const SOURCE_ID = '55555555-5555-4555-8555-555555555555';
 const SOURCE_OBJECT_URL = 'blob:command-source';
+const PLUGIN_INSTANCE_ID = '66666666-6666-4666-8666-666666666666';
 const INITIAL_PROJECT_METADATA = {
   id: '44444444-4444-4444-8444-444444444444',
   name: '테스트 프로젝트',
@@ -36,13 +38,15 @@ function createTestContext() {
   const projectRepository = new InMemoryProjectRepository();
   const commandHistory = new CommandHistory();
   const audioEngine = new MockAudioEngine();
+  const pluginHost = new PluginHost();
+  pluginHost.registerManifest(gainPluginManifest);
   const controller = new AppController({
     sessionStore: session,
     audioEngine,
     audioSourceRegistry,
     audioSourceRepository,
     projectRepository,
-    pluginHost: new PluginHost(),
+    pluginHost,
   });
   const commandExecutor = new CommandExecutor(session, controller, commandHistory);
 
@@ -446,6 +450,117 @@ describe('CommandExecutor', () => {
 
     expect(session.getState().tracks.has(TRACK_ID)).toBe(true);
     expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances).toEqual([]);
+  });
+
+  it('INSTALL_PLUGIN 명령으로 기본값을 가진 Plugin을 설치한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+
+    await commandExecutor.execute({
+      type: AudioCommandType.INSTALL_PLUGIN,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      manifestId: 'builtin.gain',
+    });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances).toEqual([
+      expect.objectContaining({
+        id: PLUGIN_INSTANCE_ID,
+        manifestSummary: expect.objectContaining({ id: 'builtin.gain' }),
+        parameters: [{ id: 'gain', value: 1 }],
+      }),
+    ]);
+  });
+
+  it('instanceId가 없는 INSTALL_PLUGIN은 생성한 ID를 Redo에서도 재사용한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+
+    await commandExecutor.execute({
+      type: AudioCommandType.INSTALL_PLUGIN,
+      trackId: TRACK_ID,
+      manifestId: 'builtin.gain',
+    });
+    const installedInstanceId = session.getState().tracks.get(TRACK_ID)?.pluginInstances[0]?.id;
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+
+    expect(installedInstanceId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances[0]?.id).toBe(installedInstanceId);
+  });
+
+  it('SET_PLUGIN_PARAMETER와 REMOVE_PLUGIN 명령을 순서대로 실행한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await commandExecutor.execute({
+      type: AudioCommandType.INSTALL_PLUGIN,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      manifestId: 'builtin.gain',
+      parameterValues: { gain: 0.75 },
+    });
+
+    await commandExecutor.execute({
+      type: AudioCommandType.SET_PLUGIN_PARAMETER,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      parameterId: 'gain',
+      value: 0.5,
+    });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances[0]?.parameters).toEqual([
+      { id: 'gain', value: 0.5 },
+    ]);
+
+    await commandExecutor.execute({
+      type: AudioCommandType.REMOVE_PLUGIN,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+    });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances).toEqual([]);
+  });
+
+  it('Plugin 설치·Parameter 변경·제거를 Undo와 Redo로 복원한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await commandExecutor.execute({
+      type: AudioCommandType.INSTALL_PLUGIN,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      manifestId: 'builtin.gain',
+      parameterValues: { gain: 0.75 },
+    });
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances).toEqual([]);
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances[0]?.parameters).toEqual([
+      { id: 'gain', value: 0.75 },
+    ]);
+
+    await commandExecutor.execute({
+      type: AudioCommandType.SET_PLUGIN_PARAMETER,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      parameterId: 'gain',
+      value: 0.25,
+    });
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances[0]?.parameters).toEqual([
+      { id: 'gain', value: 0.75 },
+    ]);
+
+    await commandExecutor.execute({
+      type: AudioCommandType.REMOVE_PLUGIN,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+    });
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances[0]?.parameters).toEqual([
+      { id: 'gain', value: 0.75 },
+    ]);
   });
 
   it('trackId를 생략하면 실행 시점의 첫 번째 트랙을 사용한다', async () => {

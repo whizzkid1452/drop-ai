@@ -6,6 +6,7 @@ import type {
   PluginInstanceState,
   PluginLogEntry,
   PluginManifestSummary,
+  PluginParameterState,
   PluginValidationResult,
 } from '../shared/types/plugin-state';
 
@@ -51,6 +52,29 @@ interface PluginCatalogStateInput {
   readonly validationResults: readonly PluginValidationResult[];
 }
 
+interface AddPluginInstanceRequest {
+  readonly trackId: string;
+  readonly instance: PluginInstanceState;
+}
+
+interface RemovePluginInstanceRequest {
+  readonly trackId: string;
+  readonly instanceId: string;
+}
+
+interface SetPluginParameterValueRequest {
+  readonly trackId: string;
+  readonly instanceId: string;
+  readonly parameterId: string;
+  readonly value: PluginParameterState['value'];
+}
+
+interface UpdateTrackPluginInstancesRequest {
+  readonly state: SessionState;
+  readonly trackId: string;
+  readonly updatePluginInstances: (instances: readonly PluginInstanceState[]) => PluginInstanceState[];
+}
+
 export interface SessionState {
   project: ProjectMetadata;
   isPlaying: boolean;
@@ -90,6 +114,9 @@ export interface SessionState {
 
   replacePluginCatalogState: (pluginCatalogState: PluginCatalogStateInput) => void;
   addPluginLog: (entry: PluginLogEntry) => void;
+  addPluginInstance: (request: AddPluginInstanceRequest) => void;
+  removePluginInstance: (request: RemovePluginInstanceRequest) => void;
+  setPluginParameterValue: (request: SetPluginParameterValueRequest) => void;
 
   setAgentModelReady: (ready: boolean) => void;
   setAgentLoadingProgress: (progress: number, text: string) => void;
@@ -178,6 +205,41 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
       set({ pluginCatalog, pluginValidationResults });
     },
     addPluginLog: entry => set(state => ({ pluginLogs: [...state.pluginLogs, { ...entry }] })),
+    addPluginInstance: ({ trackId, instance }) =>
+      set(state =>
+        updateTrackPluginInstances({
+          state,
+          trackId,
+          updatePluginInstances: pluginInstances => [...pluginInstances, clonePluginInstance(instance)],
+        })
+      ),
+    removePluginInstance: ({ trackId, instanceId }) =>
+      set(state =>
+        updateTrackPluginInstances({
+          state,
+          trackId,
+          updatePluginInstances: pluginInstances => pluginInstances.filter(instance => instance.id !== instanceId),
+        })
+      ),
+    setPluginParameterValue: ({ trackId, instanceId, parameterId, value }) =>
+      set(state =>
+        updateTrackPluginInstances({
+          state,
+          trackId,
+          updatePluginInstances: pluginInstances =>
+            pluginInstances.map(instance => {
+              if (instance.id !== instanceId) {
+                return instance;
+              }
+              return {
+                ...instance,
+                parameters: instance.parameters.map(parameter =>
+                  parameter.id === parameterId ? { ...parameter, value } : parameter
+                ),
+              };
+            }),
+        })
+      ),
 
     /* Agent Actions */
     setAgentModelReady: ready => set({ isModelReady: ready }),
@@ -221,6 +283,21 @@ function clonePluginInstance(instance: PluginInstanceState): PluginInstanceState
     manifestSummary: { ...instance.manifestSummary },
     parameters: instance.parameters.map(parameter => ({ ...parameter })),
   };
+}
+
+function updateTrackPluginInstances({
+  state,
+  trackId,
+  updatePluginInstances,
+}: UpdateTrackPluginInstancesRequest): SessionState | Pick<SessionState, 'tracks'> {
+  const track = state.tracks.get(trackId);
+  if (!track) {
+    return state;
+  }
+
+  const tracks = new Map(state.tracks);
+  tracks.set(trackId, { ...track, pluginInstances: updatePluginInstances(track.pluginInstances) });
+  return { tracks };
 }
 
 function createPluginCatalog(manifests: readonly PluginManifestSummary[]): Map<string, PluginManifestSummary> {

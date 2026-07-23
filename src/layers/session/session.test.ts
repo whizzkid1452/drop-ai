@@ -92,6 +92,20 @@ describe('Session Store - Phase 1 검증', () => {
   });
 
   describe('Plugin Runtime 상태 관리', () => {
+    function addTrack(): void {
+      store.getState().addTrack({
+        id: 'track-1',
+        name: 'Track 1',
+        volume: 1,
+        pan: 0,
+        isMuted: false,
+        isSoloed: false,
+        status: [],
+        pluginInstances: [],
+        regions: [],
+      });
+    }
+
     it('Plugin catalog 입력과 Session이 객체 참조를 공유하지 않는다', () => {
       const manifest = { id: 'builtin.gain', name: 'Gain', version: '1.0.0' };
 
@@ -155,6 +169,78 @@ describe('Session Store - Phase 1 검증', () => {
           message: '활성화 완료',
           createdAtEpochMs: 1,
         },
+      ]);
+    });
+
+    it('Track에 Plugin instance를 복제해 추가한다', () => {
+      addTrack();
+      const instance = {
+        id: 'plugin-1',
+        manifestSummary: { id: 'builtin.gain', name: 'Gain', version: '1.0.0' },
+        isEnabled: true,
+        parameters: [{ id: 'gain', value: 1 }],
+      };
+
+      store.getState().addPluginInstance({ trackId: 'track-1', instance });
+      instance.manifestSummary.name = '외부 변경';
+      instance.parameters[0].value = 0;
+
+      expect(store.getState().tracks.get('track-1')?.pluginInstances).toEqual([
+        {
+          id: 'plugin-1',
+          manifestSummary: { id: 'builtin.gain', name: 'Gain', version: '1.0.0' },
+          isEnabled: true,
+          parameters: [{ id: 'gain', value: 1 }],
+        },
+      ]);
+    });
+
+    it('Track에서 지정한 Plugin instance만 제거한다', () => {
+      addTrack();
+      const createInstance = (id: string) => ({
+        id,
+        manifestSummary: { id: 'builtin.gain', name: 'Gain', version: '1.0.0' },
+        isEnabled: true,
+        parameters: [{ id: 'gain', value: 1 }],
+      });
+      store.getState().addPluginInstance({ trackId: 'track-1', instance: createInstance('plugin-1') });
+      store.getState().addPluginInstance({ trackId: 'track-1', instance: createInstance('plugin-2') });
+
+      store.getState().removePluginInstance({ trackId: 'track-1', instanceId: 'plugin-1' });
+
+      expect(
+        store
+          .getState()
+          .tracks.get('track-1')
+          ?.pluginInstances.map(instance => instance.id)
+      ).toEqual(['plugin-2']);
+    });
+
+    it('지정한 Plugin Parameter 값만 변경한다', () => {
+      addTrack();
+      store.getState().addPluginInstance({
+        trackId: 'track-1',
+        instance: {
+          id: 'plugin-1',
+          manifestSummary: { id: 'builtin.gain', name: 'Gain', version: '1.0.0' },
+          isEnabled: true,
+          parameters: [
+            { id: 'gain', value: 1 },
+            { id: 'mix', value: 1 },
+          ],
+        },
+      });
+
+      store.getState().setPluginParameterValue({
+        trackId: 'track-1',
+        instanceId: 'plugin-1',
+        parameterId: 'gain',
+        value: 0.5,
+      });
+
+      expect(store.getState().tracks.get('track-1')?.pluginInstances[0]?.parameters).toEqual([
+        { id: 'gain', value: 0.5 },
+        { id: 'mix', value: 1 },
       ]);
     });
   });

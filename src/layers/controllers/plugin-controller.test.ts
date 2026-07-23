@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { PluginHost } from '../plugin-host/plugin-host';
+import { createSessionStore } from '../session/session';
+import { ProjectStateErrorCode } from './project-state-error';
 import { PluginController } from './plugin-controller';
 
 const gainManifest = {
@@ -28,11 +31,36 @@ const gainManifest = {
   },
 };
 
+function createTestContext() {
+  const pluginHost = new PluginHost();
+  pluginHost.registerManifest(gainManifest);
+  const sessionStore = createSessionStore({
+    initialProjectMetadata: {
+      id: '11111111-1111-4111-8111-111111111111',
+      name: 'Plugin 테스트',
+      revision: 0,
+    },
+  });
+  sessionStore.getState().addTrack({
+    id: 'track-1',
+    name: 'Track 1',
+    volume: 1,
+    pan: 0,
+    isMuted: false,
+    isSoloed: false,
+    status: [],
+    pluginInstances: [],
+    regions: [],
+  });
+  const audioEngine = new MockAudioEngine();
+  void audioEngine.addTrack('track-1');
+  const controller = new PluginController({ pluginHost, sessionStore, audioEngine });
+  return { audioEngine, controller, pluginHost, sessionStore };
+}
+
 describe('PluginController', () => {
   it('주입받은 PluginHost에서 전체 manifest를 조회한다', () => {
-    const pluginHost = new PluginHost();
-    pluginHost.registerManifest(gainManifest);
-    const controller = new PluginController(pluginHost);
+    const { controller } = createTestContext();
 
     expect(controller.resolveManifest('builtin.gain')).toMatchObject({
       id: 'builtin.gain',
@@ -41,8 +69,192 @@ describe('PluginController', () => {
   });
 
   it('등록되지 않은 Plugin ID 조회는 null을 반환한다', () => {
-    const controller = new PluginController(new PluginHost());
+    const { audioEngine, sessionStore } = createTestContext();
+    const controller = new PluginController({ pluginHost: new PluginHost(), sessionStore, audioEngine });
 
     expect(controller.resolveManifest('builtin.missing')).toBeNull();
+  });
+
+  it('manifest 기본값으로 Plugin을 AudioEngine에 설치한 뒤 Session에 추가한다', () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    const installPlugin = vi.spyOn(audioEngine, 'installPlugin');
+
+    controller.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: {},
+    });
+
+    expect(installPlugin).toHaveBeenCalledWith({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: new Map([['gain', 1]]),
+    });
+    expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances).toEqual([
+      {
+        id: 'plugin-1',
+        manifestSummary: { id: 'builtin.gain', name: 'Gain', version: '1.0.0' },
+        isEnabled: true,
+        parameters: [{ id: 'gain', value: 1 }],
+      },
+    ]);
+  });
+
+  it('AudioEngine 설치가 실패하면 Session에 Plugin을 추가하지 않는다', () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    vi.spyOn(audioEngine, 'installPlugin').mockImplementation(() => {
+      throw new Error('install failed');
+    });
+
+    expect(() =>
+      controller.installPlugin({
+        trackId: 'track-1',
+        instanceId: 'plugin-1',
+        manifestId: 'builtin.gain',
+        parameterValues: {},
+      })
+    ).toThrow('install failed');
+    expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances).toEqual([]);
+  });
+
+  it('등록되지 않은 manifest와 범위 밖 Parameter를 AudioEngine 호출 전에 거부한다', () => {
+    const { audioEngine, controller } = createTestContext();
+    const installPlugin = vi.spyOn(audioEngine, 'installPlugin');
+
+    expect(() =>
+      controller.installPlugin({
+        trackId: 'track-1',
+        instanceId: 'plugin-1',
+        manifestId: 'builtin.missing',
+        parameterValues: {},
+      })
+    ).toThrowError(expect.objectContaining({ code: ProjectStateErrorCode.PLUGIN_MANIFEST_NOT_FOUND }));
+    expect(() =>
+      controller.installPlugin({
+        trackId: 'track-1',
+        instanceId: 'plugin-1',
+        manifestId: 'builtin.gain',
+        parameterValues: { gain: 3 },
+      })
+    ).toThrowError(expect.objectContaining({ code: ProjectStateErrorCode.INVALID_PLUGIN_PARAMETER_VALUE }));
+    expect(installPlugin).not.toHaveBeenCalled();
+  });
+
+  it('Plugin Parameter를 AudioEngine 성공 뒤 Session에 반영한다', () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    controller.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: {},
+    });
+    const setPluginParameter = vi.spyOn(audioEngine, 'setPluginParameter');
+
+    controller.setPluginParameter({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      parameterId: 'gain',
+      value: 0.5,
+    });
+
+    expect(setPluginParameter).toHaveBeenCalledWith({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      parameterId: 'gain',
+      value: 0.5,
+    });
+    expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances[0]?.parameters).toEqual([
+      { id: 'gain', value: 0.5 },
+    ]);
+  });
+
+  it('AudioEngine Parameter 변경이 실패하면 Session 값을 유지한다', () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    controller.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: {},
+    });
+    vi.spyOn(audioEngine, 'setPluginParameter').mockImplementation(() => {
+      throw new Error('parameter failed');
+    });
+
+    expect(() =>
+      controller.setPluginParameter({
+        trackId: 'track-1',
+        instanceId: 'plugin-1',
+        parameterId: 'gain',
+        value: 0.5,
+      })
+    ).toThrow('parameter failed');
+    expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances[0]?.parameters).toEqual([
+      { id: 'gain', value: 1 },
+    ]);
+  });
+
+  it('중복 instance와 없는 Parameter를 AudioEngine 호출 전에 거부한다', () => {
+    const { audioEngine, controller } = createTestContext();
+    controller.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: {},
+    });
+    const installPlugin = vi.spyOn(audioEngine, 'installPlugin');
+    const setPluginParameter = vi.spyOn(audioEngine, 'setPluginParameter');
+
+    expect(() =>
+      controller.installPlugin({
+        trackId: 'track-1',
+        instanceId: 'plugin-1',
+        manifestId: 'builtin.gain',
+        parameterValues: {},
+      })
+    ).toThrowError(expect.objectContaining({ code: ProjectStateErrorCode.PLUGIN_INSTANCE_ID_CONFLICT }));
+    expect(() =>
+      controller.setPluginParameter({
+        trackId: 'track-1',
+        instanceId: 'plugin-1',
+        parameterId: 'missing-parameter',
+        value: 0.5,
+      })
+    ).toThrowError(expect.objectContaining({ code: ProjectStateErrorCode.PLUGIN_PARAMETER_NOT_FOUND }));
+    expect(installPlugin).not.toHaveBeenCalled();
+    expect(setPluginParameter).not.toHaveBeenCalled();
+  });
+
+  it('Plugin을 AudioEngine에서 제거한 뒤 Session에서 제거한다', () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    controller.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: {},
+    });
+    const removePlugin = vi.spyOn(audioEngine, 'removePlugin');
+
+    controller.removePlugin({ trackId: 'track-1', instanceId: 'plugin-1' });
+
+    expect(removePlugin).toHaveBeenCalledWith('track-1', 'plugin-1');
+    expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances).toEqual([]);
+  });
+
+  it('AudioEngine 제거가 실패하면 Session에 Plugin을 유지한다', () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    controller.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: {},
+    });
+    vi.spyOn(audioEngine, 'removePlugin').mockImplementation(() => {
+      throw new Error('remove failed');
+    });
+
+    expect(() => controller.removePlugin({ trackId: 'track-1', instanceId: 'plugin-1' })).toThrow('remove failed');
+    expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances).toHaveLength(1);
   });
 });

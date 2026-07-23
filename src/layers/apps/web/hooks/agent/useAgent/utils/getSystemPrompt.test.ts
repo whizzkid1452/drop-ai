@@ -149,6 +149,15 @@ describe('Agent 시스템 Prompt', () => {
     expect(prompt).not.toContain('"url":"<known URL optional>"');
   });
 
+  it('Plugin context가 없을 때 Plugin 변경 명령을 금지한다', () => {
+    const prompt = getSystemPrompt({});
+
+    expect(prompt).toContain('INSTALL_PLUGIN, REMOVE_PLUGIN, SET_PLUGIN_PARAMETER 요청은 []를 반환한다');
+    expect(prompt).toContain('INSTALL_PLUGIN');
+    expect(prompt).toContain('REMOVE_PLUGIN');
+    expect(prompt).toContain('SET_PLUGIN_PARAMETER');
+  });
+
   it('모든 시간 필드의 음수 금지 범위를 명시한다', () => {
     const prompt = getSystemPrompt({ tracks });
 

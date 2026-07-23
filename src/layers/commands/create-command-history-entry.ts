@@ -1,4 +1,5 @@
 import type { RegionState, SessionState, TrackState } from '../session/session';
+import type { PluginInstanceState } from '../shared/types/plugin-state';
 import { AudioCommandType, type AudioCommand } from '../shared/types/audioCommand.schema';
 import type { CommandHistoryEntry } from './command-history';
 
@@ -19,6 +20,17 @@ interface CreateEntryOptions {
 interface LocatedRegion {
   readonly region: RegionState;
   readonly track: TrackState;
+}
+
+interface LocatedPluginInstance {
+  readonly instance: PluginInstanceState;
+  readonly track: TrackState;
+}
+
+interface FindPluginInstanceRequest {
+  readonly session: SessionState;
+  readonly trackId: string;
+  readonly instanceId: string;
 }
 
 function createEntry({ executeCommand, label, redoCommand, undoCommand }: CreateEntryOptions): CommandHistoryEntry {
@@ -59,6 +71,22 @@ function createLoadRegionCommand(trackId: string, region: RegionState): AudioCom
     startTime: region.startTime,
     startOffset: region.sourceStartTime,
     duration: region.duration,
+  };
+}
+
+function findPluginInstance({ session, trackId, instanceId }: FindPluginInstanceRequest): LocatedPluginInstance | null {
+  const track = session.tracks.get(trackId);
+  const instance = track?.pluginInstances.find(candidate => candidate.id === instanceId);
+  return track && instance ? { instance, track } : null;
+}
+
+function createInstallPluginCommand(trackId: string, instance: PluginInstanceState): AudioCommand {
+  return {
+    type: AudioCommandType.INSTALL_PLUGIN,
+    trackId,
+    instanceId: instance.id,
+    manifestId: instance.manifestSummary.id,
+    parameterValues: Object.fromEntries(instance.parameters.map(parameter => [parameter.id, parameter.value])),
   };
 }
 
@@ -184,6 +212,83 @@ export function createCommandHistoryEntry({
           trackId: beforeTrack.id,
           soloed: beforeTrack.isSoloed,
         },
+        redoCommand: command,
+      });
+    }
+
+    case AudioCommandType.INSTALL_PLUGIN: {
+      const installedInstance = command.instanceId
+        ? findPluginInstance({ session: afterSession, trackId: command.trackId, instanceId: command.instanceId })
+        : null;
+      if (
+        !installedInstance ||
+        findPluginInstance({
+          session: beforeSession,
+          trackId: command.trackId,
+          instanceId: installedInstance.instance.id,
+        })
+      ) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        undoCommand: {
+          type: AudioCommandType.REMOVE_PLUGIN,
+          trackId: command.trackId,
+          instanceId: installedInstance.instance.id,
+        },
+        redoCommand: createInstallPluginCommand(command.trackId, installedInstance.instance),
+      });
+    }
+
+    case AudioCommandType.REMOVE_PLUGIN: {
+      const removedInstance = findPluginInstance({
+        session: beforeSession,
+        trackId: command.trackId,
+        instanceId: command.instanceId,
+      });
+      if (
+        !removedInstance ||
+        findPluginInstance({ session: afterSession, trackId: command.trackId, instanceId: command.instanceId })
+      ) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        undoCommand: createInstallPluginCommand(command.trackId, removedInstance.instance),
+        redoCommand: command,
+      });
+    }
+
+    case AudioCommandType.SET_PLUGIN_PARAMETER: {
+      const beforeInstance = findPluginInstance({
+        session: beforeSession,
+        trackId: command.trackId,
+        instanceId: command.instanceId,
+      });
+      const afterInstance = findPluginInstance({
+        session: afterSession,
+        trackId: command.trackId,
+        instanceId: command.instanceId,
+      });
+      const beforeParameter = beforeInstance?.instance.parameters.find(
+        parameter => parameter.id === command.parameterId
+      );
+      const afterParameter = afterInstance?.instance.parameters.find(parameter => parameter.id === command.parameterId);
+      if (
+        !beforeParameter ||
+        !afterParameter ||
+        beforeParameter.value === afterParameter.value ||
+        afterParameter.value !== command.value
+      ) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        undoCommand: { ...command, value: beforeParameter.value },
         redoCommand: command,
       });
     }

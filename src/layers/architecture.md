@@ -23,7 +23,8 @@ AudioEngine 객체를 노출하지 않는다. 현재 `PlaybackClockQuery`는 `Pl
 `CommandHistory`는 현재 앱 실행 중에만 유지하는 최대 100개의 역명령 기록이다. `CommandExecutor`가 성공한 편집의 실행 전후
 Session을 비교해 Undo·Redo 명령을 만들고, `UNDO`와 `REDO`도 같은 대기열에서 실행한다. Undo·Redo가 실패하면 해당 기록을
 반대쪽 스택으로 옮기지 않는다. 새 편집은 Redo 기록을 제거한다. 지원 범위는 Track 추가, Region 추가·삭제·이동, tempo,
-Track volume·pan·mute·solo, Export 범위 설정·해제다. 재생·playhead·저장·내보내기는 기록하지 않는다. Track 삭제와 Region
+Track volume·pan·mute·solo, Export 범위 설정·해제, Plugin 설치·제거·Parameter 변경이다. Plugin 기록은 같은 인스턴스 ID,
+manifest ID, Parameter 값을 사용해 상태를 복원한다. 재생·playhead·저장·내보내기는 기록하지 않는다. Track 삭제와 Region
 분할은 손실 없는 복원 명령이 아직 없으므로 Session 변경이 확인되면 기존 기록을 제거한다. 프로젝트 불러오기도 다른
 프로젝트의 명령을 재사용하지 않도록 기록을 제거한다. Session 구독자 예외가 상태 반영 뒤 발생한 경우에는 반영된 편집을
 기록하고 원래 예외를 호출자에게 전달한다. Apps에는 `canUndo`·`canRedo` 조회와 구독만 노출한다. 이 기록은
@@ -39,8 +40,9 @@ Agent Prompt는 현재 AudioCommand 전체의 필드와 범위를 설명하고 �
 사용 가능 여부를 전달한다. 예시 출력은 엄격한 Agent Schema로 테스트한다. 앱이 예약한 새 ID와 허용 파일 목록이
 아직 없으므로 Agent는 `ADD_TRACK`을 만들지 않는다. `LOAD_REGION`은 기존 Track의 첫 등록 Source Region을 재사용할 수
 있을 때만 제한적으로 사용한다. 등록 Source Region은 목록의 실제 `sourceId`를 사용한다. Agent 명령의 `url` 필드는
-금지하며 `sourceId`를 만들거나 추측하지 않는다. 프로젝트 컨텍스트는
-모델 입력 한도를 넘길 위험을 줄이도록 길이를 제한하고 잘림 여부를 표시한다.
+금지하며 `sourceId`를 만들거나 추측하지 않는다. Plugin 명령 Schema는 공유하지만, Prompt에 manifest·instance·Parameter
+목록을 아직 제공하지 않으므로 Agent의 Plugin 명령 생성은 막는다. 프로젝트 컨텍스트는 모델 입력 한도를 넘길 위험을
+줄이도록 길이를 제한하고 잘림 여부를 표시한다.
 
 현재 Region의 `startTime`과 `endTime`은 절대 초 단위다. 음악 시간(musical time) 모델을 도입하기 전까지 Session의
 tempo 변경은 AudioEngine의 Transport BPM과 Region 예약을 변경하지 않는다.
@@ -58,10 +60,10 @@ Session과 AudioCommand에는 저장하지 않는다. API 존재 확인은 실�
 
 Session의 Plugin 런타임 상태는 Track별 Plugin 인스턴스, Plugin 카탈로그, manifest 검증 결과, 런타임 로그로 나눈다.
 Plugin 인스턴스는 ID, manifest 요약, 활성 여부, boolean·number·string 매개변수 값을 가진다. 카탈로그·검증 결과·로그
-Action은 입력 객체를 복제해 저장하며, 프로젝트 상태 교체 시 Track의 Plugin 인스턴스도 깊은 복사한다. 이 기반은 아직
-Plugin AudioCommand, Controller 연동, UI를 제공하지 않는다. Composition Root는 시작할 때 내장 Gain manifest를
-PluginHost에 등록하고, 공개해도 되는 요약과 검증 결과만 Session에 한 번의 상태 변경으로 반영한다. 이 등록은 manifest
-선언을 카탈로그에 추가하는 동작이며 AudioWorklet 모듈을 불러오지 않는다.
+Action과 Plugin 설치·제거·Parameter 변경 Action은 입력 객체를 복제해 저장하며, 프로젝트 상태 교체 시 Track의 Plugin
+인스턴스도 깊은 복사한다. Composition Root는 시작할 때 내장 Gain manifest를 PluginHost에 등록하고, 공개해도 되는 요약과
+검증 결과만 Session에 한 번의 상태 변경으로 반영한다. 이 등록은 manifest 선언을 카탈로그에 추가하는 동작이며
+AudioWorklet 모듈을 불러오지 않는다.
 
 Plugin SDK는 다른 프로젝트 계층을 import하지 않는 선언 계약이다. manifest v1은 namespaced ID, Semantic Versioning 형식,
 effect 유형, number·boolean·enum 매개변수, AudioWorklet 모듈 상대 경로, slider·toggle·select UI control만 허용한다.
@@ -73,17 +75,19 @@ same-origin인지 여부는 후속 모듈 로더가 별도로 확인해야 한�
 조용히 교체하지 않고 typed 오류로 거부한다. 조회와 목록은 등록 순서를 유지한 복사본을 반환하므로 호출자의 변경이
 registry 내부 값에 영향을 주지 않는다. PluginHost production 코드는 Plugin SDK와 Shared만 의존한다. 구체 구현은
 Composition Root와 테스트에서만 import하고, PluginController는 `IPluginHost` 계약에 의존한다. Composition Root가 만든
-PluginHost와 전체 manifest는 Apps에 노출하지 않는다. 현재 연결 범위는 시작 시 카탈로그 등록과 조회이며, Plugin
-설치·활성화·해제 lifecycle은 아직 Controller와 연결되지 않았다. `plugins/`의 production 코드는 Plugin SDK 외 프로젝트
-계층을 import하지 않는다.
+PluginHost와 전체 manifest는 Apps에 노출하지 않는다. PluginController는 설치 전에 manifest·인스턴스·Parameter를 검증하고,
+AudioEngine 변경이 성공한 뒤 Session을 변경한다. 따라서 AudioEngine 호출이 실패하면 Session은 바뀌지 않는다. 현재
+지원하는 lifecycle은 설치·제거·Parameter 변경이며 활성화·비활성화는 아직 지원하지 않는다. `plugins/`의 production 코드는
+Plugin SDK 외 프로젝트 계층을 import하지 않는다.
 
 AudioEngine 계층의 `ToneGainPluginRuntimeFactory`는 주입받은 manifest ID와 Gain Parameter 계약으로 Tone.js `Gain`
 runtime을 만든다. 초기값과 변경값의 type·유한성·범위를 검사하고, 변경은 0.01초 ramp로 적용한다. runtime은 후속
 AudioEngine chain 조립에 필요한 연결·해제·폐기 계약을 제공한다. Composition Root는 브라우저 기본 AudioEngine에 내장
 Gain Factory를 등록한다. AudioEngine은 Plugin을 설치 순서대로 `Track input → Plugin runtime[] → Channel`에 직렬 연결하고,
 제거 시 남은 chain을 다시 연결한다. 연결 변경 실패 시 이전 chain 복원을 시도하며, 복원도 실패한 동안에는 다른 실시간
-오디오 작업을 거부하고 다음 호출에서 복원을 먼저 재시도한다. 현재 AudioCommand와 Controller가 이 API를 호출하지 않으므로
-사용자 진입점에서는 아직 Plugin을 설치하거나 Parameter를 바꿀 수 없다.
+오디오 작업을 거부하고 다음 호출에서 복원을 먼저 재시도한다. `INSTALL_PLUGIN`, `REMOVE_PLUGIN`, `SET_PLUGIN_PARAMETER`는
+CommandExecutor와 PluginController를 거쳐 이 API를 호출한다. Web JSON CLI는 이 공통 Schema를 사용할 수 있다. 이름 기반
+내부 CLI 명령, Agent용 Plugin 컨텍스트, Plugin UI는 아직 제공하지 않는다.
 
 영구 저장 형식은 Shared의 `ProjectDocumentSchema`로 검증한다. v1은 Track·Region과 오디오 Source 메타데이터를
 절대 초 단위로 저장하고, Region은 임시 URL이 아닌 안정적인 Source ID를 참조한다. `File`, `Blob`, Object URL,

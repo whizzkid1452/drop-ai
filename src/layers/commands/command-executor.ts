@@ -177,6 +177,23 @@ export class CommandExecutor {
         this.controller.track.setSolo(validatedCommand.trackId, validatedCommand.soloed);
         return;
 
+      case AudioCommandType.INSTALL_PLUGIN:
+        this.controller.plugin.installPlugin({
+          trackId: validatedCommand.trackId,
+          instanceId: validatedCommand.instanceId ?? crypto.randomUUID(),
+          manifestId: validatedCommand.manifestId,
+          parameterValues: validatedCommand.parameterValues ?? {},
+        });
+        return;
+
+      case AudioCommandType.REMOVE_PLUGIN:
+        this.controller.plugin.removePlugin(validatedCommand);
+        return;
+
+      case AudioCommandType.SET_PLUGIN_PARAMETER:
+        this.controller.plugin.setPluginParameter(validatedCommand);
+        return;
+
       case AudioCommandType.LOAD_REGION: {
         const source = validatedCommand.sourceId ? { sourceId: validatedCommand.sourceId } : {};
 
@@ -241,6 +258,9 @@ export class CommandExecutor {
     switch (command.type) {
       case AudioCommandType.LOAD_REGION:
         return command.regionId ? command : { ...command, regionId: crypto.randomUUID() };
+
+      case AudioCommandType.INSTALL_PLUGIN:
+        return command.instanceId ? command : { ...command, instanceId: crypto.randomUUID() };
 
       case AudioCommandType.SET_TRACK_VOLUME:
         return { ...command, trackId: this.resolveTrackId(session, command.trackId) };

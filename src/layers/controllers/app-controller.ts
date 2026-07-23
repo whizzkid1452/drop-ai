@@ -50,6 +50,6 @@ export class AppController {
       audioSourceRepository,
       projectRepository,
     });
-    this.plugin = new PluginController(pluginHost);
+    this.plugin = new PluginController({ pluginHost, sessionStore, audioEngine });
   }
 }

@@ -10,6 +10,7 @@ import {
 const TRACK_ID = '550e8400-e29b-41d4-a716-446655440000';
 const REGION_ID = '6ba7b810-9dad-41d1-80b4-00c04fd430c8';
 const SOURCE_ID = '11111111-1111-4111-8111-111111111111';
+const PLUGIN_INSTANCE_ID = '22222222-2222-4222-8222-222222222222';
 
 describe('ADD_TRACK 계약', () => {
   it('Track ID만으로 빈 Track 생성 명령을 허용한다', () => {
@@ -131,6 +132,82 @@ describe('LOAD_REGION 오디오 식별자 계약', () => {
 
     expect(AudioCommandSchema.safeParse(command).success).toBe(false);
     expect(StrictAudioCommandSchema.safeParse(command).success).toBe(false);
+  });
+});
+
+describe('Plugin 명령 계약', () => {
+  it('instanceId 생략과 초기 Parameter 값을 허용한다', () => {
+    const command = {
+      type: AudioCommandType.INSTALL_PLUGIN,
+      trackId: TRACK_ID,
+      manifestId: 'builtin.gain',
+      parameterValues: { gain: 0.5 },
+    };
+
+    expect(AudioCommandSchema.parse(command)).toEqual(command);
+    expect(StrictAudioCommandSchema.parse(command)).toEqual(command);
+  });
+
+  it('Plugin 제거와 Parameter 변경 명령을 허용한다', () => {
+    const commands = [
+      {
+        type: AudioCommandType.REMOVE_PLUGIN,
+        trackId: TRACK_ID,
+        instanceId: PLUGIN_INSTANCE_ID,
+      },
+      {
+        type: AudioCommandType.SET_PLUGIN_PARAMETER,
+        trackId: TRACK_ID,
+        instanceId: PLUGIN_INSTANCE_ID,
+        parameterId: 'gain',
+        value: 0.5,
+      },
+    ];
+
+    commands.forEach(command => {
+      expect(AudioCommandSchema.safeParse(command).success).toBe(true);
+      expect(StrictAudioCommandSchema.safeParse(command).success).toBe(true);
+    });
+  });
+
+  it('잘못된 UUID와 비어 있는 Plugin 식별자를 거부한다', () => {
+    const commands = [
+      { type: AudioCommandType.INSTALL_PLUGIN, trackId: 'track-1', manifestId: 'builtin.gain' },
+      { type: AudioCommandType.INSTALL_PLUGIN, trackId: TRACK_ID, manifestId: '' },
+      {
+        type: AudioCommandType.REMOVE_PLUGIN,
+        trackId: TRACK_ID,
+        instanceId: 'plugin-1',
+      },
+      {
+        type: AudioCommandType.SET_PLUGIN_PARAMETER,
+        trackId: TRACK_ID,
+        instanceId: PLUGIN_INSTANCE_ID,
+        parameterId: '',
+        value: 0.5,
+      },
+    ];
+
+    commands.forEach(command => {
+      expect(AudioCommandSchema.safeParse(command).success).toBe(false);
+      expect(StrictAudioCommandSchema.safeParse(command).success).toBe(false);
+    });
+  });
+
+  it('객체와 null Parameter 값을 거부한다', () => {
+    const values = [{ nested: true }, null];
+
+    values.forEach(value => {
+      expect(
+        AudioCommandSchema.safeParse({
+          type: AudioCommandType.SET_PLUGIN_PARAMETER,
+          trackId: TRACK_ID,
+          instanceId: PLUGIN_INSTANCE_ID,
+          parameterId: 'gain',
+          value,
+        }).success
+      ).toBe(false);
+    });
   });
 });
 
