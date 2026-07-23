@@ -139,6 +139,21 @@ describe('CommandExecutor', () => {
     expect(session.getState().tempo).toBe(140);
   });
 
+  it('SET_MASTER_VOLUME을 실행하고 Undo와 Redo로 복원한다', async () => {
+    const { audioEngine, commandExecutor, session } = createTestContext();
+    const setMasterVolume = vi.spyOn(audioEngine, 'setMasterVolume');
+
+    await commandExecutor.execute({ type: AudioCommandType.SET_MASTER_VOLUME, volume: 0.4 });
+    expect(session.getState().masterVolume).toBe(0.4);
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().masterVolume).toBe(1);
+
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(session.getState().masterVolume).toBe(0.4);
+    expect(setMasterVolume).toHaveBeenCalledTimes(3);
+  });
+
   it('실패한 편집은 Undo 기록에 추가하지 않는다', async () => {
     const { commandExecutor, commandHistory, controller } = createTestContext();
     vi.spyOn(controller.playback, 'handleSetTempo').mockImplementation(() => {

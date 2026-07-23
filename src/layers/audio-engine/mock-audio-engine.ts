@@ -32,6 +32,7 @@ interface MockPluginState {
 
 export class MockAudioEngine implements IAudioEngine {
   private mockTime = 0;
+  private mockMasterVolume = 1;
   private mockTracks: Map<string, MockTrackState> = new Map();
   private mockRegions: Map<string, Map<string, RegionData>> = new Map();
   private mockPlugins: Map<string, Map<string, MockPluginState>> = new Map();
@@ -57,6 +58,15 @@ export class MockAudioEngine implements IAudioEngine {
 
   getCurrentTime(): number {
     return this.mockTime;
+  }
+
+  getMasterVolume(): number {
+    return this.mockMasterVolume;
+  }
+
+  setMasterVolume(volume: number): void {
+    this.mockMasterVolume = volume;
+    this.graphRevision += 1;
   }
 
   async addTrack(trackId: string): Promise<void> {
@@ -227,7 +237,10 @@ export class MockAudioEngine implements IAudioEngine {
     this.graphRevision += 1;
   }
 
-  async prepareProjectGraph({ tracks }: PrepareAudioProjectGraphRequest): Promise<IPreparedAudioProjectGraph> {
+  async prepareProjectGraph({
+    tracks,
+    masterVolume = 1,
+  }: PrepareAudioProjectGraphRequest): Promise<IPreparedAudioProjectGraph> {
     const expectedRevision = this.graphRevision;
     const nextTracks = new Map<string, MockTrackState>();
     const nextRegions = new Map<string, Map<string, RegionData>>();
@@ -300,6 +313,7 @@ export class MockAudioEngine implements IAudioEngine {
         this.mockTracks = nextTracks;
         this.mockRegions = nextRegions;
         this.mockPlugins = nextPlugins;
+        this.mockMasterVolume = masterVolume;
         this.mockTime = 0;
         this.graphRevision += 1;
         state = 'activated';

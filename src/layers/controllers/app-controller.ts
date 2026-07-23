@@ -10,6 +10,7 @@ import { RegionController } from './region-controller';
 import { ExportController } from './export-controller';
 import { ProjectController } from './project-controller';
 import { PluginController } from './plugin-controller';
+import { MixerController } from './mixer-controller';
 
 interface AppControllerDependencies {
   sessionStore: SessionStore;
@@ -30,6 +31,7 @@ export class AppController {
   public readonly export: ExportController;
   public readonly project: ProjectController;
   public readonly plugin: PluginController;
+  public readonly mixer: MixerController;
 
   constructor({
     sessionStore,
@@ -51,5 +53,6 @@ export class AppController {
       projectRepository,
     });
     this.plugin = new PluginController({ pluginHost, sessionStore, audioEngine });
+    this.mixer = new MixerController({ sessionStore, audioEngine });
   }
 }

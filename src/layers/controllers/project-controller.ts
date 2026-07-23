@@ -109,6 +109,7 @@ export class ProjectController {
     await this.restoreAudioSources(snapshot.audioSources, audioSourceRegistry);
     this.attachRegions(snapshot, audioSourceRegistry);
     const audioGraph = await this.dependencies.audioEngine.prepareProjectGraph({
+      masterVolume: snapshot.session.masterVolume,
       tracks: this.createAudioGraphTracks(snapshot, audioSourceRegistry),
     });
 

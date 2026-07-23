@@ -51,6 +51,11 @@ interface AudioEngineOptions {
   readonly pluginRuntimeFactories?: readonly IAudioPluginRuntimeFactory[];
 }
 
+interface CreateGraphOutputRequest {
+  readonly initialGain: number;
+  readonly unmutedGain: number;
+}
+
 interface CreatePreparedPluginRuntimesRequest {
   readonly trackId: string;
   readonly pluginInstances: readonly AudioProjectGraphPluginInstance[];
@@ -136,12 +141,13 @@ export class AudioEngine implements IAudioEngine {
   private readonly pendingPlayerCleanup = new Set<Tone.Player>();
   private readonly pendingPluginRuntimeCleanup = new Set<IAudioPluginRuntime>();
   private readonly pendingOutputStateRecovery = new Map<Tone.Gain, boolean>();
+  private readonly unmutedOutputGains = new WeakMap<Tone.Gain, number>();
   private readonly pendingPluginChainRecovery = new Map<string, PluginChainRecoveryState>();
   private pendingTransportRecovery: TransportSnapshot | null = null;
 
   constructor({ pluginRuntimeFactories = [] }: AudioEngineOptions = {}) {
     this.pluginRuntimeFactories = createPluginRuntimeFactoryMap(pluginRuntimeFactories);
-    this.output = this.createGraphOutput(1);
+    this.output = this.createGraphOutput({ initialGain: 1, unmutedGain: 1 });
   }
 
   async play(): Promise<void> {
@@ -171,6 +177,15 @@ export class AudioEngine implements IAudioEngine {
   getCurrentTime(): number {
     this.ensureRuntimeReady();
     return Tone.getTransport().seconds;
+  }
+
+  setMasterVolume(volume: number): void {
+    this.ensureRuntimeReady();
+    if (!this.mutedOutputs.has(this.output)) {
+      this.output.gain.rampTo(volume, 0.1);
+    }
+    this.unmutedOutputGains.set(this.output, volume);
+    this.graphRevision += 1;
   }
 
   async addTrack(trackId: string): Promise<void> {
@@ -560,11 +575,14 @@ export class AudioEngine implements IAudioEngine {
     this.graphRevision += 1;
   }
 
-  async prepareProjectGraph({ tracks }: PrepareAudioProjectGraphRequest): Promise<IPreparedAudioProjectGraph> {
+  async prepareProjectGraph({
+    tracks,
+    masterVolume = 1,
+  }: PrepareAudioProjectGraphRequest): Promise<IPreparedAudioProjectGraph> {
     this.ensureRuntimeReady();
     this.retryPendingCleanup();
     const expectedRevision = this.graphRevision;
-    const preparedGraph = await this.createPreparedProjectGraph(tracks);
+    const preparedGraph = await this.createPreparedProjectGraph(tracks, masterVolume);
     let retiredGraph: IRetiredAudioProjectGraph | undefined;
     let state: PreparedGraphState = 'prepared';
 
@@ -849,9 +867,10 @@ export class AudioEngine implements IAudioEngine {
   }
 
   private async createPreparedProjectGraph(
-    tracks: PrepareAudioProjectGraphRequest['tracks']
+    tracks: PrepareAudioProjectGraphRequest['tracks'],
+    masterVolume: number
   ): Promise<AudioProjectGraphState> {
-    const graph = this.createEmptyGraph(0);
+    const graph = this.createEmptyGraph(masterVolume);
 
     try {
       for (const track of tracks) {
@@ -935,9 +954,9 @@ export class AudioEngine implements IAudioEngine {
     throw this.createRegionIdConflictError({ trackId, regionId: duplicateRegion.id });
   }
 
-  private createEmptyGraph(outputGain: number): AudioProjectGraphState {
+  private createEmptyGraph(masterVolume: number): AudioProjectGraphState {
     return {
-      output: this.createGraphOutput(outputGain),
+      output: this.createGraphOutput({ initialGain: 0, unmutedGain: masterVolume }),
       trackInputs: new Map(),
       channels: new Map(),
       desiredTrackVolumes: new Map(),
@@ -1125,9 +1144,10 @@ export class AudioEngine implements IAudioEngine {
     }
   }
 
-  private createGraphOutput(gain: number): Tone.Gain {
-    const output = new Tone.Gain({ gain });
-    if (gain === 0) {
+  private createGraphOutput({ initialGain, unmutedGain }: CreateGraphOutputRequest): Tone.Gain {
+    const output = new Tone.Gain({ gain: initialGain });
+    this.unmutedOutputGains.set(output, unmutedGain);
+    if (initialGain === 0) {
       this.mutedOutputs.add(output);
     }
 
@@ -1148,7 +1168,7 @@ export class AudioEngine implements IAudioEngine {
       return;
     }
 
-    output.gain.value = muted ? 0 : 1;
+    output.gain.value = muted ? 0 : (this.unmutedOutputGains.get(output) ?? 1);
     if (muted) {
       this.mutedOutputs.add(output);
     } else {

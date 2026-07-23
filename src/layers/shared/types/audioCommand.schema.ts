@@ -11,6 +11,7 @@ export const AudioCommandType = {
   PAUSE: 'PAUSE',
   STOP: 'STOP',
   SET_TEMPO: 'SET_TEMPO',
+  SET_MASTER_VOLUME: 'SET_MASTER_VOLUME',
   SET_TRACK_VOLUME: 'SET_TRACK_VOLUME',
   SET_TRACK_PAN: 'SET_TRACK_PAN',
   SET_TRACK_MUTE: 'SET_TRACK_MUTE',
@@ -121,6 +122,10 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal(AudioCommandType.SET_TEMPO),
     tempo: z.number().positive('Tempo must be > 0'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_MASTER_VOLUME),
+    volume: z.number().min(0).max(1),
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.SET_TRACK_VOLUME),

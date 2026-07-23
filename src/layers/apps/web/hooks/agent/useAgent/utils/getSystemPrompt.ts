@@ -58,6 +58,7 @@ const COMMAND_REFERENCE = {
   [AudioCommandType.PAUSE]: '{"type":"PAUSE"} - 현재 위치에서 일시정지',
   [AudioCommandType.STOP]: '{"type":"STOP"} - 정지하고 0초로 이동',
   [AudioCommandType.SET_TEMPO]: '{"type":"SET_TEMPO","tempo":<number greater than 0>} - 프로젝트 tempo 메타데이터 변경',
+  [AudioCommandType.SET_MASTER_VOLUME]: '{"type":"SET_MASTER_VOLUME","volume":<0..1>} - 전체 출력 볼륨 변경',
   [AudioCommandType.SET_TRACK_VOLUME]:
     '{"type":"SET_TRACK_VOLUME","trackId":"<existing Track UUID>","volume":<0..1>} - Track 볼륨 변경',
   [AudioCommandType.SET_TRACK_PAN]:
@@ -103,6 +104,14 @@ export const AGENT_PROMPT_EXAMPLES = [
   {
     request: '템포를 128로 설정해줘',
     commands: [{ type: AudioCommandType.SET_TEMPO, tempo: 128 }],
+  },
+  {
+    request: '전체 볼륨을 40%로 설정해줘',
+    commands: [{ type: AudioCommandType.SET_MASTER_VOLUME, volume: 0.4 }],
+  },
+  {
+    request: 'set the master volume to 40 percent',
+    commands: [{ type: AudioCommandType.SET_MASTER_VOLUME, volume: 0.4 }],
   },
   {
     request: '3초부터 10초까지 WAV로 내보내줘',
@@ -494,7 +503,7 @@ ${renderCommandReference()}
 5. ADD_TRACK은 현재 Agent에서 사용하지 않는다. 새 파일이나 새 Track이 필요한 요청은 []를 반환한다.
 6. LOAD_REGION은 사용자가 첫 Region 소스 복제를 명시했고 source가 available일 때만 사용한다. 목록에 표시된 sourceId를 포함하고 regionId는 생략한다. 첫 Region의 sourceStartTime과 duration은 그대로 쓴다. 두 번째 이후 Region의 소스 복제에는 사용하지 않는다.
 7. Region 제거, 분할, 이동 명령은 trackId와 regionId를 생략하지 않는다.
-8. 숫자는 문자열이 아닌 number로 쓴다. 시간은 절대 초다. 백분율은 100으로 나눠 volume 0..1, pan -1..1로 바꾼다. boolean은 true 또는 false다.
+8. 숫자는 문자열이 아닌 number로 쓴다. 시간은 절대 초다. 백분율은 100으로 나눠 Track volume과 Master Volume은 0..1, pan은 -1..1로 바꾼다. boolean은 true 또는 false다.
 9. 범위를 실제로 내보내려면 SET_EXPORT_RANGE 다음에 EXPORT_AUDIO를 둔다. endTime은 startTime보다 커야 한다.
 10. 입력 의존 순서를 유지한다. EXPORT_AUDIO는 해당 묶음의 마지막에 둔다.
 11. 편집과 저장을 함께 요청하면 SAVE_PROJECT를 해당 편집 명령 뒤에 둔다.

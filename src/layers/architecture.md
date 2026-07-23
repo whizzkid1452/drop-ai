@@ -23,7 +23,7 @@ AudioEngine 객체를 노출하지 않는다. 현재 `PlaybackClockQuery`는 `Pl
 `CommandHistory`는 현재 앱 실행 중에만 유지하는 최대 100개의 역명령 기록이다. `CommandExecutor`가 성공한 편집의 실행 전후
 Session을 비교해 Undo·Redo 명령을 만들고, `UNDO`와 `REDO`도 같은 대기열에서 실행한다. Undo·Redo가 실패하면 해당 기록을
 반대쪽 스택으로 옮기지 않는다. 새 편집은 Redo 기록을 제거한다. 지원 범위는 Track 추가, Region 추가·삭제·이동, tempo,
-Track volume·pan·mute·solo, Export 범위 설정·해제, Plugin 설치·제거·처리 순서·활성화 상태·Parameter 변경이다. Plugin 기록은 같은
+Master Volume, Track volume·pan·mute·solo, Export 범위 설정·해제, Plugin 설치·제거·처리 순서·활성화 상태·Parameter 변경이다. Plugin 기록은 같은
 인스턴스 ID, manifest ID, 설치 위치, 활성화 상태, Parameter 값을 사용해 상태를 복원한다. 제거 Undo도 원래 설치 위치를 복원한다.
 재생·playhead·저장·내보내기는 기록하지 않는다. Track 삭제와 Region
 분할은 손실 없는 복원 명령이 아직 없으므로 Session 변경이 확인되면 기존 기록을 제거한다. 프로젝트 불러오기도 다른
@@ -193,9 +193,10 @@ Source 전환만 실패했다면 Engine과 Registry를 기존 Region 상태로 �
 Region 연결을 준비하고, `prepareProjectGraph`는 출력 gate가 닫힌 새 Track input·Plugin runtime·Channel과 Player를
 준비한다. Plugin runtime은 전달된 순서대로 만들고 활성 runtime만 연결한다. manifest factory 누락, 중복 instance ID,
 잘못된 Parameter가 있으면 후보 그래프만 정리하고 준비를 거부한다. `isEnabled=false`인 runtime은 생성하되 chain에서 우회한다.
-실시간 재생은 `Player → Track input → 활성 Plugin runtime[] → Channel → output` 순서를 사용한다. 활성 Plugin이 없으면 Track input이
-Channel에 직접 연결된다. ProjectController는 v2 Mapper가 복원한 Session Plugin 상태를 준비 요청으로 바꾸므로 저장
-프로젝트를 불러올 때 Plugin chain이 반영된다. 프로젝트 그래프 계약 자체는 manifest version 호환성을 판단하지 않으며,
+실시간 재생은 `Player → Track input → 활성 Plugin runtime[] → Channel → Project output Gain → destination` 순서를 사용한다.
+활성 Plugin이 없으면 Track input이 Channel에 직접 연결된다. `SET_MASTER_VOLUME`은 Project output Gain을 0.1초에 걸쳐 목표값으로
+바꾼 뒤 Session을 갱신한다. ProjectController는 v2 Mapper가 복원한 Session Plugin 상태와 Master Volume을 준비 요청으로 바꾸므로
+저장 프로젝트를 불러올 때 Plugin chain과 출력 볼륨이 함께 반영된다. 프로젝트 그래프 계약 자체는 manifest version 호환성을 판단하지 않으며,
 v2 Mapper가 그래프 준비 전에 Shared 호환성 검증을 수행한다. ExportController는 Session의 Plugin 설치 순서·manifest ID·활성
 상태·Parameter 값을 Export 요청에 복사한다. AudioEngine은 오프라인 Tone.js context에서 별도 runtime을 만들고 활성 runtime만
 `Player → Track input → 활성 Plugin runtime[] → Channel` 순서로 연결한다. 비활성 runtime은 생성하되 chain에서 우회한다.
@@ -249,6 +250,8 @@ Web UI의 Tempo 입력은 `SET_TEMPO`로 Session 메타데이터만 변경한다
 오디오 Source를 연결한다. 첫 명령이 실패하면 pending Source를 정리한다. 두 번째 명령이 실패하면 `REMOVE_TRACK`을
 CommandExecutor로 실행한 뒤 pending Source 정리를 시도한다. 보상도 실패하면 Web workflow 전용
 `AudioImportCompensationError`에 원래 오류와 각 보상 오류를 함께 보존한다.
+Web 헤더의 Master 입력, 내부 CLI의 `master-volume <value>`, Agent의 전체 출력 볼륨 요청은 모두 0부터 1 사이의
+`SET_MASTER_VOLUME`을 CommandExecutor에 전달한다. Web 입력은 처리 중 중복 실행을 막고 실패 시 최신 Session 값으로 되돌린다.
 Web 헤더의 저장 버튼과 내부 CLI의 `save`, Agent의 저장 요청은 모두 인자 없는 `SAVE_PROJECT`를 CommandExecutor에
 전달한다. Web 버튼은 처리 중 중복 입력을 막고 성공 또는 실패 결과를 표시한다. Agent는 편집과 저장을 함께 요청받으면
 저장 명령을 편집 명령 뒤에 둔다.

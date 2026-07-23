@@ -442,6 +442,15 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     expect(toneMocks.channels[0]).toMatchObject({ mute: true, solo: false });
   });
 
+  it('Master Volume을 프로젝트 출력 Gain에 부드럽게 적용한다', () => {
+    const engine = new AudioEngine();
+
+    engine.setMasterVolume(0.4);
+
+    expect(toneMocks.gainRampTo).toHaveBeenCalledWith(0.4, 0.1);
+    expect(toneMocks.outputGains[0]?.gain.value).toBe(0.4);
+  });
+
   it('mute 중 볼륨 변경은 음소거를 유지하고 unmute 전에 목표 볼륨을 적용한다', async () => {
     const engine = new AudioEngine();
     await engine.addTrack('track-1');
@@ -1624,6 +1633,21 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     expect(engine.getTrackParams('current-track')).not.toBeNull();
   });
 
+  it('프로젝트 활성화 실패 시 기존 Master Volume을 그대로 복원한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addTrack('current-track');
+    engine.setMasterVolume(0.4);
+    const replacement = await engine.prepareProjectGraph({ tracks: [], masterVolume: 0.8 });
+    toneMocks.gainValueFailures.push(undefined, new Error('candidate unmute failed'));
+
+    expect(() => replacement.activate()).toThrowError(
+      expect.objectContaining({ code: AudioEngineErrorCode.PROJECT_GRAPH_ACTIVATION_FAILED })
+    );
+
+    expect(toneMocks.outputGains[0]?.gain.value).toBe(0.4);
+    expect(engine.getTrackParams('current-track')).not.toBeNull();
+  });
+
   it('기존 출력 복원이 계속 실패하면 다음 작업을 거부하고 복원을 재시도한다', async () => {
     const engine = new AudioEngine();
     await engine.addTrack('current-track');
@@ -1786,6 +1810,15 @@ describe('AudioEngine 실시간 상태 일관성', () => {
 
     retiredGraph.dispose();
     expect(toneMocks.playerDispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('준비한 프로젝트 그래프를 활성화하면 저장된 Master Volume을 적용한다', async () => {
+    const engine = new AudioEngine();
+    const replacement = await engine.prepareProjectGraph({ tracks: [], masterVolume: 0.25 });
+
+    replacement.activate();
+
+    expect(toneMocks.outputGains[1]?.gain.value).toBe(0.25);
   });
 
   it('두 번째 Track 준비가 실패하면 앞서 준비한 Track과 Region도 정리한다', async () => {

@@ -145,6 +145,17 @@ export function createCommandHistoryEntry({
         redoCommand: command,
       });
 
+    case AudioCommandType.SET_MASTER_VOLUME:
+      if (beforeSession.masterVolume === afterSession.masterVolume || afterSession.masterVolume !== command.volume) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        undoCommand: { type: AudioCommandType.SET_MASTER_VOLUME, volume: beforeSession.masterVolume },
+        redoCommand: command,
+      });
+
     case AudioCommandType.SET_TRACK_VOLUME: {
       const beforeTrack = command.trackId ? beforeSession.tracks.get(command.trackId) : undefined;
       const afterTrack = command.trackId ? afterSession.tracks.get(command.trackId) : undefined;

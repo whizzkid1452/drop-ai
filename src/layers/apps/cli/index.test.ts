@@ -113,6 +113,31 @@ describe('내부 CLI 명령 변환', () => {
     expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.SET_TEMPO, tempo: 140 });
   });
 
+  it.each([
+    ['0', 0],
+    ['0.4', 0.4],
+    ['1', 1],
+  ] as const)('master-volume 인자 %s를 SET_MASTER_VOLUME 명령으로 변환한다', async (rawVolume, volume) => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    const result = await commands['master-volume'].fn(rawVolume);
+
+    expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.SET_MASTER_VOLUME, volume });
+    expect(result).toBe(`Master volume set to ${volume}`);
+  });
+
+  it.each([undefined, '-0.1', '1.1', 'Infinity'])(
+    'master-volume의 잘못된 값 %s를 실행 전에 거부한다',
+    async rawVolume => {
+      const commands = createCliCommands(commandExecutor, defaultState);
+
+      const result = rawVolume ? await commands['master-volume'].fn(rawVolume) : await commands['master-volume'].fn();
+
+      expect(execute).not.toHaveBeenCalled();
+      expect(result).toBe('Error: Master volume must be between 0.0 and 1.0');
+    }
+  );
+
   it('track add의 Track ID를 URL 없는 ADD_TRACK 명령으로 변환한다', async () => {
     const commands = createCliCommands(commandExecutor, defaultState);
 

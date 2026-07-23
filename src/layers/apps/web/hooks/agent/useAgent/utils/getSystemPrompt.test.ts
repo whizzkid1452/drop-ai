@@ -73,6 +73,28 @@ describe('Agent 시스템 Prompt', () => {
     }
   });
 
+  it('Master Volume의 범위와 한국어·영어 변환 예시를 제공한다', () => {
+    const prompt = getSystemPrompt({ tracks });
+    const masterVolumeExamples = AGENT_PROMPT_EXAMPLES.filter(example =>
+      example.commands.some(command => command.type === AudioCommandType.SET_MASTER_VOLUME)
+    );
+
+    expect(prompt).toContain('{"type":"SET_MASTER_VOLUME","volume":<0..1>}');
+    expect(masterVolumeExamples).toEqual(
+      expect.arrayContaining([
+        {
+          request: '전체 볼륨을 40%로 설정해줘',
+          commands: [{ type: AudioCommandType.SET_MASTER_VOLUME, volume: 0.4 }],
+        },
+        {
+          request: 'set the master volume to 40 percent',
+          commands: [{ type: AudioCommandType.SET_MASTER_VOLUME, volume: 0.4 }],
+        },
+      ])
+    );
+    expect(prompt).toContain('Track volume과 Master Volume');
+  });
+
   it('트랙과 Region의 실제 식별자, 시간, Source ID, 소스 사용 가능 여부를 전달한다', () => {
     const prompt = getSystemPrompt({ tracks });
 

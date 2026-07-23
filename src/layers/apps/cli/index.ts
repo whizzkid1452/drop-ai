@@ -392,6 +392,18 @@ export const createCliCommands = (commandExecutor: CliCommandExecutor, state: Cl
         return `Tempo set to ${tempo} BPM`;
       },
     },
+    'master-volume': {
+      description: 'Set master output volume',
+      usage: 'master-volume <value>',
+      fn: async (value?: string) => {
+        const volume = value === undefined ? null : parseFiniteNumber(value);
+        if (volume === null || volume < 0 || volume > 1) {
+          return 'Error: Master volume must be between 0.0 and 1.0';
+        }
+        await commandExecutor.execute({ type: AudioCommandType.SET_MASTER_VOLUME, volume });
+        return `Master volume set to ${volume}`;
+      },
+    },
     track: {
       description: 'Track management',
       usage: 'track add <trackId> | track remove <trackId>',

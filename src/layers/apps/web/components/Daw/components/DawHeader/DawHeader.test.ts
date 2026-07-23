@@ -7,6 +7,7 @@ import { DawHeader } from './DawHeader';
 
 const componentMocks = vi.hoisted(() => ({
   audioRuntimeStatus: vi.fn(() => null),
+  masterVolumeControl: vi.fn(() => null),
   saveProjectButton: vi.fn(() => null),
   loadProjectControl: vi.fn(() => null),
   undoRedoControls: vi.fn(() => null),
@@ -36,6 +37,10 @@ vi.mock('./TempoMetadataControl', () => ({
   TempoMetadataControl: () => null,
 }));
 
+vi.mock('./MasterVolumeControl', () => ({
+  MasterVolumeControl: componentMocks.masterVolumeControl,
+}));
+
 vi.mock('../../DawPage.css.ts', () => ({
   header: 'header',
   headerRight: 'headerRight',
@@ -57,6 +62,7 @@ afterEach(() => {
   });
   document.body.replaceChildren();
   componentMocks.audioRuntimeStatus.mockClear();
+  componentMocks.masterVolumeControl.mockClear();
   componentMocks.saveProjectButton.mockClear();
   componentMocks.loadProjectControl.mockClear();
   componentMocks.undoRedoControls.mockClear();
@@ -72,6 +78,7 @@ describe('DawHeader', () => {
     act(() => root.render(createElement(DawHeader, { trackCount: 2 })));
 
     expect(componentMocks.audioRuntimeStatus).toHaveBeenCalledTimes(1);
+    expect(componentMocks.masterVolumeControl).toHaveBeenCalledTimes(1);
     expect(componentMocks.saveProjectButton).toHaveBeenCalledTimes(1);
     expect(componentMocks.loadProjectControl).toHaveBeenCalledTimes(1);
     expect(componentMocks.undoRedoControls).toHaveBeenCalledTimes(1);

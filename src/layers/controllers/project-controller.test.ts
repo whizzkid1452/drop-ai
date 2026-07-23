@@ -452,6 +452,7 @@ describe('ProjectController', () => {
       },
     ]);
     expect(prepareProjectGraph).toHaveBeenCalledWith({
+      masterVolume: 0.75,
       tracks: [
         expect.objectContaining({
           id: TRACK_ID,

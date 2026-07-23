@@ -99,6 +99,7 @@ export interface AudioProjectGraphTrack {
 }
 
 export interface PrepareAudioProjectGraphRequest {
+  readonly masterVolume?: number;
   readonly tracks: readonly AudioProjectGraphTrack[];
 }
 
@@ -119,6 +120,9 @@ export interface IAudioEngine {
   stop(): void;
   setTime(time: number): void;
   getCurrentTime(): number;
+
+  // Mixer Control
+  setMasterVolume(volume: number): void;
 
   // Track Management
   addTrack(trackId: string): Promise<void>;
