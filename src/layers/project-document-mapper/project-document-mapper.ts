@@ -1,13 +1,20 @@
 import type { ProjectSessionState, RegionState, TrackState } from '../session/session';
+import { validateProjectPluginCompatibility } from '../shared/project-plugin-compatibility';
 import { calculateFiniteRegionEndTime, isRegionEndTimeConsistent } from '../shared/region-timeline';
-import { readProjectDocument } from '../shared/types/project-document-reader';
+import type { PluginCatalogEntry, PluginInstanceState } from '../shared/types/plugin-state';
+import { readProjectDocument, readProjectDocumentV2 } from '../shared/types/project-document-reader';
 import {
   PROJECT_DOCUMENT_SCHEMA_VERSION,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
   ProjectDocumentSchema,
+  ProjectDocumentV2Schema,
   type ProjectAudioSource,
   type ProjectDocument,
+  type ProjectDocumentV2,
+  type ProjectPluginInstance,
   type ProjectRegion,
   type ProjectTrack,
+  type ProjectTrackV2,
 } from '../shared/types/project-document.schema';
 import { ProjectDocumentMappingError, ProjectDocumentMappingErrorCode } from './errors';
 
@@ -18,14 +25,34 @@ export interface CreateProjectDocumentFromSessionOptions {
   readonly audioSources: ReadonlyArray<Readonly<ProjectAudioSource>>;
 }
 
+export interface CreateProjectDocumentV2FromSessionOptions extends CreateProjectDocumentFromSessionOptions {
+  readonly pluginCatalog: readonly PluginCatalogEntry[];
+}
+
 export interface ProjectRestoreSnapshot {
   readonly session: SessionProjectSnapshot;
   readonly audioSources: readonly ProjectAudioSource[];
 }
 
+export interface CreateProjectRestoreSnapshotFromDocumentV2Options {
+  readonly document: ProjectDocument | ProjectDocumentV2;
+  readonly pluginCatalog: readonly PluginCatalogEntry[];
+}
+
 interface SessionTrackEntry {
   readonly mapKey: string;
   readonly track: TrackState;
+}
+
+interface SessionTrackV2Entry extends SessionTrackEntry {
+  readonly pluginCatalog: readonly PluginCatalogEntry[];
+}
+
+interface ValidatePluginInstanceForMappingOptions {
+  readonly instance: ProjectPluginInstance;
+  readonly pluginCatalog: readonly PluginCatalogEntry[];
+  readonly trackId: string;
+  readonly errorCode: ProjectDocumentMappingErrorCode;
 }
 
 export function createProjectDocumentFromSession({
@@ -51,12 +78,62 @@ export function createProjectDocumentFromSession({
   return parseSessionDocumentCandidate(documentCandidate);
 }
 
+export function createProjectDocumentV2FromSession({
+  session,
+  audioSources,
+  pluginCatalog,
+}: CreateProjectDocumentV2FromSessionOptions): ProjectDocumentV2 {
+  const documentCandidate = {
+    documentType: 'drop-ai-project',
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
+    project: { ...session.project },
+    timeline: {
+      timeUnit: 'seconds',
+      tempoBpm: session.tempo,
+    },
+    mixer: {
+      masterVolume: session.masterVolume,
+    },
+    exportRange: createExportRange(session),
+    audioSources: audioSources.map(source => ({ ...source })),
+    tracks: [...session.tracks.entries()].map(([mapKey, track]) =>
+      createProjectTrackV2({ mapKey, track, pluginCatalog })
+    ),
+  };
+
+  return parseSessionDocumentCandidateV2(documentCandidate);
+}
+
 export function createProjectRestoreSnapshotFromDocument(document: ProjectDocument): ProjectRestoreSnapshot {
   const validatedDocument = readDocumentForMapping(document);
   const tracks = new Map<string, TrackState>();
 
   validatedDocument.tracks.forEach(track => {
     tracks.set(track.id, createSessionTrack(track));
+  });
+
+  return {
+    session: {
+      project: { ...validatedDocument.project },
+      tempo: validatedDocument.timeline.tempoBpm,
+      masterVolume: validatedDocument.mixer.masterVolume,
+      exportStartTime: validatedDocument.exportRange?.startTimeSeconds ?? null,
+      exportEndTime: validatedDocument.exportRange?.endTimeSeconds ?? null,
+      tracks,
+    },
+    audioSources: validatedDocument.audioSources.map(source => ({ ...source })),
+  };
+}
+
+export function createProjectRestoreSnapshotFromDocumentV2({
+  document,
+  pluginCatalog,
+}: CreateProjectRestoreSnapshotFromDocumentV2Options): ProjectRestoreSnapshot {
+  const validatedDocument = readDocumentV2ForMapping(document);
+  const tracks = new Map<string, TrackState>();
+
+  validatedDocument.tracks.forEach(track => {
+    tracks.set(track.id, createSessionTrackV2({ track, pluginCatalog }));
   });
 
   return {
@@ -97,6 +174,37 @@ function createExportRange(session: SessionProjectSnapshot): ProjectDocument['ex
 }
 
 function createProjectTrack({ mapKey, track }: SessionTrackEntry): ProjectTrack {
+  assertSessionTrackId({ mapKey, track });
+
+  return {
+    id: track.id,
+    name: track.name,
+    volume: track.volume,
+    pan: track.pan,
+    isMuted: track.isMuted,
+    isSoloed: track.isSoloed,
+    regions: track.regions.map(createProjectRegion),
+  };
+}
+
+function createProjectTrackV2({ mapKey, track, pluginCatalog }: SessionTrackV2Entry): ProjectTrackV2 {
+  assertSessionTrackId({ mapKey, track });
+
+  return {
+    id: track.id,
+    name: track.name,
+    volume: track.volume,
+    pan: track.pan,
+    isMuted: track.isMuted,
+    isSoloed: track.isSoloed,
+    pluginInstances: track.pluginInstances.map(instance =>
+      createValidatedProjectPluginInstance({ instance, pluginCatalog, trackId: track.id })
+    ),
+    regions: track.regions.map(createProjectRegion),
+  };
+}
+
+function assertSessionTrackId({ mapKey, track }: SessionTrackEntry): void {
   if (mapKey !== track.id) {
     throw new ProjectDocumentMappingError({
       code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
@@ -108,15 +216,35 @@ function createProjectTrack({ mapKey, track }: SessionTrackEntry): ProjectTrack 
       },
     });
   }
+}
 
+function createValidatedProjectPluginInstance({
+  instance,
+  pluginCatalog,
+  trackId,
+}: {
+  readonly instance: PluginInstanceState;
+  readonly pluginCatalog: readonly PluginCatalogEntry[];
+  readonly trackId: string;
+}): ProjectPluginInstance {
+  const projectPluginInstance = createProjectPluginInstance(instance);
+  const compatiblePluginInstance = validatePluginInstanceForMapping({
+    instance: projectPluginInstance,
+    pluginCatalog,
+    trackId,
+    errorCode: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
+  });
+
+  return createProjectPluginInstance(compatiblePluginInstance);
+}
+
+function createProjectPluginInstance(instance: PluginInstanceState): ProjectPluginInstance {
   return {
-    id: track.id,
-    name: track.name,
-    volume: track.volume,
-    pan: track.pan,
-    isMuted: track.isMuted,
-    isSoloed: track.isSoloed,
-    regions: track.regions.map(createProjectRegion),
+    id: instance.id,
+    manifestId: instance.manifestSummary.id,
+    manifestVersion: instance.manifestSummary.version,
+    isEnabled: instance.isEnabled,
+    parameters: instance.parameters.map(parameter => ({ ...parameter })),
   };
 }
 
@@ -202,6 +330,36 @@ function parseSessionDocumentCandidate(documentCandidate: unknown): ProjectDocum
   }
 }
 
+function parseSessionDocumentCandidateV2(documentCandidate: unknown): ProjectDocumentV2 {
+  try {
+    const result = ProjectDocumentV2Schema.safeParse(documentCandidate);
+    if (result.success) {
+      return result.data;
+    }
+
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
+      message: 'Session 프로젝트 상태를 유효한 ProjectDocument v2로 변환할 수 없습니다.',
+      details: {
+        issues: result.error.issues,
+        reason: 'PROJECT_DOCUMENT_SCHEMA_VIOLATION',
+      },
+      cause: result.error,
+    });
+  } catch (cause) {
+    if (cause instanceof ProjectDocumentMappingError) {
+      throw cause;
+    }
+
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
+      message: 'Session 프로젝트 상태를 읽을 수 없습니다.',
+      details: { reason: 'PROJECT_DOCUMENT_SCHEMA_VIOLATION' },
+      cause,
+    });
+  }
+}
+
 function readDocumentForMapping(document: ProjectDocument): ProjectDocument {
   try {
     return readProjectDocument(document);
@@ -209,6 +367,19 @@ function readDocumentForMapping(document: ProjectDocument): ProjectDocument {
     throw new ProjectDocumentMappingError({
       code: ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT,
       message: '복원할 ProjectDocument가 유효하지 않습니다.',
+      details: { reason: 'PROJECT_DOCUMENT_READ_FAILED' },
+      cause,
+    });
+  }
+}
+
+function readDocumentV2ForMapping(document: ProjectDocument | ProjectDocumentV2): ProjectDocumentV2 {
+  try {
+    return readProjectDocumentV2(document);
+  } catch (cause) {
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT,
+      message: '복원할 ProjectDocument v2가 유효하지 않습니다.',
       details: { reason: 'PROJECT_DOCUMENT_READ_FAILED' },
       cause,
     });
@@ -227,6 +398,56 @@ function createSessionTrack(track: ProjectTrack): TrackState {
     pluginInstances: [],
     regions: track.regions.map(createSessionRegion),
   };
+}
+
+function createSessionTrackV2({
+  track,
+  pluginCatalog,
+}: {
+  readonly track: ProjectTrackV2;
+  readonly pluginCatalog: readonly PluginCatalogEntry[];
+}): TrackState {
+  return {
+    id: track.id,
+    name: track.name,
+    volume: track.volume,
+    pan: track.pan,
+    isMuted: track.isMuted,
+    isSoloed: track.isSoloed,
+    status: [],
+    pluginInstances: track.pluginInstances.map(instance =>
+      validatePluginInstanceForMapping({
+        instance,
+        pluginCatalog,
+        trackId: track.id,
+        errorCode: ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT,
+      })
+    ),
+    regions: track.regions.map(createSessionRegion),
+  };
+}
+
+function validatePluginInstanceForMapping({
+  instance,
+  pluginCatalog,
+  trackId,
+  errorCode,
+}: ValidatePluginInstanceForMappingOptions): PluginInstanceState {
+  const compatibilityResult = validateProjectPluginCompatibility({ instance, pluginCatalog });
+  if (compatibilityResult.status === 'compatible') {
+    return compatibilityResult.pluginInstance;
+  }
+
+  throw new ProjectDocumentMappingError({
+    code: errorCode,
+    message: `Track Plugin 상태가 현재 catalog와 호환되지 않습니다: ${trackId}`,
+    details: {
+      instanceId: instance.id,
+      issues: compatibilityResult.issues,
+      reason: 'PLUGIN_COMPATIBILITY_FAILED',
+      trackId,
+    },
+  });
 }
 
 function createSessionRegion(region: ProjectRegion): RegionState {

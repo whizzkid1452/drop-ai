@@ -108,12 +108,15 @@ Region, 허용 오차를 초과한 Region 끝 시각 불일치는 손실을 숨�
 ProjectDocument v1에는 Plugin 런타임 상태 필드가 없다. Mapper는 저장할 때 해당 상태를 포함하지 않고, v1 복원 Track의
 Plugin 인스턴스를 빈 배열로 초기화한다. Shared에는 후속 전환용 `ProjectDocumentV2Schema`를 별도 계약으로 정의한다. v2는
 Track별 Plugin 설치 순서, instance UUID, manifest ID·version, 활성 상태, boolean·유한 number·제한된 string Parameter 값을
-저장한다. instance UUID는 문서 전체에서, Parameter ID는 instance 안에서 중복될 수 없다. 현재 Mapper와 Reader의 활성
-형식은 아직 v1이다. `readProjectDocumentV2`는 v1을 검증한 뒤 각 Track에 빈 Plugin 배열을 넣어 v2로 바꾸고, 이미 v2인
-입력은 Plugin 상태를 보존해 검증·복제한다. 이 함수는 아직 Mapper·Repository에서 사용하지 않는 명시적 전환 경계다.
+저장한다. Plugin 이름은 문서에 저장하지 않고 현재 catalog에서 복원한다. instance UUID는 문서 전체에서, Parameter ID는
+instance 안에서 중복될 수 없다. 현재 Repository와 기본 Mapper 함수의 활성 형식은 아직 v1이다.
+`createProjectDocumentV2FromSession`과 `createProjectRestoreSnapshotFromDocumentV2`는 후속 전환을 위한 별도 Mapper
+경계다. v2 저장·복원 모두 현재 Plugin catalog와의 호환성을 먼저 검증하고, Parameter는 catalog 정의 순서로 정규화한다.
+`readProjectDocumentV2`는 v1을 검증한 뒤 각 Track에 빈 Plugin 배열을 넣어 v2로 바꾸고, 이미 v2인 입력은 Plugin 상태를
+보존해 검증·복제한다. Repository는 아직 이 v2 경계를 사용하지 않는다.
 Shared의 `validateProjectPluginCompatibility`는 저장 manifest ID·version을 현재 Plugin catalog와 정확히 비교하고,
 Parameter ID 집합·number 범위·boolean type·enum option을 검증한다. 성공하면 catalog 정의 순서의 Session Plugin 상태를
-반환하고, 실패하면 원인을 구분한 issue를 반환한다. 현재 v1 Mapper는 아직 이 함수를 호출하지 않는다.
+반환하고, 실패하면 원인을 구분한 issue를 반환한다. 기본 v1 Mapper는 이 함수를 호출하지 않는다.
 
 `createApp`은 새 프로젝트의 UUID·이름·revision 0을 만들거나 검증을 마친 기존 metadata를 Session에 주입한다.
 `project.revision`은 편집 횟수나 저장 여부가 아니라 마지막 성공 저장 snapshot의 동시성 제어 값이다. 일반 편집과
