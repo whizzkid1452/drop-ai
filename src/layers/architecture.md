@@ -108,7 +108,8 @@ ProjectDocument v1에는 Plugin 런타임 상태 필드가 없다. Mapper는 저
 Plugin 인스턴스를 빈 배열로 초기화한다. Shared에는 후속 전환용 `ProjectDocumentV2Schema`를 별도 계약으로 정의한다. v2는
 Track별 Plugin 설치 순서, instance UUID, manifest ID·version, 활성 상태, boolean·유한 number·제한된 string Parameter 값을
 저장한다. instance UUID는 문서 전체에서, Parameter ID는 instance 안에서 중복될 수 없다. 현재 Mapper와 Reader의 활성
-형식은 아직 v1이며 v2 소비자 전환과 v1 마이그레이션은 별도 단계다.
+형식은 아직 v1이다. `readProjectDocumentV2`는 v1을 검증한 뒤 각 Track에 빈 Plugin 배열을 넣어 v2로 바꾸고, 이미 v2인
+입력은 Plugin 상태를 보존해 검증·복제한다. 이 함수는 아직 Mapper·Repository에서 사용하지 않는 명시적 전환 경계다.
 
 `createApp`은 새 프로젝트의 UUID·이름·revision 0을 만들거나 검증을 마친 기존 metadata를 Session에 주입한다.
 `project.revision`은 편집 횟수나 저장 여부가 아니라 마지막 성공 저장 snapshot의 동시성 제어 값이다. 일반 편집과

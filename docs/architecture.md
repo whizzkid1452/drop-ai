@@ -373,7 +373,9 @@ Region의 끝 시각은 `startTimeSeconds + durationSeconds`로 계산하므로 
 manifest ID·version, 활성 상태, Parameter ID·값을 저장한다. Parameter 값은 boolean, 유한 number, 앞뒤 공백이 없는
 255자 이하 string만 허용한다. Plugin instance UUID는 문서 전체에서, Parameter ID는 각 instance 안에서 중복될 수 없다.
 함수, DSP node, runtime 같은 실행 객체는 엄격한 객체 검증으로 거부한다. 현재 `ProjectDocumentSchema`, Reader, Mapper는
-계속 v1을 사용한다. v2 활성화와 v1→v2 마이그레이션은 소비자 전환 단계에서 수행한다.
+계속 v1을 사용한다. 별도 `readProjectDocumentV2`는 v1과 v2를 입력으로 받고 항상 검증·복제된 v2를 반환한다. v1 Track에는
+빈 `pluginInstances`를 추가하고, v2 Plugin 상태는 그대로 보존한다. `readProjectDocumentJsonV2`도 같은 규칙을 적용한다.
+아직 Mapper와 Repository는 이 경계를 호출하지 않으므로 활성 저장 형식 전환은 후속 소비자 변경이다.
 
 `readProjectDocument`는 신뢰할 수 없는 입력에서 문서 식별자와 정수 `schemaVersion`을 먼저 읽고, 지원하는 버전의 전체
 Schema를 적용한다. `readProjectDocumentJson`은 JSON 문법 오류를 문서 구조 오류와 구분한다. 현재 실제로 정의된 형식은

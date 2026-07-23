@@ -1,8 +1,11 @@
 import { z } from 'zod';
 import {
   PROJECT_DOCUMENT_SCHEMA_VERSION,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
   ProjectDocumentSchema,
+  ProjectDocumentV2Schema,
   type ProjectDocument,
+  type ProjectDocumentV2,
 } from './project-document.schema';
 
 export const ProjectDocumentReadErrorCode = {
@@ -18,6 +21,10 @@ export type ProjectDocumentReadErrorCode =
   (typeof ProjectDocumentReadErrorCode)[keyof typeof ProjectDocumentReadErrorCode];
 
 export const SUPPORTED_PROJECT_DOCUMENT_SCHEMA_VERSIONS = [PROJECT_DOCUMENT_SCHEMA_VERSION] as const;
+export const PROJECT_DOCUMENT_V2_MIGRATION_INPUT_VERSIONS = [
+  PROJECT_DOCUMENT_SCHEMA_VERSION,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
+] as const;
 
 const ProjectDocumentSchemaVersionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const ARRAY_INDEX_PATTERN = /^(?:0|[1-9]\d*)$/;
@@ -200,7 +207,25 @@ function parseCurrentProjectDocument(input: unknown, schemaVersion: number): Pro
   throw createInvalidDocumentError(schemaVersion, parseFailure);
 }
 
-export function readProjectDocument(input: unknown): ProjectDocument {
+function parseProjectDocumentV2(input: unknown, schemaVersion: number): ProjectDocumentV2 {
+  const clonedInput = cloneProjectDocumentInput(input, schemaVersion);
+  let parseFailure: unknown;
+
+  try {
+    const documentResult = ProjectDocumentV2Schema.safeParse(clonedInput);
+    if (documentResult.success) {
+      return documentResult.data;
+    }
+
+    parseFailure = documentResult.error;
+  } catch (cause) {
+    parseFailure = cause;
+  }
+
+  throw createInvalidDocumentError(schemaVersion, parseFailure);
+}
+
+function readProjectDocumentSchemaVersion(input: unknown): number {
   const topLevelObject = readTopLevelObject(input);
   const documentTypeProperty = readOwnDataProperty({
     input: topLevelObject,
@@ -240,25 +265,46 @@ export function readProjectDocument(input: unknown): ProjectDocument {
     });
   }
 
-  const schemaVersion = schemaVersionResult.data;
-  if (schemaVersion !== PROJECT_DOCUMENT_SCHEMA_VERSION) {
-    throw new ProjectDocumentReadError({
-      code: ProjectDocumentReadErrorCode.UNSUPPORTED_SCHEMA_VERSION,
-      message: `지원하지 않는 프로젝트 문서 버전입니다: ${schemaVersion}`,
-      details: {
-        schemaVersion,
-        supportedSchemaVersions: SUPPORTED_PROJECT_DOCUMENT_SCHEMA_VERSIONS,
-      },
-    });
-  }
-
-  return parseCurrentProjectDocument(input, schemaVersion);
+  return schemaVersionResult.data;
 }
 
-export function readProjectDocumentJson(json: string): ProjectDocument {
-  let input: unknown;
+function createUnsupportedSchemaVersionError({
+  schemaVersion,
+  supportedSchemaVersions,
+}: {
+  readonly schemaVersion: number;
+  readonly supportedSchemaVersions: readonly number[];
+}): ProjectDocumentReadError {
+  return new ProjectDocumentReadError({
+    code: ProjectDocumentReadErrorCode.UNSUPPORTED_SCHEMA_VERSION,
+    message: `지원하지 않는 프로젝트 문서 버전입니다: ${schemaVersion}`,
+    details: {
+      schemaVersion,
+      supportedSchemaVersions,
+    },
+  });
+}
+
+function migrateValidatedProjectDocumentV1ToV2(document: ProjectDocument): ProjectDocumentV2 {
+  return ProjectDocumentV2Schema.parse({
+    ...document,
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
+    tracks: document.tracks.map(track => ({
+      ...track,
+      pluginInstances: [],
+      regions: track.regions.map(region => ({ ...region })),
+    })),
+    audioSources: document.audioSources.map(source => ({ ...source })),
+    exportRange: document.exportRange ? { ...document.exportRange } : null,
+    mixer: { ...document.mixer },
+    project: { ...document.project },
+    timeline: { ...document.timeline },
+  });
+}
+
+function parseProjectDocumentJsonInput(json: string): unknown {
   try {
-    input = JSON.parse(json) as unknown;
+    return JSON.parse(json) as unknown;
   } catch (cause) {
     throw new ProjectDocumentReadError({
       code: ProjectDocumentReadErrorCode.INVALID_JSON,
@@ -266,6 +312,43 @@ export function readProjectDocumentJson(json: string): ProjectDocument {
       cause,
     });
   }
+}
 
-  return readProjectDocument(input);
+export function readProjectDocument(input: unknown): ProjectDocument {
+  const schemaVersion = readProjectDocumentSchemaVersion(input);
+  if (schemaVersion !== PROJECT_DOCUMENT_SCHEMA_VERSION) {
+    throw createUnsupportedSchemaVersionError({
+      schemaVersion,
+      supportedSchemaVersions: SUPPORTED_PROJECT_DOCUMENT_SCHEMA_VERSIONS,
+    });
+  }
+
+  return parseCurrentProjectDocument(input, schemaVersion);
+}
+
+export function migrateProjectDocumentV1ToV2(document: ProjectDocument): ProjectDocumentV2 {
+  return migrateValidatedProjectDocumentV1ToV2(readProjectDocument(document));
+}
+
+export function readProjectDocumentV2(input: unknown): ProjectDocumentV2 {
+  const schemaVersion = readProjectDocumentSchemaVersion(input);
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION) {
+    return migrateValidatedProjectDocumentV1ToV2(parseCurrentProjectDocument(input, schemaVersion));
+  }
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V2) {
+    return parseProjectDocumentV2(input, schemaVersion);
+  }
+
+  throw createUnsupportedSchemaVersionError({
+    schemaVersion,
+    supportedSchemaVersions: PROJECT_DOCUMENT_V2_MIGRATION_INPUT_VERSIONS,
+  });
+}
+
+export function readProjectDocumentJson(json: string): ProjectDocument {
+  return readProjectDocument(parseProjectDocumentJsonInput(json));
+}
+
+export function readProjectDocumentJsonV2(json: string): ProjectDocumentV2 {
+  return readProjectDocumentV2(parseProjectDocumentJsonInput(json));
 }

@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { ProjectDocument } from './project-document.schema';
 import {
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
+  type ProjectDocument,
+  type ProjectDocumentV2,
+} from './project-document.schema';
+import {
+  PROJECT_DOCUMENT_V2_MIGRATION_INPUT_VERSIONS,
   ProjectDocumentReadErrorCode,
+  migrateProjectDocumentV1ToV2,
   readProjectDocument,
   readProjectDocumentJson,
+  readProjectDocumentJsonV2,
+  readProjectDocumentV2,
   type ProjectDocumentReadErrorCode as ReadErrorCode,
 } from './project-document-reader';
 
@@ -56,6 +64,25 @@ function createProjectDocumentWithRegion(): ProjectDocument {
         ],
       },
     ],
+  };
+}
+
+function createProjectDocumentV2(): ProjectDocumentV2 {
+  return {
+    ...createProjectDocumentWithRegion(),
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
+    tracks: createProjectDocumentWithRegion().tracks.map(track => ({
+      ...track,
+      pluginInstances: [
+        {
+          id: '77777777-7777-4777-8777-777777777777',
+          manifestId: 'builtin.gain',
+          manifestVersion: '1.0.0',
+          isEnabled: true,
+          parameters: [{ id: 'gain', value: 1.25 }],
+        },
+      ],
+    })),
   };
 }
 
@@ -318,5 +345,77 @@ describe('ProjectDocument reader', () => {
       () => readProjectDocument({ ...document, unexpected: true }),
       ProjectDocumentReadErrorCode.INVALID_DOCUMENT
     );
+  });
+});
+
+describe('ProjectDocument v2 migration reader', () => {
+  it('v1 문서를 v2로 바꾸고 Track마다 빈 Plugin 배열을 추가한다', () => {
+    const v1Document = createProjectDocumentWithRegion();
+
+    const v2Document = readProjectDocumentV2(v1Document);
+
+    expect(v2Document).toEqual({
+      ...v1Document,
+      schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
+      tracks: v1Document.tracks.map(track => ({ ...track, pluginInstances: [] })),
+    });
+  });
+
+  it('직접 migration도 입력과 참조를 공유하지 않는다', () => {
+    const v1Document = createProjectDocumentWithRegion();
+
+    const v2Document = migrateProjectDocumentV1ToV2(v1Document);
+    v2Document.project.name = '변경된 프로젝트';
+    v2Document.tracks[0].regions[0].durationSeconds = 1;
+
+    expect(v1Document.project.name).toBe('새 프로젝트');
+    expect(v1Document.tracks[0].regions[0].durationSeconds).toBe(5);
+  });
+
+  it('v2 문서의 Plugin 상태를 보존하고 입력과 참조를 공유하지 않는다', () => {
+    const input = createProjectDocumentV2();
+
+    const document = readProjectDocumentV2(input);
+    document.tracks[0].pluginInstances[0].parameters[0].value = 0.5;
+
+    expect(document.schemaVersion).toBe(PROJECT_DOCUMENT_SCHEMA_VERSION_V2);
+    expect(input.tracks[0].pluginInstances[0].parameters[0].value).toBe(1.25);
+  });
+
+  it('JSON으로 받은 v1과 v2를 모두 v2로 반환한다', () => {
+    const v1Document = createProjectDocument();
+    const v2Document = createProjectDocumentV2();
+
+    expect(readProjectDocumentJsonV2(JSON.stringify(v1Document))).toEqual(migrateProjectDocumentV1ToV2(v1Document));
+    expect(readProjectDocumentJsonV2(JSON.stringify(v2Document))).toEqual(v2Document);
+  });
+
+  it('v2 migration 입력 버전 목록을 오류 상세에 제공한다', () => {
+    const input = { ...createProjectDocument(), schemaVersion: 3 };
+    let thrownError: unknown;
+
+    try {
+      readProjectDocumentV2(input);
+    } catch (error) {
+      thrownError = error;
+    }
+
+    expect(thrownError).toMatchObject({
+      code: ProjectDocumentReadErrorCode.UNSUPPORTED_SCHEMA_VERSION,
+      details: {
+        schemaVersion: 3,
+        supportedSchemaVersions: PROJECT_DOCUMENT_V2_MIGRATION_INPUT_VERSIONS,
+      },
+    });
+  });
+
+  it('v2 envelope의 잘못된 Plugin 본문을 현재 문서 오류로 분류한다', () => {
+    const document = createProjectDocumentV2();
+    const invalidDocument = {
+      ...document,
+      tracks: [{ ...document.tracks[0], pluginInstances: [{ ...document.tracks[0].pluginInstances[0], id: 'bad' }] }],
+    };
+
+    expectReadError(() => readProjectDocumentV2(invalidDocument), ProjectDocumentReadErrorCode.INVALID_DOCUMENT);
   });
 });
