@@ -59,9 +59,9 @@ Session과 AudioCommand에는 저장하지 않는다. API 존재 확인은 실�
 Session의 Plugin 런타임 상태는 Track별 Plugin 인스턴스, Plugin 카탈로그, manifest 검증 결과, 런타임 로그로 나눈다.
 Plugin 인스턴스는 ID, manifest 요약, 활성 여부, boolean·number·string 매개변수 값을 가진다. 카탈로그·검증 결과·로그
 Action은 입력 객체를 복제해 저장하며, 프로젝트 상태 교체 시 Track의 Plugin 인스턴스도 깊은 복사한다. 이 기반은 아직
-Plugin 설치, 오디오 처리, AudioCommand, UI를 제공하지 않는다. Composition Root는 시작할 때 내장 Gain manifest를
+Plugin AudioCommand, Controller 연동, UI를 제공하지 않는다. Composition Root는 시작할 때 내장 Gain manifest를
 PluginHost에 등록하고, 공개해도 되는 요약과 검증 결과만 Session에 한 번의 상태 변경으로 반영한다. 이 등록은 manifest
-선언을 카탈로그에 추가하는 동작이며 AudioWorklet 모듈을 불러오거나 효과를 오디오 신호에 연결하지 않는다.
+선언을 카탈로그에 추가하는 동작이며 AudioWorklet 모듈을 불러오지 않는다.
 
 Plugin SDK는 다른 프로젝트 계층을 import하지 않는 선언 계약이다. manifest v1은 namespaced ID, Semantic Versioning 형식,
 effect 유형, number·boolean·enum 매개변수, AudioWorklet 모듈 상대 경로, slider·toggle·select UI control만 허용한다.
@@ -74,13 +74,16 @@ same-origin인지 여부는 후속 모듈 로더가 별도로 확인해야 한�
 registry 내부 값에 영향을 주지 않는다. PluginHost production 코드는 Plugin SDK와 Shared만 의존한다. 구체 구현은
 Composition Root와 테스트에서만 import하고, PluginController는 `IPluginHost` 계약에 의존한다. Composition Root가 만든
 PluginHost와 전체 manifest는 Apps에 노출하지 않는다. 현재 연결 범위는 시작 시 카탈로그 등록과 조회이며, Plugin
-설치·활성화·해제 lifecycle과 AudioEngine 연결은 없다. `plugins/`의 production 코드는 Plugin SDK 외 프로젝트 계층을
-import하지 않는다.
+설치·활성화·해제 lifecycle은 아직 Controller와 연결되지 않았다. `plugins/`의 production 코드는 Plugin SDK 외 프로젝트
+계층을 import하지 않는다.
 
 AudioEngine 계층의 `ToneGainPluginRuntimeFactory`는 주입받은 manifest ID와 Gain Parameter 계약으로 Tone.js `Gain`
 runtime을 만든다. 초기값과 변경값의 type·유한성·범위를 검사하고, 변경은 0.01초 ramp로 적용한다. runtime은 후속
-AudioEngine chain 조립에 필요한 연결·해제·폐기 계약만 제공한다. 현재 단계에서는 Factory를 AudioEngine에 등록하거나
-Track input에 연결하지 않으므로 실제 재생 신호에는 아직 영향을 주지 않는다.
+AudioEngine chain 조립에 필요한 연결·해제·폐기 계약을 제공한다. Composition Root는 브라우저 기본 AudioEngine에 내장
+Gain Factory를 등록한다. AudioEngine은 Plugin을 설치 순서대로 `Track input → Plugin runtime[] → Channel`에 직렬 연결하고,
+제거 시 남은 chain을 다시 연결한다. 연결 변경 실패 시 이전 chain 복원을 시도하며, 복원도 실패한 동안에는 다른 실시간
+오디오 작업을 거부하고 다음 호출에서 복원을 먼저 재시도한다. 현재 AudioCommand와 Controller가 이 API를 호출하지 않으므로
+사용자 진입점에서는 아직 Plugin을 설치하거나 Parameter를 바꿀 수 없다.
 
 영구 저장 형식은 Shared의 `ProjectDocumentSchema`로 검증한다. v1은 Track·Region과 오디오 Source 메타데이터를
 절대 초 단위로 저장하고, Region은 임시 URL이 아닌 안정적인 Source ID를 참조한다. `File`, `Blob`, Object URL,
@@ -157,8 +160,10 @@ Source 전환만 실패했다면 Engine과 Registry를 기존 Region 상태로 �
 
 단건 `restoreCommitted`는 원자적인 프로젝트 불러오기 API가 아니다. `beginReplacement`는 분리된 Registry에 Source와
 Region 연결을 준비하고, `prepareProjectGraph`는 출력 gate가 닫힌 새 Track input·Channel과 Player를 디코딩·예약한다.
-실시간 재생, 프로젝트 그래프 준비, Export는 모두 `Player → Track input → Channel → output` 순서를 사용한다. 현재 Track
-input은 gain 1인 Tone.js `Gain` 노드이며 음량을 바꾸지 않고 후속 Plugin chain의 삽입 지점만 만든다. 준비 실패나
+실시간 재생은 `Player → Track input → Plugin runtime[] → Channel → output` 순서를 사용한다. Plugin이 없으면 Track input이
+Channel에 직접 연결된다. 프로젝트 그래프 준비와 Export는 현재 Plugin 상태를 입력으로 받지 않으므로
+`Player → Track input → Channel → output` 순서를 유지한다. ProjectDocument v1과 Export에 Plugin 처리를 추가하기 전까지
+불러온 프로젝트와 내보낸 파일에는 실시간 Plugin chain이 반영되지 않는다. 준비 실패나
 active revision 변경에서는 기존 Registry와 AudioEngine 그래프를 유지한다. Controller는 두 prepared 대상의
 `assertActivatable`을 먼저 모두 통과시킨 뒤, 중간 `await` 없이 Engine → Registry → Session 순서로 활성화해야 한다.
 Engine 활성화 중 Transport나 출력 gate 변경이 실패하면 기존 재생 상태와 gate를 보상하고 교체를 거부한다. 이전 그래프와

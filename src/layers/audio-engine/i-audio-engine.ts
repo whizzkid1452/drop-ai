@@ -1,4 +1,5 @@
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
+import type { PluginParameterValue } from '../shared/types/plugin-state';
 
 export interface RegionData {
   id: string;
@@ -51,6 +52,20 @@ export interface ReplaceRegionRequest {
   replacements: RegionData[];
 }
 
+export interface InstallAudioPluginRequest {
+  readonly trackId: string;
+  readonly instanceId: string;
+  readonly manifestId: string;
+  readonly parameterValues: ReadonlyMap<string, PluginParameterValue>;
+}
+
+export interface SetAudioPluginParameterRequest {
+  readonly trackId: string;
+  readonly instanceId: string;
+  readonly parameterId: string;
+  readonly value: PluginParameterValue;
+}
+
 export interface AudioProjectGraphTrack {
   readonly id: string;
   readonly volume: number;
@@ -90,6 +105,11 @@ export interface IAudioEngine {
   setTrackMute(trackId: string, muted: boolean): void;
   setTrackSolo(trackId: string, soloed: boolean): void;
   getTrackParams(trackId: string): { volume: number; pan: number } | null;
+
+  // Plugin Management
+  installPlugin(request: InstallAudioPluginRequest): void;
+  removePlugin(trackId: string, instanceId: string): void;
+  setPluginParameter(request: SetAudioPluginParameterRequest): void;
 
   // Region Management
   addRegion(trackId: string, regionData: RegionData): Promise<void>;

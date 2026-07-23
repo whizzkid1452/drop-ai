@@ -18,8 +18,12 @@ interface PlayerMockState {
 }
 
 interface GainMockState {
+  disposed: boolean;
   destination?: unknown;
-  readonly gain: { value: number };
+  readonly gain: {
+    value: number;
+    rampTo: (value: number, rampSeconds: number) => void;
+  };
 }
 
 const toneMocks = vi.hoisted(() => ({
@@ -44,6 +48,7 @@ const toneMocks = vi.hoisted(() => ({
   gainDispose: vi.fn(),
   gainConnect: vi.fn(),
   gainConnectFailures: [] as Array<Error | undefined>,
+  gainRampTo: vi.fn(),
   gainToDestination: vi.fn(),
   gainValueFailures: [] as Array<Error | undefined>,
   playerConnect: vi.fn(),
@@ -143,8 +148,9 @@ vi.mock('tone', () => {
   }
 
   class Gain implements GainMockState {
+    disposed = false;
     destination?: unknown;
-    readonly gain: { value: number };
+    readonly gain: GainMockState['gain'];
 
     constructor(options?: number | { gain?: number }) {
       let gainValue = typeof options === 'number' ? options : (options?.gain ?? 1);
@@ -158,6 +164,10 @@ vi.mock('tone', () => {
             throw failure;
           }
           gainValue = value;
+        },
+        rampTo: (value, rampSeconds) => {
+          gainValue = value;
+          toneMocks.gainRampTo(value, rampSeconds);
         },
       };
       toneMocks.gains.push(this);
@@ -180,11 +190,13 @@ vi.mock('tone', () => {
     }
 
     disconnect() {
+      this.destination = undefined;
       toneMocks.gainDisconnect();
       return this;
     }
 
     dispose() {
+      this.disposed = true;
       toneMocks.gainDispose();
       return this;
     }
@@ -317,6 +329,7 @@ vi.mock('tone', () => {
 
 import { AudioEngine } from './audio-engine';
 import { AudioEngineErrorCode } from './errors';
+import { ToneGainPluginRuntimeFactory } from './plugins/tone-gain-plugin-runtime';
 
 const ORIGINAL_REGION = {
   id: 'region-1',
@@ -325,6 +338,20 @@ const ORIGINAL_REGION = {
   sourceStartTime: 2,
   duration: 3,
 };
+
+function createPluginAudioEngine(): AudioEngine {
+  return new AudioEngine({
+    pluginRuntimeFactories: [
+      new ToneGainPluginRuntimeFactory({
+        manifestId: 'builtin.gain',
+        parameterId: 'gain',
+        minValue: 0,
+        maxValue: 2,
+        defaultValue: 1,
+      }),
+    ],
+  });
+}
 
 describe('AudioEngine 실시간 상태 일관성', () => {
   beforeEach(() => {
@@ -339,6 +366,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     toneMocks.startFailures.length = 0;
     toneMocks.channelConnectFailures.length = 0;
     toneMocks.gainConnectFailures.length = 0;
+    toneMocks.gainRampTo.mockClear();
     toneMocks.gainValueFailures.length = 0;
     toneMocks.playerConnectFailures.length = 0;
     toneMocks.tempoWrites.length = 0;
@@ -462,6 +490,216 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     expect(toneMocks.playerInstances[0]?.destination).toBe(trackInput);
     expect(trackInput?.destination).toBe(toneMocks.channels[0]);
     expect(toneMocks.channels[0]?.destination).toBe(output);
+  });
+
+  it('Gain Plugin을 Track input과 Channel 사이에 설치한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('track-1');
+    const trackInput = toneMocks.gains[1];
+
+    engine.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: new Map([['gain', 0.5]]),
+    });
+
+    const pluginGain = toneMocks.gains[2];
+    expect(trackInput?.destination).toBe(pluginGain);
+    expect(pluginGain?.destination).toBe(toneMocks.channels[0]);
+    expect(pluginGain?.gain.value).toBe(0.5);
+  });
+
+  it('여러 Plugin을 설치 순서대로 직렬 연결한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('track-1');
+
+    engine.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: new Map(),
+    });
+    engine.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-2',
+      manifestId: 'builtin.gain',
+      parameterValues: new Map(),
+    });
+
+    expect(toneMocks.gains[1]?.destination).toBe(toneMocks.gains[2]);
+    expect(toneMocks.gains[2]?.destination).toBe(toneMocks.gains[3]);
+    expect(toneMocks.gains[3]?.destination).toBe(toneMocks.channels[0]);
+  });
+
+  it('설치한 Gain Plugin Parameter를 변경한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('track-1');
+    engine.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: new Map(),
+    });
+
+    engine.setPluginParameter({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      parameterId: 'gain',
+      value: 0.25,
+    });
+
+    expect(toneMocks.gainRampTo).toHaveBeenCalledWith(0.25, 0.01);
+  });
+
+  it('Plugin을 제거하고 남은 체인을 다시 연결한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('track-1');
+    engine.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: new Map(),
+    });
+    const pluginGain = toneMocks.gains[2];
+
+    engine.removePlugin('track-1', 'plugin-1');
+
+    expect(toneMocks.gains[1]?.destination).toBe(toneMocks.channels[0]);
+    expect(pluginGain?.disposed).toBe(true);
+  });
+
+  it('지원하지 않는 manifest와 중복 instance를 거부한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('track-1');
+
+    expect(() =>
+      engine.installPlugin({
+        trackId: 'track-1',
+        instanceId: 'plugin-1',
+        manifestId: 'builtin.missing',
+        parameterValues: new Map(),
+      })
+    ).toThrowError(expect.objectContaining({ code: AudioEngineErrorCode.PLUGIN_FACTORY_NOT_FOUND }));
+
+    engine.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: new Map(),
+    });
+    expect(() =>
+      engine.installPlugin({
+        trackId: 'track-1',
+        instanceId: 'plugin-1',
+        manifestId: 'builtin.gain',
+        parameterValues: new Map(),
+      })
+    ).toThrowError(expect.objectContaining({ code: AudioEngineErrorCode.PLUGIN_INSTANCE_ID_CONFLICT }));
+  });
+
+  it('Plugin 연결 실패 시 기존 bypass 연결을 복원하고 새 runtime을 폐기한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('track-1');
+    toneMocks.gainConnectFailures.push(new Error('connect failed'));
+
+    expect(() =>
+      engine.installPlugin({
+        trackId: 'track-1',
+        instanceId: 'plugin-1',
+        manifestId: 'builtin.gain',
+        parameterValues: new Map(),
+      })
+    ).toThrowError(expect.objectContaining({ code: AudioEngineErrorCode.PLUGIN_CHAIN_UPDATE_FAILED }));
+
+    expect(toneMocks.gains[1]?.destination).toBe(toneMocks.channels[0]);
+    expect(toneMocks.gains[2]?.disposed).toBe(true);
+  });
+
+  it('Plugin 체인 복원이 계속 실패하면 다음 작업을 막고 복원을 재시도한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('track-1');
+    toneMocks.gainConnectFailures.push(
+      new Error('plugin connect failed'),
+      new Error('rollback failed'),
+      new Error('next operation retry failed')
+    );
+
+    expect(() =>
+      engine.installPlugin({
+        trackId: 'track-1',
+        instanceId: 'plugin-1',
+        manifestId: 'builtin.gain',
+        parameterValues: new Map(),
+      })
+    ).toThrowError(
+      expect.objectContaining({
+        code: AudioEngineErrorCode.PLUGIN_CHAIN_UPDATE_FAILED,
+        details: expect.objectContaining({ isRuntimeRecoveryPending: true }),
+      })
+    );
+    expect(() => engine.getTrackParams('track-1')).toThrowError(
+      expect.objectContaining({ code: AudioEngineErrorCode.PROJECT_RUNTIME_RECOVERY_PENDING })
+    );
+
+    expect(engine.getTrackParams('track-1')).not.toBeNull();
+    expect(toneMocks.gains[1]?.destination).toBe(toneMocks.channels[0]);
+    expect(toneMocks.gains[2]?.disposed).toBe(true);
+  });
+
+  it('Track을 제거하면 설치한 Plugin runtime도 폐기한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('track-1');
+    engine.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: new Map(),
+    });
+    const pluginGain = toneMocks.gains[2];
+
+    engine.removeTrack('track-1');
+
+    expect(pluginGain?.disposed).toBe(true);
+  });
+
+  it('잘못된 초기 Parameter를 Plugin runtime 생성 오류로 변환한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('track-1');
+
+    expect(() =>
+      engine.installPlugin({
+        trackId: 'track-1',
+        instanceId: 'plugin-1',
+        manifestId: 'builtin.gain',
+        parameterValues: new Map([['gain', 3]]),
+      })
+    ).toThrowError(
+      expect.objectContaining({
+        code: AudioEngineErrorCode.PLUGIN_RUNTIME_CREATE_FAILED,
+        details: expect.objectContaining({ runtimeErrorCode: 'INVALID_PARAMETER_VALUE' }),
+      })
+    );
+  });
+
+  it('같은 manifest ID의 Plugin runtime factory 등록을 거부한다', () => {
+    const factoryOptions = {
+      manifestId: 'builtin.gain',
+      parameterId: 'gain',
+      minValue: 0,
+      maxValue: 2,
+      defaultValue: 1,
+    };
+
+    expect(
+      () =>
+        new AudioEngine({
+          pluginRuntimeFactories: [
+            new ToneGainPluginRuntimeFactory(factoryOptions),
+            new ToneGainPluginRuntimeFactory(factoryOptions),
+          ],
+        })
+    ).toThrowError(expect.objectContaining({ code: AudioEngineErrorCode.PLUGIN_FACTORY_ID_CONFLICT }));
   });
 
   it('Region 로드 실패 시 Player를 보관하지 않는다', async () => {

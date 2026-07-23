@@ -2,6 +2,7 @@ import type { IAudioEngine } from '../audio-engine/i-audio-engine';
 import { AudioEngine } from '../audio-engine/audio-engine';
 import { readAudioRuntimeEnvironment } from '../audio-engine/audio-runtime-environment';
 import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
+import { ToneGainPluginRuntimeFactory } from '../audio-engine/plugins/tone-gain-plugin-runtime';
 import { AudioSourceRegistry } from '../audio-source-registry/audio-source-registry';
 import { BrowserObjectUrlAdapter } from '../audio-source-registry/browser-object-url-adapter';
 import type {
@@ -112,13 +113,28 @@ function createValidManifestResult(manifest: PluginManifest): PluginValidationRe
   };
 }
 
+function createDefaultAudioEngine(): IAudioEngine {
+  const [gainParameter] = gainPluginManifest.parameters;
+  return new AudioEngine({
+    pluginRuntimeFactories: [
+      new ToneGainPluginRuntimeFactory({
+        manifestId: gainPluginManifest.id,
+        parameterId: gainParameter.id,
+        minValue: gainParameter.minValue,
+        maxValue: gainParameter.maxValue,
+        defaultValue: gainParameter.defaultValue,
+      }),
+    ],
+  });
+}
+
 /**
  * Core Application Factory
  */
 export function createApp(options: CreateAppOptions = {}): AppInstance {
   const initialProjectMetadata = options.initialProjectMetadata ?? createNewProjectMetadata();
   const session = createSessionStore({ initialProjectMetadata });
-  const audioEngine = options.audioEngine ?? new AudioEngine();
+  const audioEngine = options.audioEngine ?? createDefaultAudioEngine();
   const audioSourceRegistry = options.audioSourceRegistry ?? new AudioSourceRegistry(new BrowserObjectUrlAdapter());
   const audioSourceRepository = options.audioSourceRepository ?? new OpfsAudioSourceRepository();
   const projectRepository = options.projectRepository ?? new IndexedDbProjectRepository();

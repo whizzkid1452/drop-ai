@@ -84,7 +84,7 @@ Session은 Plugin 기반 상태도 보관한다. Track에는 Plugin 인스턴스
 manifest 검증 결과, 런타임 로그가 있다. 카탈로그·검증 결과·로그 Action과 프로젝트 상태 교체는 입력 객체의 필요한
 중첩 값까지 복제한다. `createApp`은 내장 Gain manifest의 공개 요약과 검증 결과를 한 번의 Session 상태 변경으로
 초기화한다. 이 동작은 카탈로그 선언만 등록하며 AudioWorklet 모듈을 불러오거나 오디오 효과를 연결하지 않는다. Plugin
-설치, 오디오 처리, AudioCommand, UI는 아직 제공하지 않는다.
+AudioCommand, Controller 연동, UI는 아직 제공하지 않는다.
 
 Plugin SDK는 manifest를 선언하는 독립 계약이다. v1은 effect 유형과 number·boolean·enum Parameter를 지원하고,
 slider·toggle·select control이 실제 Parameter ID와 맞는 type을 참조하는지 검사한다. 알 수 없는 필드, 중복 ID, 범위 밖
@@ -94,13 +94,15 @@ slider·toggle·select control이 실제 Parameter ID와 맞는 type을 참조�
 `PluginHost`는 검증을 통과한 manifest를 메모리에 등록한다. 같은 ID의 재등록은 기존 값을 덮어쓰지 않고 오류로
 거부하며, 조회·목록은 깊게 복사한 값을 등록 순서대로 반환한다. Composition Root가 하나의 비공개 PluginHost를 만들고
 PluginController에는 `IPluginHost`를 주입한다. Apps에는 Host, PluginController, 전체 manifest를 노출하지 않는다. 현재
-단계에는 설치·활성화·해제 lifecycle과 AudioEngine 연결이 없다. Plugin 구현은 Plugin SDK 외 프로젝트 계층을 import하지
+단계에는 설치·활성화·해제 lifecycle의 Controller 연결이 없다. Plugin 구현은 Plugin SDK 외 프로젝트 계층을 import하지
 않는다.
 
 AudioEngine 계층의 `ToneGainPluginRuntimeFactory`는 주입받은 manifest ID와 Gain Parameter 계약으로 Tone.js `Gain`
 runtime을 만든다. 초기값과 변경값의 type·유한성·범위를 검사하고, 변경은 0.01초 ramp로 적용한다. runtime은 연결·해제·폐기
-계약을 제공하지만 아직 AudioEngine에 등록되거나 Track input에 연결되지 않는다. 따라서 이 단계만으로 재생 신호가
-바뀌지는 않는다.
+계약을 제공한다. Composition Root는 브라우저 기본 AudioEngine에 내장 Gain Factory를 등록한다. AudioEngine은 Plugin을
+설치 순서대로 `Track input → Plugin runtime[] → Channel`에 직렬 연결하고, 제거 시 남은 chain을 다시 연결한다. 연결 변경
+실패 시 이전 chain을 복원한다. 복원도 실패한 동안에는 다른 실시간 오디오 작업을 거부하고 다음 호출에서 복원을 먼저
+재시도한다. 현재 AudioCommand와 Controller가 이 API를 호출하지 않으므로 사용자 진입점에서는 아직 Plugin을 조작할 수 없다.
 
 검증된 명령은 CommandExecutor의 단일 대기열에서 접수 순서대로 하나씩 실행한다. `executeMany`는 묶음 전체를
 먼저 검증한 후, 다른 요청이 끼어들지 않게 순서대로 실행한다. 실행 중 첫 오류가 나면 남은 명령은 실행하지
@@ -502,8 +504,10 @@ Resolver 결과에 영향을 주지 않는다. 활성화 뒤 이전 URL 해제�
 ### 11.1. 준비된 프로젝트 Runtime 교체
 
 `IAudioEngine.prepareProjectGraph`는 새 Track input·Channel과 Region Player를 기존 그래프와 분리해 준비한다. 실시간
-재생, 프로젝트 그래프 준비, Export는 모두 `Player → Track input → Channel → output` 순서를 사용한다. 현재 Track input은
-gain 1인 Tone.js `Gain` 노드라서 음량을 바꾸지 않으며, 후속 Plugin chain을 연결할 삽입 지점이다. 각 프로젝트 그래프는
+재생은 `Player → Track input → Plugin runtime[] → Channel → output` 순서를 사용하며 Plugin이 없으면 input과 Channel을
+직접 연결한다. 프로젝트 그래프 준비와 Export는 Plugin 상태를 입력으로 받지 않으므로 현재
+`Player → Track input → Channel → output` 순서를 유지한다. ProjectDocument v1과 Export에 Plugin 처리를 추가하기 전까지
+불러온 프로젝트와 내보낸 파일에는 실시간 Plugin chain이 반영되지 않는다. 각 프로젝트 그래프는
 전용 출력 gate를 가지며, prepared 그래프는 gate를 닫은 상태로 Region 디코딩과 예약을 끝낸다. Solo는 Tone.js
 Channel에 `solo=true`를 설정하지 않고 현재 프로젝트의 `isSoloed` 집합에서 각 Channel의 실제 mute를 계산한다. 따라서
 prepared나 retired 그래프가 active 그래프의 Solo 결과를 바꾸지 않는다. 준비 중 active 그래프가 바뀌거나 먼저 시작한

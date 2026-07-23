@@ -3,13 +3,16 @@ import { COMPLETE_RESOURCE_CLEANUP } from '../shared/types/resource-cleanup';
 import type {
   ExportRequest,
   IAudioEngine,
+  InstallAudioPluginRequest,
   IPreparedAudioProjectGraph,
   IRetiredAudioProjectGraph,
   PrepareAudioProjectGraphRequest,
   RegionData,
   ReplaceRegionRequest,
   RescheduleRegionRequest,
+  SetAudioPluginParameterRequest,
 } from './i-audio-engine';
+import type { PluginParameterValue } from '../shared/types/plugin-state';
 
 interface MockTrackState {
   muted: boolean;
@@ -18,10 +21,16 @@ interface MockTrackState {
   volume: number;
 }
 
+interface MockPluginState {
+  readonly manifestId: string;
+  readonly parameters: Map<string, PluginParameterValue>;
+}
+
 export class MockAudioEngine implements IAudioEngine {
   private mockTime = 0;
   private mockTracks: Map<string, MockTrackState> = new Map();
   private mockRegions: Map<string, Map<string, RegionData>> = new Map();
+  private mockPlugins: Map<string, Map<string, MockPluginState>> = new Map();
   private graphRevision = 0;
 
   async play(): Promise<void> {
@@ -55,6 +64,7 @@ export class MockAudioEngine implements IAudioEngine {
   removeTrack(trackId: string): void {
     this.mockTracks.delete(trackId);
     this.mockRegions.delete(trackId);
+    this.mockPlugins.delete(trackId);
     this.graphRevision += 1;
     console.log(`[MockAudioEngine] Track ${trackId} removed`);
   }
@@ -96,6 +106,39 @@ export class MockAudioEngine implements IAudioEngine {
       return null;
     }
     return { volume: track.volume, pan: track.pan };
+  }
+
+  installPlugin(request: InstallAudioPluginRequest): void {
+    const trackPlugins = this.getTrackPlugins(request.trackId);
+    if (trackPlugins.has(request.instanceId)) {
+      throw new AudioEngineError(
+        AudioEngineErrorCode.PLUGIN_INSTANCE_ID_CONFLICT,
+        ERROR_MESSAGES.PLUGIN_INSTANCE_ID_CONFLICT,
+        { instanceId: request.instanceId, trackId: request.trackId }
+      );
+    }
+    trackPlugins.set(request.instanceId, {
+      manifestId: request.manifestId,
+      parameters: new Map(request.parameterValues),
+    });
+    this.graphRevision += 1;
+  }
+
+  removePlugin(trackId: string, instanceId: string): void {
+    const trackPlugins = this.getTrackPlugins(trackId);
+    if (!trackPlugins.delete(instanceId)) {
+      throw this.createPluginInstanceNotFoundError(trackId, instanceId);
+    }
+    this.graphRevision += 1;
+  }
+
+  setPluginParameter(request: SetAudioPluginParameterRequest): void {
+    const plugin = this.getTrackPlugins(request.trackId).get(request.instanceId);
+    if (!plugin) {
+      throw this.createPluginInstanceNotFoundError(request.trackId, request.instanceId);
+    }
+    plugin.parameters.set(request.parameterId, request.value);
+    this.graphRevision += 1;
   }
 
   async addRegion(trackId: string, regionData: RegionData): Promise<void> {
@@ -149,6 +192,7 @@ export class MockAudioEngine implements IAudioEngine {
     const expectedRevision = this.graphRevision;
     const nextTracks = new Map<string, MockTrackState>();
     const nextRegions = new Map<string, Map<string, RegionData>>();
+    const nextPlugins = new Map<string, Map<string, MockPluginState>>();
 
     tracks.forEach(track => {
       if (nextTracks.has(track.id)) {
@@ -174,6 +218,7 @@ export class MockAudioEngine implements IAudioEngine {
         volume: track.volume,
       });
       nextRegions.set(track.id, trackRegions);
+      nextPlugins.set(track.id, new Map());
     });
 
     let retiredGraph: IRetiredAudioProjectGraph | undefined;
@@ -200,6 +245,7 @@ export class MockAudioEngine implements IAudioEngine {
         assertActivatable();
         this.mockTracks = nextTracks;
         this.mockRegions = nextRegions;
+        this.mockPlugins = nextPlugins;
         this.mockTime = 0;
         this.graphRevision += 1;
         state = 'activated';
@@ -228,6 +274,9 @@ export class MockAudioEngine implements IAudioEngine {
     if (!this.mockRegions.has(trackId)) {
       this.mockRegions.set(trackId, new Map());
     }
+    if (!this.mockPlugins.has(trackId)) {
+      this.mockPlugins.set(trackId, new Map());
+    }
   }
 
   private getTrack(trackId: string): MockTrackState {
@@ -236,6 +285,23 @@ export class MockAudioEngine implements IAudioEngine {
       throw new AudioEngineError(AudioEngineErrorCode.TRACK_NOT_FOUND, ERROR_MESSAGES.TRACK_NOT_FOUND, { trackId });
     }
     return track;
+  }
+
+  private getTrackPlugins(trackId: string): Map<string, MockPluginState> {
+    this.getTrack(trackId);
+    const plugins = this.mockPlugins.get(trackId);
+    if (!plugins) {
+      throw new AudioEngineError(AudioEngineErrorCode.TRACK_NOT_FOUND, ERROR_MESSAGES.TRACK_NOT_FOUND, { trackId });
+    }
+    return plugins;
+  }
+
+  private createPluginInstanceNotFoundError(trackId: string, instanceId: string): AudioEngineError {
+    return new AudioEngineError(
+      AudioEngineErrorCode.PLUGIN_INSTANCE_NOT_FOUND,
+      ERROR_MESSAGES.PLUGIN_INSTANCE_NOT_FOUND,
+      { instanceId, trackId }
+    );
   }
 
   private validateReplacementIds(currentRegions: Map<string, RegionData>, request: ReplaceRegionRequest): void {

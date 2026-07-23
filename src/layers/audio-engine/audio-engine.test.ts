@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, expectTypeOf, it } from 'vitest';
+import { AudioEngineErrorCode } from './errors';
 import { MockAudioEngine } from './mock-audio-engine';
 import type { RegionData } from './i-audio-engine';
 
@@ -76,6 +77,60 @@ describe('MockAudioEngine - Phase 2 검증', () => {
       engine.setTrackVolume('track-1', 0.25);
 
       expect(engine.getTrackParams('track-1')?.volume).toBe(0.25);
+    });
+  });
+
+  describe('Plugin Management', () => {
+    it('Plugin을 설치하고 Parameter를 변경한 뒤 제거할 수 있다', async () => {
+      await engine.addTrack('track-1');
+
+      expect(() =>
+        engine.installPlugin({
+          trackId: 'track-1',
+          instanceId: 'plugin-1',
+          manifestId: 'builtin.gain',
+          parameterValues: new Map([['gain', 1]]),
+        })
+      ).not.toThrow();
+      expect(() =>
+        engine.setPluginParameter({
+          trackId: 'track-1',
+          instanceId: 'plugin-1',
+          parameterId: 'gain',
+          value: 0.5,
+        })
+      ).not.toThrow();
+      expect(() => engine.removePlugin('track-1', 'plugin-1')).not.toThrow();
+    });
+
+    it('중복 instance와 없는 instance 작업을 거부한다', async () => {
+      await engine.addTrack('track-1');
+      engine.installPlugin({
+        trackId: 'track-1',
+        instanceId: 'plugin-1',
+        manifestId: 'builtin.gain',
+        parameterValues: new Map(),
+      });
+
+      expect(() =>
+        engine.installPlugin({
+          trackId: 'track-1',
+          instanceId: 'plugin-1',
+          manifestId: 'builtin.gain',
+          parameterValues: new Map(),
+        })
+      ).toThrowError(expect.objectContaining({ code: AudioEngineErrorCode.PLUGIN_INSTANCE_ID_CONFLICT }));
+      expect(() => engine.removePlugin('track-1', 'missing-plugin')).toThrowError(
+        expect.objectContaining({ code: AudioEngineErrorCode.PLUGIN_INSTANCE_NOT_FOUND })
+      );
+      expect(() =>
+        engine.setPluginParameter({
+          trackId: 'track-1',
+          instanceId: 'missing-plugin',
+          parameterId: 'gain',
+          value: 0.5,
+        })
+      ).toThrowError(expect.objectContaining({ code: AudioEngineErrorCode.PLUGIN_INSTANCE_NOT_FOUND }));
     });
   });
 
@@ -207,6 +262,10 @@ describe('MockAudioEngine - Phase 2 검증', () => {
       expect(typeof engine.setTrackMute).toBe('function');
       expect(typeof engine.setTrackSolo).toBe('function');
       expect(typeof engine.getTrackParams).toBe('function');
+
+      expect(typeof engine.installPlugin).toBe('function');
+      expect(typeof engine.removePlugin).toBe('function');
+      expect(typeof engine.setPluginParameter).toBe('function');
 
       // Region Management
       expect(typeof engine.addRegion).toBe('function');
