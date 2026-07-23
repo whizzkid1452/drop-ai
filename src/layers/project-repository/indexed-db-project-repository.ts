@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ProjectDocument } from '../shared/types/project-document.schema';
+import type { ProjectDocumentSnapshot } from '../shared/types/project-document.schema';
 import { ProjectRepositoryError, ProjectRepositoryErrorCode } from './errors';
 import type {
   DeleteProjectRequest,
@@ -71,7 +71,7 @@ export class IndexedDbProjectRepository implements IProjectRepository {
     this.now = now;
   }
 
-  async create(document: ProjectDocument): Promise<ProjectDocument> {
+  async create(document: ProjectDocumentSnapshot): Promise<ProjectDocumentSnapshot> {
     const validatedDocument = cloneAndValidateProjectDocument(document);
     validateInitialRevision(validatedDocument);
     const projectId = validatedDocument.project.id;
@@ -107,7 +107,7 @@ export class IndexedDbProjectRepository implements IProjectRepository {
     });
   }
 
-  async save({ document, expectedRevision }: SaveProjectRequest): Promise<ProjectDocument> {
+  async save({ document, expectedRevision }: SaveProjectRequest): Promise<ProjectDocumentSnapshot> {
     validateSaveExpectedRevision(expectedRevision);
     const validatedDocument = cloneAndValidateProjectDocument(document);
     const projectId = validatedDocument.project.id;
@@ -153,7 +153,7 @@ export class IndexedDbProjectRepository implements IProjectRepository {
     });
   }
 
-  async load(projectId: string): Promise<ProjectDocument | null> {
+  async load(projectId: string): Promise<ProjectDocumentSnapshot | null> {
     return this.runTransaction({
       mode: 'readonly',
       operation: 'load',
@@ -383,7 +383,7 @@ export class IndexedDbProjectRepository implements IProjectRepository {
     });
   }
 
-  private createProjectSummary(document: ProjectDocument): ProjectSummary {
+  private createProjectSummary(document: ProjectDocumentSnapshot): ProjectSummary {
     const result = StoredProjectSummarySchema.safeParse({
       projectId: document.project.id,
       name: document.project.name,
@@ -397,7 +397,7 @@ export class IndexedDbProjectRepository implements IProjectRepository {
     throw this.createStorageOperationError('create-summary', result.error);
   }
 
-  private parseStoredProjectDocument(value: unknown, expectedProjectId: string): ProjectDocument {
+  private parseStoredProjectDocument(value: unknown, expectedProjectId: string): ProjectDocumentSnapshot {
     const envelopeResult = StoredProjectDocumentEnvelopeSchema.safeParse(value);
     if (!envelopeResult.success || envelopeResult.data.projectId !== expectedProjectId) {
       throw new ProjectRepositoryError({

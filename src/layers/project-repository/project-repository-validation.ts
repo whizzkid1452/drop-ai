@@ -1,8 +1,8 @@
-import { ProjectDocumentSchema, type ProjectDocument } from '../shared/types/project-document.schema';
+import type { ProjectDocumentSnapshot } from '../shared/types/project-document.schema';
 import {
   ProjectDocumentReadError,
   ProjectDocumentReadErrorCode,
-  readProjectDocument,
+  readProjectDocumentSnapshot,
 } from '../shared/types/project-document-reader';
 import { ProjectRepositoryError, ProjectRepositoryErrorCode } from './errors';
 
@@ -13,30 +13,29 @@ interface RevisionConflictContext {
   readonly storedRevision: number;
 }
 
-interface ValidateDocumentOptions {
-  readonly document: ProjectDocument;
-  readonly errorCode:
-    | typeof ProjectRepositoryErrorCode.INVALID_DOCUMENT
-    | typeof ProjectRepositoryErrorCode.INVALID_STORED_DATA;
-  readonly message: string;
-}
-
 interface ReadStoredProjectDocumentOptions {
   readonly document: unknown;
   readonly projectId: string;
 }
 
-export function cloneAndValidateProjectDocument(document: ProjectDocument): ProjectDocument {
-  return validateDocument({
-    document,
-    errorCode: ProjectRepositoryErrorCode.INVALID_DOCUMENT,
-    message: '유효하지 않은 ProjectDocument입니다.',
-  });
+export function cloneAndValidateProjectDocument(document: ProjectDocumentSnapshot): ProjectDocumentSnapshot {
+  try {
+    return readProjectDocumentSnapshot(document);
+  } catch (cause) {
+    throw new ProjectRepositoryError({
+      code: ProjectRepositoryErrorCode.INVALID_DOCUMENT,
+      message: '유효하지 않은 ProjectDocument입니다.',
+      cause,
+    });
+  }
 }
 
-export function readStoredProjectDocument({ document, projectId }: ReadStoredProjectDocumentOptions): ProjectDocument {
+export function readStoredProjectDocument({
+  document,
+  projectId,
+}: ReadStoredProjectDocumentOptions): ProjectDocumentSnapshot {
   try {
-    return readProjectDocument(document);
+    return readProjectDocumentSnapshot(document);
   } catch (cause) {
     throwStoredProjectDocumentReadError(cause, projectId);
   }
@@ -65,7 +64,7 @@ export function throwStoredProjectDocumentReadError(cause: unknown, projectId: s
   });
 }
 
-export function validateInitialRevision(document: ProjectDocument): void {
+export function validateInitialRevision(document: ProjectDocumentSnapshot): void {
   const { id: projectId, revision } = document.project;
   if (revision === 0) {
     return;
@@ -117,19 +116,6 @@ export function throwIfRevisionConflict({
     code: ProjectRepositoryErrorCode.REVISION_CONFLICT,
     message: `프로젝트 revision이 변경되었습니다: ${projectId}`,
     details: { projectId, expectedRevision, documentRevision, storedRevision },
-  });
-}
-
-function validateDocument({ document, errorCode, message }: ValidateDocumentOptions): ProjectDocument {
-  const result = ProjectDocumentSchema.safeParse(document);
-  if (result.success) {
-    return result.data;
-  }
-
-  throw new ProjectRepositoryError({
-    code: errorCode,
-    message,
-    cause: result.error,
   });
 }
 

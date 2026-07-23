@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ProjectDocument } from '../shared/types/project-document.schema';
+import type { ProjectDocument, ProjectDocumentV2 } from '../shared/types/project-document.schema';
 import { InMemoryProjectRepository } from './in-memory-project-repository';
 import { ProjectRepositoryErrorCode, type ProjectRepositoryErrorCode as RepositoryErrorCode } from './errors';
 
@@ -8,6 +8,7 @@ const SECOND_PROJECT_ID = '55555555-5555-4555-8555-555555555555';
 const SOURCE_ID = '22222222-2222-4222-8222-222222222222';
 const TRACK_ID = '33333333-3333-4333-8333-333333333333';
 const REGION_ID = '44444444-4444-4444-8444-444444444444';
+const PLUGIN_INSTANCE_ID = '66666666-6666-4666-8666-666666666666';
 const SAVED_AT_EPOCH_MILLISECONDS = 1_000;
 
 interface CreateProjectDocumentOptions {
@@ -59,6 +60,27 @@ function createProjectDocument({
   };
 }
 
+function createProjectDocumentV2(options: CreateProjectDocumentOptions = {}): ProjectDocumentV2 {
+  const document = createProjectDocument(options);
+
+  return {
+    ...document,
+    schemaVersion: 2,
+    tracks: document.tracks.map(track => ({
+      ...track,
+      pluginInstances: [
+        {
+          id: PLUGIN_INSTANCE_ID,
+          manifestId: 'builtin.gain',
+          manifestVersion: '1.0.0',
+          isEnabled: true,
+          parameters: [{ id: 'gain', value: 0.75 }],
+        },
+      ],
+    })),
+  };
+}
+
 async function expectRepositoryError(promise: Promise<unknown>, code: RepositoryErrorCode): Promise<void> {
   await expect(promise).rejects.toMatchObject({
     name: 'ProjectRepositoryError',
@@ -73,6 +95,36 @@ describe('InMemoryProjectRepository', () => {
 
     await expect(repository.create(document)).resolves.toEqual(document);
     await expect(repository.load(PROJECT_ID)).resolves.toEqual(document);
+  });
+
+  it('v2 문서의 Plugin 상태와 schemaVersion을 보존해 생성·조회한다', async () => {
+    const repository = new InMemoryProjectRepository();
+    const document = createProjectDocumentV2();
+
+    const created = await repository.create(document);
+    const loaded = await repository.load(PROJECT_ID);
+
+    expect(created).toEqual(document);
+    expect(loaded).toEqual(document);
+    expect(loaded?.schemaVersion).toBe(2);
+    expect(loaded?.tracks[0]).toMatchObject({
+      pluginInstances: [{ id: PLUGIN_INSTANCE_ID, parameters: [{ id: 'gain', value: 0.75 }] }],
+    });
+  });
+
+  it('v2 문서를 저장하면 revision만 증가시키고 Plugin 상태를 유지한다', async () => {
+    const repository = new InMemoryProjectRepository();
+    const document = createProjectDocumentV2();
+    await repository.create(document);
+
+    const saved = await repository.save({ document, expectedRevision: 0 });
+
+    expect(saved).toMatchObject({
+      schemaVersion: 2,
+      project: { revision: 1 },
+      tracks: [{ pluginInstances: [{ parameters: [{ id: 'gain', value: 0.75 }] }] }],
+    });
+    await expect(repository.load(PROJECT_ID)).resolves.toEqual(saved);
   });
 
   it('새 프로젝트의 revision이 0이 아니면 거부한다', async () => {

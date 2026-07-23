@@ -262,3 +262,4 @@ export type ProjectPluginParameterState = z.infer<typeof ProjectPluginParameterS
 export type ProjectPluginInstance = z.infer<typeof ProjectPluginInstanceSchema>;
 export type ProjectTrackV2 = z.infer<typeof ProjectTrackV2Schema>;
 export type ProjectDocumentV2 = z.infer<typeof ProjectDocumentV2Schema>;
+export type ProjectDocumentSnapshot = ProjectDocument | ProjectDocumentV2;

@@ -13,13 +13,17 @@ import type {
   IRetiredAudioSourceRegistry,
 } from '../audio-source-registry/i-audio-source-registry';
 import {
-  createProjectDocumentFromSession,
-  createProjectRestoreSnapshotFromDocument,
+  createProjectDocumentV2FromSession,
+  createProjectRestoreSnapshotFromDocumentV2,
   type ProjectRestoreSnapshot,
 } from '../project-document-mapper/project-document-mapper';
 import type { IProjectRepository } from '../project-repository/i-project-repository';
 import type { SessionStore } from '../session/session';
-import type { ProjectAudioSource, ProjectDocument } from '../shared/types/project-document.schema';
+import type {
+  ProjectAudioSource,
+  ProjectDocumentSnapshot,
+  ProjectDocumentV2,
+} from '../shared/types/project-document.schema';
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
 import { ProjectLoadError, ProjectLoadErrorCode } from './project-load-error';
 import {
@@ -58,9 +62,11 @@ export class ProjectController {
 
   async saveProject(): Promise<void> {
     const registrations = this.dependencies.audioSourceRegistry.listCommittedRegistrations();
-    const document = createProjectDocumentFromSession({
-      session: this.dependencies.sessionStore.getState(),
+    const sessionState = this.dependencies.sessionStore.getState();
+    const document = createProjectDocumentV2FromSession({
+      session: sessionState,
       audioSources: registrations.map(registration => registration.metadata),
+      pluginCatalog: [...sessionState.pluginCatalog.values()],
     });
 
     await this.ensureAudioSources(registrations);
@@ -119,7 +125,11 @@ export class ProjectController {
       });
     }
 
-    const snapshot = createProjectRestoreSnapshotFromDocument(document);
+    const sessionState = this.dependencies.sessionStore.getState();
+    const snapshot = createProjectRestoreSnapshotFromDocumentV2({
+      document,
+      pluginCatalog: [...sessionState.pluginCatalog.values()],
+    });
     if (snapshot.session.project.id !== projectId) {
       throw new ProjectLoadError({
         code: ProjectLoadErrorCode.PROJECT_ID_MISMATCH,
@@ -315,7 +325,7 @@ export class ProjectController {
     }
   }
 
-  private async saveDocument(document: ProjectDocument): Promise<ProjectDocument> {
+  private async saveDocument(document: ProjectDocumentV2): Promise<ProjectDocumentSnapshot> {
     const storedDocument = await this.dependencies.projectRepository.load(document.project.id);
     if (!storedDocument) {
       return this.dependencies.projectRepository.create(document);

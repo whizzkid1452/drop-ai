@@ -1,4 +1,4 @@
-import type { ProjectDocument } from '../shared/types/project-document.schema';
+import type { ProjectDocumentSnapshot } from '../shared/types/project-document.schema';
 
 export interface ProjectSummary {
   readonly projectId: string;
@@ -8,7 +8,7 @@ export interface ProjectSummary {
 }
 
 export interface SaveProjectRequest {
-  readonly document: ProjectDocument;
+  readonly document: ProjectDocumentSnapshot;
   readonly expectedRevision: number;
 }
 
@@ -18,9 +18,9 @@ export interface DeleteProjectRequest {
 }
 
 export interface IProjectRepository {
-  create(document: ProjectDocument): Promise<ProjectDocument>;
-  save(request: SaveProjectRequest): Promise<ProjectDocument>;
-  load(projectId: string): Promise<ProjectDocument | null>;
+  create(document: ProjectDocumentSnapshot): Promise<ProjectDocumentSnapshot>;
+  save(request: SaveProjectRequest): Promise<ProjectDocumentSnapshot>;
+  load(projectId: string): Promise<ProjectDocumentSnapshot | null>;
   list(): Promise<readonly ProjectSummary[]>;
   delete(request: DeleteProjectRequest): Promise<void>;
 }

@@ -5,6 +5,7 @@ import {
   ProjectDocumentSchema,
   ProjectDocumentV2Schema,
   type ProjectDocument,
+  type ProjectDocumentSnapshot,
   type ProjectDocumentV2,
 } from './project-document.schema';
 
@@ -22,6 +23,10 @@ export type ProjectDocumentReadErrorCode =
 
 export const SUPPORTED_PROJECT_DOCUMENT_SCHEMA_VERSIONS = [PROJECT_DOCUMENT_SCHEMA_VERSION] as const;
 export const PROJECT_DOCUMENT_V2_MIGRATION_INPUT_VERSIONS = [
+  PROJECT_DOCUMENT_SCHEMA_VERSION,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
+] as const;
+export const PROJECT_DOCUMENT_SNAPSHOT_SCHEMA_VERSIONS = [
   PROJECT_DOCUMENT_SCHEMA_VERSION,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
 ] as const;
@@ -342,6 +347,21 @@ export function readProjectDocumentV2(input: unknown): ProjectDocumentV2 {
   throw createUnsupportedSchemaVersionError({
     schemaVersion,
     supportedSchemaVersions: PROJECT_DOCUMENT_V2_MIGRATION_INPUT_VERSIONS,
+  });
+}
+
+export function readProjectDocumentSnapshot(input: unknown): ProjectDocumentSnapshot {
+  const schemaVersion = readProjectDocumentSchemaVersion(input);
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION) {
+    return parseCurrentProjectDocument(input, schemaVersion);
+  }
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V2) {
+    return parseProjectDocumentV2(input, schemaVersion);
+  }
+
+  throw createUnsupportedSchemaVersionError({
+    schemaVersion,
+    supportedSchemaVersions: PROJECT_DOCUMENT_SNAPSHOT_SCHEMA_VERSIONS,
   });
 }
 

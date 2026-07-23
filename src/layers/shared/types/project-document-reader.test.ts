@@ -5,12 +5,14 @@ import {
   type ProjectDocumentV2,
 } from './project-document.schema';
 import {
+  PROJECT_DOCUMENT_SNAPSHOT_SCHEMA_VERSIONS,
   PROJECT_DOCUMENT_V2_MIGRATION_INPUT_VERSIONS,
   ProjectDocumentReadErrorCode,
   migrateProjectDocumentV1ToV2,
   readProjectDocument,
   readProjectDocumentJson,
   readProjectDocumentJsonV2,
+  readProjectDocumentSnapshot,
   readProjectDocumentV2,
   type ProjectDocumentReadErrorCode as ReadErrorCode,
 } from './project-document-reader';
@@ -417,5 +419,41 @@ describe('ProjectDocument v2 migration reader', () => {
     };
 
     expectReadError(() => readProjectDocumentV2(invalidDocument), ProjectDocumentReadErrorCode.INVALID_DOCUMENT);
+  });
+});
+
+describe('ProjectDocument snapshot reader', () => {
+  it('v1 문서를 v2로 바꾸지 않고 검증·복제한다', () => {
+    const input = createProjectDocumentWithRegion();
+
+    const document = readProjectDocumentSnapshot(input);
+
+    expect(document).toEqual(input);
+    expect(document.schemaVersion).toBe(1);
+    expect(document).not.toBe(input);
+    expect(document.tracks).not.toBe(input.tracks);
+  });
+
+  it('v2 문서를 Plugin 상태와 schemaVersion을 보존해 검증·복제한다', () => {
+    const input = createProjectDocumentV2();
+
+    const document = readProjectDocumentSnapshot(input);
+
+    expect(document).toEqual(input);
+    expect(document.schemaVersion).toBe(2);
+    expect(document).not.toBe(input);
+    expect(document.tracks[0]).not.toBe(input.tracks[0]);
+  });
+
+  it('v1·v2 밖의 문서 버전을 지원하지 않는 snapshot으로 거부한다', () => {
+    expect(() => readProjectDocumentSnapshot({ ...createProjectDocument(), schemaVersion: 3 })).toThrowError(
+      expect.objectContaining({
+        code: ProjectDocumentReadErrorCode.UNSUPPORTED_SCHEMA_VERSION,
+        details: {
+          schemaVersion: 3,
+          supportedSchemaVersions: PROJECT_DOCUMENT_SNAPSHOT_SCHEMA_VERSIONS,
+        },
+      })
+    );
   });
 });

@@ -1,4 +1,4 @@
-import type { ProjectDocument } from '../shared/types/project-document.schema';
+import type { ProjectDocumentSnapshot } from '../shared/types/project-document.schema';
 import { ProjectRepositoryError, ProjectRepositoryErrorCode } from './errors';
 import type {
   DeleteProjectRequest,
@@ -19,7 +19,7 @@ interface InMemoryProjectRepositoryOptions {
 }
 
 interface StoredProject {
-  document: ProjectDocument;
+  document: ProjectDocumentSnapshot;
   savedAtEpochMilliseconds: number;
 }
 
@@ -31,7 +31,7 @@ export class InMemoryProjectRepository implements IProjectRepository {
     this.now = now;
   }
 
-  async create(document: ProjectDocument): Promise<ProjectDocument> {
+  async create(document: ProjectDocumentSnapshot): Promise<ProjectDocumentSnapshot> {
     const validatedDocument = cloneAndValidateProjectDocument(document);
     validateInitialRevision(validatedDocument);
     const { id: projectId } = validatedDocument.project;
@@ -52,7 +52,7 @@ export class InMemoryProjectRepository implements IProjectRepository {
     return cloneAndValidateProjectDocument(validatedDocument);
   }
 
-  async save({ document, expectedRevision }: SaveProjectRequest): Promise<ProjectDocument> {
+  async save({ document, expectedRevision }: SaveProjectRequest): Promise<ProjectDocumentSnapshot> {
     validateSaveExpectedRevision(expectedRevision);
     const validatedDocument = cloneAndValidateProjectDocument(document);
     const projectId = validatedDocument.project.id;
@@ -80,7 +80,7 @@ export class InMemoryProjectRepository implements IProjectRepository {
     return cloneAndValidateProjectDocument(nextDocument);
   }
 
-  async load(projectId: string): Promise<ProjectDocument | null> {
+  async load(projectId: string): Promise<ProjectDocumentSnapshot | null> {
     const storedProject = this.projects.get(projectId);
     return storedProject ? cloneAndValidateProjectDocument(storedProject.document) : null;
   }

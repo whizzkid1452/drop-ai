@@ -1,6 +1,6 @@
 import { forceCloseDatabase, IDBFactory as FakeIDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ProjectDocument } from '../shared/types/project-document.schema';
+import type { ProjectDocument, ProjectDocumentV2 } from '../shared/types/project-document.schema';
 import { ProjectRepositoryErrorCode } from './errors';
 import { IndexedDbProjectRepository } from './indexed-db-project-repository';
 
@@ -9,6 +9,8 @@ const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
 const SAVED_AT_EPOCH_MILLISECONDS = 1_000;
 const PROJECT_DOCUMENT_STORE_NAME = 'project-documents';
 const PROJECT_SUMMARY_STORE_NAME = 'project-summaries';
+const TRACK_ID = '22222222-2222-4222-8222-222222222222';
+const PLUGIN_INSTANCE_ID = '33333333-3333-4333-8333-333333333333';
 // fake-indexeddb 6.2.5 타입은 인스턴스 대신 생성자를 요구하므로 실제 함수 계약으로 좁힌다.
 const forceCloseDatabaseForTest = forceCloseDatabase as unknown as (database: IDBDatabase) => void;
 
@@ -22,6 +24,33 @@ function createProjectDocument({ name = '새 프로젝트', revision = 0 } = {})
     exportRange: null,
     audioSources: [],
     tracks: [],
+  };
+}
+
+function createProjectDocumentV2({ name = '새 프로젝트', revision = 0 } = {}): ProjectDocumentV2 {
+  return {
+    ...createProjectDocument({ name, revision }),
+    schemaVersion: 2,
+    tracks: [
+      {
+        id: TRACK_ID,
+        name: 'Plugin Track',
+        volume: 1,
+        pan: 0,
+        isMuted: false,
+        isSoloed: false,
+        pluginInstances: [
+          {
+            id: PLUGIN_INSTANCE_ID,
+            manifestId: 'builtin.gain',
+            manifestVersion: '1.0.0',
+            isEnabled: true,
+            parameters: [{ id: 'gain', value: 0.75 }],
+          },
+        ],
+        regions: [],
+      },
+    ],
   };
 }
 
@@ -122,6 +151,41 @@ describe('IndexedDbProjectRepository', () => {
         savedAtEpochMilliseconds: SAVED_AT_EPOCH_MILLISECONDS,
       },
     ]);
+  });
+
+  it('새 Repository 인스턴스에서도 v2 Plugin 문서를 버전 그대로 불러온다', async () => {
+    const document = createProjectDocumentV2();
+    await createRepository().create(document);
+
+    const reopenedRepository = createRepository();
+
+    await expect(reopenedRepository.load(PROJECT_ID)).resolves.toEqual(document);
+    await expect(reopenedRepository.list()).resolves.toEqual([
+      {
+        projectId: PROJECT_ID,
+        name: '새 프로젝트',
+        revision: 0,
+        savedAtEpochMilliseconds: SAVED_AT_EPOCH_MILLISECONDS,
+      },
+    ]);
+  });
+
+  it('v2 문서를 저장하면 revision과 Plugin 상태를 한 transaction에서 갱신한다', async () => {
+    const repository = createRepository();
+    const document = createProjectDocumentV2();
+    await repository.create(document);
+
+    const saved = await repository.save({
+      document: createProjectDocumentV2({ name: '편집한 Plugin 프로젝트' }),
+      expectedRevision: 0,
+    });
+
+    expect(saved).toMatchObject({
+      schemaVersion: 2,
+      project: { name: '편집한 Plugin 프로젝트', revision: 1 },
+      tracks: [{ pluginInstances: [{ id: PLUGIN_INSTANCE_ID }] }],
+    });
+    await expect(repository.load(PROJECT_ID)).resolves.toEqual(saved);
   });
 
   it('서로 다른 Repository 인스턴스에서도 중복 프로젝트 생성을 거부한다', async () => {
@@ -228,12 +292,12 @@ describe('IndexedDbProjectRepository', () => {
     await repository.load(PROJECT_ID);
     await putRawProjectDocumentRecord(indexedDb, {
       projectId: PROJECT_ID,
-      document: { ...createProjectDocument(), schemaVersion: 2 },
+      document: { ...createProjectDocument(), schemaVersion: 3 },
     });
 
     await expect(repository.load(PROJECT_ID)).rejects.toMatchObject({
       code: ProjectRepositoryErrorCode.UNSUPPORTED_STORED_DOCUMENT_SCHEMA_VERSION,
-      details: { projectId: PROJECT_ID, schemaVersion: 2 },
+      details: { projectId: PROJECT_ID, schemaVersion: 3 },
       cause: {
         name: 'ProjectDocumentReadError',
         code: 'UNSUPPORTED_SCHEMA_VERSION',
@@ -271,7 +335,7 @@ describe('IndexedDbProjectRepository', () => {
   it('미래 문서 버전을 save로 덮어쓰지 않는다', async () => {
     const repository = createRepository();
     await repository.load(PROJECT_ID);
-    const futureDocument = { ...createProjectDocument(), schemaVersion: 2 };
+    const futureDocument = { ...createProjectDocument(), schemaVersion: 3 };
     await putRawProjectDocumentRecord(indexedDb, { projectId: PROJECT_ID, document: futureDocument });
 
     await expect(repository.save({ document: createProjectDocument(), expectedRevision: 0 })).rejects.toMatchObject({

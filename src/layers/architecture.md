@@ -96,8 +96,8 @@ CommandExecutor 경로를 사용한다. Web Track UI는 Session catalog의 Param
 select로 표시한다. 설치·제거·Parameter 변경은 UI에서 상태를 직접 바꾸지 않고 같은 AudioCommand와 CommandExecutor 경로를
 사용한다. 현재 UI는 manifest가 선언한 별도 배치 정보가 아니라 Parameter type 기반의 공통 배치를 사용한다.
 
-영구 저장 형식은 Shared의 `ProjectDocumentSchema`로 검증한다. v1은 Track·Region과 오디오 Source 메타데이터를
-절대 초 단위로 저장하고, Region은 임시 URL이 아닌 안정적인 Source ID를 참조한다. `File`, `Blob`, Object URL,
+영구 저장 형식은 Shared의 `ProjectDocumentSchema`와 `ProjectDocumentV2Schema`로 검증한다. v1은 Track·Region과 오디오
+Source 메타데이터를 절대 초 단위로 저장하고, Region은 임시 URL이 아닌 안정적인 Source ID를 참조한다. `File`, `Blob`, Object URL,
 AudioBuffer, 함수, 재생 중 상태, Agent·UI 상태는 ProjectDocument에 넣지 않는다. `ProjectDocumentMapper`는 Store나
 Repository를 호출하지 않고 Session의 저장 대상 snapshot과 committed Source metadata를 ProjectDocument로 변환한다.
 역변환은 Session용 snapshot과 Source metadata를 분리해 반환한다. Track은 Map 삽입 순서, Region과 Source는 입력 배열
@@ -105,15 +105,16 @@ Repository를 호출하지 않고 Session의 저장 대상 snapshot과 committed
 배열로 초기화한다. Export 범위의 한쪽만 `null`인 상태, Track Map key와 Track ID 불일치, 유한한 `endTime`을 만들 수 없는
 Region, 허용 오차를 초과한 Region 끝 시각 불일치는 손실을 숨기지 않고 오류로 거부한다. Mapper는 Session과 Shared만
 의존하며 Controllers 밖의 production 계층에서 직접 사용하지 않는다.
-ProjectDocument v1에는 Plugin 런타임 상태 필드가 없다. Mapper는 저장할 때 해당 상태를 포함하지 않고, v1 복원 Track의
-Plugin 인스턴스를 빈 배열로 초기화한다. Shared에는 후속 전환용 `ProjectDocumentV2Schema`를 별도 계약으로 정의한다. v2는
+ProjectDocument v1에는 Plugin instance 설정 필드가 없다. 기존 v1 Mapper는 저장할 때 해당 상태를 포함하지 않고, v1 복원
+Track의 Plugin 인스턴스를 빈 배열로 초기화한다. v2는
 Track별 Plugin 설치 순서, instance UUID, manifest ID·version, 활성 상태, boolean·유한 number·제한된 string Parameter 값을
 저장한다. Plugin 이름은 문서에 저장하지 않고 현재 catalog에서 복원한다. instance UUID는 문서 전체에서, Parameter ID는
-instance 안에서 중복될 수 없다. 현재 Repository와 기본 Mapper 함수의 활성 형식은 아직 v1이다.
-`createProjectDocumentV2FromSession`과 `createProjectRestoreSnapshotFromDocumentV2`는 후속 전환을 위한 별도 Mapper
-경계다. v2 저장·복원 모두 현재 Plugin catalog와의 호환성을 먼저 검증하고, Parameter는 catalog 정의 순서로 정규화한다.
+instance 안에서 중복될 수 없다. ProjectController는 새 저장에 `createProjectDocumentV2FromSession`을 사용하고,
+`createProjectRestoreSnapshotFromDocumentV2`로 v1·v2를 복원한다. v2 저장·복원 모두 현재 Plugin catalog와의 호환성을 먼저
+검증하고, Parameter는 catalog 정의 순서로 정규화한다.
 `readProjectDocumentV2`는 v1을 검증한 뒤 각 Track에 빈 Plugin 배열을 넣어 v2로 바꾸고, 이미 v2인 입력은 Plugin 상태를
-보존해 검증·복제한다. Repository는 아직 이 v2 경계를 사용하지 않는다.
+보존해 검증·복제한다. `readProjectDocumentSnapshot`은 Repository가 v1·v2를 버전 변경 없이 검증·복제할 때 사용한다.
+Repository는 두 버전을 모두 보관하고 반환하며, 다음 저장은 ProjectController가 만든 v2로 교체한다.
 Shared의 `validateProjectPluginCompatibility`는 저장 manifest ID·version을 현재 Plugin catalog와 정확히 비교하고,
 Parameter ID 집합·number 범위·boolean type·enum option을 검증한다. 성공하면 catalog 정의 순서의 Session Plugin 상태를
 반환하고, 실패하면 원인을 구분한 issue를 반환한다. 기본 v1 Mapper는 이 함수를 호출하지 않는다.
@@ -184,11 +185,10 @@ Region 연결을 준비하고, `prepareProjectGraph`는 출력 gate가 닫힌 �
 준비한다. Plugin runtime은 전달된 순서대로 연결하며 manifest factory 누락, 중복 instance ID, 잘못된 Parameter가 있으면
 후보 그래프만 정리하고 준비를 거부한다. 활성화·비활성화 lifecycle은 아직 없으므로 `isEnabled=false`도 명시적으로 거부한다.
 실시간 재생은 `Player → Track input → Plugin runtime[] → Channel → output` 순서를 사용한다. Plugin이 없으면 Track input이
-Channel에 직접 연결된다. ProjectController도 Session Plugin 상태를 준비 요청으로 바꾸지만 현재 활성 Mapper가 v1 문서의
-Plugin 배열을 비워 두므로 저장 프로젝트에는 아직 이 경로가 사용되지 않는다. Export도 Plugin 상태를 입력으로 받지 않는다.
-프로젝트 그래프 계약은 manifest version 호환성을 판단하지 않는다. Shared 호환성 검증 경계는 준비됐지만 v2 Mapper 전환에서
-반드시 먼저 호출해야 한다. v2 Mapper 전환과 Export Plugin 처리를 추가하기 전까지 불러온 프로젝트와 내보낸 파일에는 Plugin
-chain이 반영되지 않는다. 준비 실패나
+Channel에 직접 연결된다. ProjectController는 v2 Mapper가 복원한 Session Plugin 상태를 준비 요청으로 바꾸므로 저장
+프로젝트를 불러올 때 Plugin chain이 반영된다. 프로젝트 그래프 계약 자체는 manifest version 호환성을 판단하지 않으며,
+v2 Mapper가 그래프 준비 전에 Shared 호환성 검증을 수행한다. Export는 아직 Plugin 상태를 입력으로 받지 않으므로 내보낸
+파일에는 Plugin chain이 반영되지 않는다. 준비 실패나
 active revision 변경에서는 기존 Registry와 AudioEngine 그래프를 유지한다. Controller는 두 prepared 대상의
 `assertActivatable`을 먼저 모두 통과시킨 뒤, 중간 `await` 없이 Engine → Registry → Session 순서로 활성화해야 한다.
 Engine 활성화 중 Transport나 출력 gate 변경이 실패하면 기존 재생 상태와 gate를 보상하고 교체를 거부한다. 이전 그래프와

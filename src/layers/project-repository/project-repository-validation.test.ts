@@ -16,13 +16,13 @@ describe('저장 ProjectDocument 판독 오류 변환', () => {
     const cause = new ProjectDocumentReadError({
       code: ProjectDocumentReadErrorCode.UNSUPPORTED_SCHEMA_VERSION,
       message: 'unsupported schema version',
-      details: { schemaVersion: 2 },
+      details: { schemaVersion: 3 },
     });
 
     expect(() => throwStoredProjectDocumentReadError(cause, PROJECT_ID)).toThrowError(
       expect.objectContaining({
         code: ProjectRepositoryErrorCode.UNSUPPORTED_STORED_DOCUMENT_SCHEMA_VERSION,
-        details: { projectId: PROJECT_ID, schemaVersion: 2 },
+        details: { projectId: PROJECT_ID, schemaVersion: 3 },
         cause,
       })
     );

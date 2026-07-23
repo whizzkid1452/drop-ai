@@ -6,9 +6,15 @@ import type { IAudioSourceRepository } from '../audio-source-repository/i-audio-
 import { AudioSourceRepositoryError } from '../audio-source-repository/errors';
 import type { IProjectRepository } from '../project-repository/i-project-repository';
 import { ProjectRepositoryError } from '../project-repository/errors';
-import { createProjectDocumentFromSession } from '../project-document-mapper/project-document-mapper';
-import { createSessionStore } from '../session/session';
-import type { ProjectAudioSource, ProjectDocument } from '../shared/types/project-document.schema';
+import { createProjectDocumentV2FromSession } from '../project-document-mapper/project-document-mapper';
+import { gainPluginManifest } from '../plugins/builtin/gain/gain-plugin-manifest';
+import { createSessionStore, type SessionState } from '../session/session';
+import type {
+  ProjectAudioSource,
+  ProjectDocument,
+  ProjectDocumentSnapshot,
+  ProjectDocumentV2,
+} from '../shared/types/project-document.schema';
 import { ProjectMutationCompensationError } from './project-mutation-compensation-error';
 import { ProjectController } from './project-controller';
 
@@ -18,6 +24,7 @@ const SECOND_SOURCE_ID = '33333333-3333-4333-8333-333333333333';
 const LOADED_PROJECT_ID = '44444444-4444-4444-8444-444444444444';
 const TRACK_ID = '55555555-5555-4555-8555-555555555555';
 const REGION_ID = '66666666-6666-4666-8666-666666666666';
+const PLUGIN_INSTANCE_ID = '77777777-7777-4777-8777-777777777777';
 const INITIAL_PROJECT_METADATA = {
   id: PROJECT_ID,
   name: '테스트 프로젝트',
@@ -39,6 +46,7 @@ function createSourceRegistration(sourceId = SOURCE_ID) {
 
 function createTestContext() {
   const sessionStore = createSessionStore({ initialProjectMetadata: INITIAL_PROJECT_METADATA });
+  sessionStore.getState().replacePluginCatalogState({ manifests: [gainPluginManifest], validationResults: [] });
   const audioEngine = new MockAudioEngine();
   const revokeObjectUrl = vi.fn();
   let objectUrlSequence = 0;
@@ -83,8 +91,13 @@ function createTestContext() {
 function createCurrentDocument(
   sessionStore: ReturnType<typeof createSessionStore>,
   audioSources: ProjectAudioSource[] = []
-): ProjectDocument {
-  return createProjectDocumentFromSession({ session: sessionStore.getState(), audioSources });
+): ProjectDocumentV2 {
+  const sessionState = sessionStore.getState();
+  return createProjectDocumentV2FromSession({
+    session: sessionState,
+    audioSources,
+    pluginCatalog: [...sessionState.pluginCatalog.values()],
+  });
 }
 
 function createLoadedDocument({
@@ -124,6 +137,52 @@ function createLoadedDocument({
   };
 }
 
+function createLoadedDocumentV2(): ProjectDocumentV2 {
+  const document = createLoadedDocument();
+
+  return {
+    ...document,
+    schemaVersion: 2,
+    tracks: document.tracks.map(track => ({
+      ...track,
+      pluginInstances: [
+        {
+          id: PLUGIN_INSTANCE_ID,
+          manifestId: gainPluginManifest.id,
+          manifestVersion: gainPluginManifest.version,
+          isEnabled: true,
+          parameters: [{ id: gainPluginManifest.parameters[0].id, value: 0.75 }],
+        },
+      ],
+    })),
+  };
+}
+
+function addPluginTrack(session: SessionState): void {
+  session.addTrack({
+    id: TRACK_ID,
+    name: 'Plugin Track',
+    volume: 1,
+    pan: 0,
+    isMuted: false,
+    isSoloed: false,
+    status: [],
+    pluginInstances: [
+      {
+        id: PLUGIN_INSTANCE_ID,
+        manifestSummary: {
+          id: gainPluginManifest.id,
+          name: gainPluginManifest.name,
+          version: gainPluginManifest.version,
+        },
+        isEnabled: true,
+        parameters: [{ id: gainPluginManifest.parameters[0].id, value: 0.75 }],
+      },
+    ],
+    regions: [],
+  });
+}
+
 function createDeferred<Value>(): {
   readonly promise: Promise<Value>;
   readonly resolve: (value: Value) => void;
@@ -148,6 +207,7 @@ describe('ProjectController', () => {
     expect(context.audioSourceRepository.create).toHaveBeenCalledWith(registration);
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
+        schemaVersion: 2,
         project: INITIAL_PROJECT_METADATA,
         audioSources: [registration.metadata],
       })
@@ -159,6 +219,33 @@ describe('ProjectController', () => {
       context.projectRepository.create.mock.invocationCallOrder[0]
     );
     expect(replaceProjectMetadata).toHaveBeenCalledWith(INITIAL_PROJECT_METADATA);
+  });
+
+  it('Session Plugin 체인을 ProjectDocument v2에 저장한다', async () => {
+    const context = createTestContext();
+    addPluginTrack(context.sessionStore.getState());
+
+    await context.controller.saveProject();
+
+    expect(context.projectRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schemaVersion: 2,
+        tracks: [
+          expect.objectContaining({
+            id: TRACK_ID,
+            pluginInstances: [
+              {
+                id: PLUGIN_INSTANCE_ID,
+                manifestId: gainPluginManifest.id,
+                manifestVersion: gainPluginManifest.version,
+                isEnabled: true,
+                parameters: [{ id: gainPluginManifest.parameters[0].id, value: 0.75 }],
+              },
+            ],
+          }),
+        ],
+      })
+    );
   });
 
   it('저장된 revision 0 프로젝트는 create가 아니라 save로 교체하고 revision 1을 반영한다', async () => {
@@ -342,6 +429,45 @@ describe('ProjectController', () => {
     expect(context.revokeObjectUrl).toHaveBeenCalledTimes(1);
   });
 
+  it('v2 Plugin 체인을 Session과 AudioEngine 준비 요청에 복원한다', async () => {
+    const context = createTestContext();
+    const document = createLoadedDocumentV2();
+    const registration = createSourceRegistration();
+    context.projectRepository.load.mockResolvedValue(document);
+    context.audioSourceRepository.load.mockResolvedValue(registration.blob);
+    const prepareProjectGraph = vi.spyOn(context.audioEngine, 'prepareProjectGraph');
+
+    await context.controller.loadProject(LOADED_PROJECT_ID);
+
+    expect(context.sessionStore.getState().tracks.get(TRACK_ID)?.pluginInstances).toEqual([
+      {
+        id: PLUGIN_INSTANCE_ID,
+        manifestSummary: {
+          id: gainPluginManifest.id,
+          name: gainPluginManifest.name,
+          version: gainPluginManifest.version,
+        },
+        isEnabled: true,
+        parameters: [{ id: gainPluginManifest.parameters[0].id, value: 0.75 }],
+      },
+    ]);
+    expect(prepareProjectGraph).toHaveBeenCalledWith({
+      tracks: [
+        expect.objectContaining({
+          id: TRACK_ID,
+          pluginInstances: [
+            {
+              instanceId: PLUGIN_INSTANCE_ID,
+              manifestId: gainPluginManifest.id,
+              isEnabled: true,
+              parameterValues: new Map([[gainPluginManifest.parameters[0].id, 0.75]]),
+            },
+          ],
+        }),
+      ],
+    });
+  });
+
   it('두 prepared 대상을 먼저 검사하고 Engine→Registry→Session 순서로 교체한다', async () => {
     const context = createTestContext();
     const events: string[] = [];
@@ -507,7 +633,7 @@ describe('ProjectController', () => {
 
   it('준비 중 active Registry가 변경되면 새 pending Source와 기존 Runtime을 유지한다', async () => {
     const context = createTestContext();
-    const deferredDocument = createDeferred<ProjectDocument | null>();
+    const deferredDocument = createDeferred<ProjectDocumentSnapshot | null>();
     const loadedRegistration = createSourceRegistration();
     const stagedRegistration = createSourceRegistration(SECOND_SOURCE_ID);
     context.projectRepository.load.mockReturnValueOnce(deferredDocument.promise);
