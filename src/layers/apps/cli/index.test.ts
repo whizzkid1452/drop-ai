@@ -50,6 +50,24 @@ describe('내부 CLI 명령 변환', () => {
     expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.STOP });
   });
 
+  it('undo를 UNDO 명령으로 실행한다', async () => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    const result = await commands.undo.fn();
+
+    expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.UNDO });
+    expect(result).toBe('Edit undone.');
+  });
+
+  it('redo를 REDO 명령으로 실행한다', async () => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    const result = await commands.redo.fn();
+
+    expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.REDO });
+    expect(result).toBe('Edit redone.');
+  });
+
   it('save를 SAVE_PROJECT 명령으로 실행한다', async () => {
     const commands = createCliCommands(commandExecutor, defaultState);
 

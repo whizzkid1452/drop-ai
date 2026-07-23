@@ -319,6 +319,17 @@ describe('createApp', () => {
     expect(app.commandExecutor).toBeInstanceOf(CommandExecutor);
   });
 
+  it('Command History를 읽기 전용 capability로 노출한다', async () => {
+    const app = createTestApp({ audioEngine: new MockAudioEngine() });
+
+    await app.commandExecutor.execute({ type: AudioCommandType.SET_TEMPO, tempo: 140 });
+
+    expect(app.commandHistory.getSnapshot()).toEqual({ canRedo: false, canUndo: true });
+    expect('record' in app.commandHistory).toBe(false);
+    expect('clear' in app.commandHistory).toBe(false);
+    expect('undo' in app.commandHistory).toBe(false);
+  });
+
   it('Controller를 노출하지 않고 읽기 전용 PlaybackClock을 조립한다', () => {
     const audioEngine = new MockAudioEngine();
     audioEngine.setTime(7.5);

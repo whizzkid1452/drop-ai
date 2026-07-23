@@ -91,6 +91,7 @@ export class RegionController {
     this.attachAddedSource({ source, regionId: regionData.id });
 
     let isEngineRegionAdded = false;
+    let regionPendingPublication: RegionState | null = null;
     try {
       await this.audioEngine.addRegion(trackId, this.toEngineRegionData(regionData, source));
       isEngineRegionAdded = true;
@@ -98,8 +99,13 @@ export class RegionController {
       const latestTrack = this.getTrackOrThrow(trackId);
       this.throwIfRegionExists(latestTrack, regionData.id);
       const newRegion = this.createSessionRegion(regionData, preparedRegion);
+      regionPendingPublication = newRegion;
       this.sessionStore.getState().updateTrack(trackId, { regions: [...latestTrack.regions, newRegion] });
     } catch (cause) {
+      if (regionPendingPublication && this.isPublishedRegion(trackId, regionPendingPublication)) {
+        throw cause;
+      }
+
       if (isEngineRegionAdded) {
         try {
           this.audioEngine.removeRegion(trackId, regionData.id);
@@ -116,6 +122,10 @@ export class RegionController {
       this.rollbackAddedSource({ source, regionId: regionData.id, cause });
       throw cause;
     }
+  }
+
+  private isPublishedRegion(trackId: string, region: RegionState): boolean {
+    return this.sessionStore.getState().tracks.get(trackId)?.regions.includes(region) ?? false;
   }
 
   removeRegion(trackId: string, regionId: string): void {

@@ -1,6 +1,8 @@
+import { useSyncExternalStore } from 'react';
 import { useStore } from 'zustand';
 import type { IAudioSourceResolver, IAudioSourceStager } from '../../../audio-source-registry/i-audio-source-registry';
 import type { CommandExecutor } from '../../../commands/command-executor';
+import type { CommandHistorySnapshot } from '../../../commands/command-history';
 import type { IPlaybackClockQuery } from '../../../queries/playback-clock-query';
 import type { IProjectCatalogQuery } from '../../../queries/project-catalog-query';
 import type { SessionState } from '../../../session/session';
@@ -21,6 +23,11 @@ export function useAudioSourceStager(): IAudioSourceStager {
 
 export function useCommandExecutor(): CommandExecutor {
   return useLayer().commandExecutor;
+}
+
+export function useCommandHistory(): CommandHistorySnapshot {
+  const commandHistory = useLayer().commandHistory;
+  return useSyncExternalStore(commandHistory.subscribe, commandHistory.getSnapshot, commandHistory.getSnapshot);
 }
 
 export function usePlaybackClock(): IPlaybackClockQuery {

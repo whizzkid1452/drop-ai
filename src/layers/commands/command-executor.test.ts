@@ -7,6 +7,7 @@ import { AppController } from '../controllers/app-controller';
 import { createSessionStore } from '../session/session';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import { AudioCommandType, type AudioCommand } from '../shared/types/audioCommand.schema';
+import { CommandHistory } from './command-history';
 import { CommandBatchExecutionError, CommandExecutor } from './command-executor';
 
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
@@ -32,16 +33,18 @@ function createTestContext() {
     delete: vi.fn().mockResolvedValue(undefined),
   };
   const projectRepository = new InMemoryProjectRepository();
+  const commandHistory = new CommandHistory();
+  const audioEngine = new MockAudioEngine();
   const controller = new AppController({
     sessionStore: session,
-    audioEngine: new MockAudioEngine(),
+    audioEngine,
     audioSourceRegistry,
     audioSourceRepository,
     projectRepository,
   });
-  const commandExecutor = new CommandExecutor(session, controller);
+  const commandExecutor = new CommandExecutor(session, controller, commandHistory);
 
-  return { audioSourceRegistry, commandExecutor, controller, projectRepository, session };
+  return { audioEngine, audioSourceRegistry, commandExecutor, commandHistory, controller, projectRepository, session };
 }
 
 function stageSource(audioSourceRegistry: IAudioSourceRegistry): void {
@@ -116,6 +119,296 @@ describe('CommandExecutor', () => {
     await commandExecutor.execute({ type: AudioCommandType.LOAD_PROJECT, projectId: INITIAL_PROJECT_METADATA.id });
 
     expect(loadProject).toHaveBeenCalledWith(INITIAL_PROJECT_METADATA.id);
+  });
+
+  it('SET_TEMPO를 Undo하고 같은 값으로 Redo한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+
+    await commandExecutor.execute({ type: AudioCommandType.SET_TEMPO, tempo: 140 });
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tempo).toBe(120);
+
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(session.getState().tempo).toBe(140);
+  });
+
+  it('실패한 편집은 Undo 기록에 추가하지 않는다', async () => {
+    const { commandExecutor, commandHistory, controller } = createTestContext();
+    vi.spyOn(controller.playback, 'handleSetTempo').mockImplementation(() => {
+      throw new Error('tempo failed');
+    });
+
+    await expect(commandExecutor.execute({ type: AudioCommandType.SET_TEMPO, tempo: 140 })).rejects.toThrow(
+      'tempo failed'
+    );
+
+    expect(commandHistory.getSnapshot()).toEqual({ canRedo: false, canUndo: false });
+  });
+
+  it('Controller가 성공을 반환해도 Session이 바뀌지 않은 편집은 기록하지 않는다', async () => {
+    const { commandExecutor, commandHistory, controller } = createTestContext();
+    vi.spyOn(controller.playback, 'handleSetTempo').mockImplementation(() => undefined);
+
+    await commandExecutor.execute({ type: AudioCommandType.SET_TEMPO, tempo: 140 });
+
+    expect(commandHistory.getSnapshot()).toEqual({ canRedo: false, canUndo: false });
+  });
+
+  it('Session 구독자 오류가 발생해도 반영된 편집은 Undo 기록에 추가한다', async () => {
+    const { commandExecutor, commandHistory, session } = createTestContext();
+    const unsubscribe = session.subscribe(() => {
+      throw new Error('listener failed');
+    });
+
+    await expect(commandExecutor.execute({ type: AudioCommandType.SET_TEMPO, tempo: 140 })).rejects.toThrow(
+      'listener failed'
+    );
+    unsubscribe();
+
+    expect(session.getState().tempo).toBe(140);
+    expect(commandHistory.getSnapshot()).toEqual({ canRedo: false, canUndo: true });
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tempo).toBe(120);
+  });
+
+  it('CommandHistory 구독자 오류가 발생해도 같은 편집을 중복 기록하지 않는다', async () => {
+    const { commandExecutor, commandHistory } = createTestContext();
+    const unsubscribe = commandHistory.subscribe(() => {
+      throw new Error('history listener failed');
+    });
+
+    await expect(commandExecutor.execute({ type: AudioCommandType.SET_TEMPO, tempo: 140 })).rejects.toThrow(
+      'history listener failed'
+    );
+    unsubscribe();
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(commandHistory.getSnapshot()).toEqual({ canRedo: true, canUndo: false });
+  });
+
+  it('Undo 뒤 새 편집을 실행하면 Redo 기록을 제거한다', async () => {
+    const { commandExecutor, commandHistory } = createTestContext();
+    await commandExecutor.execute({ type: AudioCommandType.SET_TEMPO, tempo: 140 });
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+
+    await commandExecutor.execute({ type: AudioCommandType.SET_TEMPO, tempo: 130 });
+
+    expect(commandHistory.getSnapshot()).toEqual({ canRedo: false, canUndo: true });
+  });
+
+  it('프로젝트 불러오기가 성공하면 이전 프로젝트의 Undo 기록을 제거한다', async () => {
+    const { commandExecutor, commandHistory, controller } = createTestContext();
+    vi.spyOn(controller.project, 'loadProject').mockResolvedValue(undefined);
+    await commandExecutor.execute({ type: AudioCommandType.SET_TEMPO, tempo: 140 });
+
+    await commandExecutor.execute({ type: AudioCommandType.LOAD_PROJECT, projectId: INITIAL_PROJECT_METADATA.id });
+
+    expect(commandHistory.getSnapshot()).toEqual({ canRedo: false, canUndo: false });
+  });
+
+  it('프로젝트 상태가 교체된 뒤 구독자 오류가 발생해도 이전 Undo 기록을 제거한다', async () => {
+    const { commandExecutor, commandHistory, controller, session } = createTestContext();
+    await commandExecutor.execute({ type: AudioCommandType.SET_TEMPO, tempo: 140 });
+    vi.spyOn(controller.project, 'loadProject').mockImplementation(async () => {
+      session.getState().replaceProjectState({
+        project: { ...INITIAL_PROJECT_METADATA, name: '불러온 프로젝트' },
+        tempo: 90,
+        masterVolume: 1,
+        exportStartTime: null,
+        exportEndTime: null,
+        tracks: new Map(),
+      });
+    });
+    const unsubscribe = session.subscribe(() => {
+      throw new Error('listener failed');
+    });
+
+    await expect(
+      commandExecutor.execute({ type: AudioCommandType.LOAD_PROJECT, projectId: INITIAL_PROJECT_METADATA.id })
+    ).rejects.toThrow('listener failed');
+    unsubscribe();
+
+    expect(session.getState().tempo).toBe(90);
+    expect(commandHistory.getSnapshot()).toEqual({ canRedo: false, canUndo: false });
+  });
+
+  it('Track 추가를 Undo하고 같은 ID로 Redo한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.has(TRACK_ID)).toBe(false);
+
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(session.getState().tracks.has(TRACK_ID)).toBe(true);
+  });
+
+  it('Region 추가를 Undo하고 정규화된 Source 범위로 Redo한다', async () => {
+    const { audioSourceRegistry, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.regions).toEqual([]);
+
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.regions).toEqual([
+      expect.objectContaining({
+        id: REGION_ID,
+        sourceId: SOURCE_ID,
+        startTime: 0,
+        sourceStartTime: 0,
+        duration: 5,
+      }),
+    ]);
+  });
+
+  it('Region 상태 공개 뒤 구독자 오류가 발생해도 Source 연결을 유지해 Undo할 수 있다', async () => {
+    const { audioSourceRegistry, commandExecutor, commandHistory, session } = createTestContext();
+    await addTrack(commandExecutor);
+    stageSource(audioSourceRegistry);
+    const unsubscribe = session.subscribe(() => {
+      throw new Error('listener failed');
+    });
+
+    await expect(
+      commandExecutor.execute({
+        type: AudioCommandType.LOAD_REGION,
+        trackId: TRACK_ID,
+        regionId: REGION_ID,
+        sourceId: SOURCE_ID,
+        startTime: 0,
+        duration: 5,
+      })
+    ).rejects.toThrow('listener failed');
+    unsubscribe();
+
+    expect(audioSourceRegistry.resolve(SOURCE_ID)?.regionIds).toContain(REGION_ID);
+    expect(commandHistory.getSnapshot()).toEqual({ canRedo: false, canUndo: true });
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.regions).toEqual([]);
+  });
+
+  it('Region 삭제를 Undo하면 같은 ID와 Source 범위로 복원한다', async () => {
+    const { audioSourceRegistry, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
+    await commandExecutor.execute({
+      type: AudioCommandType.UNLOAD_REGION,
+      trackId: TRACK_ID,
+      regionId: REGION_ID,
+    });
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.regions).toEqual([
+      expect.objectContaining({ id: REGION_ID, sourceId: SOURCE_ID, duration: 5 }),
+    ]);
+  });
+
+  it('Region 이동을 Undo하고 Redo한다', async () => {
+    const { audioSourceRegistry, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
+    await commandExecutor.execute({
+      type: AudioCommandType.MOVE_REGION,
+      trackId: TRACK_ID,
+      regionId: REGION_ID,
+      newStartTime: 2,
+    });
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.regions[0]?.startTime).toBe(0);
+
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.regions[0]?.startTime).toBe(2);
+  });
+
+  it('Track 볼륨 변경을 Undo하면 Session과 AudioEngine 값을 함께 복원한다', async () => {
+    const { audioEngine, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await commandExecutor.execute({
+      type: AudioCommandType.SET_TRACK_VOLUME,
+      trackId: TRACK_ID,
+      volume: 0.4,
+    });
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.volume).toBe(1);
+    expect(audioEngine.getTrackParams(TRACK_ID)?.volume).toBe(1);
+  });
+
+  it('Track Pan 변경을 Undo한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await commandExecutor.execute({ type: AudioCommandType.SET_TRACK_PAN, trackId: TRACK_ID, pan: -0.5 });
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.pan).toBe(0);
+  });
+
+  it('Track Mute 변경을 Undo한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await commandExecutor.execute({ type: AudioCommandType.SET_TRACK_MUTE, trackId: TRACK_ID, muted: true });
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.isMuted).toBe(false);
+  });
+
+  it('Track Solo 변경을 Undo한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await commandExecutor.execute({ type: AudioCommandType.SET_TRACK_SOLO, trackId: TRACK_ID, soloed: true });
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.isSoloed).toBe(false);
+  });
+
+  it('Export 범위 해제를 Undo하면 이전 범위를 복원한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await commandExecutor.execute({ type: AudioCommandType.SET_EXPORT_RANGE, startTime: 1, endTime: 4 });
+    await commandExecutor.execute({ type: AudioCommandType.CLEAR_EXPORT_RANGE });
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+
+    expect(session.getState()).toMatchObject({ exportStartTime: 1, exportEndTime: 4 });
+  });
+
+  it('Undo 실행이 실패하면 같은 기록을 다음 Undo에서 다시 사용한다', async () => {
+    const { commandExecutor, commandHistory, controller } = createTestContext();
+    await commandExecutor.execute({ type: AudioCommandType.SET_TEMPO, tempo: 140 });
+    vi.spyOn(controller.playback, 'handleSetTempo').mockImplementation(() => {
+      throw new Error('undo failed');
+    });
+
+    await expect(commandExecutor.execute({ type: AudioCommandType.UNDO })).rejects.toThrow('undo failed');
+
+    expect(commandHistory.getSnapshot()).toEqual({ canRedo: false, canUndo: true });
+  });
+
+  it('동시에 요청한 편집과 Undo를 Command 대기열 순서로 실행한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+
+    await Promise.all([
+      commandExecutor.execute({ type: AudioCommandType.SET_TEMPO, tempo: 140 }),
+      commandExecutor.execute({ type: AudioCommandType.UNDO }),
+    ]);
+
+    expect(session.getState().tempo).toBe(120);
+  });
+
+  it('아직 복원하지 못하는 Track 삭제는 성공 뒤 기존 Undo 기록을 제거한다', async () => {
+    const { commandExecutor, commandHistory } = createTestContext();
+    await addTrack(commandExecutor);
+
+    await commandExecutor.execute({ type: AudioCommandType.REMOVE_TRACK, trackId: TRACK_ID });
+
+    expect(commandHistory.getSnapshot()).toEqual({ canRedo: false, canUndo: false });
   });
 
   it('앞선 편집 결과를 포함한 snapshot을 저장한다', async () => {

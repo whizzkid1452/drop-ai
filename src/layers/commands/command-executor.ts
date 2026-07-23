@@ -6,6 +6,8 @@ import {
   AudioCommandType,
   type AudioCommand,
 } from '../shared/types/audioCommand.schema';
+import type { ICommandHistory } from './command-history';
+import { createCommandHistoryEntry } from './create-command-history-entry';
 
 export type CommandExecutionResult = Blob | void;
 export type CommandBatchExecutionResult = readonly CommandExecutionResult[];
@@ -45,12 +47,13 @@ export class CommandExecutor {
 
   constructor(
     private readonly sessionStore: SessionStore,
-    private readonly controller: AppController
+    private readonly controller: AppController,
+    private readonly commandHistory: ICommandHistory
   ) {}
 
   async execute(command: AudioCommand): Promise<CommandExecutionResult> {
     const validatedCommand = AudioCommandSchema.parse(command);
-    return this.enqueue(() => this.executeValidated(validatedCommand));
+    return this.enqueue(() => this.executeWithHistory(validatedCommand));
   }
 
   async executeMany(commands: readonly AudioCommand[]): Promise<CommandBatchExecutionResult> {
@@ -65,7 +68,7 @@ export class CommandExecutor {
 
     for (const [failedIndex, failedCommand] of validatedCommands.entries()) {
       try {
-        completedResults.push(await this.executeValidated(failedCommand));
+        completedResults.push(await this.executeWithHistory(failedCommand));
       } catch (cause) {
         throw new CommandBatchExecutionError({ failedIndex, failedCommand, completedResults, cause });
       }
@@ -74,7 +77,55 @@ export class CommandExecutor {
     return completedResults;
   }
 
-  private async executeValidated(validatedCommand: AudioCommand): Promise<CommandExecutionResult> {
+  private async executeWithHistory(validatedCommand: AudioCommand): Promise<CommandExecutionResult> {
+    if (validatedCommand.type === AudioCommandType.UNDO || validatedCommand.type === AudioCommandType.REDO) {
+      return this.executeWithoutHistory(validatedCommand);
+    }
+
+    const beforeSession = this.sessionStore.getState();
+    const preparedCommand = this.prepareCommandForExecution(validatedCommand, beforeSession);
+    let result: CommandExecutionResult;
+    try {
+      result = await this.executeWithoutHistory(preparedCommand);
+    } catch (cause) {
+      if (this.sessionStore.getState() !== beforeSession) {
+        this.updateHistoryAfterCommittedCommand(preparedCommand, beforeSession);
+      }
+      throw cause;
+    }
+
+    this.updateHistoryAfterCommittedCommand(preparedCommand, beforeSession);
+    return result;
+  }
+
+  private updateHistoryAfterCommittedCommand(command: AudioCommand, beforeSession: SessionState): void {
+    if (this.isHistoryBoundary(command)) {
+      this.commandHistory.clear();
+      return;
+    }
+    const historyEntry = createCommandHistoryEntry({
+      beforeSession,
+      afterSession: this.sessionStore.getState(),
+      command,
+      executeCommand: async command => {
+        await this.executeWithoutHistory(AudioCommandSchema.parse(command));
+      },
+    });
+    if (historyEntry) {
+      this.commandHistory.record(historyEntry);
+    }
+  }
+
+  private async executeWithoutHistory(validatedCommand: AudioCommand): Promise<CommandExecutionResult> {
+    if (validatedCommand.type === AudioCommandType.UNDO) {
+      await this.commandHistory.undo();
+      return;
+    }
+    if (validatedCommand.type === AudioCommandType.REDO) {
+      await this.commandHistory.redo();
+      return;
+    }
+
     // 연속 명령에서 앞 명령의 변경 상태를 다음 명령이 사용하도록 실행 직전에 Session을 읽는다.
     const session = this.sessionStore.getState();
 
@@ -184,6 +235,35 @@ export class CommandExecutor {
     }
 
     return throwUnsupportedCommand(validatedCommand);
+  }
+
+  private prepareCommandForExecution(command: AudioCommand, session: SessionState): AudioCommand {
+    switch (command.type) {
+      case AudioCommandType.LOAD_REGION:
+        return command.regionId ? command : { ...command, regionId: crypto.randomUUID() };
+
+      case AudioCommandType.SET_TRACK_VOLUME:
+        return { ...command, trackId: this.resolveTrackId(session, command.trackId) };
+
+      case AudioCommandType.SET_TRACK_PAN:
+        return { ...command, trackId: this.resolveTrackId(session, command.trackId) };
+
+      case AudioCommandType.UNLOAD_REGION: {
+        const trackId = this.resolveTrackId(session, command.trackId);
+        return { ...command, trackId, regionId: command.regionId ?? this.getFirstRegionId(session, trackId) };
+      }
+
+      default:
+        return command;
+    }
+  }
+
+  private isHistoryBoundary(command: AudioCommand): boolean {
+    return (
+      command.type === AudioCommandType.REMOVE_TRACK ||
+      command.type === AudioCommandType.SPLIT_REGION ||
+      command.type === AudioCommandType.LOAD_PROJECT
+    );
   }
 
   private enqueue<Result>(operation: () => Promise<Result>): Promise<Result> {

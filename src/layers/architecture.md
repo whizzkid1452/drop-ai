@@ -20,6 +20,15 @@ AudioEngine 객체를 노출하지 않는다. 현재 `PlaybackClockQuery`는 `Pl
 `EXPORT_AUDIO`, `SAVE_PROJECT`, `LOAD_PROJECT`는 현재 완료될 때까지 대기열을 점유한다. 별도 작업 모델을 도입하기
 전의 알려진 제한이다.
 
+`CommandHistory`는 현재 앱 실행 중에만 유지하는 최대 100개의 역명령 기록이다. `CommandExecutor`가 성공한 편집의 실행 전후
+Session을 비교해 Undo·Redo 명령을 만들고, `UNDO`와 `REDO`도 같은 대기열에서 실행한다. Undo·Redo가 실패하면 해당 기록을
+반대쪽 스택으로 옮기지 않는다. 새 편집은 Redo 기록을 제거한다. 지원 범위는 Track 추가, Region 추가·삭제·이동, tempo,
+Track volume·pan·mute·solo, Export 범위 설정·해제다. 재생·playhead·저장·내보내기는 기록하지 않는다. Track 삭제와 Region
+분할은 손실 없는 복원 명령이 아직 없으므로 Session 변경이 확인되면 기존 기록을 제거한다. 프로젝트 불러오기도 다른
+프로젝트의 명령을 재사용하지 않도록 기록을 제거한다. Session 구독자 예외가 상태 반영 뒤 발생한 경우에는 반영된 편집을
+기록하고 원래 예외를 호출자에게 전달한다. Apps에는 `canUndo`·`canRedo` 조회와 구독만 노출한다. 이 기록은
+`ProjectDocument`에 저장하지 않는다.
+
 Agent 응답은 JSON 배열 전체를 엄격하게 검증한다. 빈 배열은 명령 없음으로 허용한다. 알 수 없는 명령, 잘못된
 필드, 누락·추가 필드, JSON 밖의 텍스트가 하나라도 있으면 전체를 실행하지 않는다. Agent 응답에 없는 명령을
 실행 단계에서 추가하지 않는다. 검증된 배열은 `executeMany` 한 번으로 실행하며, 중간 실패 뒤 남은 명령은
@@ -61,8 +70,8 @@ Region, 허용 오차를 초과한 Region 끝 시각 불일치는 손실을 숨�
 `project.revision`은 편집 횟수나 저장 여부가 아니라 마지막 성공 저장 snapshot의 동시성 제어 값이다. 일반 편집과
 Undo에서는 바꾸지 않으며, Project Controller가 Repository의 성공 결과를 받았을 때만 교체한다. 프로젝트 불러오기용
 `replaceProjectState`는 project, tempo, master volume, Export 범위, Track·Region을 한 번의 Store 변경으로 교체하고
-재생 상태와 playhead를 초기화한다. Agent 상태는 프로젝트 문서에 속하지 않으므로 유지한다. 문서 마이그레이션과 Undo는
-각각 후속 목적 단위에서 추가한다.
+재생 상태와 playhead를 초기화한다. Agent 상태는 프로젝트 문서에 속하지 않으므로 유지한다. 문서 마이그레이션은 후속
+목적 단위에서 추가한다.
 신뢰할 수 없는 JSON은 `readProjectDocumentJson`으로 문법을 확인하고, `readProjectDocument`로 식별자·버전·본문 순서로
 검증한다. 객체 입력은 자기 소유 열거 가능 데이터 속성만 문서 필드로 인정한다. 현재 지원 버전은 실제 형식이 정의된
 v1뿐이며, 정의되지 않은 버전을 임의 변환하지 않는다.
@@ -106,7 +115,8 @@ Source의 남은 길이로 정규화하고, Source 길이가 `null`이면 실제
 
 등록 Source를 사용하는 Region 추가·삭제·분할과 Track 삭제는 Registry 변경, AudioEngine 호출, Session 반영 순서로
 실행하고 Controller 진입 뒤 실패 시 완료한 Registry 변경을 역순으로 보상한다. 처음 연결된 pending Source의 추가가
-실패하면 URL까지 정리하고, 이미 committed였던 Source는 Undo와 재사용을 위해 유지한다. `stage` 뒤 Command 검증이나
+실패하면 URL까지 정리하고, 이미 committed였던 Source는 Undo와 재사용을 위해 유지한다. Region이 Session에 반영된 뒤
+구독자 예외가 발생하면 이미 반영된 Region 객체를 확인해 Engine·Registry를 보상하지 않고 예외만 전달한다. `stage` 뒤 Command 검증이나
 dispatch 전에 실패하면 stage 호출자가 `discardPending`을 실행한다. 보상도 실패하면 원래 오류와 실패한 보상 단계를
 `ProjectMutationCompensationError`에 함께 보존한다. 이 절차는 여러 객체의 원자적 transaction은 아니다. 일반 진입점은
 CommandExecutor 대기열로 Command 간 동시 변경을 막는다. 프로젝트 불러오기 준비 중 Web `stage`처럼 대기열 밖의
@@ -175,6 +185,9 @@ Web 헤더의 프로젝트 목록은 읽기 전용 `ProjectCatalogQuery`로 조�
 `LOAD_PROJECT`를 CommandExecutor에 전달한다. 내부 CLI의 `load-project <projectId>`와 Agent의 불러오기 요청도 같은
 Command를 사용한다. Agent는 사용자가 제공한 Project UUID만 사용할 수 있고, `LOAD_PROJECT`를 다른 명령과 같은 배열에
 넣지 않는다.
+Web 헤더의 실행 취소·다시 실행 버튼, 내부 CLI의 `undo`·`redo`, Agent의 명시적인 편집 기록 요청은 모두 `UNDO`·`REDO`를
+CommandExecutor에 전달한다. Web은 읽기 전용 `CommandHistory` 상태로 버튼 활성화를 결정한다. Agent는 이 명령을 다른
+명령과 같은 배열에 넣지 않는다.
 Web JSON CLI도 파싱된 명령 배열을 `executeMany` 한 번으로 실행하고, 중간 실패 전 결과만 후처리한다. 기존 Track의
 `Region 추가`는 길이를 확인한 뒤 Blob을 stage하고 선택한 Track ID와 현재 시각으로 `sourceId` 기반 `LOAD_REGION`을 한 번
 실행한다. Command가 실패하면 stage 호출자가 `discardPending`을 실행한다. Session은 재생 URL 기반 파일 목록을 보관하지
@@ -187,6 +200,7 @@ Web JSON CLI도 파싱된 명령 배열을 `executeMany` 한 번으로 실행하
 graph TD
     Apps["Apps (CLI, Web, Agent)"]
     Commands["CommandExecutor"]
+    CommandHistory["Command History"]
     Queries["Read-only Queries"]
     Controllers["Controllers (AppController Facade)"]
     Session["Session (Zustand Vanilla Store)"]
@@ -199,7 +213,9 @@ graph TD
     Apps -->|Read Current Clock| Queries
     Commands -->|Validate & Delegate| Controllers
     Commands -->|Read Current State| Session
+    Commands -->|Record / Undo / Redo| CommandHistory
     Apps -->|Subscribe| Session
+    Apps -->|Read canUndo / canRedo| CommandHistory
     Apps -.->|Create via| CreateApp
     Apps -->|Stage / Resolve only| AudioSourceRegistry
 
@@ -215,6 +231,7 @@ graph TD
     CreateApp -->|Create| Session
     CreateApp -->|Create & Inject Deps| Controllers
     CreateApp -->|Create & Inject Deps| Commands
+    CreateApp -->|Create & Inject Deps| CommandHistory
     CreateApp -->|Create & Inject Deps| Queries
 ```
 

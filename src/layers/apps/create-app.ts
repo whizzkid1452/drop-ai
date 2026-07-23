@@ -14,6 +14,7 @@ import { OpfsAudioSourceRepository } from '../audio-source-repository/opfs-audio
 import { createSessionStore, type SessionStore } from '../session/session';
 import { AppController } from '../controllers/app-controller';
 import { CommandExecutor } from '../commands/command-executor';
+import { CommandHistory, type ICommandHistoryQuery } from '../commands/command-history';
 import { PlaybackClockQuery, type IPlaybackClockQuery } from '../queries/playback-clock-query';
 import { ProjectCatalogQuery, type IProjectCatalogQuery } from '../queries/project-catalog-query';
 import type { IProjectRepository } from '../project-repository/i-project-repository';
@@ -34,6 +35,7 @@ export interface AppInstance {
   readonly audioSourceStager: IAudioSourceStager;
   session: SessionStore;
   commandExecutor: CommandExecutor;
+  commandHistory: ICommandHistoryQuery;
   playbackClock: IPlaybackClockQuery;
   projectCatalog: IProjectCatalogQuery;
 }
@@ -71,6 +73,13 @@ function createAudioSourceCapabilities(audioSourceRegistry: IAudioSourceRegistry
   };
 }
 
+function createCommandHistoryQuery(commandHistory: CommandHistory): ICommandHistoryQuery {
+  return {
+    getSnapshot: commandHistory.getSnapshot,
+    subscribe: commandHistory.subscribe,
+  };
+}
+
 /**
  * Core Application Factory
  */
@@ -89,7 +98,9 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     audioSourceRepository,
     projectRepository,
   });
-  const commandExecutor = new CommandExecutor(session, controller);
+  const commandHistory = new CommandHistory();
+  const commandExecutor = new CommandExecutor(session, controller, commandHistory);
+  const commandHistoryQuery = createCommandHistoryQuery(commandHistory);
   const playbackClock = new PlaybackClockQuery(controller.playback);
   const projectCatalog = new ProjectCatalogQuery(projectRepository);
   const audioRuntimeEnvironment = options.audioRuntimeEnvironment ?? readAudioRuntimeEnvironment();
@@ -100,6 +111,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     ...audioSourceCapabilities,
     session,
     commandExecutor,
+    commandHistory: commandHistoryQuery,
     playbackClock,
     projectCatalog,
   };

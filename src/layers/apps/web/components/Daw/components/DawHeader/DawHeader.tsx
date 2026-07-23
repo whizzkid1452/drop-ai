@@ -1,7 +1,8 @@
 import * as styles from '../../DawPage.css.ts';
 import { ExportButton } from '../ExportButton/ExportButton';
-import { SaveProjectButton } from '../SaveProjectButton/SaveProjectButton';
 import { LoadProjectControl } from '../LoadProjectControl/LoadProjectControl';
+import { SaveProjectButton } from '../SaveProjectButton/SaveProjectButton';
+import { UndoRedoControls } from '../UndoRedoControls/UndoRedoControls';
 import { AudioRuntimeStatus } from './AudioRuntimeStatus';
 import { TempoMetadataControl } from './TempoMetadataControl';
 
@@ -17,6 +18,7 @@ export function DawHeader({ trackCount }: DawHeaderProps) {
         <AudioRuntimeStatus />
         <TempoMetadataControl />
         <span className={styles.trackCount}>{trackCount} tracks</span>
+        <UndoRedoControls />
         <LoadProjectControl />
         <SaveProjectButton />
         <ExportButton />

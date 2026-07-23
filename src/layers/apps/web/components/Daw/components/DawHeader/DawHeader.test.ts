@@ -9,6 +9,7 @@ const componentMocks = vi.hoisted(() => ({
   audioRuntimeStatus: vi.fn(() => null),
   saveProjectButton: vi.fn(() => null),
   loadProjectControl: vi.fn(() => null),
+  undoRedoControls: vi.fn(() => null),
 }));
 
 vi.mock('./AudioRuntimeStatus', () => ({
@@ -25,6 +26,10 @@ vi.mock('../SaveProjectButton/SaveProjectButton', () => ({
 
 vi.mock('../LoadProjectControl/LoadProjectControl', () => ({
   LoadProjectControl: componentMocks.loadProjectControl,
+}));
+
+vi.mock('../UndoRedoControls/UndoRedoControls', () => ({
+  UndoRedoControls: componentMocks.undoRedoControls,
 }));
 
 vi.mock('./TempoMetadataControl', () => ({
@@ -54,6 +59,7 @@ afterEach(() => {
   componentMocks.audioRuntimeStatus.mockClear();
   componentMocks.saveProjectButton.mockClear();
   componentMocks.loadProjectControl.mockClear();
+  componentMocks.undoRedoControls.mockClear();
 });
 
 describe('DawHeader', () => {
@@ -68,5 +74,6 @@ describe('DawHeader', () => {
     expect(componentMocks.audioRuntimeStatus).toHaveBeenCalledTimes(1);
     expect(componentMocks.saveProjectButton).toHaveBeenCalledTimes(1);
     expect(componentMocks.loadProjectControl).toHaveBeenCalledTimes(1);
+    expect(componentMocks.undoRedoControls).toHaveBeenCalledTimes(1);
   });
 });

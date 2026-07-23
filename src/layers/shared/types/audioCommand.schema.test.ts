@@ -136,6 +136,8 @@ describe('LOAD_REGION 오디오 식별자 계약', () => {
 
 describe('AudioCommandSchema 프로젝트 변경 명령', () => {
   it.each([
+    { type: AudioCommandType.UNDO },
+    { type: AudioCommandType.REDO },
     { type: AudioCommandType.SAVE_PROJECT },
     { type: AudioCommandType.LOAD_PROJECT, projectId: TRACK_ID },
     { type: AudioCommandType.SET_TEMPO, tempo: 120 },

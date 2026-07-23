@@ -34,6 +34,8 @@ export const AGENT_PROJECT_CONTEXT_MAX_CHARACTERS = 1600;
 const EXAMPLE_PROJECT_ID = '99999999-9999-4999-8999-999999999999';
 
 const COMMAND_REFERENCE = {
+  [AudioCommandType.UNDO]: '{"type":"UNDO"} - 마지막 편집 실행 취소',
+  [AudioCommandType.REDO]: '{"type":"REDO"} - 마지막으로 취소한 편집 다시 실행',
   [AudioCommandType.ADD_TRACK]: '{"type":"ADD_TRACK","trackId":"<new UUID>"} - 빈 Track 추가. 현재 Agent 생성은 금지',
   [AudioCommandType.REMOVE_TRACK]:
     '{"type":"REMOVE_TRACK","trackId":"<existing Track UUID>"} - Track과 포함된 Region을 제거',
@@ -99,6 +101,14 @@ export const AGENT_PROMPT_EXAMPLES = [
   {
     request: `load project ${EXAMPLE_PROJECT_ID}`,
     commands: [{ type: AudioCommandType.LOAD_PROJECT, projectId: EXAMPLE_PROJECT_ID }],
+  },
+  {
+    request: '마지막 편집 취소해줘',
+    commands: [{ type: AudioCommandType.UNDO }],
+  },
+  {
+    request: 'redo the last edit',
+    commands: [{ type: AudioCommandType.REDO }],
   },
   {
     request: '안녕',
@@ -248,7 +258,8 @@ ${renderCommandReference()}
 10. 입력 의존 순서를 유지한다. EXPORT_AUDIO는 해당 묶음의 마지막에 둔다.
 11. 편집과 저장을 함께 요청하면 SAVE_PROJECT를 해당 편집 명령 뒤에 둔다.
 12. LOAD_PROJECT는 사용자가 Project UUID를 명시했을 때만 사용한다. Project UUID를 임의로 만들지 않고, 다른 명령과 같은 배열에 넣지 않는다.
-13. 요청을 안전하게 실행할 정보가 부족하면 []를 반환한다. 지원하지 않는 요청도 []를 반환한다.
+13. UNDO와 REDO는 사용자가 명시적으로 요청했을 때만 사용한다. UNDO와 REDO는 다른 명령과 같은 배열에 넣지 않는다.
+14. 요청을 안전하게 실행할 정보가 부족하면 []를 반환한다. 지원하지 않는 요청도 []를 반환한다.
 
 # 예시
 ${renderExamples(projectContext.visibleTracks)}

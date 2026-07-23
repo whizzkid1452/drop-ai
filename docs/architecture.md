@@ -28,6 +28,7 @@ flowchart TB
 
     subgraph command["② Commands"]
         CE["CommandExecutor"]
+        CH["CommandHistory"]
     end
 
     subgraph query["② Read-only Queries"]
@@ -60,6 +61,8 @@ flowchart TB
 
     CE -->|"검증 후 위임"| AC
     CE -->|"실행 시점 상태 조회"| SS
+    CE -->|"편집 기록·Undo·Redo"| CH
+    A -->|"canUndo·canRedo 구독"| CH
     AC -->|"쓰기·구독 갱신"| SS
     AC -->|"재생·렌더·내보내기"| IAE
     AC -->|"ProjectDocument 저장"| PR
@@ -84,6 +87,13 @@ Agent 메시지와 업로드 파일 같은 앱 워크플로 상태는 Session Ac
 실행한다.
 `EXPORT_AUDIO`, `SAVE_PROJECT`, `LOAD_PROJECT`는 현재 완료될 때까지 대기열을 점유한다. 별도 작업 모델을 도입하기
 전의 알려진 제한이다.
+
+`CommandHistory`는 현재 앱 실행 중에만 유지하는 최대 100개의 역명령 기록이다. `CommandExecutor`가 성공한 편집의 실행 전후
+Session을 비교해 Undo·Redo 명령을 만들고, `UNDO`와 `REDO`도 같은 대기열에서 실행한다. Undo·Redo가 실패하면 해당 기록을
+반대쪽 스택으로 옮기지 않는다. 새 편집은 Redo 기록을 제거한다. 지원 범위는 Track 추가, Region 추가·삭제·이동, tempo,
+Track volume·pan·mute·solo, Export 범위 설정·해제다. 재생·playhead·저장·내보내기는 기록하지 않는다. Track 삭제와 Region
+분할은 손실 없는 복원 명령이 아직 없으므로 Session 변경이 확인되면 기존 기록을 제거한다. 프로젝트 불러오기도 다른
+프로젝트의 기록을 재사용하지 않도록 기록을 제거한다. Apps에는 `canUndo`·`canRedo` 조회와 구독만 노출한다.
 
 Agent 응답은 JSON 배열 전체를 엄격하게 검증한다. 빈 배열은 명령 없음으로 허용한다. 알 수 없는 명령, 잘못된
 필드, 누락·추가 필드, JSON 밖의 텍스트가 하나라도 있으면 전체를 실행하지 않는다. Agent 응답에 없는 명령을
@@ -354,7 +364,7 @@ Mapper는 Export 범위의 부분 `null`, Track Map key와 Track ID 불일치, �
 초과한 Region 끝 시각 불일치를 거부한다. 끝 시각 비교는 위 공통 Region 타임라인 규칙을 사용한다.
 최종 문서는 기존 `ProjectDocumentSchema`로 검증하고, 역변환 입력은 `readProjectDocument`로 다시 검증·복제한다. 화면
 저장은 `SAVE_PROJECT`로, 불러오기는 `LOAD_PROJECT`로 연결한다. 불러오기는 Source와 오디오 그래프를 분리된 Runtime에
-먼저 준비한 뒤 Session 전체를 교체한다. Undo 이력은 snapshot 문서에 넣지 않고 후속 Undo Journal에서 별도로 관리한다.
+먼저 준비한 뒤 Session 전체를 교체한다. `CommandHistory`는 런타임 메모리에만 있고 snapshot 문서에 넣지 않는다.
 
 ---
 
@@ -386,7 +396,7 @@ IndexedDB Adapter는 ProjectDocument와 목록 요약을 별도 Object Store에 
 transaction으로 갱신한다. save의 읽기·revision 비교·교체도 같은 transaction 안에서 처리한다. 단위 테스트는 메모리 기반
 IndexedDB 대역으로 이 규칙을 검증하므로, 실제 브라우저의 디스크 내구성·용량 제한·저장소 제거 정책까지 증명하지는 않는다.
 
-원본 오디오 바이트와 Undo Journal은 Repository snapshot에 포함하지 않는다. `OpfsAudioSourceRepository`는 원본 바이트를
+원본 오디오 바이트와 `CommandHistory`는 Repository snapshot에 포함하지 않는다. `OpfsAudioSourceRepository`는 원본 바이트를
 `drop-ai/audio-sources/v1/<Source UUID>`에 저장한다. `create`는 metadata와 Blob 크기를 확인하고 쓰기를 닫은 뒤 저장
 크기를 다시 확인한다. `load`도 ProjectDocument metadata의 크기를 확인하고 `mimeType`을 Blob 생성 옵션으로 전달한다.
 반환된 Blob의 `type`은 브라우저 Blob 규칙에 따라 정규화될 수 있다. `delete`는 반복 호출을 허용한다. 같은 Source의
@@ -514,6 +524,10 @@ Object URL도 정리한다. 이미 committed인 Source는 Region 연결만 되�
 Command Schema 검증이나 dispatch 전에 실패한 경우는 Controller가 Source를 볼 수 없으므로 stage 호출자가
 `discardPending`을 실행해야 한다.
 
+Region 추가의 Session 변경 뒤 구독자가 예외를 던지면 Zustand 상태는 이미 바뀐 상태다. Controller는 자신이 만든 Region
+객체가 Session에 공개됐는지 확인한다. 공개됐다면 Registry·AudioEngine을 되돌리지 않고 원래 구독자 예외만 전달한다.
+CommandExecutor는 바뀐 Session을 기준으로 Undo 기록을 만든다.
+
 등록 Source Region을 분할할 때는 새 Region 연결을 먼저 예약하되 기존 Region 연결을 AudioEngine 교체가 끝날 때까지
 유지한다. 따라서 비동기 교체 중에도 Session에 남은 기존 Region의 파형 조회가 유효하다. 교체 성공 뒤 기존 연결을
 끊고 Session을 바꾼다. 재검증 시 Session에서 대상이 이미 사라졌다면 Engine의 새 Region과 남은 Source 연결을 제거해
@@ -538,6 +552,9 @@ Export는 `IAudioSourceResolver`를 받는다. ProjectDocument Mapper와 저장�
 `ProjectCatalogQuery`로 저장된 프로젝트 목록을 읽고 선택한 ID를 `LOAD_PROJECT`로 실행한다. 내부 CLI의
 `load-project <projectId>`와 Agent의 불러오기 요청도 같은 CommandExecutor 경로를 사용한다. Agent는 사용자가 제공한
 Project UUID만 사용하며 `LOAD_PROJECT`를 다른 명령과 한 배열에 섞지 않는다.
+Web 헤더의 실행 취소·다시 실행 버튼, 내부 CLI의 `undo`·`redo`, Agent의 명시적인 편집 기록 요청은 같은 `UNDO`·`REDO`
+CommandExecutor 경로를 사용한다. Web은 읽기 전용 `canUndo`·`canRedo` 구독으로 버튼 활성화를 결정한다. Agent는
+`UNDO`·`REDO`를 다른 명령과 한 배열에 섞지 않는다.
 
 production Web 파일 가져오기는 파일 metadata를 만든 뒤 Blob을 Registry에 `stage`한다. metadata 변환 단계는 재생용
 Object URL을 만들지 않는다. Web Adapter가 Source UUID를 만들고, Registry가 이를 검증·등록하면서 Object URL을 만든다.

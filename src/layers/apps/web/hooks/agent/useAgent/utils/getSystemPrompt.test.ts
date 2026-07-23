@@ -116,6 +116,21 @@ describe('Agent 시스템 Prompt', () => {
     expect(prompt).toContain('다른 명령과 같은 배열에 넣지 않는다');
   });
 
+  it('Undo와 Redo의 한국어·영어 예시와 단독 실행 규칙을 제공한다', () => {
+    const prompt = getSystemPrompt({ tracks });
+
+    expect(AGENT_PROMPT_EXAMPLES).toEqual(
+      expect.arrayContaining([
+        { request: '마지막 편집 취소해줘', commands: [{ type: AudioCommandType.UNDO }] },
+        { request: 'redo the last edit', commands: [{ type: AudioCommandType.REDO }] },
+      ])
+    );
+    expect(prompt).toContain('{"type":"UNDO"}');
+    expect(prompt).toContain('{"type":"REDO"}');
+    expect(prompt).toContain('사용자가 명시적으로 요청했을 때만 사용한다');
+    expect(prompt).toContain('UNDO와 REDO는 다른 명령과 같은 배열에 넣지 않는다');
+  });
+
   it('출력 형식과 식별자, Source ID 안전 규칙을 명시한다', () => {
     const prompt = getSystemPrompt({ tracks });
 

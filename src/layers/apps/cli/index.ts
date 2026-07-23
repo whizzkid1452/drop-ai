@@ -183,6 +183,22 @@ export const createCliCommands = (commandExecutor: CliCommandExecutor, state: Cl
         return 'Playback paused.';
       },
     },
+    undo: {
+      description: 'Undo the last edit',
+      usage: 'undo',
+      fn: async () => {
+        await commandExecutor.execute({ type: AudioCommandType.UNDO });
+        return 'Edit undone.';
+      },
+    },
+    redo: {
+      description: 'Redo the last undone edit',
+      usage: 'redo',
+      fn: async () => {
+        await commandExecutor.execute({ type: AudioCommandType.REDO });
+        return 'Edit redone.';
+      },
+    },
     save: {
       description: 'Save current project',
       usage: 'save',

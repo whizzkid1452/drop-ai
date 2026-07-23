@@ -3,6 +3,8 @@ import { calculateFiniteRegionSourceEndTime } from '../audio-source-range';
 import { calculateFiniteRegionEndTime } from '../region-timeline';
 
 export const AudioCommandType = {
+  UNDO: 'UNDO',
+  REDO: 'REDO',
   ADD_TRACK: 'ADD_TRACK',
   REMOVE_TRACK: 'REMOVE_TRACK',
   PLAY: 'PLAY',
@@ -85,6 +87,12 @@ const LoadRegionCommandSchema = z
  */
 
 export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
+  z.strictObject({
+    type: z.literal(AudioCommandType.UNDO),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.REDO),
+  }),
   z.strictObject({
     type: z.literal(AudioCommandType.ADD_TRACK),
     trackId: z.uuid('Invalid track ID format'),
