@@ -1003,6 +1003,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
           pan: -0.25,
           isMuted: false,
           isSoloed: true,
+          pluginInstances: [],
           regions: [{ ...ORIGINAL_REGION, id: 'replacement-region', url: 'replacement.wav' }],
         },
       ],
@@ -1031,6 +1032,178 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     expect(toneMocks.playerDispose).toHaveBeenCalledTimes(1);
   });
 
+  it('프로젝트 그래프를 준비할 때 Plugin을 저장 순서대로 연결한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('current-track');
+
+    const replacement = await engine.prepareProjectGraph({
+      tracks: [
+        {
+          id: 'replacement-track',
+          volume: 1,
+          pan: 0,
+          isMuted: false,
+          isSoloed: false,
+          pluginInstances: [
+            {
+              instanceId: 'plugin-1',
+              manifestId: 'builtin.gain',
+              isEnabled: true,
+              parameterValues: new Map([['gain', 0.5]]),
+            },
+            {
+              instanceId: 'plugin-2',
+              manifestId: 'builtin.gain',
+              isEnabled: true,
+              parameterValues: new Map([['gain', 0.25]]),
+            },
+          ],
+          regions: [],
+        },
+      ],
+    });
+
+    const preparedInput = toneMocks.gains[3];
+    const firstPlugin = toneMocks.gains[4];
+    const secondPlugin = toneMocks.gains[5];
+    expect(engine.getTrackParams('current-track')).not.toBeNull();
+    expect(engine.getTrackParams('replacement-track')).toBeNull();
+    expect(preparedInput?.destination).toBe(firstPlugin);
+    expect(firstPlugin?.destination).toBe(secondPlugin);
+    expect(secondPlugin?.destination).toBe(toneMocks.channels[1]);
+    expect(firstPlugin?.gain.value).toBe(0.5);
+    expect(secondPlugin?.gain.value).toBe(0.25);
+
+    replacement.activate();
+    expect(() => engine.removePlugin('replacement-track', 'plugin-1')).not.toThrow();
+  });
+
+  it('프로젝트 Plugin 준비 실패 시 후보 runtime만 정리하고 기존 그래프를 유지한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('current-track');
+
+    await expect(
+      engine.prepareProjectGraph({
+        tracks: [
+          {
+            id: 'replacement-track',
+            volume: 1,
+            pan: 0,
+            isMuted: false,
+            isSoloed: false,
+            pluginInstances: [
+              {
+                instanceId: 'plugin-1',
+                manifestId: 'builtin.gain',
+                isEnabled: true,
+                parameterValues: new Map(),
+              },
+              {
+                instanceId: 'plugin-2',
+                manifestId: 'builtin.missing',
+                isEnabled: true,
+                parameterValues: new Map(),
+              },
+            ],
+            regions: [],
+          },
+        ],
+      })
+    ).rejects.toMatchObject({ code: AudioEngineErrorCode.PLUGIN_FACTORY_NOT_FOUND });
+
+    expect(engine.getTrackParams('current-track')).not.toBeNull();
+    expect(engine.getTrackParams('replacement-track')).toBeNull();
+    expect(toneMocks.gains[4]?.disposed).toBe(true);
+  });
+
+  it('프로젝트 Plugin 연결 실패 시 후보 chain을 정리하고 기존 그래프를 유지한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('current-track');
+    toneMocks.gainConnectFailures.push(new Error('connect failed'));
+
+    await expect(
+      engine.prepareProjectGraph({
+        tracks: [
+          {
+            id: 'replacement-track',
+            volume: 1,
+            pan: 0,
+            isMuted: false,
+            isSoloed: false,
+            pluginInstances: [
+              {
+                instanceId: 'plugin-1',
+                manifestId: 'builtin.gain',
+                isEnabled: true,
+                parameterValues: new Map(),
+              },
+            ],
+            regions: [],
+          },
+        ],
+      })
+    ).rejects.toMatchObject({ code: AudioEngineErrorCode.PLUGIN_CHAIN_UPDATE_FAILED });
+
+    expect(engine.getTrackParams('current-track')).not.toBeNull();
+    expect(engine.getTrackParams('replacement-track')).toBeNull();
+    expect(toneMocks.gains[4]?.disposed).toBe(true);
+  });
+
+  it('같은 Track의 중복 Plugin instance ID를 프로젝트 준비 단계에서 거부한다', async () => {
+    const engine = createPluginAudioEngine();
+    const pluginInstance = {
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      isEnabled: true,
+      parameterValues: new Map(),
+    };
+
+    await expect(
+      engine.prepareProjectGraph({
+        tracks: [
+          {
+            id: 'replacement-track',
+            volume: 1,
+            pan: 0,
+            isMuted: false,
+            isSoloed: false,
+            pluginInstances: [pluginInstance, pluginInstance],
+            regions: [],
+          },
+        ],
+      })
+    ).rejects.toMatchObject({ code: AudioEngineErrorCode.PLUGIN_INSTANCE_ID_CONFLICT });
+  });
+
+  it('bypass 구현 전에는 비활성 Plugin runtime을 만들지 않는다', async () => {
+    const engine = createPluginAudioEngine();
+
+    await expect(
+      engine.prepareProjectGraph({
+        tracks: [
+          {
+            id: 'replacement-track',
+            volume: 1,
+            pan: 0,
+            isMuted: false,
+            isSoloed: false,
+            pluginInstances: [
+              {
+                instanceId: 'plugin-1',
+                manifestId: 'builtin.gain',
+                isEnabled: false,
+                parameterValues: new Map(),
+              },
+            ],
+            regions: [],
+          },
+        ],
+      })
+    ).rejects.toMatchObject({ code: AudioEngineErrorCode.PLUGIN_BYPASS_UNSUPPORTED });
+
+    expect(toneMocks.gains).toHaveLength(3);
+  });
+
   it('새 프로젝트 Region 로드 실패 시 준비 그래프만 정리하고 기존 그래프를 유지한다', async () => {
     const engine = new AudioEngine();
     await engine.addTrack('current-track');
@@ -1045,6 +1218,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
             pan: 0,
             isMuted: false,
             isSoloed: false,
+            pluginInstances: [],
             regions: [{ ...ORIGINAL_REGION, url: 'broken.wav' }],
           },
         ],
@@ -1067,6 +1241,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
           pan: 0,
           isMuted: false,
           isSoloed: false,
+          pluginInstances: [],
           regions: [],
         },
       ],
@@ -1116,6 +1291,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
           pan: 0,
           isMuted: false,
           isSoloed: false,
+          pluginInstances: [],
           regions: [],
         },
       ],
@@ -1147,6 +1323,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
           pan: 0,
           isMuted: false,
           isSoloed: false,
+          pluginInstances: [],
           regions: [],
         },
       ],
@@ -1184,6 +1361,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
           pan: 0,
           isMuted: false,
           isSoloed: false,
+          pluginInstances: [],
           regions: [],
         },
       ],
@@ -1318,6 +1496,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
           pan: 0,
           isMuted: false,
           isSoloed: false,
+          pluginInstances: [],
           regions: [],
         },
       ],
@@ -1399,6 +1578,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
             pan: 0,
             isMuted: false,
             isSoloed: false,
+            pluginInstances: [],
             regions: [{ ...ORIGINAL_REGION, id: 'prepared-region', url: 'prepared.wav' }],
           },
           {
@@ -1407,6 +1587,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
             pan: 0,
             isMuted: false,
             isSoloed: false,
+            pluginInstances: [],
             regions: [{ ...ORIGINAL_REGION, id: 'broken-region', url: 'broken.wav' }],
           },
         ],
@@ -1432,6 +1613,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
             pan: 0,
             isMuted: false,
             isSoloed: false,
+            pluginInstances: [],
             regions: [],
           },
         ],
@@ -1455,6 +1637,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
             pan: 0,
             isMuted: false,
             isSoloed: false,
+            pluginInstances: [],
             regions: [],
           },
         ],
@@ -1478,6 +1661,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
             pan: 0,
             isMuted: false,
             isSoloed: false,
+            pluginInstances: [],
             regions: [{ ...ORIGINAL_REGION, id: 'replacement-region' }],
           },
         ],

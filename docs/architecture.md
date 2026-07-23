@@ -521,11 +521,16 @@ Resolver 결과에 영향을 주지 않는다. 활성화 뒤 이전 URL 해제�
 
 ### 11.1. 준비된 프로젝트 Runtime 교체
 
-`IAudioEngine.prepareProjectGraph`는 새 Track input·Channel과 Region Player를 기존 그래프와 분리해 준비한다. 실시간
+`IAudioEngine.prepareProjectGraph`는 새 Track input·Plugin runtime·Channel과 Region Player를 기존 그래프와 분리해
+준비한다. Plugin은 전달된 순서대로 직렬 연결한다. factory 누락, 중복 instance ID, Parameter 오류가 있으면 만든 후보
+runtime과 그래프만 정리하고 기존 그래프를 유지한다. 현재 활성화·비활성화 lifecycle이 없으므로 비활성 Plugin 복원은
+`PLUGIN_BYPASS_UNSUPPORTED`로 거부한다. 실시간
 재생은 `Player → Track input → Plugin runtime[] → Channel → output` 순서를 사용하며 Plugin이 없으면 input과 Channel을
-직접 연결한다. 프로젝트 그래프 준비와 Export는 Plugin 상태를 입력으로 받지 않으므로 현재
-`Player → Track input → Channel → output` 순서를 유지한다. ProjectDocument v1과 Export에 Plugin 처리를 추가하기 전까지
-불러온 프로젝트와 내보낸 파일에는 실시간 Plugin chain이 반영되지 않는다. 각 프로젝트 그래프는
+직접 연결한다. ProjectController는 Session Plugin 상태를 준비 요청으로 변환한다. 다만 현재 활성 Mapper는 v1 문서를 읽어
+Plugin 배열을 비우므로 저장 프로젝트 복원에는 아직 Plugin이 전달되지 않는다. Export도 Plugin 상태를 입력으로 받지 않는다.
+프로젝트 그래프 계약 자체는 manifest version 호환성을 판단하지 않는다. v2 Mapper 전환 전에 등록 manifest와 저장 version의
+정확한 호환성 검증을 별도 경계에 추가해야 한다. v2 Mapper 전환과 Export Plugin 처리를 추가하기 전까지 불러온 프로젝트와
+내보낸 파일에는 Plugin chain이 반영되지 않는다. 각 프로젝트 그래프는
 전용 출력 gate를 가지며, prepared 그래프는 gate를 닫은 상태로 Region 디코딩과 예약을 끝낸다. Solo는 Tone.js
 Channel에 `solo=true`를 설정하지 않고 현재 프로젝트의 `isSoloed` 집합에서 각 Channel의 실제 mute를 계산한다. 따라서
 prepared나 retired 그래프가 active 그래프의 Solo 결과를 바꾸지 않는다. 준비 중 active 그래프가 바뀌거나 먼저 시작한

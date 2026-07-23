@@ -66,12 +66,20 @@ export interface SetAudioPluginParameterRequest {
   readonly value: PluginParameterValue;
 }
 
+export interface AudioProjectGraphPluginInstance {
+  readonly instanceId: string;
+  readonly manifestId: string;
+  readonly isEnabled: boolean;
+  readonly parameterValues: ReadonlyMap<string, PluginParameterValue>;
+}
+
 export interface AudioProjectGraphTrack {
   readonly id: string;
   readonly volume: number;
   readonly pan: number;
   readonly isMuted: boolean;
   readonly isSoloed: boolean;
+  readonly pluginInstances: readonly AudioProjectGraphPluginInstance[];
   readonly regions: readonly RegionData[];
 }
 

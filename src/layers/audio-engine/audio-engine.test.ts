@@ -168,6 +168,14 @@ describe('MockAudioEngine - Phase 2 검증', () => {
       pan: -0.25,
       isMuted: true,
       isSoloed: false,
+      pluginInstances: [
+        {
+          instanceId: 'plugin-1',
+          manifestId: 'builtin.gain',
+          isEnabled: true,
+          parameterValues: new Map([['gain', 0.5]]),
+        },
+      ],
       regions: [
         {
           id: 'replacement-region',
@@ -194,6 +202,7 @@ describe('MockAudioEngine - Phase 2 검증', () => {
       expect(engine.getTrackParams('current-track')).toBeNull();
       expect(engine.getTrackParams(replacementTrack.id)).toEqual({ volume: 0.5, pan: -0.25 });
       expect(engine.getCurrentTime()).toBe(0);
+      expect(() => engine.removePlugin(replacementTrack.id, 'plugin-1')).not.toThrow();
       await expect(engine.addRegion(replacementTrack.id, replacementTrack.regions[0])).rejects.toMatchObject({
         code: 'REGION_ID_CONFLICT',
       });
@@ -214,6 +223,17 @@ describe('MockAudioEngine - Phase 2 검증', () => {
 
       expect(engine.getTrackParams('current-track')?.volume).toBe(0.75);
       expect(engine.getTrackParams(replacementTrack.id)).toBeNull();
+    });
+
+    it('bypass 구현 전에는 비활성 Plugin 복원을 명시적으로 거부한다', async () => {
+      const disabledTrack = {
+        ...replacementTrack,
+        pluginInstances: replacementTrack.pluginInstances.map(instance => ({ ...instance, isEnabled: false })),
+      };
+
+      await expect(engine.prepareProjectGraph({ tracks: [disabledTrack] })).rejects.toMatchObject({
+        code: AudioEngineErrorCode.PLUGIN_BYPASS_UNSUPPORTED,
+      });
     });
   });
 

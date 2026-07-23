@@ -169,6 +169,12 @@ export class ProjectController {
       pan: track.pan,
       isMuted: track.isMuted,
       isSoloed: track.isSoloed,
+      pluginInstances: track.pluginInstances.map(instance => ({
+        instanceId: instance.id,
+        manifestId: instance.manifestSummary.id,
+        isEnabled: instance.isEnabled,
+        parameterValues: new Map(instance.parameters.map(parameter => [parameter.id, parameter.value] as const)),
+      })),
       regions: track.regions.map(region => {
         const source = registry.resolve(region.sourceId);
         if (!source) {

@@ -4,6 +4,7 @@ import { startPlayer } from './config/player-config';
 import { encodeAudioBufferToWav } from './encoders/wav-encoder';
 import { AudioEngineError, AudioEngineErrorCode, ERROR_MESSAGES } from './errors';
 import type {
+  AudioProjectGraphPluginInstance,
   ExportRequest,
   ExportTrack,
   IAudioEngine,
@@ -44,6 +45,18 @@ interface AudioProjectGraphState {
 
 interface AudioEngineOptions {
   readonly pluginRuntimeFactories?: readonly IAudioPluginRuntimeFactory[];
+}
+
+interface CreatePreparedPluginRuntimesRequest {
+  readonly trackId: string;
+  readonly pluginInstances: readonly AudioProjectGraphPluginInstance[];
+}
+
+interface ConnectPreparedPluginChainRequest {
+  readonly input: Tone.Gain;
+  readonly channel: Tone.Channel;
+  readonly runtimes: readonly IAudioPluginRuntime[];
+  readonly trackId: string;
 }
 
 interface ReplacePluginChainConnectionsRequest {
@@ -563,6 +576,82 @@ export class AudioEngine implements IAudioEngine {
     }
   }
 
+  private createPreparedPluginRuntimes({
+    trackId,
+    pluginInstances,
+  }: CreatePreparedPluginRuntimesRequest): IAudioPluginRuntime[] {
+    const instanceIds = new Set<string>();
+    const runtimes: IAudioPluginRuntime[] = [];
+
+    try {
+      for (const instance of pluginInstances) {
+        if (instanceIds.has(instance.instanceId)) {
+          throw new AudioEngineError(
+            AudioEngineErrorCode.PLUGIN_INSTANCE_ID_CONFLICT,
+            ERROR_MESSAGES.PLUGIN_INSTANCE_ID_CONFLICT,
+            { instanceId: instance.instanceId, trackId }
+          );
+        }
+        instanceIds.add(instance.instanceId);
+
+        if (!instance.isEnabled) {
+          throw new AudioEngineError(
+            AudioEngineErrorCode.PLUGIN_BYPASS_UNSUPPORTED,
+            ERROR_MESSAGES.PLUGIN_BYPASS_UNSUPPORTED,
+            { instanceId: instance.instanceId, trackId }
+          );
+        }
+
+        const factory = this.pluginRuntimeFactories.get(instance.manifestId);
+        if (!factory) {
+          throw new AudioEngineError(
+            AudioEngineErrorCode.PLUGIN_FACTORY_NOT_FOUND,
+            ERROR_MESSAGES.PLUGIN_FACTORY_NOT_FOUND,
+            { manifestId: instance.manifestId }
+          );
+        }
+
+        runtimes.push(
+          this.createPluginRuntime(factory, {
+            trackId,
+            instanceId: instance.instanceId,
+            manifestId: instance.manifestId,
+            parameterValues: instance.parameterValues,
+          })
+        );
+      }
+
+      return runtimes;
+    } catch (error) {
+      runtimes.forEach(runtime =>
+        this.disposePluginRuntimeSafely(runtime, '프로젝트 준비 중 만든 Plugin runtime 정리에 실패했습니다.')
+      );
+      throw error;
+    }
+  }
+
+  private connectPreparedPluginChain({ input, channel, runtimes, trackId }: ConnectPreparedPluginChainRequest): void {
+    if (runtimes.length === 0) {
+      input.connect(channel);
+      return;
+    }
+
+    try {
+      this.rebuildPluginChainConnections({
+        input,
+        channel,
+        targetRuntimes: runtimes,
+        involvedRuntimes: runtimes,
+      });
+    } catch (cause) {
+      throw new AudioEngineError(
+        AudioEngineErrorCode.PLUGIN_CHAIN_UPDATE_FAILED,
+        ERROR_MESSAGES.PLUGIN_CHAIN_UPDATE_FAILED,
+        { cause: this.describeError(cause), trackId }
+      );
+    }
+  }
+
   private replacePluginChainConnections({
     trackId,
     input,
@@ -696,13 +785,17 @@ export class AudioEngine implements IAudioEngine {
         });
         graph.trackInputs.set(track.id, input);
         graph.channels.set(track.id, channel);
-        input.connect(channel);
+        const pluginRuntimes = this.createPreparedPluginRuntimes({
+          trackId: track.id,
+          pluginInstances: track.pluginInstances,
+        });
+        graph.pluginRuntimes.set(track.id, pluginRuntimes);
+        this.connectPreparedPluginChain({ input, channel, runtimes: pluginRuntimes, trackId: track.id });
         channel.connect(graph.output);
         channel.volume.value = Tone.gainToDb(track.volume);
         channel.pan.value = track.pan;
         graph.desiredTrackVolumes.set(track.id, track.volume);
         graph.players.set(track.id, new Map());
-        graph.pluginRuntimes.set(track.id, []);
         if (track.isMuted) {
           graph.mutedTrackIds.add(track.id);
         }

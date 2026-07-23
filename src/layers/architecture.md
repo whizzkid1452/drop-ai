@@ -173,11 +173,15 @@ Registry 변경이 들어올 수 있으므로, 준비된 Registry와 AudioEngine
 Source 전환만 실패했다면 Engine과 Registry를 기존 Region 상태로 되돌린다.
 
 단건 `restoreCommitted`는 원자적인 프로젝트 불러오기 API가 아니다. `beginReplacement`는 분리된 Registry에 Source와
-Region 연결을 준비하고, `prepareProjectGraph`는 출력 gate가 닫힌 새 Track input·Channel과 Player를 디코딩·예약한다.
+Region 연결을 준비하고, `prepareProjectGraph`는 출력 gate가 닫힌 새 Track input·Plugin runtime·Channel과 Player를
+준비한다. Plugin runtime은 전달된 순서대로 연결하며 manifest factory 누락, 중복 instance ID, 잘못된 Parameter가 있으면
+후보 그래프만 정리하고 준비를 거부한다. 활성화·비활성화 lifecycle은 아직 없으므로 `isEnabled=false`도 명시적으로 거부한다.
 실시간 재생은 `Player → Track input → Plugin runtime[] → Channel → output` 순서를 사용한다. Plugin이 없으면 Track input이
-Channel에 직접 연결된다. 프로젝트 그래프 준비와 Export는 현재 Plugin 상태를 입력으로 받지 않으므로
-`Player → Track input → Channel → output` 순서를 유지한다. ProjectDocument v1과 Export에 Plugin 처리를 추가하기 전까지
-불러온 프로젝트와 내보낸 파일에는 실시간 Plugin chain이 반영되지 않는다. 준비 실패나
+Channel에 직접 연결된다. ProjectController도 Session Plugin 상태를 준비 요청으로 바꾸지만 현재 활성 Mapper가 v1 문서의
+Plugin 배열을 비워 두므로 저장 프로젝트에는 아직 이 경로가 사용되지 않는다. Export도 Plugin 상태를 입력으로 받지 않는다.
+프로젝트 그래프 계약은 manifest version 호환성을 판단하지 않는다. v2 Mapper 전환 전 등록 manifest와 저장 version의 정확한
+호환성 검증을 별도로 추가해야 한다. v2 Mapper 전환과 Export Plugin 처리를 추가하기 전까지 불러온 프로젝트와 내보낸 파일에는
+Plugin chain이 반영되지 않는다. 준비 실패나
 active revision 변경에서는 기존 Registry와 AudioEngine 그래프를 유지한다. Controller는 두 prepared 대상의
 `assertActivatable`을 먼저 모두 통과시킨 뒤, 중간 `await` 없이 Engine → Registry → Session 순서로 활성화해야 한다.
 Engine 활성화 중 Transport나 출력 gate 변경이 실패하면 기존 재생 상태와 gate를 보상하고 교체를 거부한다. 이전 그래프와

@@ -211,6 +211,28 @@ export class MockAudioEngine implements IAudioEngine {
         }
         trackRegions.set(region.id, this.cloneRegionData(region));
       });
+      const trackPlugins = new Map<string, MockPluginState>();
+      track.pluginInstances.forEach(instance => {
+        if (trackPlugins.has(instance.instanceId)) {
+          throw new AudioEngineError(
+            AudioEngineErrorCode.PLUGIN_INSTANCE_ID_CONFLICT,
+            ERROR_MESSAGES.PLUGIN_INSTANCE_ID_CONFLICT,
+            { instanceId: instance.instanceId, trackId: track.id }
+          );
+        }
+        if (!instance.isEnabled) {
+          throw new AudioEngineError(
+            AudioEngineErrorCode.PLUGIN_BYPASS_UNSUPPORTED,
+            ERROR_MESSAGES.PLUGIN_BYPASS_UNSUPPORTED,
+            { instanceId: instance.instanceId, trackId: track.id }
+          );
+        }
+
+        trackPlugins.set(instance.instanceId, {
+          manifestId: instance.manifestId,
+          parameters: new Map(instance.parameterValues),
+        });
+      });
       nextTracks.set(track.id, {
         muted: track.isMuted,
         pan: track.pan,
@@ -218,7 +240,7 @@ export class MockAudioEngine implements IAudioEngine {
         volume: track.volume,
       });
       nextRegions.set(track.id, trackRegions);
-      nextPlugins.set(track.id, new Map());
+      nextPlugins.set(track.id, trackPlugins);
     });
 
     let retiredGraph: IRetiredAudioProjectGraph | undefined;
