@@ -13,17 +13,20 @@ export const input = style({
 });
 
 export const button = style({
-  padding: '4px 8px',
-  border: 'none',
-  borderRadius: '4px',
-  backgroundColor: '#333333',
-  color: '#ffffff',
+  height: '24px',
+  padding: '0 7px',
+  border: '1px solid #111416',
+  borderRadius: '2px',
+  background: 'linear-gradient(180deg, #414649 0%, #303437 100%)',
+  boxShadow: 'inset 0 1px 0 #555b5e',
+  color: '#d7dadb',
   cursor: 'pointer',
-  fontSize: '12px',
+  fontSize: '9px',
+  fontWeight: 700,
   selectors: {
     '&:disabled': {
       cursor: 'wait',
-      opacity: 0.5,
+      opacity: 0.4,
     },
   },
 });

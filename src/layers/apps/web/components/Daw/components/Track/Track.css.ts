@@ -1,64 +1,157 @@
 import { style } from '@vanilla-extract/css';
 
-export const controls = style({
-  display: 'flex',
-  flexWrap: 'wrap',
+const TRACK_HEADER_WIDTH = '248px';
+const TIMELINE_MIN_WIDTH = '640px';
+
+const controlButton = style({
+  minWidth: '26px',
+  height: '24px',
+  padding: '0 7px',
+  display: 'inline-flex',
   alignItems: 'center',
-  gap: '12px',
-  justifyContent: 'space-between',
+  justifyContent: 'center',
+  border: '1px solid #111416',
+  borderRadius: '2px',
+  background: 'linear-gradient(180deg, #414649 0%, #303437 100%)',
+  boxShadow: 'inset 0 1px 0 #555b5e',
+  color: '#d7dadb',
+  cursor: 'pointer',
+  fontSize: '10px',
+  fontWeight: 700,
+  letterSpacing: '0.04em',
+  selectors: {
+    '&:hover': {
+      background: 'linear-gradient(180deg, #4a5053 0%, #383d40 100%)',
+      color: '#ffffff',
+    },
+    '&:focus-visible': {
+      outline: '1px solid #ff78e3',
+      outlineOffset: '-2px',
+    },
+    '&:disabled': {
+      opacity: 0.38,
+      cursor: 'not-allowed',
+    },
+  },
+});
+
+export const trackRow = style({
+  display: 'grid',
+  gridTemplateColumns: `${TRACK_HEADER_WIDTH} minmax(${TIMELINE_MIN_WIDTH}, 1fr)`,
+  minWidth: `calc(${TRACK_HEADER_WIDTH} + ${TIMELINE_MIN_WIDTH})`,
+  minHeight: '128px',
+  borderBottom: '1px solid #090b0c',
+  backgroundColor: '#1c1f21',
+});
+
+export const trackHeader = style({
+  minWidth: 0,
+  padding: '7px 8px 7px 30px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  alignSelf: 'stretch',
+  overflow: 'hidden',
+  borderRight: '1px solid #080a0b',
+  background: 'linear-gradient(90deg, #2a2e30 0%, #25292b 100%)',
+  boxShadow: 'inset -1px 0 0 #3a3f42, inset 0 1px 0 #383d40',
+});
+
+export const trackTimeline = style({
+  position: 'relative',
+  minWidth: 0,
+  minHeight: '128px',
+  overflow: 'hidden',
+  backgroundColor: '#202426',
+  backgroundImage:
+    'linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px), linear-gradient(to bottom, transparent 49.5%, rgba(255, 255, 255, 0.035) 50%, transparent 50.5%)',
+  backgroundSize: '100% 24px, 100% 100%',
+});
+
+export const actionControls = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+  minWidth: 0,
+});
+
+export const trackActionButton = style([controlButton]);
+
+export const muteButtonActive = style({
+  borderColor: '#42251e',
+  background: 'linear-gradient(180deg, #a85943 0%, #804131 100%)',
+  boxShadow: 'inset 0 1px 0 #ca755f',
+  color: '#fff4ee',
+});
+
+export const soloButtonActive = style({
+  borderColor: '#6f245d',
+  background: 'linear-gradient(180deg, #e654c7 0%, #a72f8d 100%)',
+  boxShadow: 'inset 0 1px 0 #ff8fe8',
+  color: '#fff5fd',
+});
+
+export const dangerButton = style({
+  marginLeft: 'auto',
+  color: '#d9a39b',
+});
+
+export const mixControls = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+  padding: '5px 6px',
+  border: '1px solid #171a1c',
+  backgroundColor: '#202426',
+});
+
+export const controls = style({
+  width: '100%',
+  minWidth: 0,
 });
 
 export const controlGroup = style({
-  display: 'flex',
+  width: '100%',
+  display: 'grid',
+  gridTemplateColumns: '40px minmax(72px, 1fr) 44px',
   alignItems: 'center',
-  gap: '8px',
-  flexWrap: 'wrap',
+  gap: '5px',
 });
 
-export const actionButton = style({
-  backgroundColor: '#1a1a1a',
-  color: '#ffffff',
-  border: '1px solid #2c2c2c',
-  borderRadius: '4px',
-  padding: '6px 10px',
-  cursor: 'pointer',
-  fontSize: '0.85rem',
-  transition: 'all 0.15s ease',
-  ':hover': {
-    borderColor: '#3a7bfd',
-    color: '#bcd2ff',
-  },
-  ':disabled': {
-    opacity: 0.5,
-    cursor: 'not-allowed',
-  },
-});
+export const actionButton = style([controlButton]);
 
 export const sliderLabel = style({
-  color: '#aaaaaa',
-  fontSize: '0.8rem',
+  color: '#aeb3b5',
+  fontSize: '9px',
+  fontWeight: 700,
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase',
 });
 
 export const slider = style({
+  width: '100%',
+  minWidth: 0,
+  height: '3px',
   appearance: 'none',
-  height: '4px',
-  background: '#2b2b2b',
-  borderRadius: '2px',
+  border: '1px solid #0d0f10',
+  borderRadius: 0,
+  background: '#111416',
   outline: 'none',
-  width: '140px',
   '::-webkit-slider-thumb': {
+    width: '7px',
+    height: '15px',
     appearance: 'none',
-    width: '14px',
-    height: '14px',
-    borderRadius: '50%',
-    background: '#3a7bfd',
-    border: '1px solid #5a8cff',
+    border: '1px solid #171a1c',
+    borderRadius: '1px',
+    background: '#aeb4b7',
+    boxShadow: 'inset 1px 0 0 #e0e3e4',
   },
 });
 
 export const sliderValue = style({
-  color: '#888888',
-  fontSize: '0.75rem',
-  minWidth: '40px',
+  minWidth: 0,
+  color: '#ff78e3',
+  fontFamily: '"Consolas", "SFMono-Regular", monospace',
+  fontSize: '9px',
   textAlign: 'right',
 });

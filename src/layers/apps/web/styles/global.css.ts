@@ -1,4 +1,4 @@
-import { globalStyle, keyframes } from '@vanilla-extract/css';
+import { globalStyle } from '@vanilla-extract/css';
 
 globalStyle('*', {
   boxSizing: 'border-box',
@@ -19,36 +19,30 @@ globalStyle('body', {
   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   WebkitFontSmoothing: 'antialiased',
   MozOsxFontSmoothing: 'grayscale',
-  backgroundColor: '#000000',
+  backgroundColor: '#111315',
+  colorScheme: 'dark',
 });
 
-// 전역 스크롤바 스타일
 globalStyle('::-webkit-scrollbar', {
-  width: '8px',
-  height: '8px',
+  width: '10px',
+  height: '10px',
 });
 
 globalStyle('::-webkit-scrollbar-track', {
-  backgroundColor: 'transparent',
+  backgroundColor: '#171a1c',
 });
 
 globalStyle('::-webkit-scrollbar-thumb', {
-  backgroundColor: '#333333',
-  borderRadius: '4px',
-  border: '1px solid rgba(255, 255, 255, 0.05)',
+  backgroundColor: '#414649',
+  border: '2px solid #171a1c',
+  borderRadius: 0,
 });
 
 globalStyle('::-webkit-scrollbar-thumb:hover', {
-  backgroundColor: '#444444',
+  backgroundColor: '#555b5e',
 });
 
-export const wave = keyframes({
-  '0%, 100%': {
-    transform: 'translateY(0)',
-    opacity: 0.5,
-  },
-  '50%': {
-    transform: 'translateY(-20px)',
-    opacity: 0.8,
-  },
+globalStyle('::selection', {
+  backgroundColor: '#8b2f78',
+  color: '#ffffff',
 });

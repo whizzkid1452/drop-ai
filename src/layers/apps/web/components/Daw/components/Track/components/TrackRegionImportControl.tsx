@@ -108,7 +108,7 @@ export function TrackRegionImportControl({
         title="현재 재생 위치에 오디오 Region을 추가합니다."
         onClick={() => inputRef.current?.click()}
       >
-        {isPending ? 'Region 추가 중…' : 'Region 추가'}
+        {isPending ? '…' : '+ AUDIO'}
       </button>
     </>
   );

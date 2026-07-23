@@ -25,6 +25,18 @@ vi.mock('./RegionComponent', () => ({
   RegionComponent: () => null,
 }));
 
+vi.mock('./Track.css.ts', () => ({
+  actionControls: 'actionControls',
+  dangerButton: 'dangerButton',
+  mixControls: 'mixControls',
+  muteButtonActive: 'muteButtonActive',
+  soloButtonActive: 'soloButtonActive',
+  trackActionButton: 'trackActionButton',
+  trackHeader: 'trackHeader',
+  trackRow: 'trackRow',
+  trackTimeline: 'trackTimeline',
+}));
+
 vi.mock('./components/TrackPanController', () => ({
   TrackPanController: () => null,
 }));
@@ -117,6 +129,32 @@ afterEach(() => {
 });
 
 describe('TrackComponent 제어', () => {
+  it('Track 제어부와 타임라인을 하나의 편집 행으로 렌더링한다', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    mountedRoots.push(root);
+
+    act(() => {
+      root.render(
+        createElement(TrackComponent, {
+          mediaElement: null,
+          track,
+          pixelsPerSecond: 100,
+          onReady: vi.fn(),
+          onVolumeChange: vi.fn(),
+          onPanChange: vi.fn(),
+          onMuteChange: vi.fn().mockResolvedValue('updated'),
+          onSoloChange: vi.fn().mockResolvedValue('updated'),
+          onRemoveTrack: vi.fn().mockResolvedValue('cancelled'),
+        })
+      );
+    });
+
+    expect(host.querySelector(`article[aria-label="Track ${track.name}"]`)).not.toBeNull();
+    expect(host.querySelector(`[aria-label="${track.name} timeline"]`)).not.toBeNull();
+  });
+
   it('현재 Track ID와 Plugin 인스턴스를 Plugin 제어에 전달한다', () => {
     const pluginInstance: PluginInstanceState = {
       id: '22222222-2222-4222-8222-222222222222',

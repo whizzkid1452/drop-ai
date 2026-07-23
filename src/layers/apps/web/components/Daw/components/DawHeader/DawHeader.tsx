@@ -3,6 +3,7 @@ import { ExportButton } from '../ExportButton/ExportButton';
 import { LoadProjectControl } from '../LoadProjectControl/LoadProjectControl';
 import { SaveProjectButton } from '../SaveProjectButton/SaveProjectButton';
 import { UndoRedoControls } from '../UndoRedoControls/UndoRedoControls';
+import { PlaybackControls } from '../PlaybackControls/PlaybackControls';
 import { AudioRuntimeStatus } from './AudioRuntimeStatus';
 import { MasterVolumeControl } from './MasterVolumeControl';
 import { TempoMetadataControl } from './TempoMetadataControl';
@@ -13,18 +14,32 @@ interface DawHeaderProps {
 
 export function DawHeader({ trackCount }: DawHeaderProps) {
   return (
-    <div className={styles.header}>
-      <h1 className={styles.title}>Tracks</h1>
-      <div className={styles.headerRight}>
-        <AudioRuntimeStatus />
-        <MasterVolumeControl />
-        <TempoMetadataControl />
-        <span className={styles.trackCount}>{trackCount} tracks</span>
-        <UndoRedoControls />
-        <LoadProjectControl />
-        <SaveProjectButton />
-        <ExportButton />
+    <header className={styles.header}>
+      <div className={styles.projectBar}>
+        <div className={styles.headerIdentity}>
+          <span className={styles.productName}>DROP.AI</span>
+          <span className={styles.workspaceName}>EDITOR</span>
+        </div>
+        <div className={styles.projectActions}>
+          <UndoRedoControls />
+          <LoadProjectControl />
+          <SaveProjectButton />
+          <ExportButton />
+        </div>
       </div>
-    </div>
+      <div className={styles.transportBar}>
+        <div className={styles.runtimeSection}>
+          <AudioRuntimeStatus />
+        </div>
+        <div className={styles.transportSection} aria-label="Transport">
+          <PlaybackControls layout="inline" />
+        </div>
+        <div className={styles.statusSection}>
+          <MasterVolumeControl />
+          <TempoMetadataControl />
+          <span className={styles.trackCount}>{trackCount} tracks</span>
+        </div>
+      </div>
+    </header>
   );
 }

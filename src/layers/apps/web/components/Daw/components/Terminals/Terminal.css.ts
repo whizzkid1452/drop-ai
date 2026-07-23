@@ -1,21 +1,20 @@
 import { style } from '@vanilla-extract/css';
 
 export const container = style({
+  position: 'relative',
+  height: '100%',
   display: 'flex',
   flexDirection: 'column',
-  height: '100%',
-  backgroundColor: 'rgba(15, 15, 20, 0.95)',
-  backdropFilter: 'blur(10px)',
-  borderLeft: '1px solid rgba(255, 255, 255, 0.1)',
-  color: '#e0e0e0',
   overflow: 'hidden',
-  position: 'relative',
+  borderLeft: '1px solid #080a0b',
+  backgroundColor: '#1b1f21',
+  color: '#d2d4d5',
 });
 
 export const content = style({
   flex: 1,
   overflow: 'hidden',
-  paddingBottom: '40px', // Space for the toggle button
+  paddingBottom: '32px',
 });
 
 export const footer = style({
@@ -23,39 +22,34 @@ export const footer = style({
   bottom: 0,
   left: 0,
   right: 0,
-  height: '40px',
+  height: '32px',
+  padding: '4px 6px',
   display: 'flex',
-  justifyContent: 'center',
   alignItems: 'center',
-  background: 'rgba(26, 26, 26, 0.8)',
-  borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-  padding: '0 8px',
+  borderTop: '1px solid #0d0f10',
+  background: '#24282a',
 });
 
 export const toggleButton = style({
   width: '100%',
-  height: '32px',
-  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-  border: '1px solid rgba(255, 255, 255, 0.1)',
-  borderRadius: '4px',
-  color: '#888',
-  fontSize: '11px',
-  fontWeight: 600,
-  cursor: 'pointer',
-  transition: 'all 0.2s ease',
+  height: '24px',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  gap: '8px',
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
+  gap: '6px',
+  border: '1px solid #111416',
+  borderRadius: '2px',
+  background: 'linear-gradient(180deg, #3b4043 0%, #2c3032 100%)',
+  color: '#7f8689',
+  cursor: 'pointer',
+  fontSize: '9px',
+  fontWeight: 700,
+  letterSpacing: '0.08em',
   ':hover': {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    color: '#f0f0f0',
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    color: '#d8dadb',
   },
 });
 
 export const activeIndicator = style({
-  color: '#00ccff',
+  color: '#ff4fd8',
 });

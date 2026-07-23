@@ -12,6 +12,7 @@ import { TrackPluginControls } from './components/TrackPluginControls';
 import { TrackRegionImportControl } from './components/TrackRegionImportControl';
 import { TrackVolumeController } from './components/TrackVolumeController';
 import { RegionComponent } from './RegionComponent';
+import * as styles from './Track.css.ts';
 
 export const TrackComponent = memo(function TrackComponent({
   mediaElement,
@@ -100,9 +101,69 @@ export const TrackComponent = memo(function TrackComponent({
   };
 
   return (
-    <>
-      <TrackNameControl trackId={track.id} name={track.name} />
-      <div style={{ position: 'relative', height: '128px', width: '100%' }}>
+    <article className={styles.trackRow} aria-label={`Track ${track.name}`}>
+      <div className={styles.trackHeader}>
+        <TrackNameControl trackId={track.id} name={track.name} />
+        <div className={styles.actionControls}>
+          <button
+            type="button"
+            className={`${styles.trackActionButton} ${track.isMuted ? styles.muteButtonActive : ''}`}
+            aria-label="Track Mute"
+            aria-pressed={track.isMuted}
+            disabled={isMutePending || isRemovingTrack || isImportingRegion}
+            onClick={() => void handleMuteChange()}
+            title="Mute"
+          >
+            M
+          </button>
+          <button
+            type="button"
+            className={`${styles.trackActionButton} ${track.isSoloed ? styles.soloButtonActive : ''}`}
+            aria-label="Track Solo"
+            aria-pressed={track.isSoloed}
+            disabled={isSoloPending || isRemovingTrack || isImportingRegion}
+            onClick={() => void handleSoloChange()}
+            title="Solo"
+          >
+            S
+          </button>
+          {mediaElement ? (
+            <button
+              type="button"
+              className={styles.trackActionButton}
+              disabled={!splitRegionId}
+              onClick={handleSplit}
+              title="Split region at playhead"
+            >
+              SPLIT
+            </button>
+          ) : null}
+          <TrackRegionImportControl
+            trackId={track.id}
+            disabled={isRemovingTrack}
+            onPendingChange={setIsImportingRegion}
+          />
+          <button
+            type="button"
+            className={`${styles.trackActionButton} ${styles.dangerButton}`}
+            aria-label="Track 삭제"
+            aria-busy={isRemovingTrack}
+            disabled={isRemovingTrack || isImportingRegion}
+            onClick={() => void handleRemoveTrack()}
+            title="Delete track"
+          >
+            {isRemovingTrack ? '…' : '×'}
+          </button>
+        </div>
+        {mediaElement ? (
+          <div className={styles.mixControls}>
+            <TrackVolumeController volume={track.volume ?? 1} onVolumeChange={val => onVolumeChange(track.id, val)} />
+            <TrackPanController pan={track.pan ?? 0} onPanChange={val => onPanChange(track.id, val)} />
+          </div>
+        ) : null}
+        <TrackPluginControls trackId={track.id} pluginInstances={track.pluginInstances} />
+      </div>
+      <div className={styles.trackTimeline} aria-label={`${track.name} timeline`}>
         {track.regions.map(region => (
           <RegionComponent
             key={region.id}
@@ -114,94 +175,6 @@ export const TrackComponent = memo(function TrackComponent({
           />
         ))}
       </div>
-      {/* Volume Controller: Updates Store AND AudioEngine */}
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '8px' }}>
-        {mediaElement ? (
-          <>
-            <TrackVolumeController volume={track.volume ?? 1} onVolumeChange={val => onVolumeChange(track.id, val)} />
-            <TrackPanController pan={track.pan ?? 0} onPanChange={val => onPanChange(track.id, val)} />
-            <button
-              disabled={!splitRegionId}
-              onClick={handleSplit}
-              style={{
-                padding: '4px 8px',
-                fontSize: '12px',
-                backgroundColor: '#333',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: splitRegionId ? 'pointer' : 'not-allowed',
-                opacity: splitRegionId ? 1 : 0.5,
-              }}
-            >
-              Split
-            </button>
-          </>
-        ) : null}
-        <TrackRegionImportControl
-          trackId={track.id}
-          disabled={isRemovingTrack}
-          onPendingChange={setIsImportingRegion}
-        />
-        <button
-          type="button"
-          aria-label="Track Mute"
-          aria-pressed={track.isMuted}
-          disabled={isMutePending || isRemovingTrack || isImportingRegion}
-          onClick={() => void handleMuteChange()}
-          style={{
-            padding: '4px 8px',
-            fontSize: '12px',
-            backgroundColor: track.isMuted ? '#8a3b3b' : '#333',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: isMutePending || isRemovingTrack || isImportingRegion ? 'wait' : 'pointer',
-            opacity: isMutePending || isRemovingTrack || isImportingRegion ? 0.5 : 1,
-          }}
-        >
-          Mute
-        </button>
-        <button
-          type="button"
-          aria-label="Track Solo"
-          aria-pressed={track.isSoloed}
-          disabled={isSoloPending || isRemovingTrack || isImportingRegion}
-          onClick={() => void handleSoloChange()}
-          style={{
-            padding: '4px 8px',
-            fontSize: '12px',
-            backgroundColor: track.isSoloed ? '#8a6d1b' : '#333',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: isSoloPending || isRemovingTrack || isImportingRegion ? 'wait' : 'pointer',
-            opacity: isSoloPending || isRemovingTrack || isImportingRegion ? 0.5 : 1,
-          }}
-        >
-          Solo
-        </button>
-        <button
-          type="button"
-          aria-label="Track 삭제"
-          aria-busy={isRemovingTrack}
-          disabled={isRemovingTrack || isImportingRegion}
-          onClick={() => void handleRemoveTrack()}
-          style={{
-            padding: '4px 8px',
-            fontSize: '12px',
-            backgroundColor: '#333',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: isRemovingTrack || isImportingRegion ? 'wait' : 'pointer',
-            opacity: isRemovingTrack || isImportingRegion ? 0.5 : 1,
-          }}
-        >
-          {isRemovingTrack ? '삭제 중…' : 'Track 삭제'}
-        </button>
-      </div>
-      <TrackPluginControls trackId={track.id} pluginInstances={track.pluginInstances} />
-    </>
+    </article>
   );
 });

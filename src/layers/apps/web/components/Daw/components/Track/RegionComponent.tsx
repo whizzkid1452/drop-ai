@@ -192,9 +192,9 @@ export const RegionComponent = ({
           }}
         >
           <WavesurferPlayer
-            height={100}
-            waveColor="#555"
-            progressColor="#555"
+            height={126}
+            waveColor="#ff8fe8"
+            progressColor="#ffc4f2"
             url={audioSourceUrl}
             onReady={onReady}
             interact={false}

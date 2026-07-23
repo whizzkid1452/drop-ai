@@ -11,6 +11,7 @@ const componentMocks = vi.hoisted(() => ({
   saveProjectButton: vi.fn(() => null),
   loadProjectControl: vi.fn(() => null),
   undoRedoControls: vi.fn(() => null),
+  playbackControls: vi.fn(() => null),
 }));
 
 vi.mock('./AudioRuntimeStatus', () => ({
@@ -33,6 +34,10 @@ vi.mock('../UndoRedoControls/UndoRedoControls', () => ({
   UndoRedoControls: componentMocks.undoRedoControls,
 }));
 
+vi.mock('../PlaybackControls/PlaybackControls', () => ({
+  PlaybackControls: componentMocks.playbackControls,
+}));
+
 vi.mock('./TempoMetadataControl', () => ({
   TempoMetadataControl: () => null,
 }));
@@ -43,6 +48,15 @@ vi.mock('./MasterVolumeControl', () => ({
 
 vi.mock('../../DawPage.css.ts', () => ({
   header: 'header',
+  headerIdentity: 'headerIdentity',
+  productName: 'productName',
+  workspaceName: 'workspaceName',
+  projectBar: 'projectBar',
+  transportBar: 'transportBar',
+  runtimeSection: 'runtimeSection',
+  transportSection: 'transportSection',
+  statusSection: 'statusSection',
+  projectActions: 'projectActions',
   headerRight: 'headerRight',
   title: 'title',
   trackCount: 'trackCount',
@@ -66,6 +80,7 @@ afterEach(() => {
   componentMocks.saveProjectButton.mockClear();
   componentMocks.loadProjectControl.mockClear();
   componentMocks.undoRedoControls.mockClear();
+  componentMocks.playbackControls.mockClear();
 });
 
 describe('DawHeader', () => {
@@ -82,5 +97,6 @@ describe('DawHeader', () => {
     expect(componentMocks.saveProjectButton).toHaveBeenCalledTimes(1);
     expect(componentMocks.loadProjectControl).toHaveBeenCalledTimes(1);
     expect(componentMocks.undoRedoControls).toHaveBeenCalledTimes(1);
+    expect(componentMocks.playbackControls).toHaveBeenCalledWith({ layout: 'inline' }, undefined);
   });
 });

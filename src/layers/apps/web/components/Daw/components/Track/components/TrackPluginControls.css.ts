@@ -1,102 +1,116 @@
 import { style } from '@vanilla-extract/css';
 
+const pluginButton = style({
+  height: '22px',
+  padding: '0 6px',
+  border: '1px solid #101214',
+  borderRadius: '2px',
+  background: 'linear-gradient(180deg, #3e4346 0%, #2d3133 100%)',
+  boxShadow: 'inset 0 1px 0 #505659',
+  color: '#d6d8d9',
+  cursor: 'pointer',
+  fontSize: '9px',
+  selectors: {
+    '&:disabled': {
+      opacity: 0.4,
+      cursor: 'wait',
+    },
+  },
+});
+
 export const container = style({
   display: 'flex',
   flexDirection: 'column',
-  gap: '8px',
-  marginTop: '8px',
-  padding: '8px',
-  border: '1px solid #2c2c2c',
-  borderRadius: '6px',
-  backgroundColor: '#151515',
+  gap: '4px',
+  minWidth: 0,
+  padding: '5px',
+  border: '1px solid #151819',
+  borderRadius: 0,
+  backgroundColor: '#1f2325',
 });
 
 export const header = style({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  gap: '8px',
-  flexWrap: 'wrap',
+  gap: '5px',
+  minWidth: 0,
 });
 
 export const title = style({
-  color: '#f0f0f0',
-  fontSize: '0.8rem',
+  flexShrink: 0,
+  color: '#9ca2a5',
+  fontSize: '9px',
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
 });
 
 export const addControls = style({
   display: 'flex',
-  gap: '6px',
+  gap: '3px',
+  minWidth: 0,
 });
 
 export const select = style({
-  minWidth: '100px',
-  padding: '4px 6px',
-  color: '#ffffff',
-  backgroundColor: '#242424',
-  border: '1px solid #3a3a3a',
-  borderRadius: '4px',
+  minWidth: 0,
+  maxWidth: '120px',
+  height: '22px',
+  padding: '0 4px',
+  border: '1px solid #111416',
+  borderRadius: '2px',
+  backgroundColor: '#171a1c',
+  color: '#d8dadb',
+  fontSize: '9px',
 });
 
-const button = style({
-  padding: '4px 8px',
-  color: '#ffffff',
-  backgroundColor: '#333333',
-  border: '1px solid #444444',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  ':disabled': {
-    opacity: 0.5,
-    cursor: 'wait',
-  },
-});
-
-export const addButton = style([button]);
+export const addButton = style([pluginButton]);
 
 export const removeButton = style([
-  button,
+  pluginButton,
   {
-    color: '#ffb8b8',
+    color: '#dda79f',
   },
 ]);
 
-export const toggleButton = style([button]);
+export const toggleButton = style([pluginButton]);
 
 export const instanceList = style({
   display: 'flex',
   flexDirection: 'column',
-  gap: '6px',
+  gap: '3px',
 });
 
 export const instance = style({
   display: 'flex',
   flexDirection: 'column',
-  gap: '6px',
-  padding: '6px',
-  backgroundColor: '#1d1d1d',
-  borderRadius: '4px',
+  gap: '4px',
+  padding: '4px',
+  border: '1px solid #151819',
+  backgroundColor: '#262a2c',
 });
 
 export const instanceHeader = style({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  color: '#dddddd',
-  fontSize: '0.78rem',
+  gap: '4px',
+  color: '#d7d9da',
+  fontSize: '9px',
 });
 
 export const instanceActions = style({
   display: 'flex',
-  gap: '4px',
+  gap: '2px',
 });
 
 export const parameter = style({
   display: 'grid',
-  gridTemplateColumns: 'minmax(72px, auto) minmax(100px, 1fr) auto',
+  gridTemplateColumns: '52px minmax(54px, 1fr) 32px',
   alignItems: 'center',
-  gap: '8px',
-  color: '#bbbbbb',
-  fontSize: '0.75rem',
+  gap: '4px',
+  minWidth: 0,
+  color: '#aeb3b5',
+  fontSize: '9px',
 });
 
 export const parameterName = style({
@@ -106,12 +120,15 @@ export const parameterName = style({
 });
 
 export const parameterValue = style({
-  minWidth: '32px',
-  color: '#8eb2ff',
+  minWidth: 0,
+  overflow: 'hidden',
+  color: '#ff78e3',
+  fontFamily: '"Consolas", "SFMono-Regular", monospace',
   textAlign: 'right',
+  textOverflow: 'ellipsis',
 });
 
 export const emptyMessage = style({
-  color: '#888888',
-  fontSize: '0.72rem',
+  color: '#777d80',
+  fontSize: '9px',
 });

@@ -5,41 +5,45 @@ export const container = style({
   height: '100%',
   display: 'flex',
   flexDirection: 'column',
-  backgroundColor: '#0f0f0f',
-  borderRight: '1px solid #333',
-  color: '#e0e0e0',
-  fontFamily: '"Fira Code", monospace',
-  fontSize: '12px',
+  borderRight: '1px solid #080a0b',
+  backgroundColor: '#1e2224',
+  color: '#c9cccd',
+  fontFamily: '"Consolas", "SFMono-Regular", monospace',
+  fontSize: '10px',
 });
 
 export const titleBar = style({
-  padding: '8px 12px',
-  backgroundColor: '#1a1a1a',
-  borderBottom: '1px solid #333',
-  fontSize: '12px',
-  fontWeight: 600,
-  color: '#888',
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
+  minHeight: '32px',
+  padding: '0 10px',
+  display: 'flex',
+  alignItems: 'center',
+  borderBottom: '1px solid #0d0f10',
+  background: 'linear-gradient(180deg, #313537 0%, #272b2d 100%)',
+  boxShadow: 'inset 0 1px 0 #414649',
+  color: '#c1c5c7',
+  fontSize: '9px',
+  fontWeight: 700,
+  letterSpacing: '0.1em',
 });
 
 export const contentArea = style({
   flex: 1,
   overflowY: 'auto',
-  padding: '12px',
+  padding: '8px',
 });
 
 export const pre = style({
   margin: 0,
+  color: '#aeb4b7',
+  lineHeight: 1.45,
   whiteSpace: 'pre-wrap',
   wordBreak: 'break-all',
-  lineHeight: '1.4',
 });
 
 export const emptyMessage = style({
-  padding: '24px',
+  padding: '24px 10px',
+  color: '#72797c',
+  fontSize: '10px',
+  lineHeight: 1.5,
   textAlign: 'center',
-  color: '#666',
-  fontSize: '12px',
-  fontStyle: 'italic',
 });

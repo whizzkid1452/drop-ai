@@ -2,11 +2,11 @@ import { style } from '@vanilla-extract/css';
 
 export const status = style({
   border: '1px solid',
-  borderRadius: '999px',
-  fontSize: '0.6875rem',
+  borderRadius: '2px',
+  fontSize: '9px',
   fontWeight: 600,
-  letterSpacing: '0.02em',
-  padding: '5px 9px',
+  letterSpacing: '0.05em',
+  padding: '5px 7px',
   whiteSpace: 'nowrap',
 });
 

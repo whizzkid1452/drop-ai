@@ -131,7 +131,7 @@ export const progressBar = style({
   left: 0,
   height: '100%',
   backgroundColor: primaryColor,
-  boxShadow: `0 0 8px rgba(13, 223, 242, 0.6)`,
+  boxShadow: '0 0 8px rgba(255, 79, 216, 0.55)',
 });
 
 export const statusStrip = style({

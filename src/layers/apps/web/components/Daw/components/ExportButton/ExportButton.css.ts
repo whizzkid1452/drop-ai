@@ -2,79 +2,61 @@ import { style } from '@vanilla-extract/css';
 
 export const container = style({
   display: 'flex',
-  flexDirection: 'column',
-  gap: '8px',
+  alignItems: 'center',
+  gap: '4px',
 });
 
 export const exportButton = style({
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '8px',
-  padding: '0.625rem 1.5rem',
-  backgroundColor: '#1a1a1a',
-  color: '#ffffff',
-  border: '1px solid #333333',
+  minWidth: '66px',
+  height: '24px',
+  padding: '0 10px',
+  border: '1px solid #6f245d',
   borderRadius: '2px',
-  fontSize: '0.875rem',
-  fontWeight: '400',
+  background: 'linear-gradient(180deg, #e654c7 0%, #a72f8d 100%)',
+  boxShadow: 'inset 0 1px 0 #ff8fe8',
+  color: '#fff5fd',
   cursor: 'pointer',
-  transition: 'all 0.15s ease',
-  minWidth: '120px',
-  minHeight: '36px',
-  position: 'relative',
-  overflow: 'hidden',
-  textTransform: 'uppercase',
+  fontSize: '9px',
+  fontWeight: 700,
   letterSpacing: '0.05em',
-
+  textTransform: 'uppercase',
   ':hover': {
-    backgroundColor: '#222222',
-    borderColor: '#444444',
+    background: 'linear-gradient(180deg, #f36bd5 0%, #bd3da1 100%)',
   },
-
   ':disabled': {
-    backgroundColor: '#0a0a0a',
-    borderColor: '#222222',
-    color: '#444444',
+    borderColor: '#202325',
+    background: '#292d2f',
+    color: '#646a6d',
     cursor: 'not-allowed',
-    opacity: 0.5,
   },
 });
 
 export const buttonText = style({
-  color: '#fff',
+  color: '#fff5fd',
 });
 
 export const progressText = style({
-  color: '#fff',
-  fontSize: '14px',
-  fontWeight: '500',
+  color: '#fff5fd',
+  fontSize: '9px',
 });
 
 export const progressBar = style({
   width: '100%',
   height: '2px',
-  backgroundColor: '#333333',
-  borderRadius: '1px',
   overflow: 'hidden',
+  backgroundColor: '#292d2f',
 });
 
 export const progressFill = style({
   height: '100%',
-  backgroundColor: '#888888',
-  transition: 'width 0.3s ease',
-  borderRadius: '1px',
+  backgroundColor: '#ff4fd8',
+  transition: 'width 150ms ease',
 });
 
 export const errorMessage = style({
-  padding: '8px 12px',
-  backgroundColor: '#1a0a0a',
-  color: '#ff4444',
-  borderRadius: '2px',
-  fontSize: '0.75rem',
-  fontWeight: '400',
-  border: '1px solid #ff4444',
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
+  padding: '4px 6px',
+  border: '1px solid #8b3f34',
+  backgroundColor: '#3b201d',
+  color: '#e49a8f',
+  fontSize: '9px',
 });

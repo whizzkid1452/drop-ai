@@ -19,7 +19,7 @@ export function TrackInfoSidebar() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.titleBar}>Track Store Info</div>
+      <div className={styles.titleBar}>TRACK STATE</div>
       <div className={styles.contentArea}>
         {tracks.length === 0 ? (
           <div className={styles.emptyMessage}>No tracks available. Add audio files to see track information.</div>

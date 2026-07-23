@@ -3,40 +3,45 @@ import { style } from '@vanilla-extract/css';
 export const container = style({
   display: 'flex',
   alignItems: 'center',
-  gap: '8px',
+  gap: '4px',
 });
 
 export const button = style({
-  minWidth: '90px',
-  minHeight: '36px',
-  padding: '0.625rem 1rem',
-  border: '1px solid #333333',
+  height: '24px',
+  padding: '0 9px',
+  border: '1px solid #0f1112',
   borderRadius: '2px',
-  backgroundColor: '#1a1a1a',
-  color: '#ffffff',
+  background: 'linear-gradient(180deg, #3d4245 0%, #2d3133 100%)',
+  boxShadow: 'inset 0 1px 0 #505659',
+  color: '#d6d8d9',
   cursor: 'pointer',
-  fontSize: '0.875rem',
+  fontSize: '9px',
+  fontWeight: 700,
   letterSpacing: '0.05em',
   textTransform: 'uppercase',
-
   ':hover': {
-    backgroundColor: '#222222',
-    borderColor: '#444444',
+    background: 'linear-gradient(180deg, #484e51 0%, #373b3e 100%)',
   },
-
   ':disabled': {
-    opacity: 0.5,
+    opacity: 0.4,
     cursor: 'not-allowed',
   },
 });
 
 export const status = style({
-  color: '#8bd49c',
-  fontSize: '0.75rem',
+  maxWidth: '100px',
+  overflow: 'hidden',
+  color: '#8fc29b',
+  fontSize: '9px',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
 });
 
 export const error = style({
-  maxWidth: '220px',
-  color: '#ff7777',
-  fontSize: '0.75rem',
+  maxWidth: '140px',
+  overflow: 'hidden',
+  color: '#df8a7e',
+  fontSize: '9px',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
 });

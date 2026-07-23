@@ -2,34 +2,36 @@ import { style } from '@vanilla-extract/css';
 
 export const container = style({
   width: '100%',
-  height: '30px',
-  backgroundColor: '#0a0a0a',
-  borderBottom: '1px solid #333',
+  height: '28px',
   position: 'relative',
   overflow: 'hidden',
-  userSelect: 'none',
   flexShrink: 0,
+  borderBottom: '1px solid #090b0c',
+  background: 'linear-gradient(180deg, #25292b 0%, #1d2022 100%)',
+  boxShadow: 'inset 0 1px 0 #353a3c',
+  userSelect: 'none',
 });
 
 export const tick = style({
   position: 'absolute',
   bottom: 0,
   width: '1px',
-  backgroundColor: '#444',
   height: '6px',
+  backgroundColor: '#51575a',
 });
 
 export const majorTick = style({
   height: '12px',
-  backgroundColor: '#666',
+  backgroundColor: '#8d9598',
 });
 
 export const label = style({
   position: 'absolute',
   top: '2px',
-  fontSize: '10px',
-  color: '#888',
   transform: 'translateX(4px)',
+  color: '#aeb4b7',
+  fontFamily: '"Consolas", "SFMono-Regular", monospace',
+  fontSize: '9px',
 });
 
 export const topZone = style({
@@ -37,11 +39,11 @@ export const topZone = style({
   top: 0,
   left: 0,
   right: 0,
-  height: '15px',
   zIndex: 10,
-  cursor: 'text', // like text selection
+  height: '14px',
+  cursor: 'crosshair',
   ':hover': {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 79, 216, 0.07)',
   },
 });
 
@@ -50,20 +52,20 @@ export const bottomZone = style({
   bottom: 0,
   left: 0,
   right: 0,
-  height: '15px',
   zIndex: 10,
+  height: '14px',
   cursor: 'pointer',
 });
 
 export const exportRangeOverlay = style({
   position: 'absolute',
   top: 0,
-  height: '100%',
-  backgroundColor: 'rgba(0, 150, 255, 0.2)',
-  borderLeft: '1px solid #0096ff',
-  borderRight: '1px solid #0096ff',
-  pointerEvents: 'none', // Allow clicks to pass through to zones
   zIndex: 5,
+  height: '100%',
+  borderLeft: '1px solid #5b9ab8',
+  borderRight: '1px solid #5b9ab8',
+  backgroundColor: 'rgba(66, 132, 164, 0.22)',
+  pointerEvents: 'none',
 });
 
 export const exportRangeLabel = style({
@@ -71,8 +73,8 @@ export const exportRangeLabel = style({
   top: 0,
   left: '50%',
   transform: 'translateX(-50%)',
-  fontSize: '10px',
-  color: '#0096ff',
+  color: '#a4d2e8',
+  fontSize: '9px',
   whiteSpace: 'nowrap',
   pointerEvents: 'none',
 });

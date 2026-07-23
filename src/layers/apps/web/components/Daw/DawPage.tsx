@@ -4,7 +4,6 @@ import { TrackList } from './components/TrackList/TrackList';
 import { Terminal } from './components/Terminals/Terminal';
 import { TrackInfoSidebar } from './components/TrackInfoSidebar/TrackInfoSidebar';
 import { TimeRuler } from './components/TimeRuler/TimeRuler';
-import { PlaybackControls } from './components/PlaybackControls/PlaybackControls';
 import * as styles from './DawPage.css.ts';
 import { useSession } from '@/layers/apps/web/context/layer-hooks';
 
@@ -61,23 +60,23 @@ export function DawPage() {
 
   return (
     <div className={styles.container}>
-      {/* Left (Track Info) Toggle Button */}
       <button
         className={`${styles.leftToggleButton} ${isTrackInfoOpen ? styles.leftToggleButtonOpen : ''}`}
         onClick={() => setIsTrackInfoOpen(!isTrackInfoOpen)}
         title={isTrackInfoOpen ? 'Close Track Info' : 'Open Track Info'}
+        aria-label={isTrackInfoOpen ? 'Close track inspector' : 'Open track inspector'}
       >
-        {isTrackInfoOpen ? '←' : '→'}
+        INSPECTOR
       </button>
 
-      {/* Right (Terminal) Toggle Button */}
       <button
         className={`${styles.cliToggleButton} ${isTerminalOpen ? styles.cliToggleButtonOpen : ''}`}
-        style={isTerminalOpen ? { right: `${chatPanelWidth + 25}px` } : undefined}
+        style={isTerminalOpen ? { right: `${chatPanelWidth}px` } : undefined}
         onClick={() => setIsTerminalOpen(!isTerminalOpen)}
         title={isTerminalOpen ? 'Close Terminal' : 'Open Terminal'}
+        aria-label={isTerminalOpen ? 'Close terminal' : 'Open terminal'}
       >
-        {isTerminalOpen ? '→' : '←'}
+        TERMINAL
       </button>
 
       <div className={`${styles.leftPanel} ${!isTrackInfoOpen ? styles.leftPanelCollapsed : ''}`}>
@@ -85,21 +84,28 @@ export function DawPage() {
       </div>
 
       <div className={styles.mainContent}>
-        <div className={styles.backgroundGrid} />
-        <div className={styles.glowEffect} />
-        <div className={styles.waveAnimation} />
-
         <DawHeader trackCount={trackCount} />
-        <TimeRuler pixelsPerSecond={pixelsPerSecond} />
+        <div className={styles.timelineHeader}>
+          <div className={styles.trackHeaderRuler}>
+            <span>TRACK CONTROLS</span>
+            <span className={styles.trackCount}>{trackCount}</span>
+          </div>
+          <div className={styles.timelineRuler}>
+            <div className={styles.timelineMeta}>
+              <span>TIMELINE</span>
+              <span>{Math.round(pixelsPerSecond)} PX/S</span>
+            </div>
+            <TimeRuler pixelsPerSecond={pixelsPerSecond} />
+          </div>
+        </div>
         <TrackList pixelsPerSecond={pixelsPerSecond} setPixelsPerSecond={setPixelsPerSecond} />
-        <PlaybackControls />
       </div>
       <div
         className={`${styles.cliPanel} ${!isTerminalOpen ? styles.cliPanelCollapsed : ''} ${isResizing ? styles.cliPanelResizing : ''}`}
         style={isTerminalOpen ? { width: chatPanelWidth } : undefined}
       >
         {isTerminalOpen && (
-          <div className={styles.resizeHandle} onMouseDown={handleResizeStart} title="드래그하여 크기 조절" />
+          <div className={styles.resizeHandle} onMouseDown={handleResizeStart} title="Drag to resize terminal" />
         )}
         <Terminal />
       </div>
