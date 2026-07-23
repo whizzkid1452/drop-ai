@@ -19,6 +19,7 @@ const audioSourceRepositoryRoot = path.join(layersRoot, 'audio-source-repository
 const audioSourceRegistryRoot = path.join(layersRoot, 'audio-source-registry');
 const controllersRoot = path.join(layersRoot, 'controllers');
 const commandRoot = path.join(layersRoot, 'commands');
+const pluginHostRoot = path.join(layersRoot, 'plugin-host');
 const projectDocumentMapperRoot = path.join(layersRoot, 'project-document-mapper');
 const queriesRoot = path.join(layersRoot, 'queries');
 const projectRepositoryRoot = path.join(layersRoot, 'project-repository');
@@ -41,6 +42,10 @@ const audioEnginePublicContractPaths = new Set([
 const projectRepositoryPublicContractPaths = new Set([
   path.join(projectRepositoryRoot, 'errors'),
   path.join(projectRepositoryRoot, 'i-project-repository'),
+]);
+const pluginHostPublicContractPaths = new Set([
+  path.join(pluginHostRoot, 'errors'),
+  path.join(pluginHostRoot, 'i-plugin-host'),
 ]);
 const webAudioConstructorNames = new Set([
   'AnalyserNode',
@@ -597,6 +602,44 @@ describe('레이어 의존성 규칙', () => {
         ((isInside(sourceImport.resolvedPath, layersRoot) && !isInside(sourceImport.resolvedPath, pluginSdkRoot)) ||
           isAppSource(sourceImport.resolvedPath))
       );
+    });
+
+    expect(formatViolations(violations)).toEqual([]);
+  });
+
+  it('PluginHost는 Plugin SDK와 Shared 외 다른 계층을 import하지 않는다', () => {
+    const violations = sourceImports.filter(sourceImport => {
+      return (
+        isInside(sourceImport.importerPath, pluginHostRoot) &&
+        !isTestFile(sourceImport.importerPath) &&
+        sourceImport.resolvedPath !== undefined &&
+        (isAppSource(sourceImport.resolvedPath) ||
+          (isInside(sourceImport.resolvedPath, layersRoot) &&
+            !isInside(sourceImport.resolvedPath, pluginHostRoot) &&
+            !isInside(sourceImport.resolvedPath, pluginSdkRoot) &&
+            !isInside(sourceImport.resolvedPath, sharedRoot)))
+      );
+    });
+
+    expect(formatViolations(violations)).toEqual([]);
+  });
+
+  it('PluginHost 외부 소비자는 공개 계약만 import한다', () => {
+    const violations = sourceImports.filter(sourceImport => {
+      const resolvedPath = removeSourceExtension(sourceImport.resolvedPath);
+      if (
+        !resolvedPath ||
+        !isInside(resolvedPath, pluginHostRoot) ||
+        isInside(sourceImport.importerPath, pluginHostRoot)
+      ) {
+        return false;
+      }
+
+      if (isTestFile(sourceImport.importerPath) || sourceImport.importerPath === compositionRootPath) {
+        return false;
+      }
+
+      return !isInside(sourceImport.importerPath, controllersRoot) || !pluginHostPublicContractPaths.has(resolvedPath);
     });
 
     expect(formatViolations(violations)).toEqual([]);

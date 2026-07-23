@@ -77,8 +77,8 @@ const PluginManifestBaseSchema = z.strictObject({
   }),
 });
 
-type PluginParameterManifest = z.infer<typeof PluginParameterManifestSchema>;
-type PluginUiControl = z.infer<typeof PluginUiControlSchema>;
+export type PluginParameterManifest = z.infer<typeof PluginParameterManifestSchema>;
+export type PluginUiControl = z.infer<typeof PluginUiControlSchema>;
 
 interface RefinementOptions<TEntry> {
   readonly entries: readonly TEntry[];

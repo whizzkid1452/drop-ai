@@ -65,7 +65,13 @@ Plugin SDK는 다른 프로젝트 계층을 import하지 않는 선언 계약이
 effect 유형, number·boolean·enum 매개변수, AudioWorklet 모듈 상대 경로, slider·toggle·select UI control만 허용한다.
 알 수 없는 필드, 중복 Parameter ID와 control, 잘못된 기본값 범위, 존재하지 않거나 type이 맞지 않는 Parameter 참조는
 검증에서 거부한다. `workletModulePath` 검증은 상대 경로 문법만 보장한다. 실제 모듈이 등록된 자산인지와 URL 해석 뒤
-same-origin인지 여부는 후속 Plugin Host가 별도로 확인해야 한다.
+same-origin인지 여부는 후속 모듈 로더가 별도로 확인해야 한다.
+
+`PluginHost`는 검증된 manifest를 ID로 보관하는 메모리 registry다. 등록 전에 전체 manifest를 검증하고, 같은 ID를
+조용히 교체하지 않고 typed 오류로 거부한다. 조회와 목록은 등록 순서를 유지한 복사본을 반환하므로 호출자의 변경이
+registry 내부 값에 영향을 주지 않는다. PluginHost production 코드는 Plugin SDK와 Shared만 의존한다. 구체 구현은
+Composition Root와 테스트에서만 import하고, 후속 Controller는 `IPluginHost` 계약에 의존한다. 현재 단계에는 Plugin
+lifecycle, Session 연결, AudioEngine 연결이 없다.
 
 영구 저장 형식은 Shared의 `ProjectDocumentSchema`로 검증한다. v1은 Track·Region과 오디오 Source 메타데이터를
 절대 초 단위로 저장하고, Region은 임시 URL이 아닌 안정적인 Source ID를 참조한다. `File`, `Blob`, Object URL,

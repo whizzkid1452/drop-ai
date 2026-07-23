@@ -87,7 +87,11 @@ manifest 검증 결과, 런타임 로그가 있다. 카탈로그·검증 결과�
 Plugin SDK는 manifest를 선언하는 독립 계약이다. v1은 effect 유형과 number·boolean·enum Parameter를 지원하고,
 slider·toggle·select control이 실제 Parameter ID와 맞는 type을 참조하는지 검사한다. 알 수 없는 필드, 중복 ID, 범위 밖
 기본값은 거부한다. AudioWorklet 모듈은 상대 경로 문법만 허용하지만, 이 검사만으로 등록 자산이나 same-origin 여부가
-증명되지는 않는다. 실제 URL 확인과 모듈 로딩은 후속 Plugin Host 책임이다.
+증명되지는 않는다. 실제 URL 확인과 모듈 로딩은 후속 모듈 로더 책임이다.
+
+`PluginHost`는 검증을 통과한 manifest를 메모리에 등록한다. 같은 ID의 재등록은 기존 값을 덮어쓰지 않고 오류로
+거부하며, 조회·목록은 깊게 복사한 값을 등록 순서대로 반환한다. 현재 단계에는 설치·활성화·해제 lifecycle, Session,
+AudioEngine, Composition Root 연결이 없다.
 
 검증된 명령은 CommandExecutor의 단일 대기열에서 접수 순서대로 하나씩 실행한다. `executeMany`는 묶음 전체를
 먼저 검증한 후, 다른 요청이 끼어들지 않게 순서대로 실행한다. 실행 중 첫 오류가 나면 남은 명령은 실행하지
@@ -266,6 +270,7 @@ sequenceDiagram
 | `layers/audio-source-repository/` | 오디오 원본 바이트 저장 계약과 OPFS Adapter |
 | `layers/audio-source-registry/`   | 재생 Source URL의 런타임 소유권과 참조 관리 |
 | `layers/plugin-sdk/`              | Plugin manifest 선언과 검증 계약            |
+| `layers/plugin-host/`             | 검증된 Plugin manifest의 메모리 registry    |
 | `layers/session/`                 | 화면에 표시할 상태 저장                     |
 | `layers/audio-engine/`            | Tone.js와 Web Audio 기반 오디오 처리        |
 
