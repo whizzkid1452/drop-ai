@@ -174,11 +174,11 @@ Apps나 Controller 내부에서 구체 구현을 직접 생성하지 않는다.
 - `pnpm worktree:remove <branch>`: 외부 Worktree 제거
 - `pnpm worktree:remove:internal <branch>`: 내부 Worktree 제거
 - `pnpm worktree:list`: 현재 Worktree 목록 확인
-- 이 저장소는 monorepo가 아니므로 `pnpm-workspace.yaml`을 추가하지 않는다. 내부 Worktree에서 상위 디렉터리를 Workspace Root로 잘못 인식할 수 있다.
+- `pnpm-workspace.yaml`은 pnpm 11 프로젝트 설정에만 사용하며 패키지 목록을 선언하지 않는다.
 
 ## 저장소 규칙
 
-- Node.js 22 이상과 pnpm 9 이상을 사용한다.
+- Node.js 26 이상과 pnpm 11 이상을 사용한다.
 - 한 PR에는 한 가지 변경 목적만 포함한다. 목적이 다르면 stacked PR로 나눈다.
 - 브랜치는 `feature/`, `bug/`, `hotfix/`, `refactor/` 중 하나로 시작한다.
 - PR은 `origin/main`을 기준으로 만들고 테스트 방법을 본문에 적는다.

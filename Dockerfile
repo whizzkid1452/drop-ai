@@ -1,15 +1,15 @@
 # 멀티스테이지 빌드를 위한 Dockerfile
-FROM node:22-alpine AS base
+FROM node:26.5.0-alpine AS base
 
 # pnpm 설치
-RUN npm install -g pnpm
+RUN npm install --global pnpm@11.16.0
 
 # 의존성 설치 단계
 FROM base AS deps
 WORKDIR /app
 
-# package.json과 pnpm-lock.yaml 복사
-COPY package.json pnpm-lock.yaml ./
+# 의존성 명세와 pnpm 설정 복사
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 # 의존성 설치
 RUN pnpm install --frozen-lockfile

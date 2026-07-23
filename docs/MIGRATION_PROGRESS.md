@@ -145,8 +145,8 @@ VST와 Audio Unit은 운영체제의 네이티브 Plugin 규격이다. 현재 �
 
 `main` 병합 후 다음 결과를 확인했다.
 
-- Test Files: 81개 통과
-- Tests: 1,026개 통과
+- Test Files: 85개 통과
+- Tests: 1,039개 통과
 - ESLint: 통과
 - TypeScript 빌드 검사: 통과
 - 프로덕션 빌드: 통과
@@ -154,10 +154,10 @@ VST와 Audio Unit은 운영체제의 네이티브 Plugin 규격이다. 현재 �
 다시 검증하려면 다음 명령을 실행한다.
 
 ```powershell
-npx --yes -p node@22.12.0 -p pnpm@9.12.2 -- pnpm test
-npx --yes -p node@22.12.0 -p pnpm@9.12.2 -- pnpm lint
-npx --yes -p node@22.12.0 -p pnpm@9.12.2 -- pnpm exec tsc -b --pretty false
-npx --yes -p node@22.12.0 -p pnpm@9.12.2 -- pnpm build
+npx --yes -p node@26.5.0 -p pnpm@11.16.0 -- pnpm test
+npx --yes -p node@26.5.0 -p pnpm@11.16.0 -- pnpm lint
+npx --yes -p node@26.5.0 -p pnpm@11.16.0 -- pnpm exec tsc -b --pretty false
+npx --yes -p node@26.5.0 -p pnpm@11.16.0 -- pnpm build
 ```
 
 ## 현재 결론
