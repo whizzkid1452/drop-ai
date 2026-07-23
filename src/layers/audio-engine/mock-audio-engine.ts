@@ -1,7 +1,11 @@
 import { AudioEngineError, AudioEngineErrorCode, ERROR_MESSAGES } from './errors';
+import { COMPLETE_RESOURCE_CLEANUP } from '../shared/types/resource-cleanup';
 import type {
   ExportRequest,
   IAudioEngine,
+  IPreparedAudioProjectGraph,
+  IRetiredAudioProjectGraph,
+  PrepareAudioProjectGraphRequest,
   RegionData,
   ReplaceRegionRequest,
   RescheduleRegionRequest,
@@ -18,6 +22,7 @@ export class MockAudioEngine implements IAudioEngine {
   private mockTime = 0;
   private mockTracks: Map<string, MockTrackState> = new Map();
   private mockRegions: Map<string, Map<string, RegionData>> = new Map();
+  private graphRevision = 0;
 
   async play(): Promise<void> {
     console.log('[MockAudioEngine] Playing...');
@@ -43,12 +48,14 @@ export class MockAudioEngine implements IAudioEngine {
 
   async addTrack(trackId: string): Promise<void> {
     this.initializeTrack(trackId);
+    this.graphRevision += 1;
     console.log(`[MockAudioEngine] Track added: ${trackId}`);
   }
 
   removeTrack(trackId: string): void {
     this.mockTracks.delete(trackId);
     this.mockRegions.delete(trackId);
+    this.graphRevision += 1;
     console.log(`[MockAudioEngine] Track ${trackId} removed`);
   }
 
@@ -58,6 +65,7 @@ export class MockAudioEngine implements IAudioEngine {
     if (track) {
       track.volume = volume;
     }
+    this.graphRevision += 1;
     console.log(`[MockAudioEngine] Track ${trackId} volume set to: ${volume}`);
   }
 
@@ -67,15 +75,18 @@ export class MockAudioEngine implements IAudioEngine {
     if (track) {
       track.pan = pan;
     }
+    this.graphRevision += 1;
     console.log(`[MockAudioEngine] Track ${trackId} pan set to: ${pan}`);
   }
 
   setTrackMute(trackId: string, muted: boolean): void {
     this.getTrack(trackId).muted = muted;
+    this.graphRevision += 1;
   }
 
   setTrackSolo(trackId: string, soloed: boolean): void {
     this.getTrack(trackId).soloed = soloed;
+    this.graphRevision += 1;
   }
 
   getTrackParams(trackId: string): { volume: number; pan: number } | null {
@@ -97,11 +108,13 @@ export class MockAudioEngine implements IAudioEngine {
       });
     }
     trackRegions?.set(regionData.id, this.cloneRegionData(regionData));
+    this.graphRevision += 1;
     console.log(`[MockAudioEngine] Adding region ${regionData.id} to track ${trackId}`);
   }
 
   removeRegion(trackId: string, regionId: string): void {
     this.mockRegions.get(trackId)?.delete(regionId);
+    this.graphRevision += 1;
     console.log(`[MockAudioEngine] Removing region ${regionId} from track ${trackId}`);
   }
 
@@ -113,6 +126,7 @@ export class MockAudioEngine implements IAudioEngine {
     }
 
     trackRegions.set(request.regionId, { ...regionData, startTime: request.startTime });
+    this.graphRevision += 1;
   }
 
   async replaceRegion(request: ReplaceRegionRequest): Promise<void> {
@@ -128,6 +142,78 @@ export class MockAudioEngine implements IAudioEngine {
       nextRegions.set(regionData.id, this.cloneRegionData(regionData));
     });
     this.mockRegions.set(request.trackId, nextRegions);
+    this.graphRevision += 1;
+  }
+
+  async prepareProjectGraph({ tracks }: PrepareAudioProjectGraphRequest): Promise<IPreparedAudioProjectGraph> {
+    const expectedRevision = this.graphRevision;
+    const nextTracks = new Map<string, MockTrackState>();
+    const nextRegions = new Map<string, Map<string, RegionData>>();
+
+    tracks.forEach(track => {
+      if (nextTracks.has(track.id)) {
+        throw new AudioEngineError(AudioEngineErrorCode.TRACK_INIT_FAILED, ERROR_MESSAGES.TRACK_INIT_FAILED, {
+          trackId: track.id,
+        });
+      }
+
+      const trackRegions = new Map<string, RegionData>();
+      track.regions.forEach(region => {
+        if (trackRegions.has(region.id)) {
+          throw new AudioEngineError(AudioEngineErrorCode.REGION_ID_CONFLICT, ERROR_MESSAGES.REGION_ID_CONFLICT, {
+            regionId: region.id,
+            trackId: track.id,
+          });
+        }
+        trackRegions.set(region.id, this.cloneRegionData(region));
+      });
+      nextTracks.set(track.id, {
+        muted: track.isMuted,
+        pan: track.pan,
+        soloed: track.isSoloed,
+        volume: track.volume,
+      });
+      nextRegions.set(track.id, trackRegions);
+    });
+
+    let retiredGraph: IRetiredAudioProjectGraph | undefined;
+    let state: 'activated' | 'discarded' | 'prepared' = 'prepared';
+    const assertActivatable = (): void => {
+      if (state === 'activated') {
+        return;
+      }
+      if (state === 'discarded' || this.graphRevision !== expectedRevision) {
+        throw new AudioEngineError(AudioEngineErrorCode.ACTIVE_GRAPH_CHANGED, ERROR_MESSAGES.ACTIVE_GRAPH_CHANGED, {
+          actualRevision: this.graphRevision,
+          expectedRevision,
+        });
+      }
+    };
+
+    return {
+      assertActivatable,
+      activate: () => {
+        if (retiredGraph) {
+          return retiredGraph;
+        }
+
+        assertActivatable();
+        this.mockTracks = nextTracks;
+        this.mockRegions = nextRegions;
+        this.mockTime = 0;
+        this.graphRevision += 1;
+        state = 'activated';
+        retiredGraph = { dispose: () => COMPLETE_RESOURCE_CLEANUP };
+        return retiredGraph;
+      },
+      discard: () => {
+        if (state === 'activated') {
+          return COMPLETE_RESOURCE_CLEANUP;
+        }
+        state = 'discarded';
+        return COMPLETE_RESOURCE_CLEANUP;
+      },
+    };
   }
 
   async exportProject(request: ExportRequest): Promise<Blob> {

@@ -54,8 +54,10 @@ describe('createApp', () => {
     expect(app.audioSourceResolver.resolve(registration.metadata.id)).toEqual(stagedSource);
     expect('audioSourceRegistry' in app).toBe(false);
     expect('attach' in app.audioSourceStager).toBe(false);
+    expect('beginReplacement' in app.audioSourceStager).toBe(false);
     expect('stage' in app.audioSourceResolver).toBe(false);
     expect('listCommittedRegistrations' in app.audioSourceResolver).toBe(false);
+    expect('beginReplacement' in app.audioSourceResolver).toBe(false);
   });
 
   it('등록 capability와 Command Controller가 같은 Source Registry를 공유한다', async () => {

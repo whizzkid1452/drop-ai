@@ -1,4 +1,5 @@
 import type { ProjectAudioSource } from '../shared/types/project-document.schema';
+import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
 
 export interface AudioSourceRegistration {
   readonly metadata: ProjectAudioSource;
@@ -31,7 +32,27 @@ export interface ICommittedAudioSourceReader {
   listCommittedRegistrations(): ReadonlyArray<Readonly<AudioSourceRegistration>>;
 }
 
-export interface IAudioSourceRegistry extends IAudioSourceStager, IAudioSourceResolver, ICommittedAudioSourceReader {
+export interface IRetiredAudioSourceRegistry {
+  dispose(): ResourceCleanupResult;
+}
+
+export interface IPreparedAudioSourceRegistryReplacement extends IAudioSourceResolver {
+  restoreCommitted(registration: AudioSourceRegistration): RuntimeAudioSource;
+  attach(attachment: AudioSourceAttachment): void;
+  assertActivatable(): void;
+  activate(): IRetiredAudioSourceRegistry;
+  discard(): ResourceCleanupResult;
+}
+
+export interface IAudioSourceRegistryReplacementCoordinator {
+  beginReplacement(): IPreparedAudioSourceRegistryReplacement;
+}
+
+export interface IAudioSourceRegistry
+  extends IAudioSourceStager,
+    IAudioSourceResolver,
+    ICommittedAudioSourceReader,
+    IAudioSourceRegistryReplacementCoordinator {
   restoreCommitted(registration: AudioSourceRegistration): RuntimeAudioSource;
   attach(attachment: AudioSourceAttachment): void;
   detach(attachment: AudioSourceAttachment): void;

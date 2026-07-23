@@ -1,4 +1,4 @@
-import type { RegionState, SessionState, TrackState } from '../session/session';
+import type { ProjectSessionState, RegionState, TrackState } from '../session/session';
 import { calculateFiniteRegionEndTime, isRegionEndTimeConsistent } from '../shared/region-timeline';
 import { readProjectDocument } from '../shared/types/project-document-reader';
 import {
@@ -11,9 +11,7 @@ import {
 } from '../shared/types/project-document.schema';
 import { ProjectDocumentMappingError, ProjectDocumentMappingErrorCode } from './errors';
 
-export type SessionProjectSnapshot = Readonly<
-  Pick<SessionState, 'project' | 'tempo' | 'masterVolume' | 'exportStartTime' | 'exportEndTime' | 'tracks'>
->;
+export type SessionProjectSnapshot = ProjectSessionState;
 
 export interface CreateProjectDocumentFromSessionOptions {
   readonly session: SessionProjectSnapshot;

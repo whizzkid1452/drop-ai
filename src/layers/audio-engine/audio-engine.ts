@@ -1,4 +1,5 @@
 import * as Tone from 'tone';
+import { COMPLETE_RESOURCE_CLEANUP, type ResourceCleanupResult } from '../shared/types/resource-cleanup';
 import { startPlayer } from './config/player-config';
 import { encodeAudioBufferToWav } from './encoders/wav-encoder';
 import { AudioEngineError, AudioEngineErrorCode, ERROR_MESSAGES } from './errors';
@@ -6,6 +7,9 @@ import type {
   ExportRequest,
   ExportTrack,
   IAudioEngine,
+  IPreparedAudioProjectGraph,
+  IRetiredAudioProjectGraph,
+  PrepareAudioProjectGraphRequest,
   RegionData,
   ReplaceRegionRequest,
   RescheduleRegionRequest,
@@ -23,13 +27,58 @@ interface CreateRegionEntriesRequest {
   regions: RegionData[];
 }
 
+interface AudioProjectGraphState {
+  readonly output: Tone.Gain;
+  readonly channels: Map<string, Tone.Channel>;
+  readonly desiredTrackVolumes: Map<string, number>;
+  readonly mutedTrackIds: Set<string>;
+  readonly soloedTrackIds: Set<string>;
+  readonly players: Map<string, Map<string, RegionPlayerEntry>>;
+}
+
+interface TransportSnapshot {
+  readonly seconds: number;
+  readonly state: 'paused' | 'started' | 'stopped';
+}
+
+interface GraphActivationRollbackResult {
+  readonly compensationFailures: string[];
+  readonly isRuntimeRecoveryPending: boolean;
+}
+
+type PreparedGraphState = 'activated' | 'discarded' | 'prepared';
+
 export class AudioEngine implements IAudioEngine {
+  private output: Tone.Gain;
   private channels: Map<string, Tone.Channel> = new Map();
   private desiredTrackVolumes: Map<string, number> = new Map();
   private mutedTrackIds: Set<string> = new Set();
+  private soloedTrackIds: Set<string> = new Set();
   private players: Map<string, Map<string, RegionPlayerEntry>> = new Map();
+  private graphRevision = 0;
+  private readonly mutedOutputs = new WeakSet<Tone.Gain>();
+  private readonly disconnectedOutputs = new WeakSet<Tone.Gain>();
+  private readonly disposedOutputs = new WeakSet<Tone.Gain>();
+  private readonly disconnectedChannels = new WeakSet<Tone.Channel>();
+  private readonly disposedChannels = new WeakSet<Tone.Channel>();
+  private readonly unsyncedPlayers = new WeakSet<Tone.Player>();
+  private readonly stoppedPlayers = new WeakSet<Tone.Player>();
+  private readonly disconnectedPlayers = new WeakSet<Tone.Player>();
+  private readonly disposedPlayers = new WeakSet<Tone.Player>();
+  private readonly pendingGraphCleanup = new Set<AudioProjectGraphState>();
+  private readonly pendingChannelCleanup = new Set<Tone.Channel>();
+  private readonly pendingOutputCleanup = new Set<Tone.Gain>();
+  private readonly pendingPlayerCleanup = new Set<Tone.Player>();
+  private readonly pendingOutputStateRecovery = new Map<Tone.Gain, boolean>();
+  private pendingTransportRecovery: TransportSnapshot | null = null;
+
+  constructor() {
+    this.output = this.createGraphOutput(1);
+  }
 
   async play(): Promise<void> {
+    this.ensureRuntimeReady();
+    this.retryPendingCleanup();
     if (Tone.getContext().state !== 'running') {
       await Tone.start();
     }
@@ -37,46 +86,58 @@ export class AudioEngine implements IAudioEngine {
   }
 
   pause(): void {
+    this.ensureRuntimeReady();
     Tone.getTransport().pause();
   }
 
   stop(): void {
+    this.ensureRuntimeReady();
     Tone.getTransport().stop();
   }
 
   setTime(time: number): void {
+    this.ensureRuntimeReady();
     Tone.getTransport().seconds = time;
   }
 
   getCurrentTime(): number {
+    this.ensureRuntimeReady();
     return Tone.getTransport().seconds;
   }
 
   async addTrack(trackId: string): Promise<void> {
+    this.ensureRuntimeReady();
     console.log(`[AudioEngine] Adding track: ${trackId}`);
     this.getOrInitChannel(trackId);
   }
 
   removeTrack(trackId: string): void {
+    this.ensureRuntimeReady();
+    const hadTrack = this.channels.has(trackId) || this.players.has(trackId);
+    if (hadTrack) {
+      this.graphRevision += 1;
+    }
     const trackPlayers = this.players.get(trackId);
     trackPlayers?.forEach(entry => this.disposePlayer(entry.player));
     this.players.delete(trackId);
 
     const channel = this.channels.get(trackId);
     if (channel) {
-      channel.solo = false;
-      channel.disconnect();
-      channel.dispose();
+      this.disposeChannel(channel);
     }
     this.channels.delete(trackId);
     this.desiredTrackVolumes.delete(trackId);
     this.mutedTrackIds.delete(trackId);
+    this.soloedTrackIds.delete(trackId);
+    this.applyGraphAudibility(this.captureActiveGraph());
   }
 
   setTrackVolume(trackId: string, volume: number): void {
+    this.ensureRuntimeReady();
     const channel = this.getOrInitChannel(trackId);
+    this.graphRevision += 1;
     this.desiredTrackVolumes.set(trackId, volume);
-    if (this.mutedTrackIds.has(trackId)) {
+    if (this.isTrackMutedInGraph(this.captureActiveGraph(), trackId)) {
       return;
     }
 
@@ -85,29 +146,39 @@ export class AudioEngine implements IAudioEngine {
   }
 
   setTrackPan(trackId: string, pan: number): void {
+    this.ensureRuntimeReady();
     const channel = this.getOrInitChannel(trackId);
+    this.graphRevision += 1;
     channel.pan.rampTo(pan, 0.1);
   }
 
   setTrackMute(trackId: string, muted: boolean): void {
-    const channel = this.getExistingChannel(trackId);
+    this.ensureRuntimeReady();
+    this.getExistingChannel(trackId);
+    this.graphRevision += 1;
     if (muted) {
-      channel.mute = true;
       this.mutedTrackIds.add(trackId);
-      return;
+    } else {
+      this.mutedTrackIds.delete(trackId);
     }
 
-    this.mutedTrackIds.delete(trackId);
-    const desiredVolume = this.desiredTrackVolumes.get(trackId) ?? 1;
-    channel.mute = false;
-    channel.volume.value = Tone.gainToDb(desiredVolume);
+    this.applyGraphAudibility(this.captureActiveGraph());
   }
 
   setTrackSolo(trackId: string, soloed: boolean): void {
-    this.getExistingChannel(trackId).solo = soloed;
+    this.ensureRuntimeReady();
+    this.getExistingChannel(trackId);
+    this.graphRevision += 1;
+    if (soloed) {
+      this.soloedTrackIds.add(trackId);
+    } else {
+      this.soloedTrackIds.delete(trackId);
+    }
+    this.applyGraphAudibility(this.captureActiveGraph());
   }
 
   getTrackParams(trackId: string): { volume: number; pan: number } | null {
+    this.ensureRuntimeReady();
     const channel = this.channels.get(trackId);
     if (!channel) {
       return null;
@@ -120,6 +191,7 @@ export class AudioEngine implements IAudioEngine {
   }
 
   async addRegion(trackId: string, regionData: RegionData): Promise<void> {
+    this.ensureRuntimeReady();
     const channel = this.getOrInitChannel(trackId);
     const trackPlayers = this.players.get(trackId);
     if (!trackPlayers) {
@@ -128,8 +200,10 @@ export class AudioEngine implements IAudioEngine {
     if (trackPlayers.has(regionData.id)) {
       throw this.createRegionIdConflictError({ trackId, regionId: regionData.id });
     }
+    this.graphRevision += 1;
 
     const [entry] = await this.createScheduledRegionEntries({ channel, regions: [regionData] });
+    this.ensureRuntimeReadyOrCleanupEntries(entry ? [entry] : []);
     if (!entry) {
       return;
     }
@@ -143,23 +217,28 @@ export class AudioEngine implements IAudioEngine {
     }
 
     trackPlayers.set(entry.regionData.id, entry);
+    this.graphRevision += 1;
   }
 
   removeRegion(trackId: string, regionId: string): void {
+    this.ensureRuntimeReady();
     const trackPlayers = this.players.get(trackId);
     const entry = trackPlayers?.get(regionId);
     if (!entry) {
       return;
     }
 
+    this.graphRevision += 1;
     this.disposePlayer(entry.player);
     trackPlayers?.delete(regionId);
   }
 
   rescheduleRegion(request: RescheduleRegionRequest): void {
+    this.ensureRuntimeReady();
     const trackPlayers = this.players.get(request.trackId);
     const entry = this.getRegionEntry(request);
     const channel = this.getExistingChannel(request.trackId);
+    this.graphRevision += 1;
     const nextRegionData = { ...entry.regionData, startTime: request.startTime };
     const nextEntry: RegionPlayerEntry = {
       player: new Tone.Player({ url: entry.player.buffer, loop: false }).connect(channel),
@@ -181,6 +260,7 @@ export class AudioEngine implements IAudioEngine {
   }
 
   async replaceRegion(request: ReplaceRegionRequest): Promise<void> {
+    this.ensureRuntimeReady();
     const trackPlayers = this.players.get(request.trackId);
     const originalEntry = trackPlayers?.get(request.regionId);
     if (!trackPlayers || !originalEntry) {
@@ -190,10 +270,12 @@ export class AudioEngine implements IAudioEngine {
     const originalRevision = originalEntry.revision;
     this.validateReplacementIds(trackPlayers, request);
     const channel = this.getExistingChannel(request.trackId);
+    this.graphRevision += 1;
     const replacementEntries = await this.createScheduledRegionEntries({
       channel,
       regions: request.replacements,
     });
+    this.ensureRuntimeReadyOrCleanupEntries(replacementEntries);
 
     const currentEntry = trackPlayers.get(request.regionId);
     const stateChanged =
@@ -215,6 +297,60 @@ export class AudioEngine implements IAudioEngine {
     this.disposePlayer(originalEntry.player);
     trackPlayers.delete(request.regionId);
     replacementEntries.forEach(entry => trackPlayers.set(entry.regionData.id, entry));
+    this.graphRevision += 1;
+  }
+
+  async prepareProjectGraph({ tracks }: PrepareAudioProjectGraphRequest): Promise<IPreparedAudioProjectGraph> {
+    this.ensureRuntimeReady();
+    this.retryPendingCleanup();
+    const expectedRevision = this.graphRevision;
+    const preparedGraph = await this.createPreparedProjectGraph(tracks);
+    let retiredGraph: IRetiredAudioProjectGraph | undefined;
+    let state: PreparedGraphState = 'prepared';
+
+    const assertActivatable = (): void => {
+      if (state === 'activated') {
+        return;
+      }
+
+      if (state === 'discarded' || this.graphRevision !== expectedRevision) {
+        throw new AudioEngineError(AudioEngineErrorCode.ACTIVE_GRAPH_CHANGED, ERROR_MESSAGES.ACTIVE_GRAPH_CHANGED, {
+          actualRevision: this.graphRevision,
+          expectedRevision,
+        });
+      }
+    };
+
+    return {
+      assertActivatable,
+      activate: () => {
+        if (retiredGraph) {
+          return retiredGraph;
+        }
+
+        assertActivatable();
+        let previousGraph: AudioProjectGraphState;
+        try {
+          previousGraph = this.activatePreparedGraph(preparedGraph);
+        } catch (cause) {
+          state = 'discarded';
+          this.disposeGraph(preparedGraph, '활성화에 실패한 프로젝트 그래프 정리에 실패했습니다.');
+          throw cause;
+        }
+        this.graphRevision += 1;
+        state = 'activated';
+        retiredGraph = this.createRetiredGraph(previousGraph);
+        return retiredGraph;
+      },
+      discard: () => {
+        if (state === 'activated') {
+          return COMPLETE_RESOURCE_CLEANUP;
+        }
+
+        state = 'discarded';
+        return this.disposeGraph(preparedGraph, '준비한 프로젝트 그래프 정리에 실패했습니다.');
+      },
+    };
   }
 
   async exportProject(request: ExportRequest): Promise<Blob> {
@@ -257,11 +393,445 @@ export class AudioEngine implements IAudioEngine {
     const channel = new Tone.Channel({
       volume: 0,
       pan: 0,
-    }).toDestination();
+    });
     this.channels.set(trackId, channel);
     this.desiredTrackVolumes.set(trackId, 1);
     this.players.set(trackId, new Map());
+
+    try {
+      channel.connect(this.output);
+    } catch (cause) {
+      this.channels.delete(trackId);
+      this.desiredTrackVolumes.delete(trackId);
+      this.players.delete(trackId);
+      this.disposeChannelSafely(channel, '연결에 실패한 Track Channel 정리에 실패했습니다.');
+      throw new AudioEngineError(AudioEngineErrorCode.TRACK_INIT_FAILED, ERROR_MESSAGES.TRACK_INIT_FAILED, {
+        cause: this.describeError(cause),
+        trackId,
+      });
+    }
+
+    this.graphRevision += 1;
+    this.applyGraphAudibility(this.captureActiveGraph());
     return channel;
+  }
+
+  private async createPreparedProjectGraph(
+    tracks: PrepareAudioProjectGraphRequest['tracks']
+  ): Promise<AudioProjectGraphState> {
+    const graph = this.createEmptyGraph(0);
+
+    try {
+      for (const track of tracks) {
+        if (graph.channels.has(track.id)) {
+          throw new AudioEngineError(AudioEngineErrorCode.TRACK_INIT_FAILED, ERROR_MESSAGES.TRACK_INIT_FAILED, {
+            reason: 'TRACK_ID_CONFLICT',
+            trackId: track.id,
+          });
+        }
+
+        this.assertUniquePreparedRegionIds(track.id, track.regions);
+        const channel = new Tone.Channel({
+          volume: Tone.gainToDb(track.volume),
+          pan: track.pan,
+        });
+        graph.channels.set(track.id, channel);
+        channel.connect(graph.output);
+        channel.volume.value = Tone.gainToDb(track.volume);
+        channel.pan.value = track.pan;
+        graph.desiredTrackVolumes.set(track.id, track.volume);
+        graph.players.set(track.id, new Map());
+        if (track.isMuted) {
+          graph.mutedTrackIds.add(track.id);
+        }
+        if (track.isSoloed) {
+          graph.soloedTrackIds.add(track.id);
+        }
+
+        const entries = await this.createScheduledRegionEntries({
+          channel,
+          regions: track.regions.map(region => this.cloneRegionData(region)),
+        });
+        const trackPlayers = graph.players.get(track.id);
+        entries.forEach(entry => trackPlayers?.set(entry.regionData.id, entry));
+      }
+
+      this.applyGraphAudibility(graph);
+      return graph;
+    } catch (error) {
+      this.disposeGraph(graph, '실패한 프로젝트 그래프 준비 자원 정리에 실패했습니다.');
+      if (error instanceof AudioEngineError) {
+        throw error;
+      }
+
+      throw new AudioEngineError(AudioEngineErrorCode.TRACK_INIT_FAILED, ERROR_MESSAGES.TRACK_INIT_FAILED, {
+        cause: this.describeError(error),
+      });
+    }
+  }
+
+  private assertUniquePreparedRegionIds(trackId: string, regions: readonly RegionData[]): void {
+    const regionIds = new Set<string>();
+    const duplicateRegion = regions.find(region => {
+      if (regionIds.has(region.id)) {
+        return true;
+      }
+      regionIds.add(region.id);
+      return false;
+    });
+    if (!duplicateRegion) {
+      return;
+    }
+
+    throw this.createRegionIdConflictError({ trackId, regionId: duplicateRegion.id });
+  }
+
+  private createEmptyGraph(outputGain: number): AudioProjectGraphState {
+    return {
+      output: this.createGraphOutput(outputGain),
+      channels: new Map(),
+      desiredTrackVolumes: new Map(),
+      mutedTrackIds: new Set(),
+      soloedTrackIds: new Set(),
+      players: new Map(),
+    };
+  }
+
+  private captureActiveGraph(): AudioProjectGraphState {
+    return {
+      output: this.output,
+      channels: this.channels,
+      desiredTrackVolumes: this.desiredTrackVolumes,
+      mutedTrackIds: this.mutedTrackIds,
+      soloedTrackIds: this.soloedTrackIds,
+      players: this.players,
+    };
+  }
+
+  private useGraph(graph: AudioProjectGraphState): void {
+    this.output = graph.output;
+    this.channels = graph.channels;
+    this.desiredTrackVolumes = graph.desiredTrackVolumes;
+    this.mutedTrackIds = graph.mutedTrackIds;
+    this.soloedTrackIds = graph.soloedTrackIds;
+    this.players = graph.players;
+  }
+
+  private createRetiredGraph(graph: AudioProjectGraphState): IRetiredAudioProjectGraph {
+    this.pendingGraphCleanup.add(graph);
+
+    return {
+      dispose: () => this.disposeGraph(graph, '이전 프로젝트 오디오 그래프 정리에 실패했습니다.'),
+    };
+  }
+
+  private disposeGraph(graph: AudioProjectGraphState, errorMessage: string): ResourceCleanupResult {
+    this.pendingGraphCleanup.add(graph);
+    const isOutputDisposed = this.disposeOutput(graph.output, errorMessage);
+
+    graph.players.forEach((trackPlayers, trackId) => {
+      trackPlayers.forEach((entry, regionId) => {
+        if (this.disposePlayerSafely(entry.player, errorMessage)) {
+          trackPlayers.delete(regionId);
+        }
+      });
+      if (trackPlayers.size === 0) {
+        graph.players.delete(trackId);
+      }
+    });
+
+    graph.channels.forEach((channel, trackId) => {
+      if (this.disposeChannelSafely(channel, errorMessage)) {
+        graph.channels.delete(trackId);
+        graph.desiredTrackVolumes.delete(trackId);
+        graph.mutedTrackIds.delete(trackId);
+        graph.soloedTrackIds.delete(trackId);
+      }
+    });
+
+    const failedPlayerCount = [...graph.players.values()].reduce(
+      (playerCount, trackPlayers) => playerCount + trackPlayers.size,
+      0
+    );
+    const failedResourceCount = failedPlayerCount + graph.channels.size + (isOutputDisposed ? 0 : 1);
+    if (failedResourceCount > 0) {
+      return { isComplete: false, failedResourceCount };
+    }
+
+    this.pendingGraphCleanup.delete(graph);
+    return COMPLETE_RESOURCE_CLEANUP;
+  }
+
+  private activatePreparedGraph(preparedGraph: AudioProjectGraphState): AudioProjectGraphState {
+    const previousGraph = this.captureActiveGraph();
+    const transport = Tone.getTransport();
+    const transportSnapshot: TransportSnapshot = {
+      seconds: transport.seconds,
+      state: transport.state,
+    };
+
+    try {
+      transport.stop();
+      transport.seconds = 0;
+      this.setOutputMuted(previousGraph.output, true);
+      this.setOutputMuted(preparedGraph.output, false);
+    } catch (cause) {
+      const rollbackResult = this.rollbackGraphActivation({
+        preparedGraph,
+        previousGraph,
+        transportSnapshot,
+      });
+      throw new AudioEngineError(
+        AudioEngineErrorCode.PROJECT_GRAPH_ACTIVATION_FAILED,
+        ERROR_MESSAGES.PROJECT_GRAPH_ACTIVATION_FAILED,
+        {
+          cause: this.describeError(cause),
+          compensationFailures: rollbackResult.compensationFailures,
+          isRuntimeRecoveryPending: rollbackResult.isRuntimeRecoveryPending,
+        }
+      );
+    }
+
+    this.useGraph(preparedGraph);
+    return previousGraph;
+  }
+
+  private rollbackGraphActivation({
+    preparedGraph,
+    previousGraph,
+    transportSnapshot,
+  }: {
+    readonly preparedGraph: AudioProjectGraphState;
+    readonly previousGraph: AudioProjectGraphState;
+    readonly transportSnapshot: TransportSnapshot;
+  }): GraphActivationRollbackResult {
+    const compensationFailures: string[] = [];
+    this.tryCompensation(
+      () => this.setOutputMuted(preparedGraph.output, true, true),
+      'PREPARED_OUTPUT_MUTE',
+      compensationFailures
+    );
+    this.tryOutputStateRecovery(previousGraph.output, false, 'PREVIOUS_OUTPUT_UNMUTE', compensationFailures);
+    this.tryTransportRecovery(transportSnapshot, compensationFailures);
+    compensationFailures.push(...this.retryPendingRuntimeRecovery());
+    return {
+      compensationFailures,
+      isRuntimeRecoveryPending: this.hasPendingRuntimeRecovery(),
+    };
+  }
+
+  private tryCompensation(operation: () => void, step: string, failures: string[]): void {
+    try {
+      operation();
+    } catch (error) {
+      failures.push(`${step}: ${this.describeError(error)}`);
+    }
+  }
+
+  private restoreTransport(snapshot: TransportSnapshot): void {
+    const transport = Tone.getTransport();
+    transport.stop();
+    transport.seconds = snapshot.seconds;
+    if (snapshot.state === 'started') {
+      transport.start();
+      return;
+    }
+    if (snapshot.state === 'paused') {
+      transport.start();
+      transport.pause();
+    }
+  }
+
+  private createGraphOutput(gain: number): Tone.Gain {
+    const output = new Tone.Gain({ gain });
+    if (gain === 0) {
+      this.mutedOutputs.add(output);
+    }
+
+    try {
+      output.toDestination();
+      return output;
+    } catch (cause) {
+      this.pendingOutputCleanup.add(output);
+      this.disposeOutput(output, '연결에 실패한 프로젝트 출력 정리에 실패했습니다.');
+      throw new AudioEngineError(AudioEngineErrorCode.TRACK_INIT_FAILED, ERROR_MESSAGES.TRACK_INIT_FAILED, {
+        cause: this.describeError(cause),
+      });
+    }
+  }
+
+  private setOutputMuted(output: Tone.Gain, muted: boolean, force = false): void {
+    if (!force && muted === this.mutedOutputs.has(output)) {
+      return;
+    }
+
+    output.gain.value = muted ? 0 : 1;
+    if (muted) {
+      this.mutedOutputs.add(output);
+    } else {
+      this.mutedOutputs.delete(output);
+    }
+    if (this.pendingOutputStateRecovery.get(output) === muted) {
+      this.pendingOutputStateRecovery.delete(output);
+    }
+  }
+
+  private disposeOutput(output: Tone.Gain, errorMessage: string): boolean {
+    this.pendingOutputCleanup.add(output);
+    this.tryCleanupStep(() => this.setOutputMuted(output, true), errorMessage);
+
+    if (!this.disconnectedOutputs.has(output)) {
+      const isDisconnected = this.tryCleanupStep(() => output.disconnect(), errorMessage);
+      if (isDisconnected) {
+        this.disconnectedOutputs.add(output);
+      }
+    }
+
+    if (!this.disposedOutputs.has(output)) {
+      const isDisposed = this.tryCleanupStep(() => output.dispose(), errorMessage);
+      if (isDisposed) {
+        this.disposedOutputs.add(output);
+      }
+    }
+
+    const isComplete = this.disposedOutputs.has(output);
+    if (isComplete) {
+      this.pendingOutputCleanup.delete(output);
+      this.pendingOutputStateRecovery.delete(output);
+    }
+    return isComplete;
+  }
+
+  private disposeChannelSafely(channel: Tone.Channel, errorMessage: string): boolean {
+    this.pendingChannelCleanup.add(channel);
+    if (!this.disconnectedChannels.has(channel)) {
+      const isDisconnected = this.tryCleanupStep(() => channel.disconnect(), errorMessage);
+      if (isDisconnected) {
+        this.disconnectedChannels.add(channel);
+      }
+    }
+
+    if (!this.disposedChannels.has(channel)) {
+      const isDisposed = this.tryCleanupStep(() => channel.dispose(), errorMessage);
+      if (isDisposed) {
+        this.disposedChannels.add(channel);
+      }
+    }
+
+    const isComplete = this.disposedChannels.has(channel);
+    if (isComplete) {
+      this.pendingChannelCleanup.delete(channel);
+    }
+    return isComplete;
+  }
+
+  private disposeChannel(channel: Tone.Channel): void {
+    channel.disconnect();
+    channel.dispose();
+  }
+
+  private applyGraphAudibility(graph: AudioProjectGraphState): void {
+    graph.channels.forEach((channel, trackId) => {
+      const shouldMute = this.isTrackMutedInGraph(graph, trackId);
+      channel.mute = shouldMute;
+      if (!shouldMute) {
+        const desiredVolume = graph.desiredTrackVolumes.get(trackId) ?? 1;
+        channel.volume.value = Tone.gainToDb(desiredVolume);
+      }
+    });
+  }
+
+  private isTrackMutedInGraph(graph: AudioProjectGraphState, trackId: string): boolean {
+    if (graph.mutedTrackIds.has(trackId)) {
+      return true;
+    }
+
+    return graph.soloedTrackIds.size > 0 && !graph.soloedTrackIds.has(trackId);
+  }
+
+  private retryPendingCleanup(): void {
+    [...this.pendingOutputCleanup].forEach(output =>
+      this.disposeOutput(output, '대기 중인 프로젝트 출력 정리에 실패했습니다.')
+    );
+    [...this.pendingChannelCleanup].forEach(channel =>
+      this.disposeChannelSafely(channel, '대기 중인 Channel 정리에 실패했습니다.')
+    );
+    [...this.pendingPlayerCleanup].forEach(player =>
+      this.disposePlayerSafely(player, '대기 중인 Region Player 정리에 실패했습니다.')
+    );
+    [...this.pendingGraphCleanup].forEach(graph =>
+      this.disposeGraph(graph, '대기 중인 프로젝트 그래프 정리에 실패했습니다.')
+    );
+  }
+
+  private ensureRuntimeReady(): void {
+    if (!this.hasPendingRuntimeRecovery()) {
+      return;
+    }
+
+    const recoveryFailures = this.retryPendingRuntimeRecovery();
+    if (!this.hasPendingRuntimeRecovery()) {
+      return;
+    }
+
+    throw new AudioEngineError(
+      AudioEngineErrorCode.PROJECT_RUNTIME_RECOVERY_PENDING,
+      ERROR_MESSAGES.PROJECT_RUNTIME_RECOVERY_PENDING,
+      { recoveryFailures }
+    );
+  }
+
+  private ensureRuntimeReadyOrCleanupEntries(entries: RegionPlayerEntry[]): void {
+    try {
+      this.ensureRuntimeReady();
+    } catch (error) {
+      this.cleanupRegionEntries(entries);
+      throw error;
+    }
+  }
+
+  private hasPendingRuntimeRecovery(): boolean {
+    return this.pendingOutputStateRecovery.size > 0 || this.pendingTransportRecovery !== null;
+  }
+
+  private retryPendingRuntimeRecovery(): string[] {
+    const failures: string[] = [];
+    [...this.pendingOutputStateRecovery].forEach(([output, muted]) => {
+      this.tryOutputStateRecovery(output, muted, 'OUTPUT_STATE_RETRY', failures);
+    });
+    if (this.pendingTransportRecovery) {
+      this.tryTransportRecovery(this.pendingTransportRecovery, failures);
+    }
+    return failures;
+  }
+
+  private tryOutputStateRecovery(output: Tone.Gain, muted: boolean, step: string, failures: string[]): void {
+    try {
+      this.setOutputMuted(output, muted, true);
+    } catch (error) {
+      this.pendingOutputStateRecovery.set(output, muted);
+      failures.push(`${step}: ${this.describeError(error)}`);
+    }
+  }
+
+  private tryTransportRecovery(snapshot: TransportSnapshot, failures: string[]): void {
+    try {
+      this.restoreTransport(snapshot);
+      this.pendingTransportRecovery = null;
+    } catch (error) {
+      this.pendingTransportRecovery = snapshot;
+      failures.push(`TRANSPORT_RESTORE: ${this.describeError(error)}`);
+    }
+  }
+
+  private tryCleanupStep(operation: () => unknown, errorMessage: string): boolean {
+    try {
+      operation();
+      return true;
+    } catch (error) {
+      console.error(`[AudioEngine] ${errorMessage}`, error);
+      return false;
+    }
   }
 
   private getExistingChannel(trackId: string): Tone.Channel {
@@ -281,11 +851,24 @@ export class AudioEngine implements IAudioEngine {
   }
 
   private async createScheduledRegionEntries(request: CreateRegionEntriesRequest): Promise<RegionPlayerEntry[]> {
-    const entries = request.regions.map(regionData => ({
-      player: new Tone.Player({ loop: false }).connect(request.channel),
-      regionData: this.cloneRegionData(regionData),
-      revision: 0,
-    }));
+    const entries: RegionPlayerEntry[] = [];
+
+    try {
+      request.regions.forEach(regionData => {
+        const entry = {
+          player: new Tone.Player({ loop: false }),
+          regionData: this.cloneRegionData(regionData),
+          revision: 0,
+        };
+        entries.push(entry);
+        entry.player.connect(request.channel);
+      });
+    } catch (cause) {
+      this.cleanupRegionEntries(entries);
+      throw new AudioEngineError(AudioEngineErrorCode.TRACK_INIT_FAILED, ERROR_MESSAGES.TRACK_INIT_FAILED, {
+        cause: this.describeError(cause),
+      });
+    }
 
     const loadResults = await Promise.allSettled(entries.map(entry => entry.player.load(entry.regionData.url)));
     const loadFailure = loadResults.find(result => result.status === 'rejected');
@@ -360,11 +943,7 @@ export class AudioEngine implements IAudioEngine {
 
   private cleanupRegionEntries(entries: RegionPlayerEntry[]): void {
     entries.forEach(entry => {
-      try {
-        this.disposePlayer(entry.player);
-      } catch (error) {
-        console.error('[AudioEngine] Failed to clean up a Region Player', error);
-      }
+      this.disposePlayerSafely(entry.player, 'Region Player 정리에 실패했습니다.');
     });
   }
 
@@ -373,6 +952,40 @@ export class AudioEngine implements IAudioEngine {
     player.stop();
     player.disconnect();
     player.dispose();
+  }
+
+  private disposePlayerSafely(player: Tone.Player, errorMessage: string): boolean {
+    this.pendingPlayerCleanup.add(player);
+    if (!this.unsyncedPlayers.has(player)) {
+      const isUnsynced = this.tryCleanupStep(() => player.unsync(), errorMessage);
+      if (isUnsynced) {
+        this.unsyncedPlayers.add(player);
+      }
+    }
+    if (!this.stoppedPlayers.has(player)) {
+      const isStopped = this.tryCleanupStep(() => player.stop(), errorMessage);
+      if (isStopped) {
+        this.stoppedPlayers.add(player);
+      }
+    }
+    if (!this.disconnectedPlayers.has(player)) {
+      const isDisconnected = this.tryCleanupStep(() => player.disconnect(), errorMessage);
+      if (isDisconnected) {
+        this.disconnectedPlayers.add(player);
+      }
+    }
+    if (!this.disposedPlayers.has(player)) {
+      const isDisposed = this.tryCleanupStep(() => player.dispose(), errorMessage);
+      if (isDisposed) {
+        this.disposedPlayers.add(player);
+      }
+    }
+
+    const isComplete = this.disposedPlayers.has(player);
+    if (isComplete) {
+      this.pendingPlayerCleanup.delete(player);
+    }
+    return isComplete;
   }
 
   private describeError(error: unknown): string {

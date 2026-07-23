@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface ChannelMockState {
   mute: boolean;
@@ -15,9 +15,14 @@ interface PlayerMockState {
   unsyncCount: number;
 }
 
+interface GainMockState {
+  readonly gain: { value: number };
+}
+
 const toneMocks = vi.hoisted(() => ({
   channelOptions: [] as Array<{ volume: number; pan: number }>,
   channels: [] as ChannelMockState[],
+  gains: [] as GainMockState[],
   playerInstances: [] as PlayerMockState[],
   loadFailures: new Map<string, Error>(),
   loadPromises: new Map<string, Promise<void>>(),
@@ -28,6 +33,15 @@ const toneMocks = vi.hoisted(() => ({
   channelSoloWrites: vi.fn(),
   channelDisconnect: vi.fn(),
   channelDispose: vi.fn(),
+  channelConnect: vi.fn(),
+  channelConnectFailures: [] as Array<Error | undefined>,
+  channelToDestination: vi.fn(),
+  gainDisconnect: vi.fn(),
+  gainDispose: vi.fn(),
+  gainToDestination: vi.fn(),
+  gainValueFailures: [] as Array<Error | undefined>,
+  playerConnect: vi.fn(),
+  playerConnectFailures: [] as Array<Error | undefined>,
   playerDisconnect: vi.fn(),
   playerDispose: vi.fn(),
   playerLoad: vi.fn(),
@@ -35,6 +49,12 @@ const toneMocks = vi.hoisted(() => ({
   playerStop: vi.fn(),
   playerSync: vi.fn(),
   playerUnsync: vi.fn(),
+  transportPause: vi.fn(),
+  transportStart: vi.fn(),
+  transportStop: vi.fn(),
+  transportSeconds: 0,
+  transportSecondsFailures: [] as Array<Error | undefined>,
+  transportState: 'stopped' as 'paused' | 'started' | 'stopped',
 }));
 
 vi.mock('tone', () => {
@@ -92,6 +112,16 @@ vi.mock('tone', () => {
     }
 
     toDestination() {
+      toneMocks.channelToDestination();
+      return this;
+    }
+
+    connect() {
+      toneMocks.channelConnect();
+      const failure = toneMocks.channelConnectFailures.shift();
+      if (failure) {
+        throw failure;
+      }
       return this;
     }
 
@@ -101,6 +131,42 @@ vi.mock('tone', () => {
 
     dispose() {
       toneMocks.channelDispose();
+    }
+  }
+
+  class Gain implements GainMockState {
+    readonly gain: { value: number };
+
+    constructor(options?: number | { gain?: number }) {
+      let gainValue = typeof options === 'number' ? options : (options?.gain ?? 1);
+      this.gain = {
+        get value() {
+          return gainValue;
+        },
+        set value(value: number) {
+          const failure = toneMocks.gainValueFailures.shift();
+          if (failure) {
+            throw failure;
+          }
+          gainValue = value;
+        },
+      };
+      toneMocks.gains.push(this);
+    }
+
+    toDestination() {
+      toneMocks.gainToDestination();
+      return this;
+    }
+
+    disconnect() {
+      toneMocks.gainDisconnect();
+      return this;
+    }
+
+    dispose() {
+      toneMocks.gainDispose();
+      return this;
     }
   }
 
@@ -116,6 +182,11 @@ vi.mock('tone', () => {
     }
 
     connect() {
+      toneMocks.playerConnect();
+      const failure = toneMocks.playerConnectFailures.shift();
+      if (failure) {
+        throw failure;
+      }
       return this;
     }
 
@@ -177,14 +248,46 @@ vi.mock('tone', () => {
     },
   };
 
+  const transport = {
+    pause: () => {
+      toneMocks.transportPause();
+      toneMocks.transportState = 'paused';
+      return transport;
+    },
+    start: () => {
+      toneMocks.transportStart();
+      toneMocks.transportState = 'started';
+      return transport;
+    },
+    stop: () => {
+      toneMocks.transportStop();
+      toneMocks.transportState = 'stopped';
+      return transport;
+    },
+    get state() {
+      return toneMocks.transportState;
+    },
+    get seconds() {
+      return toneMocks.transportSeconds;
+    },
+    set seconds(value: number) {
+      const failure = toneMocks.transportSecondsFailures.shift();
+      if (failure) {
+        throw failure;
+      }
+      toneMocks.transportSeconds = value;
+    },
+  };
+
   return {
     Channel,
+    Gain,
     Player,
     Transport: { bpm },
     dbToGain: (value: number) => (value === Number.NEGATIVE_INFINITY ? 0 : value),
     gainToDb: (value: number) => (value === 0 ? Number.NEGATIVE_INFINITY : value),
     getContext: () => ({ state: 'running' }),
-    getTransport: () => ({ pause: vi.fn(), seconds: 0, start: vi.fn(), stop: vi.fn() }),
+    getTransport: () => transport,
     Offline: toneMocks.offline,
     start: vi.fn(),
   };
@@ -206,21 +309,32 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     vi.clearAllMocks();
     toneMocks.channelOptions.length = 0;
     toneMocks.channels.length = 0;
+    toneMocks.gains.length = 0;
     toneMocks.playerInstances.length = 0;
     toneMocks.loadFailures.clear();
     toneMocks.loadPromises.clear();
     toneMocks.startFailures.length = 0;
+    toneMocks.channelConnectFailures.length = 0;
+    toneMocks.gainValueFailures.length = 0;
+    toneMocks.playerConnectFailures.length = 0;
     toneMocks.tempoWrites.length = 0;
+    toneMocks.transportSeconds = 0;
+    toneMocks.transportSecondsFailures.length = 0;
+    toneMocks.transportState = 'stopped';
   });
 
-  it('기존 채널의 mute와 solo 값을 변경한다', async () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('명시적 mute와 solo 선택을 채널 음소거로 계산한다', async () => {
     const engine = new AudioEngine();
     await engine.addTrack('track-1');
 
     engine.setTrackMute('track-1', true);
     engine.setTrackSolo('track-1', true);
 
-    expect(toneMocks.channels[0]).toMatchObject({ mute: true, solo: true });
+    expect(toneMocks.channels[0]).toMatchObject({ mute: true, solo: false });
   });
 
   it('mute 중 볼륨 변경은 음소거를 유지하고 unmute 전에 목표 볼륨을 적용한다', async () => {
@@ -574,16 +688,502 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     expect(toneMocks.channelDispose).toHaveBeenCalledOnce();
   });
 
-  it('Solo 트랙 제거 전에 solo를 해제한다', async () => {
+  it('마지막 Solo 트랙을 제거하면 남은 트랙의 계산된 음소거를 해제한다', async () => {
     const engine = new AudioEngine();
     await engine.addTrack('track-1');
+    await engine.addTrack('track-2');
     engine.setTrackSolo('track-1', true);
-    toneMocks.channelSoloWrites.mockClear();
+
+    expect(toneMocks.channels[0]?.mute).toBe(false);
+    expect(toneMocks.channels[1]?.mute).toBe(true);
 
     engine.removeTrack('track-1');
 
-    expect(toneMocks.channelSoloWrites).toHaveBeenCalledWith(false);
-    expect(toneMocks.channelSoloWrites).toHaveBeenCalledBefore(toneMocks.channelDispose);
+    expect(toneMocks.channels[1]?.mute).toBe(false);
+    expect(toneMocks.channels[1]?.solo).toBe(false);
+  });
+
+  it('Solo가 활성화된 동안 추가한 일반 Track을 즉시 음소거한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addTrack('solo-track');
+    engine.setTrackSolo('solo-track', true);
+
+    await engine.addTrack('new-track');
+
+    expect(toneMocks.channels[0]?.mute).toBe(false);
+    expect(toneMocks.channels[1]?.mute).toBe(true);
+  });
+
+  it('새 프로젝트 그래프를 음소거 상태로 준비하고 activate에서 기존 그래프와 교체한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addRegion('current-track', ORIGINAL_REGION);
+    toneMocks.transportSeconds = 7;
+
+    const replacement = await engine.prepareProjectGraph({
+      tracks: [
+        {
+          id: 'replacement-track',
+          volume: 0.5,
+          pan: -0.25,
+          isMuted: false,
+          isSoloed: true,
+          regions: [{ ...ORIGINAL_REGION, id: 'replacement-region', url: 'replacement.wav' }],
+        },
+      ],
+    });
+
+    expect(engine.getTrackParams('current-track')).not.toBeNull();
+    expect(engine.getTrackParams('replacement-track')).toBeNull();
+    expect(toneMocks.channels[1]?.mute).toBe(false);
+    expect(toneMocks.channels[1]?.solo).toBe(false);
+    expect(toneMocks.gains[1]?.gain.value).toBe(0);
+
+    replacement.assertActivatable();
+    const retiredGraph = replacement.activate();
+
+    expect(engine.getTrackParams('current-track')).toBeNull();
+    expect(engine.getTrackParams('replacement-track')).toEqual({ volume: 0.5, pan: -0.25 });
+    expect(toneMocks.transportStop).toHaveBeenCalledOnce();
+    expect(toneMocks.transportSeconds).toBe(0);
+    expect(toneMocks.channels[1]?.mute).toBe(false);
+    expect(toneMocks.channels[1]?.solo).toBe(false);
+    expect(toneMocks.gains[0]?.gain.value).toBe(0);
+    expect(toneMocks.gains[1]?.gain.value).toBe(1);
+    expect(toneMocks.playerDispose).not.toHaveBeenCalled();
+
+    retiredGraph.dispose();
+    expect(toneMocks.playerDispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('새 프로젝트 Region 로드 실패 시 준비 그래프만 정리하고 기존 그래프를 유지한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addTrack('current-track');
+    toneMocks.loadFailures.set('broken.wav', new Error('load failed'));
+
+    await expect(
+      engine.prepareProjectGraph({
+        tracks: [
+          {
+            id: 'replacement-track',
+            volume: 1,
+            pan: 0,
+            isMuted: false,
+            isSoloed: false,
+            regions: [{ ...ORIGINAL_REGION, url: 'broken.wav' }],
+          },
+        ],
+      })
+    ).rejects.toMatchObject({ code: AudioEngineErrorCode.REGION_LOAD_FAILED });
+
+    expect(engine.getTrackParams('current-track')).not.toBeNull();
+    expect(engine.getTrackParams('replacement-track')).toBeNull();
+    expect(toneMocks.channelDispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('준비 중 active 그래프가 바뀌면 activate 전에 거부한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addTrack('current-track');
+    const replacement = await engine.prepareProjectGraph({
+      tracks: [
+        {
+          id: 'replacement-track',
+          volume: 1,
+          pan: 0,
+          isMuted: false,
+          isSoloed: false,
+          regions: [],
+        },
+      ],
+    });
+
+    engine.setTrackVolume('current-track', 0.25);
+
+    expect(() => replacement.assertActivatable()).toThrowError(
+      expect.objectContaining({ code: AudioEngineErrorCode.ACTIVE_GRAPH_CHANGED })
+    );
+    replacement.discard();
+    expect(engine.getTrackParams('current-track')?.volume).toBe(0.25);
+    expect(toneMocks.channelDispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('준비 시작 전에 실행 중이던 Region 추가가 나중에 완료되면 교체를 거부한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addTrack('current-track');
+    let finishLoad: (() => void) | undefined;
+    toneMocks.loadPromises.set(
+      'late.wav',
+      new Promise<void>(resolve => {
+        finishLoad = resolve;
+      })
+    );
+    const addRegion = engine.addRegion('current-track', { ...ORIGINAL_REGION, url: 'late.wav' });
+    await vi.waitFor(() => expect(toneMocks.playerLoad).toHaveBeenCalledWith('late.wav'));
+    const replacement = await engine.prepareProjectGraph({ tracks: [] });
+
+    finishLoad?.();
+    await addRegion;
+
+    expect(() => replacement.assertActivatable()).toThrowError(
+      expect.objectContaining({ code: AudioEngineErrorCode.ACTIVE_GRAPH_CHANGED })
+    );
+    replacement.discard();
+  });
+
+  it('activate 뒤 이전 그래프 정리 실패는 새 그래프를 되돌리지 않는다', async () => {
+    const engine = new AudioEngine();
+    await engine.addTrack('current-track');
+    const replacement = await engine.prepareProjectGraph({
+      tracks: [
+        {
+          id: 'replacement-track',
+          volume: 1,
+          pan: 0,
+          isMuted: false,
+          isSoloed: false,
+          regions: [],
+        },
+      ],
+    });
+    replacement.assertActivatable();
+    const retiredGraph = replacement.activate();
+    toneMocks.channelDispose.mockImplementationOnce(() => {
+      throw new Error('dispose failed');
+    });
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const firstCleanup = retiredGraph.dispose();
+    const retriedCleanup = retiredGraph.dispose();
+
+    expect(firstCleanup.isComplete).toBe(false);
+    expect(retriedCleanup).toEqual({ isComplete: true, failedResourceCount: 0 });
+    expect(engine.getTrackParams('replacement-track')).not.toBeNull();
+    expect(logError).toHaveBeenCalledTimes(1);
+  });
+
+  it('discard 정리가 일부 실패해도 준비 그래프를 다시 활성화하지 못한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addTrack('current-track');
+    const replacement = await engine.prepareProjectGraph({
+      tracks: [
+        {
+          id: 'replacement-track',
+          volume: 1,
+          pan: 0,
+          isMuted: false,
+          isSoloed: false,
+          regions: [],
+        },
+      ],
+    });
+    toneMocks.channelDispose.mockImplementationOnce(() => {
+      throw new Error('candidate dispose failed');
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const firstCleanup = replacement.discard();
+    const retriedCleanup = replacement.discard();
+
+    expect(firstCleanup.isComplete).toBe(false);
+    expect(retriedCleanup).toEqual({ isComplete: true, failedResourceCount: 0 });
+    expect(() => replacement.assertActivatable()).toThrowError(
+      expect.objectContaining({ code: AudioEngineErrorCode.ACTIVE_GRAPH_CHANGED })
+    );
+    expect(() => replacement.activate()).toThrowError(
+      expect.objectContaining({ code: AudioEngineErrorCode.ACTIVE_GRAPH_CHANGED })
+    );
+    expect(engine.getTrackParams('current-track')).not.toBeNull();
+    expect(engine.getTrackParams('replacement-track')).toBeNull();
+  });
+
+  it('활성화 중 Transport 초기화가 실패하면 기존 재생 상태와 그래프를 복원한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addTrack('current-track');
+    engine.setTime(7);
+    await engine.play();
+    const replacement = await engine.prepareProjectGraph({
+      tracks: [
+        {
+          id: 'replacement-track',
+          volume: 1,
+          pan: 0,
+          isMuted: false,
+          isSoloed: false,
+          regions: [],
+        },
+      ],
+    });
+    toneMocks.transportSecondsFailures.push(new Error('seconds failed'));
+
+    expect(() => replacement.activate()).toThrowError(
+      expect.objectContaining({ code: AudioEngineErrorCode.PROJECT_GRAPH_ACTIVATION_FAILED })
+    );
+
+    expect(engine.getTrackParams('current-track')).not.toBeNull();
+    expect(engine.getTrackParams('replacement-track')).toBeNull();
+    expect(engine.getCurrentTime()).toBe(7);
+    expect(toneMocks.transportState).toBe('started');
+    expect(() => replacement.assertActivatable()).toThrowError(
+      expect.objectContaining({ code: AudioEngineErrorCode.ACTIVE_GRAPH_CHANGED })
+    );
+  });
+
+  it('활성화 실패 후 기존 출력 복원이 한 번 실패해도 즉시 재시도한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addTrack('current-track');
+    const replacement = await engine.prepareProjectGraph({ tracks: [] });
+    toneMocks.gainValueFailures.push(
+      undefined,
+      new Error('candidate unmute failed'),
+      undefined,
+      new Error('previous unmute failed')
+    );
+
+    expect(() => replacement.activate()).toThrowError(
+      expect.objectContaining({ code: AudioEngineErrorCode.PROJECT_GRAPH_ACTIVATION_FAILED })
+    );
+
+    expect(toneMocks.gains[0]?.gain.value).toBe(1);
+    expect(engine.getTrackParams('current-track')).not.toBeNull();
+  });
+
+  it('기존 출력 복원이 계속 실패하면 다음 작업을 거부하고 복원을 재시도한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addTrack('current-track');
+    const replacement = await engine.prepareProjectGraph({ tracks: [] });
+    toneMocks.gainValueFailures.push(
+      undefined,
+      new Error('candidate unmute failed'),
+      undefined,
+      new Error('previous unmute failed'),
+      new Error('immediate retry failed'),
+      new Error('next operation retry failed')
+    );
+
+    expect(() => replacement.activate()).toThrowError(
+      expect.objectContaining({
+        code: AudioEngineErrorCode.PROJECT_GRAPH_ACTIVATION_FAILED,
+        details: expect.objectContaining({ isRuntimeRecoveryPending: true }),
+      })
+    );
+    expect(() => engine.getTrackParams('current-track')).toThrowError(
+      expect.objectContaining({ code: AudioEngineErrorCode.PROJECT_RUNTIME_RECOVERY_PENDING })
+    );
+
+    expect(engine.getTrackParams('current-track')).not.toBeNull();
+    expect(toneMocks.gains[0]?.gain.value).toBe(1);
+  });
+
+  it('Transport 복원이 계속 실패하면 다음 작업을 거부하고 재생 상태를 재복원한다', async () => {
+    const engine = new AudioEngine();
+    engine.setTime(7);
+    await engine.play();
+    const replacement = await engine.prepareProjectGraph({ tracks: [] });
+    toneMocks.transportSecondsFailures.push(
+      new Error('activation reset failed'),
+      new Error('transport restore failed'),
+      new Error('immediate retry failed'),
+      new Error('next operation retry failed')
+    );
+
+    expect(() => replacement.activate()).toThrowError(
+      expect.objectContaining({
+        code: AudioEngineErrorCode.PROJECT_GRAPH_ACTIVATION_FAILED,
+        details: expect.objectContaining({ isRuntimeRecoveryPending: true }),
+      })
+    );
+    expect(() => engine.getCurrentTime()).toThrowError(
+      expect.objectContaining({ code: AudioEngineErrorCode.PROJECT_RUNTIME_RECOVERY_PENDING })
+    );
+
+    expect(engine.getCurrentTime()).toBe(7);
+    expect(toneMocks.transportState).toBe('started');
+  });
+
+  it('비동기 Region 추가 완료 전에 Runtime 복원 대기 상태가 되면 새 Player를 정리한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addTrack('current-track');
+    let finishLoad: (() => void) | undefined;
+    toneMocks.loadPromises.set(
+      'late.wav',
+      new Promise<void>(resolve => {
+        finishLoad = resolve;
+      })
+    );
+    const addRegion = engine.addRegion('current-track', { ...ORIGINAL_REGION, url: 'late.wav' });
+    await vi.waitFor(() => expect(toneMocks.playerLoad).toHaveBeenCalledWith('late.wav'));
+    const replacement = await engine.prepareProjectGraph({ tracks: [] });
+    toneMocks.gainValueFailures.push(
+      undefined,
+      new Error('candidate unmute failed'),
+      undefined,
+      new Error('previous unmute failed'),
+      new Error('immediate retry failed'),
+      new Error('region commit retry failed')
+    );
+    expect(() => replacement.activate()).toThrowError(
+      expect.objectContaining({ code: AudioEngineErrorCode.PROJECT_GRAPH_ACTIVATION_FAILED })
+    );
+
+    finishLoad?.();
+
+    await expect(addRegion).rejects.toMatchObject({ code: AudioEngineErrorCode.PROJECT_RUNTIME_RECOVERY_PENDING });
+    expect(toneMocks.playerInstances[0]?.disposed).toBe(true);
+    expect(engine.getTrackParams('current-track')).not.toBeNull();
+  });
+
+  it('이전 그래프 정리가 실패해도 출력 gate가 닫혀 다음 재생에 섞이지 않는다', async () => {
+    const engine = new AudioEngine();
+    await engine.addRegion('current-track', ORIGINAL_REGION);
+    const replacement = await engine.prepareProjectGraph({
+      tracks: [
+        {
+          id: 'replacement-track',
+          volume: 1,
+          pan: 0,
+          isMuted: false,
+          isSoloed: false,
+          regions: [],
+        },
+      ],
+    });
+    const retiredGraph = replacement.activate();
+    toneMocks.channelDisconnect.mockImplementationOnce(() => {
+      throw new Error('disconnect failed');
+    });
+    toneMocks.channelDispose.mockImplementationOnce(() => {
+      throw new Error('dispose failed');
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    retiredGraph.dispose();
+
+    expect(toneMocks.gains[0]?.gain.value).toBe(0);
+    expect(engine.getTrackParams('replacement-track')).not.toBeNull();
+  });
+
+  it('Channel disconnect가 실패해도 dispose가 성공하면 정리를 완료한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addTrack('current-track');
+    const replacement = await engine.prepareProjectGraph({ tracks: [] });
+    const retiredGraph = replacement.activate();
+    toneMocks.channelDisconnect.mockImplementationOnce(() => {
+      throw new Error('disconnect failed');
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const cleanup = retiredGraph.dispose();
+
+    expect(cleanup).toEqual({ isComplete: true, failedResourceCount: 0 });
+    expect(toneMocks.channelDispose).toHaveBeenCalledOnce();
+  });
+
+  it('Player unsync가 실패해도 dispose가 성공하면 정리를 완료한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addRegion('current-track', ORIGINAL_REGION);
+    const replacement = await engine.prepareProjectGraph({ tracks: [] });
+    const retiredGraph = replacement.activate();
+    toneMocks.playerUnsync.mockImplementationOnce(() => {
+      throw new Error('unsync failed');
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const cleanup = retiredGraph.dispose();
+
+    expect(cleanup).toEqual({ isComplete: true, failedResourceCount: 0 });
+    expect(toneMocks.playerDispose).toHaveBeenCalledOnce();
+  });
+
+  it('빈 프로젝트 그래프를 활성화하면 기존 Track과 Player를 retired 그래프로 분리한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addRegion('current-track', ORIGINAL_REGION);
+    toneMocks.transportSeconds = 5;
+    const replacement = await engine.prepareProjectGraph({ tracks: [] });
+
+    const retiredGraph = replacement.activate();
+
+    expect(engine.getTrackParams('current-track')).toBeNull();
+    expect(engine.getCurrentTime()).toBe(0);
+    expect(toneMocks.playerDispose).not.toHaveBeenCalled();
+
+    retiredGraph.dispose();
+    expect(toneMocks.playerDispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('두 번째 Track 준비가 실패하면 앞서 준비한 Track과 Region도 정리한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addTrack('current-track');
+    toneMocks.loadFailures.set('broken.wav', new Error('load failed'));
+
+    await expect(
+      engine.prepareProjectGraph({
+        tracks: [
+          {
+            id: 'prepared-track',
+            volume: 1,
+            pan: 0,
+            isMuted: false,
+            isSoloed: false,
+            regions: [{ ...ORIGINAL_REGION, id: 'prepared-region', url: 'prepared.wav' }],
+          },
+          {
+            id: 'broken-track',
+            volume: 1,
+            pan: 0,
+            isMuted: false,
+            isSoloed: false,
+            regions: [{ ...ORIGINAL_REGION, id: 'broken-region', url: 'broken.wav' }],
+          },
+        ],
+      })
+    ).rejects.toMatchObject({ code: AudioEngineErrorCode.REGION_LOAD_FAILED });
+
+    expect(engine.getTrackParams('current-track')).not.toBeNull();
+    expect(toneMocks.playerDispose).toHaveBeenCalledTimes(2);
+    expect(toneMocks.channelDispose).toHaveBeenCalledTimes(2);
+  });
+
+  it('준비 Channel 연결 실패 시 생성한 Channel을 정리한다', async () => {
+    const engine = new AudioEngine();
+    toneMocks.channelConnectFailures.push(new Error('connect failed'));
+
+    await expect(
+      engine.prepareProjectGraph({
+        tracks: [
+          {
+            id: 'replacement-track',
+            volume: 1,
+            pan: 0,
+            isMuted: false,
+            isSoloed: false,
+            regions: [],
+          },
+        ],
+      })
+    ).rejects.toMatchObject({ code: AudioEngineErrorCode.TRACK_INIT_FAILED });
+
+    expect(toneMocks.channelDispose).toHaveBeenCalledOnce();
+  });
+
+  it('준비 Player 연결 실패 시 생성한 Player를 정리한다', async () => {
+    const engine = new AudioEngine();
+    toneMocks.playerConnectFailures.push(new Error('connect failed'));
+
+    await expect(
+      engine.prepareProjectGraph({
+        tracks: [
+          {
+            id: 'replacement-track',
+            volume: 1,
+            pan: 0,
+            isMuted: false,
+            isSoloed: false,
+            regions: [{ ...ORIGINAL_REGION, id: 'replacement-region' }],
+          },
+        ],
+      })
+    ).rejects.toMatchObject({ code: AudioEngineErrorCode.TRACK_INIT_FAILED });
+
+    expect(toneMocks.playerInstances[0]?.disposed).toBe(true);
   });
 });
 

@@ -1,10 +1,13 @@
 import { z } from 'zod';
+import { COMPLETE_RESOURCE_CLEANUP, type ResourceCleanupResult } from '../shared/types/resource-cleanup';
 import { ProjectAudioSourceSchema, type ProjectAudioSource } from '../shared/types/project-document.schema';
 import { AudioSourceRegistryError } from './errors';
 import type {
   AudioSourceAttachment,
   AudioSourceRegistration,
   IAudioSourceRegistry,
+  IPreparedAudioSourceRegistryReplacement,
+  IRetiredAudioSourceRegistry,
   RuntimeAudioSource,
 } from './i-audio-source-registry';
 import type { IObjectUrlAdapter } from './i-object-url-adapter';
@@ -19,18 +22,104 @@ interface StoredAudioSource {
   readonly regionIds: Set<string>;
 }
 
+interface RetiredAudioSourceRegistryState {
+  readonly sources: Map<string, StoredAudioSource>;
+  readonly sourceIdByRegionId: Map<string, string>;
+}
+
+type PreparedRegistryState = 'activated' | 'discarded' | 'prepared';
+
 export class AudioSourceRegistry implements IAudioSourceRegistry {
-  private readonly sources = new Map<string, StoredAudioSource>();
-  private readonly sourceIdByRegionId = new Map<string, string>();
+  private sources = new Map<string, StoredAudioSource>();
+  private sourceIdByRegionId = new Map<string, string>();
+  private mutationRevision = 0;
+  private readonly pendingDetachedRegistryCleanup = new Set<AudioSourceRegistry>();
+  private readonly pendingRetiredRegistryCleanup = new Set<RetiredAudioSourceRegistryState>();
 
   constructor(private readonly objectUrlAdapter: IObjectUrlAdapter) {}
 
   stage(registration: AudioSourceRegistration): RuntimeAudioSource {
-    return this.register(registration, false);
+    const source = this.register(registration, false);
+    this.mutationRevision += 1;
+    return source;
   }
 
   restoreCommitted(registration: AudioSourceRegistration): RuntimeAudioSource {
-    return this.register(registration, true);
+    const source = this.register(registration, true);
+    this.mutationRevision += 1;
+    return source;
+  }
+
+  beginReplacement(): IPreparedAudioSourceRegistryReplacement {
+    this.retryPendingCleanup();
+    const expectedRevision = this.mutationRevision;
+    const replacementRegistry = new AudioSourceRegistry(this.objectUrlAdapter);
+    let retiredSources: IRetiredAudioSourceRegistry | undefined;
+    let state: PreparedRegistryState = 'prepared';
+
+    const assertPrepared = (): void => {
+      if (state !== 'prepared') {
+        throw new AudioSourceRegistryError({
+          code: 'ACTIVE_REGISTRY_CHANGED',
+          message: '이미 종료한 Source Registry 교체는 변경할 수 없습니다.',
+        });
+      }
+    };
+
+    const assertActivatable = (): void => {
+      if (state === 'activated') {
+        return;
+      }
+      assertPrepared();
+      if (this.mutationRevision === expectedRevision) {
+        return;
+      }
+
+      throw new AudioSourceRegistryError({
+        code: 'ACTIVE_REGISTRY_CHANGED',
+        message: '프로젝트를 준비하는 동안 active Source Registry가 변경되었습니다.',
+        details: { actualRevision: this.mutationRevision, expectedRevision },
+      });
+    };
+
+    return {
+      restoreCommitted: registration => {
+        assertPrepared();
+        return replacementRegistry.restoreCommitted(registration);
+      },
+      attach: attachment => {
+        assertPrepared();
+        replacementRegistry.attach(attachment);
+      },
+      resolve: sourceId => replacementRegistry.resolve(sourceId),
+      listCommittedMetadata: () => replacementRegistry.listCommittedMetadata(),
+      assertActivatable,
+      activate: () => {
+        if (retiredSources) {
+          return retiredSources;
+        }
+
+        assertActivatable();
+        const previousSources = this.sources;
+        const previousSourceIdByRegionId = this.sourceIdByRegionId;
+        this.sources = replacementRegistry.sources;
+        this.sourceIdByRegionId = replacementRegistry.sourceIdByRegionId;
+        replacementRegistry.sources = new Map();
+        replacementRegistry.sourceIdByRegionId = new Map();
+        this.mutationRevision += 1;
+        state = 'activated';
+        retiredSources = this.createRetiredSources(previousSources, previousSourceIdByRegionId);
+        return retiredSources;
+      },
+      discard: () => {
+        if (state === 'activated') {
+          return COMPLETE_RESOURCE_CLEANUP;
+        }
+
+        state = 'discarded';
+        return this.disposeDetachedRegistry(replacementRegistry);
+      },
+    };
   }
 
   resolve(sourceId: string): RuntimeAudioSource | null {
@@ -64,6 +153,7 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
     source.regionIds.add(regionId);
     source.isCommitted = true;
     this.sourceIdByRegionId.set(regionId, sourceId);
+    this.mutationRevision += 1;
   }
 
   detach({ sourceId, regionId }: AudioSourceAttachment): void {
@@ -80,6 +170,7 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
 
     source.regionIds.delete(regionId);
     this.sourceIdByRegionId.delete(regionId);
+    this.mutationRevision += 1;
   }
 
   discardPending(sourceId: string): void {
@@ -97,6 +188,7 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
     }
 
     this.removeSourceAndRevoke(sourceId, source);
+    this.mutationRevision += 1;
   }
 
   purgeUnused(sourceId: string): void {
@@ -119,12 +211,15 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
     }
 
     this.removeSourceAndRevoke(sourceId, source);
+    this.mutationRevision += 1;
   }
 
   clear(): void {
+    this.retryPendingCleanup();
     const sources = [...this.sources.entries()];
     let firstRevocationError: unknown;
     const failedSourceIds: string[] = [];
+    let removedSourceCount = 0;
     sources.forEach(([sourceId, source]) => {
       try {
         this.objectUrlAdapter.revokeObjectUrl(source.objectUrl);
@@ -136,7 +231,12 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
 
       this.sources.delete(sourceId);
       source.regionIds.forEach(regionId => this.sourceIdByRegionId.delete(regionId));
+      removedSourceCount += 1;
     });
+
+    if (removedSourceCount > 0) {
+      this.mutationRevision += 1;
+    }
 
     if (firstRevocationError) {
       throw new AudioSourceRegistryError({
@@ -281,5 +381,75 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
     }
 
     this.sources.delete(sourceId);
+  }
+
+  private createRetiredSources(
+    sources: Map<string, StoredAudioSource>,
+    sourceIdByRegionId: Map<string, string>
+  ): IRetiredAudioSourceRegistry {
+    const retiredState = { sources, sourceIdByRegionId };
+    this.pendingRetiredRegistryCleanup.add(retiredState);
+
+    return {
+      dispose: () => this.disposeRetiredRegistry(retiredState),
+    };
+  }
+
+  private disposeDetachedRegistry(registry: AudioSourceRegistry): ResourceCleanupResult {
+    let cleanupError: unknown;
+
+    try {
+      registry.clear();
+    } catch (error) {
+      cleanupError = error;
+    }
+
+    const failedResourceCount = registry.sources.size;
+    if (failedResourceCount === 0) {
+      this.pendingDetachedRegistryCleanup.delete(registry);
+      return COMPLETE_RESOURCE_CLEANUP;
+    }
+
+    this.pendingDetachedRegistryCleanup.add(registry);
+    console.error('[AudioSourceRegistry] 준비한 Source Registry 정리에 실패했습니다.', cleanupError);
+    return { isComplete: false, failedResourceCount };
+  }
+
+  private disposeRetiredRegistry(retiredState: RetiredAudioSourceRegistryState): ResourceCleanupResult {
+    const failedSourceIds: string[] = [];
+    let firstRevocationError: unknown;
+    retiredState.sources.forEach((source, sourceId) => {
+      try {
+        this.objectUrlAdapter.revokeObjectUrl(source.objectUrl);
+      } catch (error) {
+        firstRevocationError ??= error;
+        failedSourceIds.push(sourceId);
+        return;
+      }
+
+      retiredState.sources.delete(sourceId);
+    });
+
+    if (failedSourceIds.length > 0) {
+      console.error(
+        '[AudioSourceRegistry] 이전 프로젝트 Object URL 정리에 실패했습니다.',
+        new AudioSourceRegistryError({
+          code: 'OBJECT_URL_REVOCATION_FAILED',
+          message: '이전 프로젝트의 일부 Object URL을 해제하지 못했습니다.',
+          details: { failedSourceIds },
+          cause: firstRevocationError,
+        })
+      );
+      return { isComplete: false, failedResourceCount: failedSourceIds.length };
+    }
+
+    retiredState.sourceIdByRegionId.clear();
+    this.pendingRetiredRegistryCleanup.delete(retiredState);
+    return COMPLETE_RESOURCE_CLEANUP;
+  }
+
+  private retryPendingCleanup(): void {
+    [...this.pendingDetachedRegistryCleanup].forEach(registry => this.disposeDetachedRegistry(registry));
+    [...this.pendingRetiredRegistryCleanup].forEach(retiredState => this.disposeRetiredRegistry(retiredState));
   }
 }

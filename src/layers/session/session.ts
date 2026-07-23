@@ -30,6 +30,15 @@ export interface TrackState {
   regions: RegionState[];
 }
 
+export interface ProjectSessionState {
+  readonly project: ProjectMetadata;
+  readonly tempo: number;
+  readonly masterVolume: number;
+  readonly exportStartTime: number | null;
+  readonly exportEndTime: number | null;
+  readonly tracks: ReadonlyMap<string, TrackState>;
+}
+
 export interface SessionState {
   project: ProjectMetadata;
   isPlaying: boolean;
@@ -58,6 +67,7 @@ export interface SessionState {
   setMasterVolume: (volume: number) => void;
   setExportRange: (startTime: number | null, endTime: number | null) => void;
   replaceProjectMetadata: (project: ProjectMetadata) => void;
+  replaceProjectState: (projectState: ProjectSessionState) => void;
 
   addTrack: (track: TrackState) => void;
   updateTrack: (id: string, updates: Partial<TrackState>) => void;
@@ -107,6 +117,17 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     setMasterVolume: volume => set({ masterVolume: volume }),
     setExportRange: (startTime, endTime) => set({ exportStartTime: startTime, exportEndTime: endTime }),
     replaceProjectMetadata: project => set({ project: { ...project } }),
+    replaceProjectState: projectState =>
+      set({
+        project: { ...projectState.project },
+        tempo: projectState.tempo,
+        masterVolume: projectState.masterVolume,
+        exportStartTime: projectState.exportStartTime,
+        exportEndTime: projectState.exportEndTime,
+        tracks: cloneProjectTracks(projectState.tracks),
+        isPlaying: false,
+        currentTime: 0,
+      }),
 
     /* Track Actions */
     addTrack: track =>
@@ -150,4 +171,17 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
         hasSuccessfulAgentResult: false,
       }),
   }));
+}
+
+function cloneProjectTracks(tracks: ReadonlyMap<string, TrackState>): Map<string, TrackState> {
+  return new Map(
+    [...tracks.entries()].map(([trackId, track]) => [
+      trackId,
+      {
+        ...track,
+        status: [...track.status],
+        regions: track.regions.map(region => ({ ...region, status: [...region.status] })),
+      },
+    ])
+  );
 }

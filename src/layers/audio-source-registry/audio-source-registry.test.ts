@@ -9,6 +9,7 @@ import type { IObjectUrlAdapter } from './i-object-url-adapter';
 const SOURCE_ID = '11111111-1111-4111-8111-111111111111';
 const SECOND_SOURCE_ID = '22222222-2222-4222-8222-222222222222';
 const REGION_ID = '33333333-3333-4333-8333-333333333333';
+const THIRD_SOURCE_ID = '44444444-4444-4444-8444-444444444444';
 
 class FakeObjectUrlAdapter implements IObjectUrlAdapter {
   private nextUrlIndex = 0;
@@ -60,6 +61,10 @@ describe('AudioSourceRegistry', () => {
   beforeEach(() => {
     objectUrlAdapter = new FakeObjectUrlAdapter();
     registry = new AudioSourceRegistry(objectUrlAdapter);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('Source를 pending 상태로 등록하고 외부에 복사본만 반환한다', () => {
@@ -331,6 +336,113 @@ describe('AudioSourceRegistry', () => {
     registry.clear();
     expect(registry.resolve(SOURCE_ID)).toBeNull();
     expect(objectUrlAdapter.revokeObjectUrl).toHaveBeenCalledTimes(3);
+  });
+
+  describe('준비된 Source Registry 교체', () => {
+    it('새 Source와 연결을 분리해 준비한 뒤 activate에서 한 번에 교체한다', () => {
+      registry.restoreCommitted(createRegistration());
+      const replacement = registry.beginReplacement();
+
+      replacement.restoreCommitted(createRegistration(SOURCE_ID));
+      replacement.attach({ sourceId: SOURCE_ID, regionId: REGION_ID });
+
+      expect(registry.resolve(SOURCE_ID)).toMatchObject({ objectUrl: 'blob:test-1', regionIds: [] });
+      expect(replacement.resolve(SOURCE_ID)).toMatchObject({ objectUrl: 'blob:test-2', regionIds: [REGION_ID] });
+
+      replacement.assertActivatable();
+      const retiredSources = replacement.activate();
+
+      expect(registry.resolve(SOURCE_ID)).toMatchObject({ objectUrl: 'blob:test-2', regionIds: [REGION_ID] });
+      expect(objectUrlAdapter.revokeObjectUrl).not.toHaveBeenCalled();
+
+      retiredSources.dispose();
+      expect(objectUrlAdapter.revokeObjectUrl).toHaveBeenCalledWith('blob:test-1');
+    });
+
+    it('준비 중 active Registry가 바뀌면 교체를 거부하고 새 변경을 보존한다', () => {
+      registry.restoreCommitted(createRegistration());
+      const replacement = registry.beginReplacement();
+      replacement.restoreCommitted(createRegistration(SECOND_SOURCE_ID));
+
+      registry.stage(createRegistration(THIRD_SOURCE_ID));
+
+      expectRegistryError(() => replacement.assertActivatable(), 'ACTIVE_REGISTRY_CHANGED');
+      expect(registry.resolve(SOURCE_ID)).not.toBeNull();
+      expect(registry.resolve(THIRD_SOURCE_ID)).not.toBeNull();
+      expect(registry.resolve(SECOND_SOURCE_ID)).toBeNull();
+
+      replacement.discard();
+      expect(objectUrlAdapter.revokeObjectUrl).toHaveBeenCalledWith('blob:test-2');
+    });
+
+    it('discard를 반복해도 준비한 URL만 한 번 해제하고 active Registry는 유지한다', () => {
+      registry.restoreCommitted(createRegistration());
+      const replacement = registry.beginReplacement();
+      replacement.restoreCommitted(createRegistration(SECOND_SOURCE_ID));
+
+      replacement.discard();
+      replacement.discard();
+
+      expect(registry.resolve(SOURCE_ID)).not.toBeNull();
+      expect(registry.resolve(SECOND_SOURCE_ID)).toBeNull();
+      expect(objectUrlAdapter.revokeObjectUrl).toHaveBeenCalledTimes(1);
+      expect(objectUrlAdapter.revokeObjectUrl).toHaveBeenCalledWith('blob:test-2');
+    });
+
+    it('discard 정리가 일부 실패해도 준비한 Registry를 다시 활성화하지 못한다', () => {
+      registry.restoreCommitted(createRegistration());
+      const replacement = registry.beginReplacement();
+      replacement.restoreCommitted(createRegistration(SECOND_SOURCE_ID));
+      objectUrlAdapter.revokeObjectUrl.mockImplementationOnce(() => {
+        throw new Error('준비 URL 해제 실패');
+      });
+      const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      const firstCleanup = replacement.discard();
+      const retriedCleanup = replacement.discard();
+
+      expect(firstCleanup).toEqual({ isComplete: false, failedResourceCount: 1 });
+      expect(retriedCleanup).toEqual({ isComplete: true, failedResourceCount: 0 });
+      expectRegistryError(() => replacement.assertActivatable(), 'ACTIVE_REGISTRY_CHANGED');
+      expectRegistryError(() => replacement.activate(), 'ACTIVE_REGISTRY_CHANGED');
+      expect(registry.resolve(SOURCE_ID)).not.toBeNull();
+      expect(registry.resolve(SECOND_SOURCE_ID)).toBeNull();
+      expect(logError).toHaveBeenCalledTimes(1);
+    });
+
+    it('빈 Registry를 활성화해도 이전 URL은 retired dispose 전까지 유지한다', () => {
+      registry.restoreCommitted(createRegistration());
+      const replacement = registry.beginReplacement();
+
+      const retiredSources = replacement.activate();
+
+      expect(registry.resolve(SOURCE_ID)).toBeNull();
+      expect(objectUrlAdapter.revokeObjectUrl).not.toHaveBeenCalled();
+
+      retiredSources.dispose();
+      expect(objectUrlAdapter.revokeObjectUrl).toHaveBeenCalledWith('blob:test-1');
+    });
+
+    it('activate 뒤 이전 URL 정리가 실패해도 새 Registry를 되돌리지 않는다', () => {
+      registry.restoreCommitted(createRegistration());
+      const replacement = registry.beginReplacement();
+      replacement.restoreCommitted(createRegistration(SECOND_SOURCE_ID));
+      replacement.assertActivatable();
+      const retiredSources = replacement.activate();
+      objectUrlAdapter.revokeObjectUrl.mockImplementationOnce(() => {
+        throw new Error('이전 URL 해제 실패');
+      });
+      const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      const firstCleanup = retiredSources.dispose();
+      const retriedCleanup = retiredSources.dispose();
+
+      expect(firstCleanup).toEqual({ isComplete: false, failedResourceCount: 1 });
+      expect(retriedCleanup).toEqual({ isComplete: true, failedResourceCount: 0 });
+      expect(registry.resolve(SOURCE_ID)).toBeNull();
+      expect(registry.resolve(SECOND_SOURCE_ID)).not.toBeNull();
+      expect(logError).toHaveBeenCalledTimes(1);
+    });
   });
 });
 

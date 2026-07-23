@@ -58,8 +58,10 @@ Region, 허용 오차를 초과한 Region 끝 시각 불일치는 손실을 숨�
 
 `createApp`은 새 프로젝트의 UUID·이름·revision 0을 만들거나 검증을 마친 기존 metadata를 Session에 주입한다.
 `project.revision`은 편집 횟수나 저장 여부가 아니라 마지막 성공 저장 snapshot의 동시성 제어 값이다. 일반 편집과
-Undo에서는 바꾸지 않으며, Project Controller가 Repository의 성공 결과를 받았을 때만 교체한다. 전체 Session 교체,
-문서 마이그레이션, Undo는 각각 후속 목적 단위에서 추가한다.
+Undo에서는 바꾸지 않으며, Project Controller가 Repository의 성공 결과를 받았을 때만 교체한다. 프로젝트 불러오기용
+`replaceProjectState`는 project, tempo, master volume, Export 범위, Track·Region을 한 번의 Store 변경으로 교체하고
+재생 상태와 playhead를 초기화한다. Agent 상태는 프로젝트 문서에 속하지 않으므로 유지한다. 문서 마이그레이션과 Undo는
+각각 후속 목적 단위에서 추가한다.
 신뢰할 수 없는 JSON은 `readProjectDocumentJson`으로 문법을 확인하고, `readProjectDocument`로 식별자·버전·본문 순서로
 검증한다. 객체 입력은 자기 소유 열거 가능 데이터 속성만 문서 필드로 인정한다. 현재 지원 버전은 실제 형식이 정의된
 v1뿐이며, 정의되지 않은 버전을 임의 변환하지 않는다.
@@ -72,9 +74,9 @@ Composition Root에서만 조립한다. 저장과 삭제는 expected revision �
 `IndexedDbProjectRepository`를 조립하고 Project Controller에만 주입한다.
 IndexedDB가 없는 환경에서도 앱 조립은 완료하며 실제 저장소 작업에서 `STORAGE_UNAVAILABLE`을 반환한다.
 
-Session의 `replaceProjectMetadata`는 Project Controller가 불러오기 또는 저장 성공 결과를 반영하기 위한 내부
-상태 교체 동작이다. Apps는 이 동작을 직접 호출하지 않는다. 프로젝트를 불러올 때 metadata만 먼저 바꾸지 않고,
-Source와 AudioEngine 준비가 모두 성공한 뒤 전체 프로젝트 상태를 한 번에 반영한다.
+Session의 `replaceProjectMetadata`는 저장 성공 metadata만 반영하고, `replaceProjectState`는 불러오기 성공 결과 전체를
+반영하는 내부 상태 교체 동작이다. Apps는 두 동작을 직접 호출하지 않는다. 프로젝트를 불러올 때 metadata만 먼저 바꾸지
+않고, Source와 AudioEngine 준비가 모두 성공한 뒤 전체 프로젝트 상태를 한 번에 반영한다.
 
 `AudioSourceRegistry`는 재생에 쓰는 Source Object URL의 생성과 해제를 한곳에서 관리한다. 파일 길이 판독용 임시 URL과
 Export 다운로드 URL은 이 범위가 아니다. Source UUID는 프로젝트에 저장하는 고정 식별자이고 Object URL은 현재 앱 실행
@@ -106,15 +108,24 @@ Source의 남은 길이로 정규화하고, Source 길이가 `null`이면 실제
 실패하면 URL까지 정리하고, 이미 committed였던 Source는 Undo와 재사용을 위해 유지한다. `stage` 뒤 Command 검증이나
 dispatch 전에 실패하면 stage 호출자가 `discardPending`을 실행한다. 보상도 실패하면 원래 오류와 실패한 보상 단계를
 `ProjectMutationCompensationError`에 함께 보존한다. 이 절차는 여러 객체의 원자적 transaction은 아니다. 일반 진입점은
-CommandExecutor 대기열로 동시 변경을 막지만, 향후 AudioEngine 교체와 프로젝트 불러오기는 별도의 원자적 교체 계약이
-필요하다.
+CommandExecutor 대기열로 Command 간 동시 변경을 막는다. 프로젝트 불러오기 준비 중 Web `stage`처럼 대기열 밖의
+Registry 변경이 들어올 수 있으므로, 준비된 Registry와 AudioEngine 그래프는 시작 시점의 active revision을 확인한 뒤에만
+활성화한다.
 
 등록 Source Region 분할은 새 연결을 예약한 뒤에도 기존 연결을 AudioEngine 교체 완료까지 유지한다. 성공 후 기존
 연결과 Session을 바꾼다. 재검증 시 Session 대상이 사라졌다면 새 Engine Region과 남은 Source 연결을 제거하고,
 Source 전환만 실패했다면 Engine과 Registry를 기존 Region 상태로 되돌린다.
 
-단건 `restoreCommitted`는 원자적인 프로젝트 불러오기 API가 아니다. 후속 불러오기 구현은 새 Registry에 모든 Blob을
-복원하고 AudioEngine 준비까지 성공한 뒤 기존 프로젝트와 교체해야 한다. Registry는 영구 저장소가 아니다.
+단건 `restoreCommitted`는 원자적인 프로젝트 불러오기 API가 아니다. `beginReplacement`는 분리된 Registry에 Source와
+Region 연결을 준비하고, `prepareProjectGraph`는 출력 gate가 닫힌 새 Channel과 Player를 디코딩·예약한다. 준비 실패나
+active revision 변경에서는 기존 Registry와 AudioEngine 그래프를 유지한다. Controller는 두 prepared 대상의
+`assertActivatable`을 먼저 모두 통과시킨 뒤, 중간 `await` 없이 Engine → Registry → Session 순서로 활성화해야 한다.
+Engine 활성화 중 Transport나 출력 gate 변경이 실패하면 기존 재생 상태와 gate를 보상하고 교체를 거부한다. 이전 그래프와
+URL은 성공 상태를 공개한 뒤 정리하며, 정리 실패는 새 프로젝트를 되돌리는 불러오기 실패로 분류하지 않는다. `discard`를
+시작한 prepared 대상은 정리가 일부 실패해도 다시 활성화할 수 없다. 실패 자원은 소유자가 보관하고 다음 정리에서 재시도한다.
+보상도 실패하면 Engine이 즉시 재시도한다. 계속 실패하는 동안은 `PROJECT_RUNTIME_RECOVERY_PENDING`을 반환하고 실시간 오디오
+변경을 중단한 뒤 다음 호출에서 복원을 먼저 재시도한다. 이 오류 상태는 기존 Runtime이 아직 완전히 복원되지 않았음을 뜻한다.
+실제 LOAD Command와 Controller 연결은 후속 목적 단위다. Registry는 영구 저장소가 아니다.
 `OpfsAudioSourceRepository`는 Source UUID를 키로 `drop-ai/audio-sources/v1/<Source UUID>`에 원본 바이트를 보존한다.
 `create`는 metadata와 Blob 크기를 확인하고 쓰기를 닫은 뒤 저장 크기를 다시 확인한다. `load`도 ProjectDocument metadata의
 크기를 확인하고 `mimeType`을 Blob 생성 옵션으로 전달한다. 반환된 Blob의 `type`은 브라우저 Blob 규칙에 따라 정규화될 수

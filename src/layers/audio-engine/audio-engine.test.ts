@@ -106,6 +106,62 @@ describe('MockAudioEngine - Phase 2 검증', () => {
     });
   });
 
+  describe('준비된 프로젝트 그래프 교체', () => {
+    const replacementTrack = {
+      id: 'replacement-track',
+      volume: 0.5,
+      pan: -0.25,
+      isMuted: true,
+      isSoloed: false,
+      regions: [
+        {
+          id: 'replacement-region',
+          url: 'replacement.wav',
+          startTime: 1,
+          sourceStartTime: 0,
+          duration: 2,
+        },
+      ],
+    };
+
+    it('activate 전에는 기존 그래프를 유지하고 activate에서 전체를 교체한다', async () => {
+      await engine.addTrack('current-track');
+      engine.setTime(8);
+
+      const replacement = await engine.prepareProjectGraph({ tracks: [replacementTrack] });
+
+      expect(engine.getTrackParams('current-track')).not.toBeNull();
+      expect(engine.getTrackParams(replacementTrack.id)).toBeNull();
+
+      replacement.assertActivatable();
+      const retiredGraph = replacement.activate();
+
+      expect(engine.getTrackParams('current-track')).toBeNull();
+      expect(engine.getTrackParams(replacementTrack.id)).toEqual({ volume: 0.5, pan: -0.25 });
+      expect(engine.getCurrentTime()).toBe(0);
+      await expect(engine.addRegion(replacementTrack.id, replacementTrack.regions[0])).rejects.toMatchObject({
+        code: 'REGION_ID_CONFLICT',
+      });
+      expect(() => retiredGraph.dispose()).not.toThrow();
+    });
+
+    it('준비 중 active 그래프가 바뀌면 교체를 거부하고 현재 변경을 유지한다', async () => {
+      await engine.addTrack('current-track');
+      const replacement = await engine.prepareProjectGraph({ tracks: [replacementTrack] });
+
+      engine.setTrackVolume('current-track', 0.75);
+
+      expect(() => replacement.assertActivatable()).toThrowError(
+        expect.objectContaining({ code: 'ACTIVE_GRAPH_CHANGED' })
+      );
+      replacement.discard();
+      replacement.discard();
+
+      expect(engine.getTrackParams('current-track')?.volume).toBe(0.75);
+      expect(engine.getTrackParams(replacementTrack.id)).toBeNull();
+    });
+  });
+
   describe('Export', () => {
     const exportRequest = {
       tracks: [
@@ -157,6 +213,7 @@ describe('MockAudioEngine - Phase 2 검증', () => {
       expect(typeof engine.removeRegion).toBe('function');
       expect(typeof engine.rescheduleRegion).toBe('function');
       expect(typeof engine.replaceRegion).toBe('function');
+      expect(typeof engine.prepareProjectGraph).toBe('function');
       // Export
       expect(typeof engine.exportProject).toBe('function');
     });

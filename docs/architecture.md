@@ -345,8 +345,9 @@ metadata, tempo, master volume, Export 범위, Track·Region과 호출자가 전
 Mapper는 Export 범위의 부분 `null`, Track Map key와 Track ID 불일치, 유한한 끝 시각을 만들 수 없는 Region, 허용 오차를
 초과한 Region 끝 시각 불일치를 거부한다. 끝 시각 비교는 위 공통 Region 타임라인 규칙을 사용한다.
 최종 문서는 기존 `ProjectDocumentSchema`로 검증하고, 역변환 입력은 `readProjectDocument`로 다시 검증·복제한다. 현재
-화면 저장은 `SAVE_PROJECT`로 연결했다. 불러오기와 Session 전체 교체 Action은 아직 없다. Undo 이력도 snapshot 문서에
-넣지 않고 후속 Undo Journal에서 별도로 관리한다.
+화면 저장은 `SAVE_PROJECT`로 연결했다. 불러오기용 Session 전체 교체 Action과 Runtime 준비 계약은 추가했지만 실제
+LOAD Command와 화면 진입점은 아직 연결하지 않았다. Undo 이력은 snapshot 문서에 넣지 않고 후속 Undo Journal에서
+별도로 관리한다.
 
 ---
 
@@ -405,9 +406,11 @@ Source 저장 후 ProjectDocument 저장이 실패하면 참조되지 않는 OPF
 사용자 기능으로 연결하기 전에는 Source 확인과 문서 저장 사이의 동시 삭제를 막는 전역 잠금 또는 참조 인식 삭제 규칙이
 필요하다.
 
-Session의 프로젝트 metadata 전체 교체는 Project Controller만 사용한다. Apps는 직접 호출하지 않는다. 불러오기
-과정에서는 Source와 AudioEngine 준비가 성공하기 전에 metadata만 먼저 교체하지 않는다. 저장 과정에서는 Repository가
-성공 결과를 반환했을 때만 Session revision을 교체하며, 실패나 revision 충돌이면 기존 값을 유지한다.
+Session의 `replaceProjectMetadata`는 저장 성공 metadata만 반영한다. `replaceProjectState`는 project, tempo,
+master volume, Export 범위, Track·Region을 한 번에 교체하고 재생 상태와 playhead를 초기화하되 Agent 상태를 유지한다.
+두 Action은 Project Controller만 사용하고 Apps는 직접 호출하지 않는다. 불러오기 과정에서는 Source와 AudioEngine 준비가
+성공하기 전에 metadata만 먼저 교체하지 않는다. 저장 과정에서는 Repository가 성공 결과를 반환했을 때만 Session
+revision을 교체하며, 실패나 revision 충돌이면 기존 값을 유지한다.
 
 ---
 
@@ -428,6 +431,7 @@ ProjectDocument의 식별자로 사용하지 않는다. Session Region도 Source
 | clear                      | 프로젝트 종료나 실패한 임시 복원 정리에서 모든 Source URL을 해제한다.    |
 | listCommittedMetadata      | pending은 제외하고 Region이 없는 committed Source는 포함한다.            |
 | listCommittedRegistrations | Project 저장용 metadata 복사본과 원본 Blob을 반환한다.                   |
+| beginReplacement           | 분리된 Registry에서 불러올 Source와 Region 연결을 준비한다.              |
 
 Region 삭제 직후 Source를 자동 제거하지 않는다. React·WaveSurfer 정리 순서와 경쟁할 수 있고 Undo가 같은 Source와 Region
 ID를 다시 연결할 수 있기 때문이다. 조회 결과와 metadata 목록은 내부 `Set`이나 객체 참조를 노출하지 않고 복사본을 반환한다.
@@ -437,7 +441,40 @@ Registry는 OPFS 저장에 필요한 원본 Blob을 Source 수명 동안 보관�
 `ICommittedAudioSourceReader`를 받는 Project Controller만 사용하며 Apps에는 노출하지 않는다. Blob 내용은 변경할 수
 없으므로 같은 참조를 반환하고 metadata는 복사한다.
 
-### 11.1. Region Source 경로
+`beginReplacement`는 시작 시점의 active Registry revision을 기록한다. 준비 중 Web 업로드가 Source를 stage하면
+`assertActivatable`이 교체를 거부해 새 pending Source와 현재 프로젝트를 보존한다. 준비된 Registry는 활성화 전까지 기존
+Resolver 결과에 영향을 주지 않는다. 활성화 뒤 이전 URL 해제가 실패해도 새 Registry를 되돌리지 않고 정리 실패를 별도로
+기록한다. `discard`를 시작하면 정리가 일부 실패해도 해당 prepared Registry는 다시 활성화할 수 없다. 남은 URL은 Registry가
+소유권을 유지하고 다음 정리에서 재시도하며, 정리 결과는 완료 여부와 남은 자원 수를 반환한다.
+
+### 11.1. 준비된 프로젝트 Runtime 교체
+
+`IAudioEngine.prepareProjectGraph`는 새 Track Channel과 Region Player를 기존 그래프와 분리해 준비한다. 각 프로젝트
+그래프는 전용 출력 gate를 가지며, prepared 그래프는 gate를 닫은 상태로 Region 디코딩과 예약을 끝낸다. Solo는 Tone.js
+Channel에 `solo=true`를 설정하지 않고 현재 프로젝트의 `isSoloed` 집합에서 각 Channel의 실제 mute를 계산한다. 따라서
+prepared나 retired 그래프가 active 그래프의 Solo 결과를 바꾸지 않는다. 준비 중 active 그래프가 바뀌거나 먼저 시작한
+비동기 Region 작업이 나중에 완료되면 revision 검사가 교체를 거부한다.
+
+후속 LOAD Controller는 Registry와 AudioEngine의 `assertActivatable`을 먼저 모두 실행한다. 그 뒤 활성화 임계 구간은 중간
+`await` 없이 아래 순서를 따라야 한다.
+
+```text
+준비된 AudioEngine 그래프 활성화
+→ 준비된 AudioSourceRegistry 활성화
+→ Session.replaceProjectState
+```
+
+AudioEngine은 Transport를 정지·초기화하고 기존 출력 gate를 닫은 뒤 prepared gate를 연다. 이 과정의 외부 API 호출이
+실패하면 기존 Transport 상태·시각과 두 gate 복원을 즉시 시도한 뒤 typed 오류를 반환한다. 복원도 실패하면
+Engine이 목표 상태를 보관하고 즉시 한 번 재시도한다. 계속 실패하는 동안은 `PROJECT_RUNTIME_RECOVERY_PENDING`으로 다른 실시간
+오디오 작업을 거부하고, 다음 호출에서 먼저 복원을 재시도한다. 따라서 활성화 오류의 `isRuntimeRecoveryPending`가 `true`면 기존
+Runtime이 완전히 복원됐다고 간주하면 안 된다. 활성화가 성공하면 retired 출력 gate는 이미 닫혀 있으므로 Player·Channel 정리 실패가
+다음 재생에 이전 오디오를 섞지 않는다. Tone.js `dispose` 성공은 연결 해제를 포함하므로 폐기 완료로 처리한다. `dispose`가 실패한
+자원만 Engine이 보관하고 다음 정리에서 재시도한다. 활성화 후 이전 Player·Channel·Object URL 정리 실패는 새 프로젝트를 실패 상태로 되돌리지 않는다.
+이미 공개된 새 상태와 자원 정리 실패를 구분하기 위해서다. 실제 LOAD Command와 사용자 진입점은 다음 목적 단위에서
+연결한다.
+
+### 11.2. Region Source 경로
 
 Session Region은 `sourceId`만 저장하고 Object URL을 저장하지 않는다. `LOAD_REGION`은 폐기된 `url` 필드를 일반·Agent
 Schema에서 명시적으로 거부한다. 새 Region은 등록된 `sourceId`를 명시하거나 같은 Track의 첫 Region Source를 재사용한다.
@@ -476,18 +513,20 @@ Command Schema 검증이나 dispatch 전에 실패한 경우는 Controller가 So
 
 이 보상 절차는 원자적 transaction을 보장하지 않는다. 일반 Web·CLI·Agent 변경은 CommandExecutor의 단일 대기열을
 통과하므로 서로 끼어들지 않지만, AudioEngine API가 부분 성공한 뒤 실패하는 구현이나 외부에서 Session을 직접 변경하는
-경우까지 복구한다고 결론낼 수 없다. 후속 프로젝트 불러오기와 오디오 그래프 교체에는 준비된 전체 상태를 한 번에
-교체하는 별도 계약이 필요하다.
+경우까지 복구한다고 결론낼 수 없다. 프로젝트 전체 불러오기는 이 보상 절차를 반복하지 않고 아래의 준비된 Runtime
+교체 계약을 사용해야 한다.
 
 `restoreCommitted`는 Blob 하나를 committed 상태로 복원하는 동작일 뿐 프로젝트 전체를 원자적으로 불러오는 API가 아니다.
-후속 불러오기 Controller는 새 Registry에서 모든 Source 복원과 AudioEngine 준비를 끝낸 뒤 기존 프로젝트를 교체해야 한다.
-중간 실패 시 새 Registry를 `clear`하고 기존 Session과 Registry를 유지한다.
+후속 불러오기 Controller는 `beginReplacement`로 분리된 Registry에서 모든 Source 복원과 Region 연결을 준비하고,
+`prepareProjectGraph`로 분리된 오디오 그래프 준비를 끝낸 뒤 기존 프로젝트를 교체해야 한다. 중간 실패 시 준비한 대상만
+`discard`하고 기존 Session·Registry·AudioEngine을 유지한다.
 
 Registry는 영구 저장소가 아니다. OPFS Repository가 Source UUID를 키로 원본 바이트를 보존하고, Registry는 현재 실행의
 Object URL과 Region 연결을 관리한다. 현재 단계에서는 Registry 계약·브라우저 URL Adapter·메모리 구현을 Composition
 Root에서 한 번 조립한다. Apps에는 `IAudioSourceStager`와 `IAudioSourceResolver`만 제공하며, 전체 Registry 변경 계약과
 구체 구현은 노출하지 않는다. 연결 수명을 바꾸는 Track·Region Controller만 전체 Registry 계약을 받고, 조회만 하는
-Export는 `IAudioSourceResolver`를 받는다. ProjectDocument Mapper와 저장·불러오기 연결은 별도 기능 단위로 진행한다.
+Export는 `IAudioSourceResolver`를 받는다. ProjectDocument Mapper와 저장은 연결됐으며, 불러오기 Command와 사용자
+진입점은 별도 기능 단위로 진행한다.
 
 production Web 파일 가져오기는 파일 metadata를 만든 뒤 Blob을 Registry에 `stage`한다. metadata 변환 단계는 재생용
 Object URL을 만들지 않는다. Web Adapter가 Source UUID를 만들고, Registry가 이를 검증·등록하면서 Object URL을 만든다.

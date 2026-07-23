@@ -111,6 +111,127 @@ describe('Session Store - Phase 1 검증', () => {
         revision: 1,
       });
     });
+
+    it('프로젝트 상태를 한 번에 교체하고 재생 위치만 초기화한다', () => {
+      const listener = vi.fn();
+      const nextProjectId = '22222222-2222-4222-8222-222222222222';
+      const nextTrack = {
+        id: '33333333-3333-4333-8333-333333333333',
+        name: '복원 트랙',
+        volume: 0.75,
+        pan: -0.25,
+        isMuted: true,
+        isSoloed: false,
+        status: [],
+        regions: [],
+      };
+      store.getState().setPlaying(true);
+      store.getState().setCurrentTime(8);
+      store.getState().addAgentMessage({
+        id: 'message-1',
+        role: 'user',
+        content: '기존 대화',
+        timestamp: 1,
+      });
+      store.subscribe(listener);
+
+      store.getState().replaceProjectState({
+        project: { id: nextProjectId, name: '복원 프로젝트', revision: 4 },
+        tempo: 132,
+        masterVolume: 0.8,
+        exportStartTime: 1,
+        exportEndTime: 6,
+        tracks: new Map([[nextTrack.id, nextTrack]]),
+      });
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(store.getState()).toMatchObject({
+        project: { id: nextProjectId, name: '복원 프로젝트', revision: 4 },
+        tempo: 132,
+        masterVolume: 0.8,
+        exportStartTime: 1,
+        exportEndTime: 6,
+        isPlaying: false,
+        currentTime: 0,
+      });
+      expect(store.getState().tracks.get(nextTrack.id)).toEqual(nextTrack);
+      expect(store.getState().agentMessages).toEqual([
+        expect.objectContaining({ id: 'message-1', content: '기존 대화' }),
+      ]);
+    });
+
+    it('교체 입력과 Session 프로젝트 상태가 객체 참조를 공유하지 않는다', () => {
+      const trackId = '33333333-3333-4333-8333-333333333333';
+      const regionId = '44444444-4444-4444-8444-444444444444';
+      const projectState = {
+        project: { id: PROJECT_ID, name: '복원 프로젝트', revision: 2 },
+        tempo: 128,
+        masterVolume: 0.9,
+        exportStartTime: null,
+        exportEndTime: null,
+        tracks: new Map([
+          [
+            trackId,
+            {
+              id: trackId,
+              name: '복원 트랙',
+              volume: 1,
+              pan: 0,
+              isMuted: false,
+              isSoloed: false,
+              status: [],
+              regions: [
+                {
+                  id: regionId,
+                  sourceId: '55555555-5555-4555-8555-555555555555',
+                  startTime: 0,
+                  endTime: 1,
+                  sourceStartTime: 0,
+                  duration: 1,
+                  status: [],
+                },
+              ],
+            },
+          ],
+        ]),
+      };
+
+      store.getState().replaceProjectState(projectState);
+      projectState.project.name = '입력 변경';
+      projectState.tracks.get(trackId)!.name = '입력 트랙 변경';
+      projectState.tracks.get(trackId)!.regions[0].duration = 9;
+
+      expect(store.getState().project.name).toBe('복원 프로젝트');
+      expect(store.getState().tracks.get(trackId)?.name).toBe('복원 트랙');
+      expect(store.getState().tracks.get(trackId)?.regions[0].duration).toBe(1);
+    });
+
+    it('빈 프로젝트로 교체하면 기존 Track과 Export 범위를 제거한다', () => {
+      store.getState().addTrack({
+        id: '33333333-3333-4333-8333-333333333333',
+        name: '기존 트랙',
+        volume: 1,
+        pan: 0,
+        isMuted: false,
+        isSoloed: false,
+        status: [],
+        regions: [],
+      });
+      store.getState().setExportRange(1, 4);
+
+      store.getState().replaceProjectState({
+        project: { id: PROJECT_ID, name: '빈 프로젝트', revision: 3 },
+        tempo: 120,
+        masterVolume: 1,
+        exportStartTime: null,
+        exportEndTime: null,
+        tracks: new Map(),
+      });
+
+      expect(store.getState().tracks.size).toBe(0);
+      expect(store.getState().exportStartTime).toBeNull();
+      expect(store.getState().exportEndTime).toBeNull();
+    });
   });
 
   describe('Agent 작업 상태 관리', () => {

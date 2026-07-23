@@ -1,3 +1,5 @@
+import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
+
 export interface RegionData {
   id: string;
   url: string;
@@ -49,6 +51,29 @@ export interface ReplaceRegionRequest {
   replacements: RegionData[];
 }
 
+export interface AudioProjectGraphTrack {
+  readonly id: string;
+  readonly volume: number;
+  readonly pan: number;
+  readonly isMuted: boolean;
+  readonly isSoloed: boolean;
+  readonly regions: readonly RegionData[];
+}
+
+export interface PrepareAudioProjectGraphRequest {
+  readonly tracks: readonly AudioProjectGraphTrack[];
+}
+
+export interface IRetiredAudioProjectGraph {
+  dispose(): ResourceCleanupResult;
+}
+
+export interface IPreparedAudioProjectGraph {
+  assertActivatable(): void;
+  activate(): IRetiredAudioProjectGraph;
+  discard(): ResourceCleanupResult;
+}
+
 export interface IAudioEngine {
   // Transport Control
   play(): Promise<void>;
@@ -71,6 +96,7 @@ export interface IAudioEngine {
   removeRegion(trackId: string, regionId: string): void;
   rescheduleRegion(request: RescheduleRegionRequest): void;
   replaceRegion(request: ReplaceRegionRequest): Promise<void>;
+  prepareProjectGraph(request: PrepareAudioProjectGraphRequest): Promise<IPreparedAudioProjectGraph>;
 
   // Export
   exportProject(request: ExportRequest): Promise<Blob>;
