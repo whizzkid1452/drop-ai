@@ -151,7 +151,9 @@ Registry 변경이 들어올 수 있으므로, 준비된 Registry와 AudioEngine
 Source 전환만 실패했다면 Engine과 Registry를 기존 Region 상태로 되돌린다.
 
 단건 `restoreCommitted`는 원자적인 프로젝트 불러오기 API가 아니다. `beginReplacement`는 분리된 Registry에 Source와
-Region 연결을 준비하고, `prepareProjectGraph`는 출력 gate가 닫힌 새 Channel과 Player를 디코딩·예약한다. 준비 실패나
+Region 연결을 준비하고, `prepareProjectGraph`는 출력 gate가 닫힌 새 Track input·Channel과 Player를 디코딩·예약한다.
+실시간 재생, 프로젝트 그래프 준비, Export는 모두 `Player → Track input → Channel → output` 순서를 사용한다. 현재 Track
+input은 gain 1인 Tone.js `Gain` 노드이며 음량을 바꾸지 않고 후속 Plugin chain의 삽입 지점만 만든다. 준비 실패나
 active revision 변경에서는 기존 Registry와 AudioEngine 그래프를 유지한다. Controller는 두 prepared 대상의
 `assertActivatable`을 먼저 모두 통과시킨 뒤, 중간 `await` 없이 Engine → Registry → Session 순서로 활성화해야 한다.
 Engine 활성화 중 Transport나 출력 gate 변경이 실패하면 기존 재생 상태와 gate를 보상하고 교체를 거부한다. 이전 그래프와

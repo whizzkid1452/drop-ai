@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface ChannelMockState {
+  destination?: unknown;
   mute: boolean;
   solo: boolean;
   volume: {
@@ -10,12 +11,14 @@ interface ChannelMockState {
 
 interface PlayerMockState {
   buffer: { duration: number };
+  destination?: unknown;
   disposed: boolean;
   source: unknown;
   unsyncCount: number;
 }
 
 interface GainMockState {
+  destination?: unknown;
   readonly gain: { value: number };
 }
 
@@ -23,6 +26,7 @@ const toneMocks = vi.hoisted(() => ({
   channelOptions: [] as Array<{ volume: number; pan: number }>,
   channels: [] as ChannelMockState[],
   gains: [] as GainMockState[],
+  outputGains: [] as GainMockState[],
   playerInstances: [] as PlayerMockState[],
   loadFailures: new Map<string, Error>(),
   loadPromises: new Map<string, Promise<void>>(),
@@ -38,6 +42,8 @@ const toneMocks = vi.hoisted(() => ({
   channelToDestination: vi.fn(),
   gainDisconnect: vi.fn(),
   gainDispose: vi.fn(),
+  gainConnect: vi.fn(),
+  gainConnectFailures: [] as Array<Error | undefined>,
   gainToDestination: vi.fn(),
   gainValueFailures: [] as Array<Error | undefined>,
   playerConnect: vi.fn(),
@@ -71,6 +77,7 @@ vi.mock('tone', () => {
   });
 
   class Channel implements ChannelMockState {
+    destination?: unknown;
     private soloed = false;
     private unmutedVolume = 0;
     volume = {
@@ -116,7 +123,8 @@ vi.mock('tone', () => {
       return this;
     }
 
-    connect() {
+    connect(destination: unknown) {
+      this.destination = destination;
       toneMocks.channelConnect();
       const failure = toneMocks.channelConnectFailures.shift();
       if (failure) {
@@ -135,6 +143,7 @@ vi.mock('tone', () => {
   }
 
   class Gain implements GainMockState {
+    destination?: unknown;
     readonly gain: { value: number };
 
     constructor(options?: number | { gain?: number }) {
@@ -155,7 +164,18 @@ vi.mock('tone', () => {
     }
 
     toDestination() {
+      toneMocks.outputGains.push(this);
       toneMocks.gainToDestination();
+      return this;
+    }
+
+    connect(destination: unknown) {
+      this.destination = destination;
+      toneMocks.gainConnect();
+      const failure = toneMocks.gainConnectFailures.shift();
+      if (failure) {
+        throw failure;
+      }
       return this;
     }
 
@@ -172,6 +192,7 @@ vi.mock('tone', () => {
 
   class Player implements PlayerMockState {
     buffer = { duration: 10 };
+    destination?: unknown;
     disposed = false;
     source: unknown;
     unsyncCount = 0;
@@ -181,7 +202,8 @@ vi.mock('tone', () => {
       toneMocks.playerInstances.push(this);
     }
 
-    connect() {
+    connect(destination: unknown) {
+      this.destination = destination;
       toneMocks.playerConnect();
       const failure = toneMocks.playerConnectFailures.shift();
       if (failure) {
@@ -310,11 +332,13 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     toneMocks.channelOptions.length = 0;
     toneMocks.channels.length = 0;
     toneMocks.gains.length = 0;
+    toneMocks.outputGains.length = 0;
     toneMocks.playerInstances.length = 0;
     toneMocks.loadFailures.clear();
     toneMocks.loadPromises.clear();
     toneMocks.startFailures.length = 0;
     toneMocks.channelConnectFailures.length = 0;
+    toneMocks.gainConnectFailures.length = 0;
     toneMocks.gainValueFailures.length = 0;
     toneMocks.playerConnectFailures.length = 0;
     toneMocks.tempoWrites.length = 0;
@@ -426,6 +450,18 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     expect(toneMocks.playerLoad).toHaveBeenCalledWith('original.wav');
     expect(toneMocks.playerSync).toHaveBeenCalledOnce();
     expect(toneMocks.playerStart).toHaveBeenCalledWith(4, 2, 3);
+  });
+
+  it('Region Player를 Track input에 연결하고 input을 Channel 앞에 둔다', async () => {
+    const engine = new AudioEngine();
+
+    await engine.addRegion('track-1', ORIGINAL_REGION);
+
+    const output = toneMocks.outputGains[0];
+    const trackInput = toneMocks.gains.find(gain => gain !== output);
+    expect(toneMocks.playerInstances[0]?.destination).toBe(trackInput);
+    expect(trackInput?.destination).toBe(toneMocks.channels[0]);
+    expect(toneMocks.channels[0]?.destination).toBe(output);
   });
 
   it('Region 로드 실패 시 Player를 보관하지 않는다', async () => {
@@ -684,6 +720,8 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     expect(toneMocks.playerStop).toHaveBeenCalledTimes(2);
     expect(toneMocks.playerDisconnect).toHaveBeenCalledTimes(2);
     expect(toneMocks.playerDispose).toHaveBeenCalledTimes(2);
+    expect(toneMocks.gainDisconnect).toHaveBeenCalledOnce();
+    expect(toneMocks.gainDispose).toHaveBeenCalledOnce();
     expect(toneMocks.channelDisconnect).toHaveBeenCalledOnce();
     expect(toneMocks.channelDispose).toHaveBeenCalledOnce();
   });
@@ -736,7 +774,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     expect(engine.getTrackParams('replacement-track')).toBeNull();
     expect(toneMocks.channels[1]?.mute).toBe(false);
     expect(toneMocks.channels[1]?.solo).toBe(false);
-    expect(toneMocks.gains[1]?.gain.value).toBe(0);
+    expect(toneMocks.outputGains[1]?.gain.value).toBe(0);
 
     replacement.assertActivatable();
     const retiredGraph = replacement.activate();
@@ -747,8 +785,8 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     expect(toneMocks.transportSeconds).toBe(0);
     expect(toneMocks.channels[1]?.mute).toBe(false);
     expect(toneMocks.channels[1]?.solo).toBe(false);
-    expect(toneMocks.gains[0]?.gain.value).toBe(0);
-    expect(toneMocks.gains[1]?.gain.value).toBe(1);
+    expect(toneMocks.outputGains[0]?.gain.value).toBe(0);
+    expect(toneMocks.outputGains[1]?.gain.value).toBe(1);
     expect(toneMocks.playerDispose).not.toHaveBeenCalled();
 
     retiredGraph.dispose();
@@ -942,7 +980,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
       expect.objectContaining({ code: AudioEngineErrorCode.PROJECT_GRAPH_ACTIVATION_FAILED })
     );
 
-    expect(toneMocks.gains[0]?.gain.value).toBe(1);
+    expect(toneMocks.outputGains[0]?.gain.value).toBe(1);
     expect(engine.getTrackParams('current-track')).not.toBeNull();
   });
 
@@ -970,7 +1008,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     );
 
     expect(engine.getTrackParams('current-track')).not.toBeNull();
-    expect(toneMocks.gains[0]?.gain.value).toBe(1);
+    expect(toneMocks.outputGains[0]?.gain.value).toBe(1);
   });
 
   it('Transport 복원이 계속 실패하면 다음 작업을 거부하고 재생 상태를 재복원한다', async () => {
@@ -1057,7 +1095,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
 
     retiredGraph.dispose();
 
-    expect(toneMocks.gains[0]?.gain.value).toBe(0);
+    expect(toneMocks.outputGains[0]?.gain.value).toBe(0);
     expect(engine.getTrackParams('replacement-track')).not.toBeNull();
   });
 
@@ -1139,6 +1177,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
 
     expect(engine.getTrackParams('current-track')).not.toBeNull();
     expect(toneMocks.playerDispose).toHaveBeenCalledTimes(2);
+    expect(toneMocks.gainDispose).toHaveBeenCalledTimes(3);
     expect(toneMocks.channelDispose).toHaveBeenCalledTimes(2);
   });
 
@@ -1161,6 +1200,30 @@ describe('AudioEngine 실시간 상태 일관성', () => {
       })
     ).rejects.toMatchObject({ code: AudioEngineErrorCode.TRACK_INIT_FAILED });
 
+    expect(toneMocks.gainDispose).toHaveBeenCalledTimes(2);
+    expect(toneMocks.channelDispose).toHaveBeenCalledOnce();
+  });
+
+  it('준비 input 연결 실패 시 생성한 input과 Channel을 정리한다', async () => {
+    const engine = new AudioEngine();
+    toneMocks.gainConnectFailures.push(new Error('connect failed'));
+
+    await expect(
+      engine.prepareProjectGraph({
+        tracks: [
+          {
+            id: 'replacement-track',
+            volume: 1,
+            pan: 0,
+            isMuted: false,
+            isSoloed: false,
+            regions: [],
+          },
+        ],
+      })
+    ).rejects.toMatchObject({ code: AudioEngineErrorCode.TRACK_INIT_FAILED });
+
+    expect(toneMocks.gainDispose).toHaveBeenCalledTimes(2);
     expect(toneMocks.channelDispose).toHaveBeenCalledOnce();
   });
 
@@ -1192,10 +1255,13 @@ describe('AudioEngine Export 회귀', () => {
     vi.clearAllMocks();
     toneMocks.channelOptions.length = 0;
     toneMocks.channels.length = 0;
+    toneMocks.gains.length = 0;
+    toneMocks.outputGains.length = 0;
     toneMocks.playerInstances.length = 0;
     toneMocks.loadFailures.clear();
     toneMocks.loadPromises.clear();
     toneMocks.startFailures.length = 0;
+    toneMocks.gainConnectFailures.length = 0;
     toneMocks.tempoWrites.length = 0;
   });
 
@@ -1221,6 +1287,10 @@ describe('AudioEngine Export 회귀', () => {
     expect(toneMocks.playerLoad).toHaveBeenCalledWith('test.wav');
     expect(toneMocks.playerStart).toHaveBeenCalledWith(0, 2, 3);
     expect(toneMocks.channelOptions).toContainEqual({ volume: 0.25, pan: -0.25 });
+    const output = toneMocks.outputGains[0];
+    const trackInput = toneMocks.gains.find(gain => gain !== output);
+    expect(toneMocks.playerInstances[0]?.destination).toBe(trackInput);
+    expect(trackInput?.destination).toBe(toneMocks.channels[0]);
     expect(toneMocks.offline).toHaveBeenCalledWith(expect.any(Function), 3, 2, 44100);
     expect(blob.type).toBe('audio/wav');
     expect(blob.size).toBeGreaterThan(44);

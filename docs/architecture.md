@@ -496,8 +496,10 @@ Resolver 결과에 영향을 주지 않는다. 활성화 뒤 이전 URL 해제�
 
 ### 11.1. 준비된 프로젝트 Runtime 교체
 
-`IAudioEngine.prepareProjectGraph`는 새 Track Channel과 Region Player를 기존 그래프와 분리해 준비한다. 각 프로젝트
-그래프는 전용 출력 gate를 가지며, prepared 그래프는 gate를 닫은 상태로 Region 디코딩과 예약을 끝낸다. Solo는 Tone.js
+`IAudioEngine.prepareProjectGraph`는 새 Track input·Channel과 Region Player를 기존 그래프와 분리해 준비한다. 실시간
+재생, 프로젝트 그래프 준비, Export는 모두 `Player → Track input → Channel → output` 순서를 사용한다. 현재 Track input은
+gain 1인 Tone.js `Gain` 노드라서 음량을 바꾸지 않으며, 후속 Plugin chain을 연결할 삽입 지점이다. 각 프로젝트 그래프는
+전용 출력 gate를 가지며, prepared 그래프는 gate를 닫은 상태로 Region 디코딩과 예약을 끝낸다. Solo는 Tone.js
 Channel에 `solo=true`를 설정하지 않고 현재 프로젝트의 `isSoloed` 집합에서 각 Channel의 실제 mute를 계산한다. 따라서
 prepared나 retired 그래프가 active 그래프의 Solo 결과를 바꾸지 않는다. 준비 중 active 그래프가 바뀌거나 먼저 시작한
 비동기 Region 작업이 나중에 완료되면 revision 검사가 교체를 거부한다.
@@ -515,9 +517,10 @@ AudioEngine은 Transport를 정지·초기화하고 기존 출력 gate를 닫은
 실패하면 기존 Transport 상태·시각과 두 gate 복원을 즉시 시도한 뒤 typed 오류를 반환한다. 복원도 실패하면
 Engine이 목표 상태를 보관하고 즉시 한 번 재시도한다. 계속 실패하는 동안은 `PROJECT_RUNTIME_RECOVERY_PENDING`으로 다른 실시간
 오디오 작업을 거부하고, 다음 호출에서 먼저 복원을 재시도한다. 따라서 활성화 오류의 `isRuntimeRecoveryPending`가 `true`면 기존
-Runtime이 완전히 복원됐다고 간주하면 안 된다. 활성화가 성공하면 retired 출력 gate는 이미 닫혀 있으므로 Player·Channel 정리 실패가
-다음 재생에 이전 오디오를 섞지 않는다. Tone.js `dispose` 성공은 연결 해제를 포함하므로 폐기 완료로 처리한다. `dispose`가 실패한
-자원만 Engine이 보관하고 다음 정리에서 재시도한다. 활성화 후 이전 Player·Channel·Object URL 정리 실패는 새 프로젝트를 실패 상태로 되돌리지 않는다.
+Runtime이 완전히 복원됐다고 간주하면 안 된다. 활성화가 성공하면 retired 출력 gate는 이미 닫혀 있으므로
+Player·Track input·Channel 정리 실패가 다음 재생에 이전 오디오를 섞지 않는다. Tone.js `dispose` 성공은 연결 해제를
+포함하므로 폐기 완료로 처리한다. `dispose`가 실패한 자원만 Engine이 보관하고 다음 정리에서 재시도한다. 활성화 후 이전
+Player·Track input·Channel·Object URL 정리 실패는 새 프로젝트를 실패 상태로 되돌리지 않는다.
 이미 공개된 새 상태와 자원 정리 실패를 구분하기 위해서다. Engine 활성화 자체가 실패하면 prepared 그래프와 Registry를
 모두 폐기하고 Session·Registry는 교체하지 않는다. Engine 오류가 Runtime 복원 대기 상태를 표시하면 기존 오디오 그래프
 복원은 아직 완료되지 않은 상태다. Session 구독자 예외는 Zustand 상태 반영 뒤에 발생하므로 Runtime을 되돌리지 않고

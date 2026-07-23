@@ -23,12 +23,13 @@ interface RegionPlayerEntry {
 }
 
 interface CreateRegionEntriesRequest {
-  channel: Tone.Channel;
+  input: Tone.Gain;
   regions: RegionData[];
 }
 
 interface AudioProjectGraphState {
   readonly output: Tone.Gain;
+  readonly trackInputs: Map<string, Tone.Gain>;
   readonly channels: Map<string, Tone.Channel>;
   readonly desiredTrackVolumes: Map<string, number>;
   readonly mutedTrackIds: Set<string>;
@@ -50,6 +51,7 @@ type PreparedGraphState = 'activated' | 'discarded' | 'prepared';
 
 export class AudioEngine implements IAudioEngine {
   private output: Tone.Gain;
+  private trackInputs: Map<string, Tone.Gain> = new Map();
   private channels: Map<string, Tone.Channel> = new Map();
   private desiredTrackVolumes: Map<string, number> = new Map();
   private mutedTrackIds: Set<string> = new Set();
@@ -59,6 +61,8 @@ export class AudioEngine implements IAudioEngine {
   private readonly mutedOutputs = new WeakSet<Tone.Gain>();
   private readonly disconnectedOutputs = new WeakSet<Tone.Gain>();
   private readonly disposedOutputs = new WeakSet<Tone.Gain>();
+  private readonly disconnectedTrackInputs = new WeakSet<Tone.Gain>();
+  private readonly disposedTrackInputs = new WeakSet<Tone.Gain>();
   private readonly disconnectedChannels = new WeakSet<Tone.Channel>();
   private readonly disposedChannels = new WeakSet<Tone.Channel>();
   private readonly unsyncedPlayers = new WeakSet<Tone.Player>();
@@ -68,6 +72,7 @@ export class AudioEngine implements IAudioEngine {
   private readonly pendingGraphCleanup = new Set<AudioProjectGraphState>();
   private readonly pendingChannelCleanup = new Set<Tone.Channel>();
   private readonly pendingOutputCleanup = new Set<Tone.Gain>();
+  private readonly pendingTrackInputCleanup = new Set<Tone.Gain>();
   private readonly pendingPlayerCleanup = new Set<Tone.Player>();
   private readonly pendingOutputStateRecovery = new Map<Tone.Gain, boolean>();
   private pendingTransportRecovery: TransportSnapshot | null = null;
@@ -108,18 +113,24 @@ export class AudioEngine implements IAudioEngine {
   async addTrack(trackId: string): Promise<void> {
     this.ensureRuntimeReady();
     console.log(`[AudioEngine] Adding track: ${trackId}`);
-    this.getOrInitChannel(trackId);
+    this.getOrInitTrackNodes(trackId);
   }
 
   removeTrack(trackId: string): void {
     this.ensureRuntimeReady();
-    const hadTrack = this.channels.has(trackId) || this.players.has(trackId);
+    const hadTrack = this.trackInputs.has(trackId) || this.channels.has(trackId) || this.players.has(trackId);
     if (hadTrack) {
       this.graphRevision += 1;
     }
     const trackPlayers = this.players.get(trackId);
     trackPlayers?.forEach(entry => this.disposePlayer(entry.player));
     this.players.delete(trackId);
+
+    const input = this.trackInputs.get(trackId);
+    if (input) {
+      this.disposeTrackInput(input);
+    }
+    this.trackInputs.delete(trackId);
 
     const channel = this.channels.get(trackId);
     if (channel) {
@@ -192,7 +203,7 @@ export class AudioEngine implements IAudioEngine {
 
   async addRegion(trackId: string, regionData: RegionData): Promise<void> {
     this.ensureRuntimeReady();
-    const channel = this.getOrInitChannel(trackId);
+    const { input } = this.getOrInitTrackNodes(trackId);
     const trackPlayers = this.players.get(trackId);
     if (!trackPlayers) {
       throw this.createRegionStateChangedError({ trackId, regionId: regionData.id });
@@ -202,7 +213,7 @@ export class AudioEngine implements IAudioEngine {
     }
     this.graphRevision += 1;
 
-    const [entry] = await this.createScheduledRegionEntries({ channel, regions: [regionData] });
+    const [entry] = await this.createScheduledRegionEntries({ input, regions: [regionData] });
     this.ensureRuntimeReadyOrCleanupEntries(entry ? [entry] : []);
     if (!entry) {
       return;
@@ -237,11 +248,11 @@ export class AudioEngine implements IAudioEngine {
     this.ensureRuntimeReady();
     const trackPlayers = this.players.get(request.trackId);
     const entry = this.getRegionEntry(request);
-    const channel = this.getExistingChannel(request.trackId);
+    const input = this.getExistingInput(request.trackId);
     this.graphRevision += 1;
     const nextRegionData = { ...entry.regionData, startTime: request.startTime };
     const nextEntry: RegionPlayerEntry = {
-      player: new Tone.Player({ url: entry.player.buffer, loop: false }).connect(channel),
+      player: new Tone.Player({ url: entry.player.buffer, loop: false }).connect(input),
       regionData: this.cloneRegionData(nextRegionData),
       revision: entry.revision + 1,
     };
@@ -269,10 +280,10 @@ export class AudioEngine implements IAudioEngine {
 
     const originalRevision = originalEntry.revision;
     this.validateReplacementIds(trackPlayers, request);
-    const channel = this.getExistingChannel(request.trackId);
+    const input = this.getExistingInput(request.trackId);
     this.graphRevision += 1;
     const replacementEntries = await this.createScheduledRegionEntries({
-      channel,
+      input,
       regions: request.replacements,
     });
     this.ensureRuntimeReadyOrCleanupEntries(replacementEntries);
@@ -385,25 +396,33 @@ export class AudioEngine implements IAudioEngine {
   }
 
   private getOrInitChannel(trackId: string): Tone.Channel {
+    return this.getOrInitTrackNodes(trackId).channel;
+  }
+
+  private getOrInitTrackNodes(trackId: string): { readonly input: Tone.Gain; readonly channel: Tone.Channel } {
+    const currentInput = this.trackInputs.get(trackId);
     const currentChannel = this.channels.get(trackId);
-    if (currentChannel) {
-      return currentChannel;
+    if (currentInput && currentChannel) {
+      return { input: currentInput, channel: currentChannel };
+    }
+    if (currentInput || currentChannel) {
+      throw new AudioEngineError(AudioEngineErrorCode.TRACK_INIT_FAILED, ERROR_MESSAGES.TRACK_INIT_FAILED, {
+        reason: 'TRACK_NODE_STATE_INCONSISTENT',
+        trackId,
+      });
     }
 
+    const input = new Tone.Gain({ gain: 1 });
     const channel = new Tone.Channel({
       volume: 0,
       pan: 0,
     });
-    this.channels.set(trackId, channel);
-    this.desiredTrackVolumes.set(trackId, 1);
-    this.players.set(trackId, new Map());
 
     try {
+      input.connect(channel);
       channel.connect(this.output);
     } catch (cause) {
-      this.channels.delete(trackId);
-      this.desiredTrackVolumes.delete(trackId);
-      this.players.delete(trackId);
+      this.disposeTrackInputSafely(input, '연결에 실패한 Track input 정리에 실패했습니다.');
       this.disposeChannelSafely(channel, '연결에 실패한 Track Channel 정리에 실패했습니다.');
       throw new AudioEngineError(AudioEngineErrorCode.TRACK_INIT_FAILED, ERROR_MESSAGES.TRACK_INIT_FAILED, {
         cause: this.describeError(cause),
@@ -411,9 +430,13 @@ export class AudioEngine implements IAudioEngine {
       });
     }
 
+    this.trackInputs.set(trackId, input);
+    this.channels.set(trackId, channel);
+    this.desiredTrackVolumes.set(trackId, 1);
+    this.players.set(trackId, new Map());
     this.graphRevision += 1;
     this.applyGraphAudibility(this.captureActiveGraph());
-    return channel;
+    return { input, channel };
   }
 
   private async createPreparedProjectGraph(
@@ -431,11 +454,14 @@ export class AudioEngine implements IAudioEngine {
         }
 
         this.assertUniquePreparedRegionIds(track.id, track.regions);
+        const input = new Tone.Gain({ gain: 1 });
         const channel = new Tone.Channel({
           volume: Tone.gainToDb(track.volume),
           pan: track.pan,
         });
+        graph.trackInputs.set(track.id, input);
         graph.channels.set(track.id, channel);
+        input.connect(channel);
         channel.connect(graph.output);
         channel.volume.value = Tone.gainToDb(track.volume);
         channel.pan.value = track.pan;
@@ -449,7 +475,7 @@ export class AudioEngine implements IAudioEngine {
         }
 
         const entries = await this.createScheduledRegionEntries({
-          channel,
+          input,
           regions: track.regions.map(region => this.cloneRegionData(region)),
         });
         const trackPlayers = graph.players.get(track.id);
@@ -489,6 +515,7 @@ export class AudioEngine implements IAudioEngine {
   private createEmptyGraph(outputGain: number): AudioProjectGraphState {
     return {
       output: this.createGraphOutput(outputGain),
+      trackInputs: new Map(),
       channels: new Map(),
       desiredTrackVolumes: new Map(),
       mutedTrackIds: new Set(),
@@ -500,6 +527,7 @@ export class AudioEngine implements IAudioEngine {
   private captureActiveGraph(): AudioProjectGraphState {
     return {
       output: this.output,
+      trackInputs: this.trackInputs,
       channels: this.channels,
       desiredTrackVolumes: this.desiredTrackVolumes,
       mutedTrackIds: this.mutedTrackIds,
@@ -510,6 +538,7 @@ export class AudioEngine implements IAudioEngine {
 
   private useGraph(graph: AudioProjectGraphState): void {
     this.output = graph.output;
+    this.trackInputs = graph.trackInputs;
     this.channels = graph.channels;
     this.desiredTrackVolumes = graph.desiredTrackVolumes;
     this.mutedTrackIds = graph.mutedTrackIds;
@@ -540,6 +569,12 @@ export class AudioEngine implements IAudioEngine {
       }
     });
 
+    graph.trackInputs.forEach((input, trackId) => {
+      if (this.disposeTrackInputSafely(input, errorMessage)) {
+        graph.trackInputs.delete(trackId);
+      }
+    });
+
     graph.channels.forEach((channel, trackId) => {
       if (this.disposeChannelSafely(channel, errorMessage)) {
         graph.channels.delete(trackId);
@@ -553,7 +588,8 @@ export class AudioEngine implements IAudioEngine {
       (playerCount, trackPlayers) => playerCount + trackPlayers.size,
       0
     );
-    const failedResourceCount = failedPlayerCount + graph.channels.size + (isOutputDisposed ? 0 : 1);
+    const failedResourceCount =
+      failedPlayerCount + graph.trackInputs.size + graph.channels.size + (isOutputDisposed ? 0 : 1);
     if (failedResourceCount > 0) {
       return { isComplete: false, failedResourceCount };
     }
@@ -730,6 +766,34 @@ export class AudioEngine implements IAudioEngine {
     channel.dispose();
   }
 
+  private disposeTrackInputSafely(input: Tone.Gain, errorMessage: string): boolean {
+    this.pendingTrackInputCleanup.add(input);
+    if (!this.disconnectedTrackInputs.has(input)) {
+      const isDisconnected = this.tryCleanupStep(() => input.disconnect(), errorMessage);
+      if (isDisconnected) {
+        this.disconnectedTrackInputs.add(input);
+      }
+    }
+
+    if (!this.disposedTrackInputs.has(input)) {
+      const isDisposed = this.tryCleanupStep(() => input.dispose(), errorMessage);
+      if (isDisposed) {
+        this.disposedTrackInputs.add(input);
+      }
+    }
+
+    const isComplete = this.disposedTrackInputs.has(input);
+    if (isComplete) {
+      this.pendingTrackInputCleanup.delete(input);
+    }
+    return isComplete;
+  }
+
+  private disposeTrackInput(input: Tone.Gain): void {
+    input.disconnect();
+    input.dispose();
+  }
+
   private applyGraphAudibility(graph: AudioProjectGraphState): void {
     graph.channels.forEach((channel, trackId) => {
       const shouldMute = this.isTrackMutedInGraph(graph, trackId);
@@ -755,6 +819,9 @@ export class AudioEngine implements IAudioEngine {
     );
     [...this.pendingChannelCleanup].forEach(channel =>
       this.disposeChannelSafely(channel, '대기 중인 Channel 정리에 실패했습니다.')
+    );
+    [...this.pendingTrackInputCleanup].forEach(input =>
+      this.disposeTrackInputSafely(input, '대기 중인 Track input 정리에 실패했습니다.')
     );
     [...this.pendingPlayerCleanup].forEach(player =>
       this.disposePlayerSafely(player, '대기 중인 Region Player 정리에 실패했습니다.')
@@ -842,6 +909,14 @@ export class AudioEngine implements IAudioEngine {
     return channel;
   }
 
+  private getExistingInput(trackId: string): Tone.Gain {
+    const input = this.trackInputs.get(trackId);
+    if (!input) {
+      throw new AudioEngineError(AudioEngineErrorCode.TRACK_NOT_FOUND, ERROR_MESSAGES.TRACK_NOT_FOUND, { trackId });
+    }
+    return input;
+  }
+
   private getRegionEntry(request: RescheduleRegionRequest): RegionPlayerEntry {
     const entry = this.players.get(request.trackId)?.get(request.regionId);
     if (!entry) {
@@ -861,7 +936,7 @@ export class AudioEngine implements IAudioEngine {
           revision: 0,
         };
         entries.push(entry);
-        entry.player.connect(request.channel);
+        entry.player.connect(request.input);
       });
     } catch (cause) {
       this.cleanupRegionEntries(entries);
@@ -1000,6 +1075,7 @@ export class AudioEngine implements IAudioEngine {
         volume: Tone.gainToDb(track.volume * request.masterVolume),
         pan: track.pan,
       }).toDestination();
+      const input = new Tone.Gain({ gain: 1 }).connect(channel);
 
       for (const region of track.regions) {
         const params = RegionRenderer.adjustForExportRange(RegionRenderer.calculateRenderParams(region), request.range);
@@ -1007,7 +1083,7 @@ export class AudioEngine implements IAudioEngine {
           continue;
         }
 
-        scheduledPlayers.push({ player: new Tone.Player({ loop: false }).connect(channel), params });
+        scheduledPlayers.push({ player: new Tone.Player({ loop: false }).connect(input), params });
       }
     }
 
