@@ -5,13 +5,11 @@ import { getProjectRouteRedirect } from './project-route-access';
 
 interface ProjectRouteGuardProps {
   children: ReactNode;
-  requiresAgentResult?: boolean;
 }
 
-export function ProjectRouteGuard({ children, requiresAgentResult = false }: ProjectRouteGuardProps) {
+export function ProjectRouteGuard({ children }: ProjectRouteGuardProps) {
   const hasProject = useSession(state => state.tracks.size > 0);
-  const hasSuccessfulAgentResult = useSession(state => state.hasSuccessfulAgentResult);
-  const redirect = getProjectRouteRedirect({ hasProject, requiresAgentResult, hasSuccessfulAgentResult });
+  const redirect = getProjectRouteRedirect({ hasProject });
 
   if (redirect) {
     return <Navigate to={redirect} replace />;

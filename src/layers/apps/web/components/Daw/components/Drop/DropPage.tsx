@@ -15,7 +15,7 @@ export function DropPage() {
         return;
       }
       resetAgentWorkflow();
-      navigate('/preview', { replace: true });
+      navigate('/daw', { replace: true });
     },
     [navigate, resetAgentWorkflow]
   );
