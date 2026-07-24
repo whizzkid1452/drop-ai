@@ -1,22 +1,12 @@
 interface ProjectRouteAccess {
   hasProject: boolean;
-  requiresAgentResult: boolean;
-  hasSuccessfulAgentResult: boolean;
 }
 
-export type ProjectRouteRedirect = '/' | '/preview' | null;
+export type ProjectRouteRedirect = '/' | null;
 
-export function getProjectRouteRedirect({
-  hasProject,
-  requiresAgentResult,
-  hasSuccessfulAgentResult,
-}: ProjectRouteAccess): ProjectRouteRedirect {
+export function getProjectRouteRedirect({ hasProject }: ProjectRouteAccess): ProjectRouteRedirect {
   if (!hasProject) {
     return '/';
-  }
-
-  if (requiresAgentResult && !hasSuccessfulAgentResult) {
-    return '/preview';
   }
 
   return null;
