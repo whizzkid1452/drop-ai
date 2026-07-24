@@ -38,6 +38,7 @@ vi.mock('./DawPage.css.ts', () => ({
   cliPanelResizing: 'cliPanelResizing',
   cliToggleButton: 'cliToggleButton',
   cliToggleButtonOpen: 'cliToggleButtonOpen',
+  cliToggleButtonResizing: 'cliToggleButtonResizing',
   container: 'container',
   leftPanel: 'leftPanel',
   leftPanelCollapsed: 'leftPanelCollapsed',
@@ -98,5 +99,28 @@ describe('DawPage 타임라인 스크롤', () => {
 
     expect(mainContent.scrollLeft).toBe(120);
     expect(wheelEvent.defaultPrevented).toBe(true);
+  });
+});
+
+describe('DawPage Terminal 리사이즈', () => {
+  it('리사이즈 중에는 Terminal 버튼의 위치 transition을 끈다', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    mountedRoots.push(root);
+
+    act(() => root.render(createElement(DawPage)));
+
+    const resizeHandle = host.querySelector('.resizeHandle');
+    const terminalToggle = host.querySelector('.cliToggleButton');
+    if (!resizeHandle || !terminalToggle) {
+      throw new Error('Terminal 리사이즈 제어를 찾지 못했습니다.');
+    }
+
+    act(() => {
+      resizeHandle.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 600 }));
+    });
+
+    expect(terminalToggle.classList.contains('cliToggleButtonResizing')).toBe(true);
   });
 });

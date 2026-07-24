@@ -142,7 +142,9 @@ export function DawPage() {
       </button>
 
       <button
-        className={`${styles.cliToggleButton} ${isTerminalOpen ? styles.cliToggleButtonOpen : ''}`}
+        className={`${styles.cliToggleButton} ${isTerminalOpen ? styles.cliToggleButtonOpen : ''} ${
+          isResizing ? styles.cliToggleButtonResizing : ''
+        }`}
         style={isTerminalOpen ? { right: `${chatPanelWidth}px` } : undefined}
         onClick={() => setIsTerminalOpen(!isTerminalOpen)}
         title={`${isTerminalOpen ? 'Close Terminal' : 'Open Terminal'} (${KEYBOARD_SHORTCUT_LABELS[KeyboardShortcutAction.TOGGLE_TERMINAL]})`}

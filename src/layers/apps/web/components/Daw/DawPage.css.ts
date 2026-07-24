@@ -134,6 +134,10 @@ export const cliToggleButtonOpen = style({
   color: '#ff78e3',
 });
 
+export const cliToggleButtonResizing = style({
+  transition: 'none',
+});
+
 export const leftToggleButton = style([
   dockToggle,
   {
