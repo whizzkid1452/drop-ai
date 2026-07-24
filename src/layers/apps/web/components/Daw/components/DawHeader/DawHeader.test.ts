@@ -12,6 +12,7 @@ const componentMocks = vi.hoisted(() => ({
   loadProjectControl: vi.fn(() => null),
   undoRedoControls: vi.fn(() => null),
   playbackControls: vi.fn(() => null),
+  addTrackControl: vi.fn(() => null),
 }));
 
 vi.mock('./AudioRuntimeStatus', () => ({
@@ -36,6 +37,10 @@ vi.mock('../UndoRedoControls/UndoRedoControls', () => ({
 
 vi.mock('../PlaybackControls/PlaybackControls', () => ({
   PlaybackControls: componentMocks.playbackControls,
+}));
+
+vi.mock('../AddTrackControl/AddTrackControl', () => ({
+  AddTrackControl: componentMocks.addTrackControl,
 }));
 
 vi.mock('./TempoMetadataControl', () => ({
@@ -81,6 +86,7 @@ afterEach(() => {
   componentMocks.loadProjectControl.mockClear();
   componentMocks.undoRedoControls.mockClear();
   componentMocks.playbackControls.mockClear();
+  componentMocks.addTrackControl.mockClear();
 });
 
 describe('DawHeader', () => {
@@ -98,5 +104,6 @@ describe('DawHeader', () => {
     expect(componentMocks.loadProjectControl).toHaveBeenCalledTimes(1);
     expect(componentMocks.undoRedoControls).toHaveBeenCalledTimes(1);
     expect(componentMocks.playbackControls).toHaveBeenCalledWith({ layout: 'inline' }, undefined);
+    expect(componentMocks.addTrackControl).toHaveBeenCalledTimes(1);
   });
 });
