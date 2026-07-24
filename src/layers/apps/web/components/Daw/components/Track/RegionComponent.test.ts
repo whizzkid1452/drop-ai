@@ -7,12 +7,16 @@ import type { RuntimeAudioSource } from '@/layers/audio-source-registry/i-audio-
 import type { RegionState } from '@/layers/session/session';
 import { RegionComponent } from './RegionComponent';
 
-const { resolveAudioSource } = vi.hoisted(() => ({
+const { renderWaveSurferPlayer, resolveAudioSource } = vi.hoisted(() => ({
+  renderWaveSurferPlayer: vi.fn(),
   resolveAudioSource: vi.fn<(sourceId: string) => RuntimeAudioSource | null>(),
 }));
 
 vi.mock('@wavesurfer/react', () => ({
-  default: ({ url }: { url: string }) => createElement('div', { 'data-audio-url': url }),
+  default: (props: { duration?: number; peaks?: Array<Float32Array | number[]>; url: string }) => {
+    renderWaveSurferPlayer(props);
+    return createElement('div', { 'data-audio-url': props.url });
+  },
 }));
 
 vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
@@ -37,6 +41,11 @@ interface RenderRegionOptions {
   onMove: (newStartTime: number) => Promise<void>;
   onRemove?: () => void;
   region?: RegionState;
+  waveformRenderData?: {
+    duration: number;
+    objectUrl: string;
+    peaks: Array<Float32Array | number[]>;
+  };
 }
 
 interface PointerOptions {
@@ -71,7 +80,7 @@ function createDeferred<T>(): Deferred<T> {
   return { promise, resolve, reject };
 }
 
-function renderRegion({ onMove, onRemove, region = sourceBackedRegion }: RenderRegionOptions) {
+function renderRegion({ onMove, onRemove, region = sourceBackedRegion, waveformRenderData }: RenderRegionOptions) {
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
@@ -84,6 +93,7 @@ function renderRegion({ onMove, onRemove, region = sourceBackedRegion }: RenderR
         pixelsPerSecond: 100,
         onMove,
         onRemove,
+        waveformRenderData,
       })
     );
   });
@@ -98,7 +108,7 @@ function renderRegion({ onMove, onRemove, region = sourceBackedRegion }: RenderR
   regionElement.hasPointerCapture = pointerId => capturedPointerIds.has(pointerId);
   regionElement.releasePointerCapture = pointerId => capturedPointerIds.delete(pointerId);
 
-  return { host, regionElement };
+  return { host, regionElement, root };
 }
 
 function dispatchPointer(
@@ -125,6 +135,7 @@ afterEach(() => {
   });
   document.body.replaceChildren();
   resolveAudioSource.mockReset();
+  renderWaveSurferPlayer.mockReset();
 });
 
 describe('RegionComponent 오디오 소스', () => {
@@ -160,6 +171,141 @@ describe('RegionComponent 오디오 소스', () => {
     expect(resolveAudioSource).toHaveBeenCalledWith(sourceBackedRegion.sourceId);
     expect(host.querySelector('[data-audio-url="blob:source"]')).not.toBeNull();
     expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('같은 runtime source의 캐시된 파형 데이터를 WaveSurfer에 전달한다', () => {
+    const peaks = [new Float32Array([0, 0.5, -0.5])];
+    resolveAudioSource.mockReturnValue({
+      metadata: {
+        id: sourceId,
+        fileName: 'source.wav',
+        mimeType: 'audio/wav',
+        byteLength: 100,
+        durationSeconds: 3,
+      },
+      objectUrl: 'blob:source',
+      isCommitted: true,
+      regionIds: [sourceBackedRegion.id],
+    });
+
+    renderRegion({
+      region: sourceBackedRegion,
+      onMove: vi.fn().mockResolvedValue(undefined),
+      waveformRenderData: {
+        duration: 3,
+        objectUrl: 'blob:source',
+        peaks,
+      },
+    });
+
+    expect(renderWaveSurferPlayer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        duration: 3,
+        peaks,
+        url: 'blob:source',
+      })
+    );
+  });
+
+  it('마운트 후 생성된 캐시는 기존 WaveSurfer의 options를 바꾸지 않는다', () => {
+    const peaks = [new Float32Array([0, 0.5, -0.5])];
+    resolveAudioSource.mockReturnValue({
+      metadata: {
+        id: sourceId,
+        fileName: 'source.wav',
+        mimeType: 'audio/wav',
+        byteLength: 100,
+        durationSeconds: 3,
+      },
+      objectUrl: 'blob:source',
+      isCommitted: true,
+      regionIds: [sourceBackedRegion.id],
+    });
+    const onMove = vi.fn().mockResolvedValue(undefined);
+    const { root } = renderRegion({
+      region: sourceBackedRegion,
+      onMove,
+    });
+    renderWaveSurferPlayer.mockClear();
+
+    act(() => {
+      root.render(
+        createElement(RegionComponent, {
+          region: sourceBackedRegion,
+          pixelsPerSecond: 100,
+          onMove,
+          waveformRenderData: {
+            duration: 3,
+            objectUrl: 'blob:source',
+            peaks,
+          },
+        })
+      );
+    });
+
+    expect(renderWaveSurferPlayer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        duration: undefined,
+        peaks: undefined,
+      })
+    );
+  });
+
+  it('runtime source URL이 바뀌면 이전 source의 캐시를 사용하지 않는다', () => {
+    const oldPeaks = [new Float32Array([0, 0.5, -0.5])];
+    const onMove = vi.fn().mockResolvedValue(undefined);
+    resolveAudioSource.mockReturnValue({
+      metadata: {
+        id: sourceId,
+        fileName: 'source.wav',
+        mimeType: 'audio/wav',
+        byteLength: 100,
+        durationSeconds: 3,
+      },
+      objectUrl: 'blob:old-source',
+      isCommitted: true,
+      regionIds: [sourceBackedRegion.id],
+    });
+    const { root } = renderRegion({
+      region: sourceBackedRegion,
+      onMove,
+      waveformRenderData: {
+        duration: 3,
+        objectUrl: 'blob:old-source',
+        peaks: oldPeaks,
+      },
+    });
+    renderWaveSurferPlayer.mockClear();
+    resolveAudioSource.mockReturnValue({
+      metadata: {
+        id: sourceId,
+        fileName: 'source.wav',
+        mimeType: 'audio/wav',
+        byteLength: 100,
+        durationSeconds: 3,
+      },
+      objectUrl: 'blob:new-source',
+      isCommitted: true,
+      regionIds: [sourceBackedRegion.id],
+    });
+
+    act(() => {
+      root.render(
+        createElement(RegionComponent, {
+          region: sourceBackedRegion,
+          pixelsPerSecond: 100,
+          onMove,
+        })
+      );
+    });
+
+    expect(renderWaveSurferPlayer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        duration: undefined,
+        peaks: undefined,
+        url: 'blob:new-source',
+      })
+    );
   });
 
   it.each([

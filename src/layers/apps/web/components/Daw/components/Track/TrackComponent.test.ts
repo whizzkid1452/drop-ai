@@ -110,6 +110,7 @@ const track: TrackState = {
   pluginInstances: [],
   regions: [],
 };
+const waveformRenderCache = new Map();
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -141,6 +142,7 @@ describe('TrackComponent 제어', () => {
           mediaElement: null,
           track,
           pixelsPerSecond: 100,
+          waveformRenderCache,
           onReady: vi.fn(),
           onVolumeChange: vi.fn(),
           onPanChange: vi.fn(),
@@ -173,6 +175,7 @@ describe('TrackComponent 제어', () => {
           mediaElement: null,
           track: { ...track, pluginInstances: [pluginInstance] },
           pixelsPerSecond: 100,
+          waveformRenderCache,
           onReady: vi.fn(),
           onVolumeChange: vi.fn(),
           onPanChange: vi.fn(),
@@ -206,6 +209,7 @@ describe('TrackComponent 제어', () => {
           mediaElement: null,
           track,
           pixelsPerSecond: 100,
+          waveformRenderCache,
           onReady: vi.fn(),
           onVolumeChange: vi.fn(),
           onPanChange: vi.fn(),
@@ -253,6 +257,7 @@ describe('TrackComponent 제어', () => {
           mediaElement: null,
           track: { ...track, isMuted: true, isSoloed: false },
           pixelsPerSecond: 100,
+          waveformRenderCache,
           onReady: vi.fn(),
           onVolumeChange: vi.fn(),
           onPanChange: vi.fn(),
@@ -295,6 +300,7 @@ describe('TrackComponent 제어', () => {
           mediaElement: null,
           track,
           pixelsPerSecond: 100,
+          waveformRenderCache,
           onReady: vi.fn(),
           onVolumeChange: vi.fn(),
           onPanChange: vi.fn(),
@@ -337,6 +343,7 @@ describe('TrackComponent 제어', () => {
           mediaElement: null,
           track: { ...track, isSoloed: true },
           pixelsPerSecond: 100,
+          waveformRenderCache,
           onReady: vi.fn(),
           onVolumeChange: vi.fn(),
           onPanChange: vi.fn(),
@@ -377,6 +384,7 @@ describe('TrackComponent 제어', () => {
           mediaElement: null,
           track,
           pixelsPerSecond: 100,
+          waveformRenderCache,
           onReady: vi.fn(),
           onVolumeChange: vi.fn(),
           onPanChange: vi.fn(),

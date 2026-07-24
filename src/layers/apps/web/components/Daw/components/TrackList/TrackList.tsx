@@ -1,7 +1,7 @@
 ﻿import { useEffect, useRef, useState, useCallback } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
 import { useErrorBoundary } from 'react-error-boundary';
-import { TrackComponent } from '../Track/TrackComponent';
+import { TrackComponent, type RegionWaveSurferReadyEvent } from '../Track/TrackComponent';
 import {
   createRegionWaveSurferKey,
   pruneWaveSurferInstances,
@@ -9,10 +9,11 @@ import {
 } from './prune-wave-surfer-instances';
 import * as styles from './TrackList.css.ts';
 import { Cursor } from '@/layers/apps/web/components/Cursor/Cursor';
-import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
+import { useAudioSourceResolver, useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
 import { executeConfirmedTrackRemoval } from '@/layers/apps/web/hooks/track-action-commands';
 import { executeTrackMuteChange, executeTrackSoloChange } from '@/layers/apps/web/hooks/track-mute-solo-commands';
 import { AudioCommandType } from '@/types/audioCommand.schema';
+import { pruneWaveformRenderCache, storeWaveformRenderData, type WaveformRenderCache } from './waveform-render-cache';
 import { clampTimelinePixelsPerSecond, TIMELINE_ZOOM_FACTOR } from '../../timeline-zoom';
 
 interface TrackListProps {
@@ -24,8 +25,10 @@ export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProp
   const tracks = useSession(state => state.tracks);
   const trackArray = Array.from(tracks.values());
   const commandExecutor = useCommandExecutor();
+  const audioSourceResolver = useAudioSourceResolver();
 
   const [wavesurferInstances, setWavesurferInstances] = useState<Map<string, WaveSurfer>>(new Map());
+  const waveformRenderCacheRef = useRef<WaveformRenderCache>(new Map());
 
   useEffect(() => {
     const activeRegionKeys = new Set(
@@ -36,6 +39,13 @@ export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProp
     setWavesurferInstances(currentInstances =>
       pruneWaveSurferInstances({ instances: currentInstances, activeRegionKeys })
     );
+    const activeSourceIds = new Set(
+      Array.from(tracks.values()).flatMap(track => track.regions.map(region => region.sourceId))
+    );
+    pruneWaveformRenderCache({
+      cache: waveformRenderCacheRef.current,
+      activeSourceIds,
+    });
   }, [tracks]);
 
   const { showBoundary } = useErrorBoundary();
@@ -98,11 +108,31 @@ export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProp
     [commandExecutor, showBoundary]
   );
 
-  const handleReady = useCallback((trackId: string, regionId: string, ws: WaveSurfer) => {
-    setWavesurferInstances(currentInstances =>
-      registerWaveSurferInstance({ instances: currentInstances, trackId, regionId, instance: ws })
-    );
-  }, []);
+  const handleReady = useCallback(
+    ({ trackId, regionId, sourceId, waveSurfer }: RegionWaveSurferReadyEvent) => {
+      setWavesurferInstances(currentInstances =>
+        registerWaveSurferInstance({
+          instances: currentInstances,
+          trackId,
+          regionId,
+          instance: waveSurfer,
+        })
+      );
+
+      const source = audioSourceResolver.resolve(sourceId);
+      if (!source || !source.regionIds.includes(regionId)) {
+        return;
+      }
+
+      storeWaveformRenderData({
+        cache: waveformRenderCacheRef.current,
+        sourceId,
+        objectUrl: source.objectUrl,
+        waveSurfer,
+      });
+    },
+    [audioSourceResolver]
+  );
 
   const handleRemoveTrack = useCallback(
     async (trackId: string) => {
@@ -165,6 +195,7 @@ export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProp
               onMuteChange={muted => handleMuteChange(track.id, muted)}
               onSoloChange={soloed => handleSoloChange(track.id, soloed)}
               onRemoveTrack={() => handleRemoveTrack(track.id)}
+              waveformRenderCache={waveformRenderCacheRef.current}
             />
           );
         })}

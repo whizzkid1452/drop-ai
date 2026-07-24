@@ -6,6 +6,7 @@ import type { IAudioSourceResolver } from '@/layers/audio-source-registry/i-audi
 import { useAudioSourceResolver } from '@/layers/apps/web/context/layer-hooks';
 import type { RegionState } from '@/layers/session/session';
 import { calculateRegionDragStartTime } from '@/layers/apps/web/hooks/calculate-region-drag-start-time';
+import type { WaveformRenderData } from '../TrackList/waveform-render-cache';
 
 const MISSING_AUDIO_SOURCE_MESSAGE = '오디오 소스를 찾을 수 없습니다.';
 
@@ -15,12 +16,18 @@ interface RegionDragSession {
   initialStartTime: number;
 }
 
+interface WaveformRenderSelection {
+  objectUrl: string | null;
+  renderData: WaveformRenderData | null;
+}
+
 interface RegionComponentProps {
   region: RegionState;
   pixelsPerSecond: number;
   onReady?: (ws: WaveSurfer) => void;
   onMove?: (newStartTime: number) => Promise<void>;
   onRemove?: () => void;
+  waveformRenderData?: WaveformRenderData;
 }
 
 function resolveRegionAudioSourceUrl(region: RegionState, audioSourceResolver: IAudioSourceResolver): string | null {
@@ -38,6 +45,7 @@ export const RegionComponent = ({
   onReady: onReadyProp,
   onMove,
   onRemove,
+  waveformRenderData,
 }: RegionComponentProps) => {
   const audioSourceResolver = useAudioSourceResolver();
   const dragSession = useRef<RegionDragSession | null>(null);
@@ -47,6 +55,16 @@ export const RegionComponent = ({
   const left = displayedStartTime * pixelsPerSecond;
   const width = region.duration * pixelsPerSecond;
   const audioSourceUrl = resolveRegionAudioSourceUrl(region, audioSourceResolver);
+  const waveformRenderSelection = useRef<WaveformRenderSelection>({
+    objectUrl: audioSourceUrl,
+    renderData: waveformRenderData?.objectUrl === audioSourceUrl ? waveformRenderData : null,
+  });
+  if (waveformRenderSelection.current.objectUrl !== audioSourceUrl) {
+    waveformRenderSelection.current = {
+      objectUrl: audioSourceUrl,
+      renderData: waveformRenderData?.objectUrl === audioSourceUrl ? waveformRenderData : null,
+    };
+  }
 
   const calculateStartTime = (pointerX: number, session: RegionDragSession) =>
     calculateRegionDragStartTime({
@@ -192,7 +210,9 @@ export const RegionComponent = ({
           }}
         >
           <WavesurferPlayer
+            duration={waveformRenderSelection.current.renderData?.duration}
             height={126}
+            peaks={waveformRenderSelection.current.renderData?.peaks}
             waveColor="#ff8fe8"
             progressColor="#ffc4f2"
             url={audioSourceUrl}

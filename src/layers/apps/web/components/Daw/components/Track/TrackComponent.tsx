@@ -13,6 +13,14 @@ import { TrackRegionImportControl } from './components/TrackRegionImportControl'
 import { TrackVolumeController } from './components/TrackVolumeController';
 import { RegionComponent } from './RegionComponent';
 import * as styles from './Track.css.ts';
+import type { WaveformRenderData } from '@/layers/apps/web/components/Daw/components/TrackList/waveform-render-cache';
+
+export interface RegionWaveSurferReadyEvent {
+  trackId: string;
+  regionId: string;
+  sourceId: string;
+  waveSurfer: WaveSurfer;
+}
 
 export const TrackComponent = memo(function TrackComponent({
   mediaElement,
@@ -24,16 +32,18 @@ export const TrackComponent = memo(function TrackComponent({
   onMuteChange,
   onSoloChange,
   onRemoveTrack,
+  waveformRenderCache,
 }: {
   mediaElement: HTMLMediaElement | null;
   track: TrackState;
   pixelsPerSecond: number;
-  onReady: (trackId: string, regionId: string, ws: WaveSurfer) => void;
+  onReady: (event: RegionWaveSurferReadyEvent) => void;
   onVolumeChange: (trackId: string, volume: number) => void;
   onPanChange: (trackId: string, pan: number) => void;
   onMuteChange: (muted: boolean) => Promise<TrackToggleResult>;
   onSoloChange: (soloed: boolean) => Promise<TrackToggleResult>;
   onRemoveTrack: () => Promise<TrackRemovalResult>;
+  waveformRenderCache: ReadonlyMap<string, WaveformRenderData>;
 }) {
   const { moveRegion, removeRegion, splitRegion } = useTrackActions();
   const [isMutePending, setIsMutePending] = useState(false);
@@ -169,9 +179,17 @@ export const TrackComponent = memo(function TrackComponent({
             key={region.id}
             region={region}
             pixelsPerSecond={pixelsPerSecond}
-            onReady={ws => onReady(track.id, region.id, ws)}
+            onReady={waveSurfer =>
+              onReady({
+                trackId: track.id,
+                regionId: region.id,
+                sourceId: region.sourceId,
+                waveSurfer,
+              })
+            }
             onMove={newStartTime => handleMoveRegion(region.id, newStartTime)}
             onRemove={() => handleRemoveRegion(region.id)}
+            waveformRenderData={waveformRenderCache.get(region.sourceId)}
           />
         ))}
       </div>
