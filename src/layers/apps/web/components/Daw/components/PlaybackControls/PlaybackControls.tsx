@@ -2,6 +2,11 @@ import { ErrorBoundary, useErrorBoundary, type FallbackProps } from 'react-error
 import * as styles from './PlaybackControls.css.ts';
 import { AudioEngineError, getUserFriendlyMessage } from '@/layers/audio-engine/errors';
 import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
+import {
+  KeyboardShortcutAction,
+  KEYBOARD_SHORTCUT_LABELS,
+  useKeyboardShortcutAction,
+} from '@/layers/apps/web/keyboard-shortcuts/keyboard-shortcuts';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 
 type PlaybackControlsLayout = 'floating' | 'inline';
@@ -61,22 +66,44 @@ function PlaybackControlsContent({ layout }: PlaybackControlsContentProps) {
     }
   };
 
+  useKeyboardShortcutAction(KeyboardShortcutAction.TOGGLE_PLAYBACK, () => {
+    void (isPlaying ? handlePause() : handlePlay());
+  });
+  useKeyboardShortcutAction(KeyboardShortcutAction.STOP_PLAYBACK, () => {
+    void handleStop();
+  });
+
   return (
     <div className={`${styles.container} ${layout === 'inline' ? styles.inlineContainer : ''}`}>
-      <button className={styles.button} onClick={handleStop} title="Stop">
+      <button
+        className={styles.button}
+        onClick={handleStop}
+        title={`Stop (${KEYBOARD_SHORTCUT_LABELS[KeyboardShortcutAction.STOP_PLAYBACK]})`}
+        aria-keyshortcuts="Shift+Space"
+      >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
           <rect x="4" y="4" width="16" height="16" rx="2" />
         </svg>
       </button>
 
       {isPlaying ? (
-        <button className={styles.playButton} onClick={handlePause} title="Pause">
+        <button
+          className={styles.playButton}
+          onClick={handlePause}
+          title={`Pause (${KEYBOARD_SHORTCUT_LABELS[KeyboardShortcutAction.TOGGLE_PLAYBACK]})`}
+          aria-keyshortcuts="Space"
+        >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
             <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
           </svg>
         </button>
       ) : (
-        <button className={styles.playButton} onClick={handlePlay} title="Play">
+        <button
+          className={styles.playButton}
+          onClick={handlePlay}
+          title={`Play (${KEYBOARD_SHORTCUT_LABELS[KeyboardShortcutAction.TOGGLE_PLAYBACK]})`}
+          aria-keyshortcuts="Space"
+        >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <path d="M8 5v14l11-7z" />
           </svg>

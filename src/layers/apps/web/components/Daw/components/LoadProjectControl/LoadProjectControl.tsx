@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCommandExecutor, useProjectCatalog } from '@/layers/apps/web/context/layer-hooks';
+import {
+  KeyboardShortcutAction,
+  KEYBOARD_SHORTCUT_LABELS,
+  useKeyboardShortcutAction,
+} from '@/layers/apps/web/keyboard-shortcuts/keyboard-shortcuts';
 import type { ProjectSummary } from '@/layers/project-repository/i-project-repository';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import * as styles from './LoadProjectControl.css';
@@ -79,6 +84,21 @@ export function LoadProjectControl() {
   const hasProjects = projects.length > 0;
   const buttonText = isOpening ? '불러오는 중...' : '불러오기';
 
+  useKeyboardShortcutAction(
+    KeyboardShortcutAction.OPEN_PROJECT,
+    () => {
+      void handleOpen();
+    },
+    !isListing && !isOpening && Boolean(selectedProjectId)
+  );
+  useKeyboardShortcutAction(
+    KeyboardShortcutAction.REFRESH_PROJECT_LIST,
+    () => {
+      void loadProjects();
+    },
+    !isListing && !isOpening
+  );
+
   return (
     <div className={styles.container}>
       <select
@@ -100,6 +120,8 @@ export function LoadProjectControl() {
         type="button"
         onClick={handleOpen}
         disabled={isListing || isOpening || !selectedProjectId}
+        title={`불러오기 (${KEYBOARD_SHORTCUT_LABELS[KeyboardShortcutAction.OPEN_PROJECT]})`}
+        aria-keyshortcuts="Control+O Meta+O"
       >
         {buttonText}
       </button>
@@ -108,6 +130,8 @@ export function LoadProjectControl() {
         type="button"
         onClick={() => void loadProjects()}
         disabled={isListing || isOpening}
+        title={`목록 새로고침 (${KEYBOARD_SHORTCUT_LABELS[KeyboardShortcutAction.REFRESH_PROJECT_LIST]})`}
+        aria-keyshortcuts="Control+Shift+O Meta+Shift+O"
       >
         {isListing ? '목록 읽는 중...' : '목록 새로고침'}
       </button>

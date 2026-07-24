@@ -13,6 +13,7 @@ import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-
 import { executeConfirmedTrackRemoval } from '@/layers/apps/web/hooks/track-action-commands';
 import { executeTrackMuteChange, executeTrackSoloChange } from '@/layers/apps/web/hooks/track-mute-solo-commands';
 import { AudioCommandType } from '@/types/audioCommand.schema';
+import { clampTimelinePixelsPerSecond, TIMELINE_ZOOM_FACTOR } from '../../timeline-zoom';
 
 interface TrackListProps {
   pixelsPerSecond: number;
@@ -48,11 +49,9 @@ export function TrackList({ pixelsPerSecond, setPixelsPerSecond }: TrackListProp
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
 
-        const zoomFactor = 1.1;
-        const newPixelsPerSecond = e.deltaY > 0 ? pixelsPerSecond / zoomFactor : pixelsPerSecond * zoomFactor;
-
-        // Clamp
-        const clamped = Math.max(1, Math.min(1000, newPixelsPerSecond));
+        const newPixelsPerSecond =
+          e.deltaY > 0 ? pixelsPerSecond / TIMELINE_ZOOM_FACTOR : pixelsPerSecond * TIMELINE_ZOOM_FACTOR;
+        const clamped = clampTimelinePixelsPerSecond(newPixelsPerSecond);
 
         // ?뵩 Update to PlaybackStore
         setPixelsPerSecond(clamped);

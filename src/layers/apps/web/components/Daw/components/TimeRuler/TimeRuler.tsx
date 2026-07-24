@@ -1,11 +1,19 @@
 import { memo, useMemo, useRef, useState, useEffect } from 'react';
 import * as styles from './TimeRuler.css.ts';
-import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
+import { useCommandExecutor, usePlaybackClock, useSession } from '@/layers/apps/web/context/layer-hooks';
 import { useErrorBoundary } from 'react-error-boundary';
+import {
+  KeyboardShortcutAction,
+  KEYBOARD_SHORTCUT_LABELS,
+  useKeyboardShortcutAction,
+} from '@/layers/apps/web/keyboard-shortcuts/keyboard-shortcuts';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import { getMaxDuration } from './get-max-duration';
 
 // ...
+
+const LARGE_SEEK_STEP_SECONDS = 5;
+const SEEK_STEP_SECONDS = 1;
 
 interface TimeRulerProps {
   pixelsPerSecond: number;
@@ -17,6 +25,7 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
   const exportEndTime = useSession(state => state.exportEndTime);
 
   const commandExecutor = useCommandExecutor();
+  const playbackClock = usePlaybackClock();
 
   const trackArray = Array.from(tracks.values());
 
@@ -155,6 +164,47 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
     }
   };
 
+  const handleSeek = async (offsetSeconds: number) => {
+    try {
+      await commandExecutor.execute({
+        type: AudioCommandType.SET_CURRENT_TIME,
+        time: Math.max(0, playbackClock.getCurrentTime() + offsetSeconds),
+      });
+    } catch (error) {
+      showBoundary(error);
+    }
+  };
+
+  const handleSeekToStart = async () => {
+    try {
+      await commandExecutor.execute({
+        type: AudioCommandType.SET_CURRENT_TIME,
+        time: 0,
+      });
+    } catch (error) {
+      showBoundary(error);
+    }
+  };
+
+  useKeyboardShortcutAction(KeyboardShortcutAction.SEEK_TO_START, () => {
+    void handleSeekToStart();
+  });
+  useKeyboardShortcutAction(KeyboardShortcutAction.SEEK_BACKWARD, () => {
+    void handleSeek(-SEEK_STEP_SECONDS);
+  });
+  useKeyboardShortcutAction(KeyboardShortcutAction.SEEK_FORWARD, () => {
+    void handleSeek(SEEK_STEP_SECONDS);
+  });
+  useKeyboardShortcutAction(KeyboardShortcutAction.SEEK_BACKWARD_LARGE, () => {
+    void handleSeek(-LARGE_SEEK_STEP_SECONDS);
+  });
+  useKeyboardShortcutAction(KeyboardShortcutAction.SEEK_FORWARD_LARGE, () => {
+    void handleSeek(LARGE_SEEK_STEP_SECONDS);
+  });
+  useKeyboardShortcutAction(KeyboardShortcutAction.CLEAR_EXPORT_RANGE, () => {
+    void handleDoubleClick();
+  });
+
   return (
     <div className={styles.container} ref={containerRef} onDoubleClick={handleDoubleClick}>
       {ticks}
@@ -176,9 +226,13 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
       <div
         className={styles.topZone}
         onMouseDown={handleTopMouseDown}
-        title="Drag to Select Export Range. Double click to clear."
+        title={`Drag to Select Export Range. Double click or ${KEYBOARD_SHORTCUT_LABELS[KeyboardShortcutAction.CLEAR_EXPORT_RANGE]} to clear.`}
       />
-      <div className={styles.bottomZone} onMouseDown={handleBottomMouseDown} title="Click to Set Playhead" />
+      <div
+        className={styles.bottomZone}
+        onMouseDown={handleBottomMouseDown}
+        title={`Click to Set Playhead. ${KEYBOARD_SHORTCUT_LABELS[KeyboardShortcutAction.SEEK_BACKWARD]}/${KEYBOARD_SHORTCUT_LABELS[KeyboardShortcutAction.SEEK_FORWARD]} to seek.`}
+      />
     </div>
   );
 });

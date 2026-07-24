@@ -1,5 +1,10 @@
 import { useRef, useState } from 'react';
 import { useCommandExecutor } from '@/layers/apps/web/context/layer-hooks';
+import {
+  KeyboardShortcutAction,
+  KEYBOARD_SHORTCUT_LABELS,
+  useKeyboardShortcutAction,
+} from '@/layers/apps/web/keyboard-shortcuts/keyboard-shortcuts';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import * as styles from './SaveProjectButton.css';
 
@@ -37,9 +42,24 @@ export function SaveProjectButton() {
 
   const buttonText = isSaving ? 'Saving...' : errorMessage ? 'Retry save' : 'Save';
 
+  useKeyboardShortcutAction(
+    KeyboardShortcutAction.SAVE_PROJECT,
+    () => {
+      void handleSave();
+    },
+    !isSaving
+  );
+
   return (
     <div className={styles.container}>
-      <button className={styles.button} type="button" onClick={handleSave} disabled={isSaving}>
+      <button
+        className={styles.button}
+        type="button"
+        onClick={handleSave}
+        disabled={isSaving}
+        title={`Save (${KEYBOARD_SHORTCUT_LABELS[KeyboardShortcutAction.SAVE_PROJECT]})`}
+        aria-keyshortcuts="Control+S Meta+S"
+      >
         {buttonText}
       </button>
       {isSaved ? (

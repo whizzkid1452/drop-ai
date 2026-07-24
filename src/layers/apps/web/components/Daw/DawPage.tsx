@@ -6,6 +6,17 @@ import { TrackInfoSidebar } from './components/TrackInfoSidebar/TrackInfoSidebar
 import { TimeRuler } from './components/TimeRuler/TimeRuler';
 import * as styles from './DawPage.css.ts';
 import { useSession } from '@/layers/apps/web/context/layer-hooks';
+import {
+  KeyboardShortcutAction,
+  KEYBOARD_SHORTCUT_LABELS,
+  useGlobalKeyboardShortcuts,
+  useKeyboardShortcutAction,
+} from '@/layers/apps/web/keyboard-shortcuts/keyboard-shortcuts';
+import {
+  clampTimelinePixelsPerSecond,
+  DEFAULT_TIMELINE_PIXELS_PER_SECOND,
+  TIMELINE_ZOOM_FACTOR,
+} from './timeline-zoom';
 
 const CHAT_PANEL_MIN_WIDTH = 280;
 const CHAT_PANEL_MAX_WIDTH = 600;
@@ -17,9 +28,26 @@ export function DawPage() {
   const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
   const [chatPanelWidth, setChatPanelWidth] = useState(CHAT_PANEL_DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
-  const [pixelsPerSecond, setPixelsPerSecond] = useState(20);
+  const [pixelsPerSecond, setPixelsPerSecond] = useState(DEFAULT_TIMELINE_PIXELS_PER_SECOND);
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(CHAT_PANEL_DEFAULT_WIDTH);
+
+  useGlobalKeyboardShortcuts();
+  useKeyboardShortcutAction(KeyboardShortcutAction.TOGGLE_INSPECTOR, () => {
+    setIsTrackInfoOpen(current => !current);
+  });
+  useKeyboardShortcutAction(KeyboardShortcutAction.TOGGLE_TERMINAL, () => {
+    setIsTerminalOpen(current => !current);
+  });
+  useKeyboardShortcutAction(KeyboardShortcutAction.ZOOM_IN, () => {
+    setPixelsPerSecond(current => clampTimelinePixelsPerSecond(current * TIMELINE_ZOOM_FACTOR));
+  });
+  useKeyboardShortcutAction(KeyboardShortcutAction.ZOOM_OUT, () => {
+    setPixelsPerSecond(current => clampTimelinePixelsPerSecond(current / TIMELINE_ZOOM_FACTOR));
+  });
+  useKeyboardShortcutAction(KeyboardShortcutAction.RESET_ZOOM, () => {
+    setPixelsPerSecond(DEFAULT_TIMELINE_PIXELS_PER_SECOND);
+  });
 
   const handleResizeStart = useCallback(
     (e: React.MouseEvent) => {
@@ -63,8 +91,9 @@ export function DawPage() {
       <button
         className={`${styles.leftToggleButton} ${isTrackInfoOpen ? styles.leftToggleButtonOpen : ''}`}
         onClick={() => setIsTrackInfoOpen(!isTrackInfoOpen)}
-        title={isTrackInfoOpen ? 'Close Track Info' : 'Open Track Info'}
+        title={`${isTrackInfoOpen ? 'Close Track Info' : 'Open Track Info'} (${KEYBOARD_SHORTCUT_LABELS[KeyboardShortcutAction.TOGGLE_INSPECTOR]})`}
         aria-label={isTrackInfoOpen ? 'Close track inspector' : 'Open track inspector'}
+        aria-keyshortcuts="I"
       >
         INSPECTOR
       </button>
@@ -73,8 +102,9 @@ export function DawPage() {
         className={`${styles.cliToggleButton} ${isTerminalOpen ? styles.cliToggleButtonOpen : ''}`}
         style={isTerminalOpen ? { right: `${chatPanelWidth}px` } : undefined}
         onClick={() => setIsTerminalOpen(!isTerminalOpen)}
-        title={isTerminalOpen ? 'Close Terminal' : 'Open Terminal'}
+        title={`${isTerminalOpen ? 'Close Terminal' : 'Open Terminal'} (${KEYBOARD_SHORTCUT_LABELS[KeyboardShortcutAction.TOGGLE_TERMINAL]})`}
         aria-label={isTerminalOpen ? 'Close terminal' : 'Open terminal'}
+        aria-keyshortcuts="`"
       >
         TERMINAL
       </button>
