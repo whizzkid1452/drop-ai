@@ -111,6 +111,7 @@ export interface SessionState {
   // Actions (Setters)
   setPlaying: (playing: boolean) => void;
   setCurrentTime: (time: number) => void;
+  pausePlayback: (currentTime: number) => void;
   stopPlayback: () => void;
   setTempo: (tempo: number) => void;
   setMasterVolume: (volume: number) => void;
@@ -172,6 +173,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     /* Actions */
     setPlaying: playing => set({ isPlaying: playing }),
     setCurrentTime: time => set({ currentTime: time }),
+    pausePlayback: currentTime => set({ isPlaying: false, currentTime }),
     stopPlayback: () => set({ isPlaying: false, currentTime: 0 }),
     setTempo: tempo => set({ tempo: tempo }),
     setMasterVolume: volume => set({ masterVolume: volume }),

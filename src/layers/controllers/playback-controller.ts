@@ -32,9 +32,10 @@ export class PlaybackController {
 
     // 1. Command Audio Engine
     this.audioEngine.pause();
+    const currentTime = this.audioEngine.getCurrentTime();
 
     // 2. Update Session State
-    this.sessionStore.getState().setPlaying(false);
+    this.sessionStore.getState().pausePlayback(currentTime);
   }
 
   handleSeek(time: number): void {

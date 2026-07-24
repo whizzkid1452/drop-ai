@@ -44,6 +44,16 @@ describe('Layers Integration', () => {
 
       expect(session.getState().isPlaying).toBe(false);
     });
+
+    it('pause 시 AudioEngine의 정지 시각을 Session currentTime에 반영한다', async () => {
+      const { mockEngine, session, commandExecutor } = setup();
+      await commandExecutor.execute({ type: AudioCommandType.PLAY });
+      mockEngine.setTime(7.5);
+
+      await commandExecutor.execute({ type: AudioCommandType.PAUSE });
+
+      expect(session.getState().currentTime).toBe(7.5);
+    });
   });
 
   describe('Track 명령', () => {
