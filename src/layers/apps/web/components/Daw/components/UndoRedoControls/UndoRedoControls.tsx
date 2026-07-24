@@ -1,5 +1,10 @@
 import { useRef, useState } from 'react';
 import { useCommandExecutor, useCommandHistory } from '@/layers/apps/web/context/layer-hooks';
+import {
+  KeyboardShortcutAction,
+  KEYBOARD_SHORTCUT_LABELS,
+  useKeyboardShortcutAction,
+} from '@/layers/apps/web/keyboard-shortcuts/keyboard-shortcuts';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import * as styles from './UndoRedoControls.css';
 
@@ -32,6 +37,21 @@ export function UndoRedoControls() {
     }
   };
 
+  useKeyboardShortcutAction(
+    KeyboardShortcutAction.UNDO,
+    () => {
+      void executeHistoryCommand(AudioCommandType.UNDO);
+    },
+    !isExecuting && canUndo
+  );
+  useKeyboardShortcutAction(
+    KeyboardShortcutAction.REDO,
+    () => {
+      void executeHistoryCommand(AudioCommandType.REDO);
+    },
+    !isExecuting && canRedo
+  );
+
   return (
     <div className={styles.container}>
       <button
@@ -39,6 +59,8 @@ export function UndoRedoControls() {
         type="button"
         disabled={isExecuting || !canUndo}
         onClick={() => void executeHistoryCommand(AudioCommandType.UNDO)}
+        title={`실행 취소 (${KEYBOARD_SHORTCUT_LABELS[KeyboardShortcutAction.UNDO]})`}
+        aria-keyshortcuts="Control+Z Meta+Z"
       >
         실행 취소
       </button>
@@ -47,6 +69,8 @@ export function UndoRedoControls() {
         type="button"
         disabled={isExecuting || !canRedo}
         onClick={() => void executeHistoryCommand(AudioCommandType.REDO)}
+        title={`다시 실행 (${KEYBOARD_SHORTCUT_LABELS[KeyboardShortcutAction.REDO]})`}
+        aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y Meta+Y"
       >
         다시 실행
       </button>

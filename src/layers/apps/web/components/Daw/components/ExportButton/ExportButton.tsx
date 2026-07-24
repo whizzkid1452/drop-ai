@@ -2,6 +2,11 @@ import { useState } from 'react';
 import * as styles from './ExportButton.css.ts';
 import { useCommandExecutor } from '@/layers/apps/web/context/layer-hooks';
 import { executeWebAudioCommand } from '@/layers/apps/web/utils/execute-web-audio-command';
+import {
+  KeyboardShortcutAction,
+  KEYBOARD_SHORTCUT_LABELS,
+  useKeyboardShortcutAction,
+} from '@/layers/apps/web/keyboard-shortcuts/keyboard-shortcuts';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import { ErrorBoundary, useErrorBoundary, type FallbackProps } from 'react-error-boundary';
 
@@ -46,8 +51,22 @@ function ExportButtonContent() {
     }
   };
 
+  useKeyboardShortcutAction(
+    KeyboardShortcutAction.EXPORT_AUDIO,
+    () => {
+      void handleExport();
+    },
+    !isExporting
+  );
+
   return (
-    <button className={styles.exportButton} onClick={handleExport} disabled={isExporting} title="Export Audio">
+    <button
+      className={styles.exportButton}
+      onClick={handleExport}
+      disabled={isExporting}
+      title={`Export Audio (${KEYBOARD_SHORTCUT_LABELS[KeyboardShortcutAction.EXPORT_AUDIO]})`}
+      aria-keyshortcuts="Control+Shift+E Meta+Shift+E"
+    >
       {isExporting ? 'Exporting...' : 'Export'}
     </button>
   );

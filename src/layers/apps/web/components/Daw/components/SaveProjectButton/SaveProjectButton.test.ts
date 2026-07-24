@@ -3,6 +3,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useGlobalKeyboardShortcuts } from '@/layers/apps/web/keyboard-shortcuts/keyboard-shortcuts';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
 import { SaveProjectButton } from './SaveProjectButton';
 
@@ -33,13 +34,18 @@ function createDeferred() {
   return { promise, resolve };
 }
 
+function ShortcutEnabledSaveProjectButton() {
+  useGlobalKeyboardShortcuts();
+  return createElement(SaveProjectButton);
+}
+
 function renderButton() {
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
   mountedRoots.push(root);
 
-  act(() => root.render(createElement(SaveProjectButton)));
+  act(() => root.render(createElement(ShortcutEnabledSaveProjectButton)));
   const button = host.querySelector('button');
   if (!button) {
     throw new Error('프로젝트 저장 버튼을 찾지 못했습니다.');
@@ -82,6 +88,24 @@ describe('SaveProjectButton', () => {
 
     await act(async () => execution.resolve(undefined));
     expect(button.disabled).toBe(false);
+  });
+
+  it('Ctrl+S를 누르면 버튼과 같은 저장 동작을 실행한다', async () => {
+    layerMocks.execute.mockResolvedValue(undefined);
+    renderButton();
+
+    await act(async () => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          code: 'KeyS',
+          ctrlKey: true,
+        })
+      );
+    });
+
+    expect(layerMocks.execute).toHaveBeenCalledWith({ type: AudioCommandType.SAVE_PROJECT });
   });
 
   it('실패 원인을 표시하고 같은 버튼으로 다시 시도한다', async () => {
