@@ -21,6 +21,25 @@ import {
 const CHAT_PANEL_MIN_WIDTH = 280;
 const CHAT_PANEL_MAX_WIDTH = 600;
 const CHAT_PANEL_DEFAULT_WIDTH = 350;
+const WHEEL_DELTA_MODE_LINE = 1;
+const WHEEL_DELTA_MODE_PAGE = 2;
+const WHEEL_LINE_DISTANCE = 16;
+
+function getShiftWheelHorizontalDelta(event: WheelEvent, pageWidth: number): number | null {
+  if (!event.shiftKey || event.ctrlKey || event.metaKey || event.deltaX !== 0 || event.deltaY === 0) {
+    return null;
+  }
+
+  if (event.deltaMode === WHEEL_DELTA_MODE_LINE) {
+    return event.deltaY * WHEEL_LINE_DISTANCE;
+  }
+
+  if (event.deltaMode === WHEEL_DELTA_MODE_PAGE) {
+    return event.deltaY * pageWidth;
+  }
+
+  return event.deltaY;
+}
 
 export function DawPage() {
   const trackCount = useSession(state => state.tracks.size);
@@ -31,6 +50,7 @@ export function DawPage() {
   const [pixelsPerSecond, setPixelsPerSecond] = useState(DEFAULT_TIMELINE_PIXELS_PER_SECOND);
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(CHAT_PANEL_DEFAULT_WIDTH);
+  const mainContentRef = useRef<HTMLDivElement>(null);
 
   useGlobalKeyboardShortcuts();
   useKeyboardShortcutAction(KeyboardShortcutAction.TOGGLE_INSPECTOR, () => {
@@ -86,6 +106,29 @@ export function DawPage() {
     };
   }, [isResizing]);
 
+  useEffect(() => {
+    const mainContent = mainContentRef.current;
+    if (!mainContent) {
+      return;
+    }
+
+    const handleTimelineWheel = (event: WheelEvent) => {
+      const horizontalDelta = getShiftWheelHorizontalDelta(event, mainContent.clientWidth);
+      const hasHorizontalOverflow = mainContent.scrollWidth > mainContent.clientWidth;
+      if (horizontalDelta === null || !hasHorizontalOverflow) {
+        return;
+      }
+
+      event.preventDefault();
+      mainContent.scrollLeft += horizontalDelta;
+    };
+
+    mainContent.addEventListener('wheel', handleTimelineWheel, { passive: false });
+    return () => {
+      mainContent.removeEventListener('wheel', handleTimelineWheel);
+    };
+  }, []);
+
   return (
     <div className={styles.container}>
       <button
@@ -113,7 +156,7 @@ export function DawPage() {
         <TrackInfoSidebar />
       </div>
 
-      <div className={styles.mainContent}>
+      <div ref={mainContentRef} className={styles.mainContent}>
         <DawHeader trackCount={trackCount} />
         <div className={styles.timelineHeader}>
           <div className={styles.trackHeaderRuler}>
