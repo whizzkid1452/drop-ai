@@ -2,11 +2,14 @@ import { z } from 'zod';
 import {
   PROJECT_DOCUMENT_SCHEMA_VERSION,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V3,
   ProjectDocumentSchema,
   ProjectDocumentV2Schema,
+  ProjectDocumentV3Schema,
   type ProjectDocument,
   type ProjectDocumentSnapshot,
   type ProjectDocumentV2,
+  type ProjectDocumentV3,
 } from './project-document.schema';
 
 export const ProjectDocumentReadErrorCode = {
@@ -25,6 +28,11 @@ export const SUPPORTED_PROJECT_DOCUMENT_SCHEMA_VERSIONS = [PROJECT_DOCUMENT_SCHE
 export const PROJECT_DOCUMENT_V2_MIGRATION_INPUT_VERSIONS = [
   PROJECT_DOCUMENT_SCHEMA_VERSION,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
+] as const;
+export const PROJECT_DOCUMENT_V3_MIGRATION_INPUT_VERSIONS = [
+  PROJECT_DOCUMENT_SCHEMA_VERSION,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V3,
 ] as const;
 export const PROJECT_DOCUMENT_SNAPSHOT_SCHEMA_VERSIONS = [
   PROJECT_DOCUMENT_SCHEMA_VERSION,
@@ -230,6 +238,24 @@ function parseProjectDocumentV2(input: unknown, schemaVersion: number): ProjectD
   throw createInvalidDocumentError(schemaVersion, parseFailure);
 }
 
+function parseProjectDocumentV3(input: unknown, schemaVersion: number): ProjectDocumentV3 {
+  const clonedInput = cloneProjectDocumentInput(input, schemaVersion);
+  let parseFailure: unknown;
+
+  try {
+    const documentResult = ProjectDocumentV3Schema.safeParse(clonedInput);
+    if (documentResult.success) {
+      return documentResult.data;
+    }
+
+    parseFailure = documentResult.error;
+  } catch (cause) {
+    parseFailure = cause;
+  }
+
+  throw createInvalidDocumentError(schemaVersion, parseFailure);
+}
+
 function readProjectDocumentSchemaVersion(input: unknown): number {
   const topLevelObject = readTopLevelObject(input);
   const documentTypeProperty = readOwnDataProperty({
@@ -307,6 +333,27 @@ function migrateValidatedProjectDocumentV1ToV2(document: ProjectDocument): Proje
   });
 }
 
+function migrateValidatedProjectDocumentV2ToV3(document: ProjectDocumentV2): ProjectDocumentV3 {
+  return ProjectDocumentV3Schema.parse({
+    ...document,
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V3,
+    tracks: document.tracks.map(track => ({
+      ...track,
+      loopSlots: [],
+      pluginInstances: track.pluginInstances.map(instance => ({
+        ...instance,
+        parameters: instance.parameters.map(parameter => ({ ...parameter })),
+      })),
+      regions: track.regions.map(region => ({ ...region })),
+    })),
+    audioSources: document.audioSources.map(source => ({ ...source })),
+    exportRange: document.exportRange ? { ...document.exportRange } : null,
+    mixer: { ...document.mixer },
+    project: { ...document.project },
+    timeline: { ...document.timeline },
+  });
+}
+
 function parseProjectDocumentJsonInput(json: string): unknown {
   try {
     return JSON.parse(json) as unknown;
@@ -350,6 +397,29 @@ export function readProjectDocumentV2(input: unknown): ProjectDocumentV2 {
   });
 }
 
+export function migrateProjectDocumentV2ToV3(document: ProjectDocumentV2): ProjectDocumentV3 {
+  return migrateValidatedProjectDocumentV2ToV3(readProjectDocumentV2(document));
+}
+
+export function readProjectDocumentV3(input: unknown): ProjectDocumentV3 {
+  const schemaVersion = readProjectDocumentSchemaVersion(input);
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION) {
+    const v1Document = parseCurrentProjectDocument(input, schemaVersion);
+    return migrateValidatedProjectDocumentV2ToV3(migrateValidatedProjectDocumentV1ToV2(v1Document));
+  }
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V2) {
+    return migrateValidatedProjectDocumentV2ToV3(parseProjectDocumentV2(input, schemaVersion));
+  }
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V3) {
+    return parseProjectDocumentV3(input, schemaVersion);
+  }
+
+  throw createUnsupportedSchemaVersionError({
+    schemaVersion,
+    supportedSchemaVersions: PROJECT_DOCUMENT_V3_MIGRATION_INPUT_VERSIONS,
+  });
+}
+
 export function readProjectDocumentSnapshot(input: unknown): ProjectDocumentSnapshot {
   const schemaVersion = readProjectDocumentSchemaVersion(input);
   if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION) {
@@ -371,4 +441,8 @@ export function readProjectDocumentJson(json: string): ProjectDocument {
 
 export function readProjectDocumentJsonV2(json: string): ProjectDocumentV2 {
   return readProjectDocumentV2(parseProjectDocumentJsonInput(json));
+}
+
+export function readProjectDocumentJsonV3(json: string): ProjectDocumentV3 {
+  return readProjectDocumentV3(parseProjectDocumentJsonInput(json));
 }
