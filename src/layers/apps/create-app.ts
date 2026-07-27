@@ -1,5 +1,9 @@
 import type { IAudioEngine } from '../audio-engine/i-audio-engine';
 import { AudioEngine } from '../audio-engine/audio-engine';
+import { AudioWorkletPcmCapture } from '../audio-engine/live-input/audio-worklet-pcm-capture';
+import { BrowserLiveAudioInput } from '../audio-engine/live-input/browser-live-audio-input';
+import { QuantizedLoopRuntime } from '../audio-engine/loop-runtime/quantized-loop-runtime';
+import { ToneLoopPlaybackAdapter } from '../audio-engine/loop-runtime/tone-loop-playback-adapter';
 import { readAudioRuntimeEnvironment } from '../audio-engine/audio-runtime-environment';
 import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { ToneGainPluginRuntimeFactory } from '../audio-engine/plugins/tone-gain-plugin-runtime';
@@ -119,6 +123,11 @@ function createDefaultAudioEngine(): IAudioEngine {
   const [gainParameter] = gainPluginManifest.parameters;
   const [saturationDriveParameter] = saturationPluginManifest.parameters;
   return new AudioEngine({
+    loopRuntime: new QuantizedLoopRuntime({
+      liveAudioInput: new BrowserLiveAudioInput(),
+      pcmCapture: new AudioWorkletPcmCapture(),
+      playback: new ToneLoopPlaybackAdapter(),
+    }),
     pluginRuntimeFactories: [
       new ToneGainPluginRuntimeFactory({
         manifestId: gainPluginManifest.id,

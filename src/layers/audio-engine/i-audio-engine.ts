@@ -1,5 +1,26 @@
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
 import type { PluginParameterValue } from '../shared/types/plugin-state';
+import type {
+  ArmLoopRequest,
+  LoadLoopRequest,
+  LoopRuntimeListener,
+  LoopSlotAddress,
+  SetLiveInputMonitoringRequest,
+  StopAllLoopsRequest,
+  TriggerLoopRequest,
+} from './loop-runtime/loop-runtime-contract';
+
+export type {
+  ArmLoopRequest,
+  LoadLoopRequest,
+  LoopRuntimeEvent,
+  LoopRuntimeListener,
+  LoopRuntimeState,
+  LoopSlotAddress,
+  SetLiveInputMonitoringRequest,
+  StopAllLoopsRequest,
+  TriggerLoopRequest,
+} from './loop-runtime/loop-runtime-contract';
 
 export interface RegionData {
   id: string;
@@ -120,6 +141,18 @@ export interface IAudioEngine {
   stop(): void;
   setTime(time: number): void;
   getCurrentTime(): number;
+
+  // Live Loop Control
+  setLiveInputDevice(deviceId: string | null): Promise<string | null>;
+  setLiveInputMonitoring(request: SetLiveInputMonitoringRequest): Promise<void>;
+  armLoop(request: ArmLoopRequest): Promise<void>;
+  cancelLoop(address: LoopSlotAddress): void;
+  triggerLoop(request: TriggerLoopRequest): Promise<void>;
+  stopLoop(request: TriggerLoopRequest): void;
+  clearLoop(address: LoopSlotAddress): void;
+  stopAllLoops(request: StopAllLoopsRequest): void;
+  loadLoop(request: LoadLoopRequest): Promise<void>;
+  subscribeLoopEvents(listener: LoopRuntimeListener): () => void;
 
   // Mixer Control
   setMasterVolume(volume: number): void;
