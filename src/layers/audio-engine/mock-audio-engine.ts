@@ -315,6 +315,7 @@ export class MockAudioEngine implements IAudioEngine {
     const nextTracks = new Map<string, MockTrackState>();
     const nextRegions = new Map<string, Map<string, RegionData>>();
     const nextPlugins = new Map<string, Map<string, MockPluginState>>();
+    const nextLoopStates = new Map<string, LoopRuntimeState>();
 
     tracks.forEach(track => {
       if (nextTracks.has(track.id)) {
@@ -356,6 +357,13 @@ export class MockAudioEngine implements IAudioEngine {
       });
       nextRegions.set(track.id, trackRegions);
       nextPlugins.set(track.id, trackPlugins);
+      (track.loops ?? []).forEach(loop => {
+        const loopKey = this.createLoopKey({ slotId: loop.slotId, trackId: track.id });
+        if (nextLoopStates.has(loopKey)) {
+          throw new Error(`중복된 루프 슬롯입니다: ${loop.slotId}`);
+        }
+        nextLoopStates.set(loopKey, 'stopped');
+      });
     });
 
     let retiredGraph: IRetiredAudioProjectGraph | undefined;
@@ -383,6 +391,7 @@ export class MockAudioEngine implements IAudioEngine {
         this.mockTracks = nextTracks;
         this.mockRegions = nextRegions;
         this.mockPlugins = nextPlugins;
+        this.mockLoopStates = nextLoopStates;
         this.mockMasterVolume = masterVolume;
         this.mockTime = 0;
         this.graphRevision += 1;

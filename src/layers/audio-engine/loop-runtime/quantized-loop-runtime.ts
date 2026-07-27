@@ -1,4 +1,5 @@
 import { calculateLoopDurationSeconds, calculateNextLoopBoundarySeconds } from '../../shared/loop-time';
+import { COMPLETE_RESOURCE_CLEANUP, type ResourceCleanupResult } from '../../shared/types/resource-cleanup';
 import { encodeAudioBufferToWav } from '../encoders/wav-encoder';
 import type { ILiveAudioInput, ILiveAudioInputConnection } from '../live-input/live-audio-input';
 import type { ILivePcmCapture, ScheduledPcmCapture } from '../live-input/live-pcm-capture';
@@ -6,6 +7,8 @@ import type { ILoopPlaybackAdapter, ILoopPlayer } from './loop-playback-adapter'
 import type {
   ArmLoopRuntimeRequest,
   ILoopAudioRuntime,
+  IPreparedLoopRuntimeReplacement,
+  IRetiredLoopRuntime,
   LoadLoopRuntimeRequest,
   LoopRuntimeEvent,
   LoopRuntimeListener,
@@ -34,6 +37,8 @@ interface LoopPlaybackEntry {
   readonly player: ILoopPlayer;
 }
 
+type PreparedLoopReplacementState = 'activated' | 'discarded' | 'prepared';
+
 const LOOP_KEY_SEPARATOR = '\u0000';
 
 function createLoopKey({ trackId, slotId }: LoopSlotAddress): string {
@@ -51,7 +56,8 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
   readonly #pcmCapture: ILivePcmCapture;
   readonly #pendingCaptures = new Map<string, PendingLoopCapture>();
   readonly #playback: ILoopPlaybackAdapter;
-  readonly #playbackEntries = new Map<string, LoopPlaybackEntry>();
+  #playbackEntries = new Map<string, LoopPlaybackEntry>();
+  #revision = 0;
   #inputConnection: ILiveAudioInputConnection | null = null;
   #monitorDestination: AudioNode | null = null;
 
@@ -99,6 +105,7 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
       session,
     };
     this.#pendingCaptures.set(key, pendingCapture);
+    this.#revision += 1;
     this.#emit({ ...address, scheduledTimeSeconds: boundaryTimeSeconds, state: 'armed', type: 'STATE_CHANGED' });
     void session.completion
       .then(capturedPcm => this.#completeCapture(address, pendingCapture, capturedPcm))
@@ -107,6 +114,7 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
           return;
         }
         this.#pendingCaptures.delete(key);
+        this.#revision += 1;
         this.#emit({ ...address, error: describeError(error), type: 'RUNTIME_ERROR' });
         this.#emit({ ...address, state: 'error', type: 'STATE_CHANGED' });
       });
@@ -119,6 +127,8 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
       return;
     }
     this.#pendingCaptures.delete(key);
+    this.#revision += 1;
+    this.#revision += 1;
     pendingCapture.session.cancel();
     this.#emit({ ...address, state: this.#playbackEntries.has(key) ? 'stopped' : 'empty', type: 'STATE_CHANGED' });
   }
@@ -128,7 +138,9 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
     const key = createLoopKey(address);
     const entry = this.#playbackEntries.get(key);
     entry?.player.dispose();
-    this.#playbackEntries.delete(key);
+    if (this.#playbackEntries.delete(key)) {
+      this.#revision += 1;
+    }
     this.#emit({ ...address, state: 'empty', type: 'STATE_CHANGED' });
   }
 
@@ -143,13 +155,35 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
   }
 
   async load(request: LoadLoopRuntimeRequest): Promise<void> {
-    const response = await fetch(request.url);
-    if (!response.ok) {
-      throw new Error(`루프 오디오를 불러오지 못했습니다: ${response.status}`);
-    }
-    const audioBuffer = await this.#playback.getAudioContext().decodeAudioData(await response.arrayBuffer());
+    const audioBuffer = await this.#loadAudioBuffer(request.url);
     this.#replacePlayer(request, audioBuffer);
     this.#emit({ ...request, state: 'stopped', type: 'STATE_CHANGED' });
+  }
+
+  async prepareReplacement(requests: readonly LoadLoopRuntimeRequest[]): Promise<IPreparedLoopRuntimeReplacement> {
+    if (this.#pendingCaptures.size > 0) {
+      throw new Error('녹음 대기 또는 녹음 중에는 프로젝트 루프를 교체할 수 없습니다.');
+    }
+    const expectedRevision = this.#revision;
+    const preparedEntries = new Map<string, LoopPlaybackEntry>();
+
+    try {
+      for (const request of requests) {
+        const key = createLoopKey(request);
+        if (preparedEntries.has(key)) {
+          throw new Error(`중복된 루프 슬롯입니다: ${request.slotId}`);
+        }
+        const audioBuffer = await this.#loadAudioBuffer(request.url);
+        preparedEntries.set(key, {
+          player: this.#playback.createPlayer({ audioBuffer, destination: request.destination }),
+        });
+      }
+    } catch (cause) {
+      this.#disposePlaybackEntries(preparedEntries);
+      throw cause;
+    }
+
+    return this.#createPreparedReplacement({ expectedRevision, preparedEntries });
   }
 
   async setInputDevice(deviceId: string | null): Promise<string | null> {
@@ -266,7 +300,77 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
     this.#playbackEntries.get(key)?.player.dispose();
     const player = this.#playback.createPlayer({ audioBuffer, destination: request.destination });
     this.#playbackEntries.set(key, { player });
+    this.#revision += 1;
     return player;
+  }
+
+  async #loadAudioBuffer(url: string): Promise<AudioBuffer> {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`루프 오디오를 불러오지 못했습니다: ${response.status}`);
+    }
+    return this.#playback.getAudioContext().decodeAudioData(await response.arrayBuffer());
+  }
+
+  #createPreparedReplacement({
+    expectedRevision,
+    preparedEntries,
+  }: {
+    readonly expectedRevision: number;
+    readonly preparedEntries: Map<string, LoopPlaybackEntry>;
+  }): IPreparedLoopRuntimeReplacement {
+    let state: PreparedLoopReplacementState = 'prepared';
+    let retiredRuntime: IRetiredLoopRuntime | null = null;
+
+    const assertActivatable = (): void => {
+      if (state === 'activated') {
+        return;
+      }
+      if (state === 'discarded' || this.#revision !== expectedRevision || this.#pendingCaptures.size > 0) {
+        throw new Error('준비 중 활성 루프 상태가 변경되었습니다.');
+      }
+    };
+
+    return {
+      assertActivatable,
+      activate: () => {
+        if (retiredRuntime) {
+          return retiredRuntime;
+        }
+        assertActivatable();
+        const retiredEntries = this.#playbackEntries;
+        this.#playbackEntries = preparedEntries;
+        this.#revision += 1;
+        state = 'activated';
+        retiredRuntime = this.#createRetiredRuntime(retiredEntries);
+        return retiredRuntime;
+      },
+      discard: () => {
+        if (state === 'activated') {
+          return COMPLETE_RESOURCE_CLEANUP;
+        }
+        state = 'discarded';
+        return this.#disposePlaybackEntries(preparedEntries);
+      },
+    };
+  }
+
+  #createRetiredRuntime(entries: Map<string, LoopPlaybackEntry>): IRetiredLoopRuntime {
+    return { dispose: () => this.#disposePlaybackEntries(entries) };
+  }
+
+  #disposePlaybackEntries(entries: Map<string, LoopPlaybackEntry>): ResourceCleanupResult {
+    let failedResourceCount = 0;
+    entries.forEach((entry, key) => {
+      try {
+        entry.player.dispose();
+        entries.delete(key);
+      } catch {
+        failedResourceCount += 1;
+      }
+    });
+
+    return failedResourceCount === 0 ? COMPLETE_RESOURCE_CLEANUP : { failedResourceCount, isComplete: false };
   }
 
   #resolveBoundaryTime(request: TriggerLoopRequest): number {

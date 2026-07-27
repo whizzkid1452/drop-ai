@@ -1,4 +1,5 @@
 import type { LoopLengthBars } from '../../shared/loop-time';
+import type { ResourceCleanupResult } from '../../shared/types/resource-cleanup';
 import type { LoopSlotRuntimeState } from '../../shared/types/loop-state';
 
 export type LoopRuntimeState = LoopSlotRuntimeState;
@@ -73,10 +74,21 @@ export interface ILoopAudioRuntime {
   clear(address: LoopSlotAddress): void;
   clearTrack(trackId: string): void;
   load(request: LoadLoopRuntimeRequest): Promise<void>;
+  prepareReplacement(requests: readonly LoadLoopRuntimeRequest[]): Promise<IPreparedLoopRuntimeReplacement>;
   setInputDevice(deviceId: string | null): Promise<string | null>;
   setMonitoring(request: SetLiveInputMonitoringRuntimeRequest): Promise<void>;
   stop(request: TriggerLoopRequest): void;
   stopAll(request: StopAllLoopsRequest): void;
   subscribe(listener: LoopRuntimeListener): () => void;
   trigger(request: TriggerLoopRequest): Promise<void>;
+}
+
+export interface IRetiredLoopRuntime {
+  dispose(): ResourceCleanupResult;
+}
+
+export interface IPreparedLoopRuntimeReplacement {
+  assertActivatable(): void;
+  activate(): IRetiredLoopRuntime;
+  discard(): ResourceCleanupResult;
 }

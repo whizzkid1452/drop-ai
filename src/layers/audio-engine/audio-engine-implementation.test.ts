@@ -366,6 +366,16 @@ vi.mock('tone', () => {
 
 import { AudioEngine } from './audio-engine';
 import { AudioEngineErrorCode } from './errors';
+import type {
+  ArmLoopRuntimeRequest,
+  ILoopAudioRuntime,
+  LoadLoopRuntimeRequest,
+  LoopRuntimeListener,
+  LoopSlotAddress,
+  SetLiveInputMonitoringRuntimeRequest,
+  StopAllLoopsRequest,
+  TriggerLoopRequest,
+} from './loop-runtime/loop-runtime-contract';
 import { ToneGainPluginRuntimeFactory } from './plugins/tone-gain-plugin-runtime';
 import { ToneSaturationPluginRuntimeFactory } from './plugins/tone-saturation-plugin-runtime';
 
@@ -376,6 +386,70 @@ const ORIGINAL_REGION = {
   sourceStartTime: 2,
   duration: 3,
 };
+
+class LoopRuntimeStub implements ILoopAudioRuntime {
+  readonly activateReplacement = vi.fn();
+  readonly disposeRetired = vi.fn(() => ({ failedResourceCount: 0, isComplete: true }));
+  readonly discardReplacement = vi.fn(() => ({ failedResourceCount: 0, isComplete: true }));
+  readonly prepareReplacementRequests: LoadLoopRuntimeRequest[][] = [];
+
+  async arm(_request: ArmLoopRuntimeRequest): Promise<void> {
+    void _request;
+  }
+
+  cancel(_address: LoopSlotAddress): void {
+    void _address;
+  }
+
+  clear(_address: LoopSlotAddress): void {
+    void _address;
+  }
+
+  clearTrack(_trackId: string): void {
+    void _trackId;
+  }
+
+  async load(_request: LoadLoopRuntimeRequest): Promise<void> {
+    void _request;
+  }
+
+  async prepareReplacement(requests: readonly LoadLoopRuntimeRequest[]) {
+    this.prepareReplacementRequests.push([...requests]);
+    return {
+      assertActivatable: () => undefined,
+      activate: () => {
+        this.activateReplacement();
+        return { dispose: this.disposeRetired };
+      },
+      discard: this.discardReplacement,
+    };
+  }
+
+  async setInputDevice(deviceId: string | null): Promise<string | null> {
+    return deviceId;
+  }
+
+  async setMonitoring(_request: SetLiveInputMonitoringRuntimeRequest): Promise<void> {
+    void _request;
+  }
+
+  stop(_request: TriggerLoopRequest): void {
+    void _request;
+  }
+
+  stopAll(_request: StopAllLoopsRequest): void {
+    void _request;
+  }
+
+  subscribe(_listener: LoopRuntimeListener): () => void {
+    void _listener;
+    return () => undefined;
+  }
+
+  async trigger(_request: TriggerLoopRequest): Promise<void> {
+    void _request;
+  }
+}
 
 function createPluginAudioEngine(): AudioEngine {
   return new AudioEngine({
@@ -1258,6 +1332,37 @@ describe('AudioEngine 실시간 상태 일관성', () => {
 
     retiredGraph.dispose();
     expect(toneMocks.playerDispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('프로젝트 루프를 그래프와 함께 준비하고 activate에서 함께 교체한다', async () => {
+    const loopRuntime = new LoopRuntimeStub();
+    const engine = new AudioEngine({ loopRuntime });
+
+    const replacement = await engine.prepareProjectGraph({
+      tracks: [
+        {
+          id: 'loop-track',
+          isMuted: false,
+          isSoloed: false,
+          loops: [{ slotId: 'loop-slot', url: 'blob:loop' }],
+          pan: 0,
+          pluginInstances: [],
+          regions: [],
+          volume: 1,
+        },
+      ],
+    });
+
+    expect(loopRuntime.prepareReplacementRequests[0]).toEqual([
+      expect.objectContaining({ slotId: 'loop-slot', trackId: 'loop-track', url: 'blob:loop' }),
+    ]);
+    expect(loopRuntime.activateReplacement).not.toHaveBeenCalled();
+
+    const retired = replacement.activate();
+    expect(loopRuntime.activateReplacement).toHaveBeenCalledOnce();
+
+    retired.dispose();
+    expect(loopRuntime.disposeRetired).toHaveBeenCalledOnce();
   });
 
   it('프로젝트 그래프를 준비할 때 Plugin을 저장 순서대로 연결한다', async () => {

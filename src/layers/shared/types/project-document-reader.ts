@@ -37,6 +37,7 @@ export const PROJECT_DOCUMENT_V3_MIGRATION_INPUT_VERSIONS = [
 export const PROJECT_DOCUMENT_SNAPSHOT_SCHEMA_VERSIONS = [
   PROJECT_DOCUMENT_SCHEMA_VERSION,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V3,
 ] as const;
 
 const ProjectDocumentSchemaVersionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
@@ -427,6 +428,9 @@ export function readProjectDocumentSnapshot(input: unknown): ProjectDocumentSnap
   }
   if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V2) {
     return parseProjectDocumentV2(input, schemaVersion);
+  }
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V3) {
+    return parseProjectDocumentV3(input, schemaVersion);
   }
 
   throw createUnsupportedSchemaVersionError({

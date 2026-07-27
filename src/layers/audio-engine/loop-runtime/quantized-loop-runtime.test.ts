@@ -66,6 +66,7 @@ class LoopPlaybackAdapterStub implements ILoopPlaybackAdapter {
   readonly players: LoopPlayerStub[] = [];
   readonly setMonitoring = vi.fn();
   readonly prepare = vi.fn(async () => undefined);
+  readonly decodeAudioData = vi.fn(async () => ({}) as AudioBuffer);
 
   createAudioBuffer(): AudioBuffer {
     return {} as AudioBuffer;
@@ -78,7 +79,7 @@ class LoopPlaybackAdapterStub implements ILoopPlaybackAdapter {
   }
 
   getAudioContext(): AudioContext {
-    return {} as AudioContext;
+    return { decodeAudioData: this.decodeAudioData } as unknown as AudioContext;
   }
 
   getContextTimeSeconds(): number {
@@ -182,5 +183,43 @@ describe('QuantizedLoopRuntime', () => {
 
     expect(playback.players[0].startAt).toHaveBeenLastCalledWith(31.5);
     expect(playback.players[0].stopAt).toHaveBeenCalledWith(31.5);
+  });
+
+  it('프로젝트 루프를 준비한 뒤 activate 시점에만 기존 루프와 교체한다', async () => {
+    const { playback, runtime } = createRuntime();
+    await runtime.load({ ...address, destination, url: 'data:audio/wav;base64,AA==' });
+    const activePlayer = playback.players[0];
+
+    const replacement = await runtime.prepareReplacement([
+      {
+        destination,
+        slotId: 'slot-2',
+        trackId: 'track-2',
+        url: 'data:audio/wav;base64,AA==',
+      },
+    ]);
+
+    expect(activePlayer.dispose).not.toHaveBeenCalled();
+    const retired = replacement.activate();
+    expect(activePlayer.dispose).not.toHaveBeenCalled();
+    await runtime.trigger({ quantizationBars: 1, slotId: 'slot-2', tempoBpm: 120, trackId: 'track-2' });
+    expect(playback.players[1].startAt).toHaveBeenCalledOnce();
+    expect(() => runtime.stop({ quantizationBars: 1, ...address, tempoBpm: 120 })).toThrow(
+      '루프 슬롯에 재생할 오디오가 없습니다.'
+    );
+
+    retired.dispose();
+    expect(activePlayer.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('준비한 루프 교체를 버리면 새 Player만 정리한다', async () => {
+    const { playback, runtime } = createRuntime();
+    const replacement = await runtime.prepareReplacement([
+      { ...address, destination, url: 'data:audio/wav;base64,AA==' },
+    ]);
+
+    replacement.discard();
+
+    expect(playback.players[0].dispose).toHaveBeenCalledOnce();
   });
 });

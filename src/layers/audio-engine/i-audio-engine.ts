@@ -109,6 +109,11 @@ export interface AudioProjectGraphPluginInstance {
   readonly parameterValues: ReadonlyMap<string, PluginParameterValue>;
 }
 
+export interface AudioProjectGraphLoop {
+  readonly slotId: string;
+  readonly url: string;
+}
+
 export interface AudioProjectGraphTrack {
   readonly id: string;
   readonly volume: number;
@@ -116,6 +121,7 @@ export interface AudioProjectGraphTrack {
   readonly isMuted: boolean;
   readonly isSoloed: boolean;
   readonly pluginInstances: readonly AudioProjectGraphPluginInstance[];
+  readonly loops?: readonly AudioProjectGraphLoop[];
   readonly regions: readonly RegionData[];
 }
 

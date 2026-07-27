@@ -27,7 +27,12 @@ import type {
   StopAllLoopsRequest,
   TriggerLoopRequest,
 } from './i-audio-engine';
-import type { ILoopAudioRuntime } from './loop-runtime/loop-runtime-contract';
+import type {
+  ILoopAudioRuntime,
+  IPreparedLoopRuntimeReplacement,
+  IRetiredLoopRuntime,
+  LoadLoopRuntimeRequest,
+} from './loop-runtime/loop-runtime-contract';
 import { UnavailableLoopAudioRuntime } from './loop-runtime/unavailable-loop-audio-runtime';
 import type { IAudioPluginRuntime, IAudioPluginRuntimeFactory } from './plugins/audio-plugin-runtime';
 import { AudioPluginRuntimeError } from './plugins/errors';
@@ -640,6 +645,13 @@ export class AudioEngine implements IAudioEngine {
     this.retryPendingCleanup();
     const expectedRevision = this.graphRevision;
     const preparedGraph = await this.createPreparedProjectGraph(tracks, masterVolume);
+    let preparedLoops: IPreparedLoopRuntimeReplacement;
+    try {
+      preparedLoops = await this.loopRuntime.prepareReplacement(this.createPreparedLoopRequests(tracks, preparedGraph));
+    } catch (cause) {
+      this.disposeGraph(preparedGraph, '루프 준비에 실패한 프로젝트 그래프 정리에 실패했습니다.');
+      throw cause;
+    }
     let retiredGraph: IRetiredAudioProjectGraph | undefined;
     let state: PreparedGraphState = 'prepared';
 
@@ -654,6 +666,7 @@ export class AudioEngine implements IAudioEngine {
           expectedRevision,
         });
       }
+      preparedLoops.assertActivatable();
     };
 
     return {
@@ -670,11 +683,13 @@ export class AudioEngine implements IAudioEngine {
         } catch (cause) {
           state = 'discarded';
           this.disposeGraph(preparedGraph, '활성화에 실패한 프로젝트 그래프 정리에 실패했습니다.');
+          preparedLoops.discard();
           throw cause;
         }
+        const retiredLoops = preparedLoops.activate();
         this.graphRevision += 1;
         state = 'activated';
-        retiredGraph = this.createRetiredGraph(previousGraph);
+        retiredGraph = this.createRetiredGraph(previousGraph, retiredLoops);
         return retiredGraph;
       },
       discard: () => {
@@ -683,7 +698,10 @@ export class AudioEngine implements IAudioEngine {
         }
 
         state = 'discarded';
-        return this.disposeGraph(preparedGraph, '준비한 프로젝트 그래프 정리에 실패했습니다.');
+        return this.combineCleanupResults(
+          this.disposeGraph(preparedGraph, '준비한 프로젝트 그래프 정리에 실패했습니다.'),
+          preparedLoops.discard()
+        );
       },
     };
   }
@@ -995,6 +1013,27 @@ export class AudioEngine implements IAudioEngine {
     }
   }
 
+  private createPreparedLoopRequests(
+    tracks: PrepareAudioProjectGraphRequest['tracks'],
+    graph: AudioProjectGraphState
+  ): LoadLoopRuntimeRequest[] {
+    return tracks.flatMap(track => {
+      const destination = graph.trackInputs.get(track.id);
+      if (!destination) {
+        throw new AudioEngineError(AudioEngineErrorCode.TRACK_NOT_FOUND, ERROR_MESSAGES.TRACK_NOT_FOUND, {
+          trackId: track.id,
+        });
+      }
+
+      return (track.loops ?? []).map(loop => ({
+        destination: destination.input,
+        slotId: loop.slotId,
+        trackId: track.id,
+        url: loop.url,
+      }));
+    });
+  }
+
   private assertUniquePreparedRegionIds(trackId: string, regions: readonly RegionData[]): void {
     const regionIds = new Set<string>();
     const duplicateRegion = regions.find(region => {
@@ -1051,12 +1090,21 @@ export class AudioEngine implements IAudioEngine {
     this.disabledPluginInstanceIds = graph.disabledPluginInstanceIds;
   }
 
-  private createRetiredGraph(graph: AudioProjectGraphState): IRetiredAudioProjectGraph {
+  private createRetiredGraph(graph: AudioProjectGraphState, loops: IRetiredLoopRuntime): IRetiredAudioProjectGraph {
     this.pendingGraphCleanup.add(graph);
 
     return {
-      dispose: () => this.disposeGraph(graph, '이전 프로젝트 오디오 그래프 정리에 실패했습니다.'),
+      dispose: () =>
+        this.combineCleanupResults(
+          this.disposeGraph(graph, '이전 프로젝트 오디오 그래프 정리에 실패했습니다.'),
+          loops.dispose()
+        ),
     };
+  }
+
+  private combineCleanupResults(...results: readonly ResourceCleanupResult[]): ResourceCleanupResult {
+    const failedResourceCount = results.reduce((count, result) => count + result.failedResourceCount, 0);
+    return failedResourceCount === 0 ? COMPLETE_RESOURCE_CLEANUP : { failedResourceCount, isComplete: false };
   }
 
   private disposeGraph(graph: AudioProjectGraphState, errorMessage: string): ResourceCleanupResult {
