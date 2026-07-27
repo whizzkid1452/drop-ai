@@ -1,19 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import {
   PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V3,
   type ProjectDocument,
   type ProjectDocumentV2,
+  type ProjectDocumentV3,
 } from './project-document.schema';
 import {
   PROJECT_DOCUMENT_SNAPSHOT_SCHEMA_VERSIONS,
   PROJECT_DOCUMENT_V2_MIGRATION_INPUT_VERSIONS,
+  PROJECT_DOCUMENT_V3_MIGRATION_INPUT_VERSIONS,
   ProjectDocumentReadErrorCode,
   migrateProjectDocumentV1ToV2,
+  migrateProjectDocumentV2ToV3,
   readProjectDocument,
   readProjectDocumentJson,
   readProjectDocumentJsonV2,
   readProjectDocumentSnapshot,
   readProjectDocumentV2,
+  readProjectDocumentV3,
   type ProjectDocumentReadErrorCode as ReadErrorCode,
 } from './project-document-reader';
 
@@ -85,6 +90,15 @@ function createProjectDocumentV2(): ProjectDocumentV2 {
         },
       ],
     })),
+  };
+}
+
+function createProjectDocumentV3(): ProjectDocumentV3 {
+  const document = createProjectDocumentV2();
+  return {
+    ...document,
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V3,
+    tracks: document.tracks.map(track => ({ ...track, loopSlots: [] })),
   };
 }
 
@@ -452,6 +466,57 @@ describe('ProjectDocument snapshot reader', () => {
         details: {
           schemaVersion: 3,
           supportedSchemaVersions: PROJECT_DOCUMENT_SNAPSHOT_SCHEMA_VERSIONS,
+        },
+      })
+    );
+  });
+});
+
+describe('ProjectDocument v3 migration reader', () => {
+  it('v1 문서를 v3로 바꾸고 Track마다 Plugin과 Loop Slot 배열을 추가한다', () => {
+    const v1Document = createProjectDocumentWithRegion();
+
+    const v3Document = readProjectDocumentV3(v1Document);
+
+    expect(v3Document.schemaVersion).toBe(PROJECT_DOCUMENT_SCHEMA_VERSION_V3);
+    expect(v3Document.tracks[0].pluginInstances).toEqual([]);
+    expect(v3Document.tracks[0].loopSlots).toEqual([]);
+  });
+
+  it('v2 문서를 v3로 바꾸고 Plugin 상태를 보존한다', () => {
+    const v2Document = createProjectDocumentV2();
+
+    const v3Document = migrateProjectDocumentV2ToV3(v2Document);
+
+    expect(v3Document.tracks[0].pluginInstances).toEqual(v2Document.tracks[0].pluginInstances);
+    expect(v3Document.tracks[0].loopSlots).toEqual([]);
+  });
+
+  it('v3 문서를 검증하고 입력과 참조를 공유하지 않는다', () => {
+    const input = createProjectDocumentV3();
+
+    const document = readProjectDocumentV3(input);
+    document.tracks[0].loopSlots.push({
+      id: '88888888-8888-4888-8888-888888888888',
+      sourceId: null,
+      lengthBars: 4,
+      quantizationBars: 1,
+      recordedTempoBpm: null,
+      gain: 1,
+    });
+
+    expect(input.tracks[0].loopSlots).toEqual([]);
+  });
+
+  it('v3 migration 입력 버전 목록을 오류 상세에 제공한다', () => {
+    const input = { ...createProjectDocument(), schemaVersion: 4 };
+
+    expect(() => readProjectDocumentV3(input)).toThrowError(
+      expect.objectContaining({
+        code: ProjectDocumentReadErrorCode.UNSUPPORTED_SCHEMA_VERSION,
+        details: {
+          schemaVersion: 4,
+          supportedSchemaVersions: PROJECT_DOCUMENT_V3_MIGRATION_INPUT_VERSIONS,
         },
       })
     );

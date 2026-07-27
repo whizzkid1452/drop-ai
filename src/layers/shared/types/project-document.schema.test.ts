@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   PROJECT_DOCUMENT_SCHEMA_VERSION,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V3,
   ProjectDocumentSchema,
   ProjectDocumentV2Schema,
+  ProjectDocumentV3Schema,
 } from './project-document.schema';
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
@@ -447,6 +449,54 @@ describe('ProjectDocumentV2Schema', () => {
     };
 
     expect(ProjectDocumentV2Schema.safeParse(runtimeFieldDocument).success).toBe(false);
+  });
+});
+
+describe('ProjectDocumentV3Schema', () => {
+  it('루프 슬롯과 Source 참조를 검증한다', () => {
+    const document = createValidProjectDocumentV2();
+    const candidate = {
+      ...document,
+      schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V3,
+      tracks: document.tracks.map(track => ({
+        ...track,
+        loopSlots: [
+          {
+            id: crypto.randomUUID(),
+            sourceId: document.audioSources[0].id,
+            lengthBars: 4,
+            quantizationBars: 1,
+            recordedTempoBpm: 120,
+            gain: 1,
+          },
+        ],
+      })),
+    };
+
+    expect(ProjectDocumentV3Schema.safeParse(candidate).success).toBe(true);
+  });
+
+  it('Source와 녹음 BPM 중 하나만 있는 루프 슬롯을 거부한다', () => {
+    const document = createValidProjectDocumentV2();
+    const candidate = {
+      ...document,
+      schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V3,
+      tracks: document.tracks.map(track => ({
+        ...track,
+        loopSlots: [
+          {
+            id: crypto.randomUUID(),
+            sourceId: document.audioSources[0].id,
+            lengthBars: 4,
+            quantizationBars: 1,
+            recordedTempoBpm: null,
+            gain: 1,
+          },
+        ],
+      })),
+    };
+
+    expect(ProjectDocumentV3Schema.safeParse(candidate).success).toBe(false);
   });
 });
 
