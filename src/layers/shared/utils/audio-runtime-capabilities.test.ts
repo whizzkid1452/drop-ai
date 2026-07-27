@@ -8,6 +8,8 @@ import {
 const fullEnvironment: AudioRuntimeEnvironment = {
   crossOriginIsolated: true,
   hasAudioWorklet: true,
+  hasGetUserMedia: true,
+  hasMediaDevices: true,
   hasSharedArrayBuffer: true,
   hasWebAssembly: true,
   isSecureContext: true,
@@ -18,13 +20,30 @@ describe('resolveAudioRuntimeCapabilities', () => {
     expect(resolveAudioRuntimeCapabilities(fullEnvironment)).toEqual({
       blockers: {
         audioWorklet: [],
+        liveInput: [],
         sharedMemory: [],
         wasm: [],
       },
       meetsAudioWorkletPreconditions: true,
+      meetsLiveInputPreconditions: true,
       meetsSharedMemoryPreconditions: true,
       meetsWasmPreconditions: true,
     });
+  });
+
+  it('MediaDevices 또는 getUserMedia가 없으면 실시간 입력만 차단한다', () => {
+    const capabilities = resolveAudioRuntimeCapabilities({
+      ...fullEnvironment,
+      hasGetUserMedia: false,
+      hasMediaDevices: false,
+    });
+
+    expect(capabilities.meetsAudioWorkletPreconditions).toBe(true);
+    expect(capabilities.meetsLiveInputPreconditions).toBe(false);
+    expect(capabilities.blockers.liveInput).toEqual([
+      AudioRuntimeBlocker.MEDIA_DEVICES_API_UNAVAILABLE,
+      AudioRuntimeBlocker.GET_USER_MEDIA_API_UNAVAILABLE,
+    ]);
   });
 
   it('격리가 없어도 AudioWorklet과 단일 스레드 WASM은 사용할 수 있다', () => {
@@ -37,6 +56,7 @@ describe('resolveAudioRuntimeCapabilities', () => {
     expect(capabilities).toEqual({
       blockers: {
         audioWorklet: [],
+        liveInput: [],
         sharedMemory: [
           AudioRuntimeBlocker.CROSS_ORIGIN_ISOLATION_UNAVAILABLE,
           AudioRuntimeBlocker.SHARED_ARRAY_BUFFER_UNAVAILABLE,
@@ -44,6 +64,7 @@ describe('resolveAudioRuntimeCapabilities', () => {
         wasm: [],
       },
       meetsAudioWorkletPreconditions: true,
+      meetsLiveInputPreconditions: true,
       meetsSharedMemoryPreconditions: false,
       meetsWasmPreconditions: true,
     });

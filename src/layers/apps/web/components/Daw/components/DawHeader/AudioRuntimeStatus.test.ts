@@ -8,8 +8,9 @@ import { AudioRuntimeStatus } from './AudioRuntimeStatus';
 
 const layerMocks = vi.hoisted((): { capabilities: AudioRuntimeCapabilities } => ({
   capabilities: {
-    blockers: { audioWorklet: [], sharedMemory: [], wasm: [] },
+    blockers: { audioWorklet: [], liveInput: [], sharedMemory: [], wasm: [] },
     meetsAudioWorkletPreconditions: true,
+    meetsLiveInputPreconditions: true,
     meetsSharedMemoryPreconditions: true,
     meetsWasmPreconditions: true,
   },
@@ -53,8 +54,9 @@ afterEach(() => {
   });
   document.body.replaceChildren();
   layerMocks.capabilities = {
-    blockers: { audioWorklet: [], sharedMemory: [], wasm: [] },
+    blockers: { audioWorklet: [], liveInput: [], sharedMemory: [], wasm: [] },
     meetsAudioWorkletPreconditions: true,
+    meetsLiveInputPreconditions: true,
     meetsSharedMemoryPreconditions: true,
     meetsWasmPreconditions: true,
   };
@@ -76,6 +78,7 @@ describe('AudioRuntimeStatus', () => {
     layerMocks.capabilities = {
       blockers: {
         audioWorklet: [],
+        liveInput: [],
         sharedMemory: [
           AudioRuntimeBlocker.CROSS_ORIGIN_ISOLATION_UNAVAILABLE,
           AudioRuntimeBlocker.SHARED_ARRAY_BUFFER_UNAVAILABLE,
@@ -83,6 +86,7 @@ describe('AudioRuntimeStatus', () => {
         wasm: [],
       },
       meetsAudioWorkletPreconditions: true,
+      meetsLiveInputPreconditions: true,
       meetsSharedMemoryPreconditions: false,
       meetsWasmPreconditions: true,
     };
@@ -98,10 +102,12 @@ describe('AudioRuntimeStatus', () => {
     layerMocks.capabilities = {
       blockers: {
         audioWorklet: [AudioRuntimeBlocker.INSECURE_CONTEXT, AudioRuntimeBlocker.AUDIO_WORKLET_API_UNAVAILABLE],
+        liveInput: [AudioRuntimeBlocker.INSECURE_CONTEXT],
         sharedMemory: [AudioRuntimeBlocker.INSECURE_CONTEXT],
         wasm: [AudioRuntimeBlocker.WEBASSEMBLY_API_UNAVAILABLE],
       },
       meetsAudioWorkletPreconditions: false,
+      meetsLiveInputPreconditions: false,
       meetsSharedMemoryPreconditions: false,
       meetsWasmPreconditions: false,
     };
@@ -112,5 +118,25 @@ describe('AudioRuntimeStatus', () => {
     expect(status.title).toContain('보안 연결');
     expect(status.title).toContain('WebAssembly API');
     expect(status.dataset.level).toBe('limited');
+  });
+
+  it('실시간 입력 API가 없으면 제한 상태와 차단 사유를 표시한다', () => {
+    layerMocks.capabilities = {
+      blockers: {
+        audioWorklet: [],
+        liveInput: [AudioRuntimeBlocker.MEDIA_DEVICES_API_UNAVAILABLE],
+        sharedMemory: [],
+        wasm: [],
+      },
+      meetsAudioWorkletPreconditions: true,
+      meetsLiveInputPreconditions: false,
+      meetsSharedMemoryPreconditions: true,
+      meetsWasmPreconditions: true,
+    };
+
+    const status = renderStatus();
+
+    expect(status.dataset.level).toBe('limited');
+    expect(status.title).toContain('미디어 장치 API');
   });
 });

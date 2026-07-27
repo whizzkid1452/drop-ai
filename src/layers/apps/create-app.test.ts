@@ -434,6 +434,8 @@ describe('createApp', () => {
       audioRuntimeEnvironment: {
         crossOriginIsolated: false,
         hasAudioWorklet: true,
+        hasGetUserMedia: true,
+        hasMediaDevices: true,
         hasSharedArrayBuffer: false,
         hasWebAssembly: true,
         isSecureContext: true,
@@ -442,6 +444,7 @@ describe('createApp', () => {
 
     expect(app.audioRuntimeCapabilities).toMatchObject({
       meetsAudioWorkletPreconditions: true,
+      meetsLiveInputPreconditions: true,
       meetsSharedMemoryPreconditions: false,
       meetsWasmPreconditions: true,
     });
