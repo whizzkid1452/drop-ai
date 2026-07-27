@@ -357,4 +357,4 @@ export type ProjectDocumentV2 = z.infer<typeof ProjectDocumentV2Schema>;
 export type ProjectLoopSlot = z.infer<typeof ProjectLoopSlotSchema>;
 export type ProjectTrackV3 = z.infer<typeof ProjectTrackV3Schema>;
 export type ProjectDocumentV3 = z.infer<typeof ProjectDocumentV3Schema>;
-export type ProjectDocumentSnapshot = ProjectDocument | ProjectDocumentV2;
+export type ProjectDocumentSnapshot = ProjectDocument | ProjectDocumentV2 | ProjectDocumentV3;

@@ -1,6 +1,7 @@
 import type {
   ArmLoopRuntimeRequest,
   ILoopAudioRuntime,
+  IPreparedLoopRuntimeReplacement,
   LoadLoopRuntimeRequest,
   LoopRuntimeListener,
   LoopSlotAddress,
@@ -8,6 +9,7 @@ import type {
   StopAllLoopsRequest,
   TriggerLoopRequest,
 } from './loop-runtime-contract';
+import { COMPLETE_RESOURCE_CLEANUP } from '../../shared/types/resource-cleanup';
 
 const RUNTIME_UNAVAILABLE_MESSAGE = '이 AudioEngine에는 루프 오디오 런타임이 구성되지 않았습니다.';
 
@@ -36,6 +38,18 @@ export class UnavailableLoopAudioRuntime implements ILoopAudioRuntime {
   async load(_request: LoadLoopRuntimeRequest): Promise<void> {
     void _request;
     throwRuntimeUnavailable();
+  }
+
+  async prepareReplacement(requests: readonly LoadLoopRuntimeRequest[]): Promise<IPreparedLoopRuntimeReplacement> {
+    if (requests.length > 0) {
+      throwRuntimeUnavailable();
+    }
+
+    return {
+      assertActivatable: () => undefined,
+      activate: () => ({ dispose: () => COMPLETE_RESOURCE_CLEANUP }),
+      discard: () => COMPLETE_RESOURCE_CLEANUP,
+    };
   }
 
   async setInputDevice(_deviceId: string | null): Promise<string | null> {

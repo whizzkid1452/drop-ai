@@ -459,12 +459,23 @@ describe('ProjectDocument snapshot reader', () => {
     expect(document.tracks[0]).not.toBe(input.tracks[0]);
   });
 
-  it('v1·v2 밖의 문서 버전을 지원하지 않는 snapshot으로 거부한다', () => {
-    expect(() => readProjectDocumentSnapshot({ ...createProjectDocument(), schemaVersion: 3 })).toThrowError(
+  it('v3 문서를 Loop Slot 상태와 schemaVersion을 보존해 검증·복제한다', () => {
+    const input = createProjectDocumentV3();
+
+    const document = readProjectDocumentSnapshot(input);
+
+    expect(document).toEqual(input);
+    expect(document.schemaVersion).toBe(3);
+    expect(document).not.toBe(input);
+    expect(document.tracks[0]).not.toBe(input.tracks[0]);
+  });
+
+  it('v1·v2·v3 밖의 문서 버전을 지원하지 않는 snapshot으로 거부한다', () => {
+    expect(() => readProjectDocumentSnapshot({ ...createProjectDocument(), schemaVersion: 4 })).toThrowError(
       expect.objectContaining({
         code: ProjectDocumentReadErrorCode.UNSUPPORTED_SCHEMA_VERSION,
         details: {
-          schemaVersion: 3,
+          schemaVersion: 4,
           supportedSchemaVersions: PROJECT_DOCUMENT_SNAPSHOT_SCHEMA_VERSIONS,
         },
       })

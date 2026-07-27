@@ -110,7 +110,7 @@ CommandExecutor 경로를 사용한다. Web Track UI는 Session catalog의 Param
 select로 표시하고, 위·아래 버튼은 처리 순서를 한 칸씩 바꾼다. 설치·제거·처리 순서·활성화 상태·Parameter 변경은 UI에서 상태를 직접 바꾸지 않고 같은 AudioCommand와 CommandExecutor 경로를
 사용한다. 현재 UI는 manifest가 선언한 별도 배치 정보가 아니라 Parameter type 기반의 공통 배치를 사용한다.
 
-영구 저장 형식은 Shared의 `ProjectDocumentSchema`와 `ProjectDocumentV2Schema`로 검증한다. v1은 Track·Region과 오디오
+영구 저장 형식은 Shared의 `ProjectDocumentSchema`, `ProjectDocumentV2Schema`, `ProjectDocumentV3Schema`로 검증한다. v1은 Track·Region과 오디오
 Source 메타데이터를 절대 초 단위로 저장하고, Region은 임시 URL이 아닌 안정적인 Source ID를 참조한다. `File`, `Blob`, Object URL,
 AudioBuffer, 함수, 재생 중 상태, Agent·UI 상태는 ProjectDocument에 넣지 않는다. `ProjectDocumentMapper`는 Store나
 Repository를 호출하지 않고 Session의 저장 대상 snapshot과 committed Source metadata를 ProjectDocument로 변환한다.
@@ -123,12 +123,14 @@ ProjectDocument v1에는 Plugin instance 설정 필드가 없다. 기존 v1 Mapp
 Track의 Plugin 인스턴스를 빈 배열로 초기화한다. v2는
 Track별 Plugin 설치 순서, instance UUID, manifest ID·version, 활성 상태, boolean·유한 number·제한된 string Parameter 값을
 저장한다. Plugin 이름은 문서에 저장하지 않고 현재 catalog에서 복원한다. instance UUID는 문서 전체에서, Parameter ID는
-instance 안에서 중복될 수 없다. ProjectController는 새 저장에 `createProjectDocumentV2FromSession`을 사용하고,
-`createProjectRestoreSnapshotFromDocumentV2`로 v1·v2를 복원한다. v2 저장·복원 모두 현재 Plugin catalog와의 호환성을 먼저
-검증하고, Parameter는 catalog 정의 순서로 정규화한다.
+instance 안에서 중복될 수 없다. v3는 Track별 Loop Slot UUID, Source ID, 길이, 정량화 단위, 녹음 템포, gain을 저장한다.
+재생·녹음 상태, 예약 시각, 런타임 오류는 저장하지 않는다. ProjectController는 새 저장에
+`createProjectDocumentV3FromSession`을 사용하고, `createProjectRestoreSnapshotFromDocumentV3`로 v1·v2·v3을 복원한다.
+저장·복원 모두 현재 Plugin catalog와의 호환성을 먼저 검증하고, Parameter는 catalog 정의 순서로 정규화한다.
 `readProjectDocumentV2`는 v1을 검증한 뒤 각 Track에 빈 Plugin 배열을 넣어 v2로 바꾸고, 이미 v2인 입력은 Plugin 상태를
-보존해 검증·복제한다. `readProjectDocumentSnapshot`은 Repository가 v1·v2를 버전 변경 없이 검증·복제할 때 사용한다.
-Repository는 두 버전을 모두 보관하고 반환하며, 다음 저장은 ProjectController가 만든 v2로 교체한다.
+보존해 검증·복제한다. `readProjectDocumentV3`는 v1·v2 Track에 Loop Slot 배열을 추가한다.
+`readProjectDocumentSnapshot`은 Repository가 v1·v2·v3을 버전 변경 없이 검증·복제할 때 사용한다.
+Repository는 세 버전을 모두 보관하고 반환하며, 다음 저장은 ProjectController가 만든 v3로 교체한다.
 Shared의 `validateProjectPluginCompatibility`는 저장 manifest ID·version을 현재 Plugin catalog와 정확히 비교하고,
 Parameter ID 집합·number 범위·boolean type·enum option을 검증한다. 성공하면 catalog 정의 순서의 Session Plugin 상태를
 반환하고, 실패하면 원인을 구분한 issue를 반환한다. 기본 v1 Mapper는 이 함수를 호출하지 않는다.
@@ -195,14 +197,15 @@ Registry 변경이 들어올 수 있으므로, 준비된 Registry와 AudioEngine
 Source 전환만 실패했다면 Engine과 Registry를 기존 Region 상태로 되돌린다.
 
 단건 `restoreCommitted`는 원자적인 프로젝트 불러오기 API가 아니다. `beginReplacement`는 분리된 Registry에 Source와
-Region 연결을 준비하고, `prepareProjectGraph`는 출력 gate가 닫힌 새 Track input·Plugin runtime·Channel과 Player를
-준비한다. Plugin runtime은 전달된 순서대로 만들고 활성 runtime만 연결한다. manifest factory 누락, 중복 instance ID,
+Region·Loop Slot 연결을 준비하고, `prepareProjectGraph`는 출력 gate가 닫힌 새 Track input·Plugin runtime·Channel,
+Region Player, Loop Player를 준비한다. Loop Player는 모든 Source fetch와 decode가 성공한 뒤에만 그래프와 함께 교체한다.
+Plugin runtime은 전달된 순서대로 만들고 활성 runtime만 연결한다. manifest factory 누락, 중복 instance ID,
 잘못된 Parameter가 있으면 후보 그래프만 정리하고 준비를 거부한다. `isEnabled=false`인 runtime은 생성하되 chain에서 우회한다.
 실시간 재생은 `Player → Track input → 활성 Plugin runtime[] → Channel → Project output Gain → destination` 순서를 사용한다.
 활성 Plugin이 없으면 Track input이 Channel에 직접 연결된다. `SET_MASTER_VOLUME`은 Project output Gain을 0.1초에 걸쳐 목표값으로
-바꾼 뒤 Session을 갱신한다. ProjectController는 v2 Mapper가 복원한 Session Plugin 상태와 Master Volume을 준비 요청으로 바꾸므로
-저장 프로젝트를 불러올 때 Plugin chain과 출력 볼륨이 함께 반영된다. 프로젝트 그래프 계약 자체는 manifest version 호환성을 판단하지 않으며,
-v2 Mapper가 그래프 준비 전에 Shared 호환성 검증을 수행한다. ExportController는 Session의 Plugin 설치 순서·manifest ID·활성
+바꾼 뒤 Session을 갱신한다. ProjectController는 v3 Mapper가 복원한 Session Plugin·Loop Slot 상태와 Master Volume을 준비 요청으로 바꾸므로
+저장 프로젝트를 불러올 때 Plugin chain, 정지 상태의 Loop Player, 출력 볼륨이 함께 반영된다. 프로젝트 그래프 계약 자체는 manifest version 호환성을 판단하지 않으며,
+v3 Mapper가 그래프 준비 전에 Shared 호환성 검증을 수행한다. ExportController는 Session의 Plugin 설치 순서·manifest ID·활성
 상태·Parameter 값을 Export 요청에 복사한다. AudioEngine은 오프라인 Tone.js context에서 별도 runtime을 만들고 활성 runtime만
 `Player → Track input → 활성 Plugin runtime[] → Channel` 순서로 연결한다. 비활성 runtime은 생성하되 chain에서 우회한다.
 오프라인 context에서 생성할 수 없는 runtime이나 등록되지 않은 manifest가 있으면 해당 Export를 명시적으로 거부한다. 준비 실패나

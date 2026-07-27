@@ -6,7 +6,7 @@ import type { IAudioSourceRepository } from '../audio-source-repository/i-audio-
 import { AudioSourceRepositoryError } from '../audio-source-repository/errors';
 import type { IProjectRepository } from '../project-repository/i-project-repository';
 import { ProjectRepositoryError } from '../project-repository/errors';
-import { createProjectDocumentV2FromSession } from '../project-document-mapper/project-document-mapper';
+import { createProjectDocumentV3FromSession } from '../project-document-mapper/project-document-mapper';
 import { gainPluginManifest } from '../plugins/builtin/gain/gain-plugin-manifest';
 import { createSessionStore, type SessionState } from '../session/session';
 import type {
@@ -14,6 +14,7 @@ import type {
   ProjectDocument,
   ProjectDocumentSnapshot,
   ProjectDocumentV2,
+  ProjectDocumentV3,
 } from '../shared/types/project-document.schema';
 import { ProjectMutationCompensationError } from './project-mutation-compensation-error';
 import { ProjectController } from './project-controller';
@@ -25,6 +26,7 @@ const LOADED_PROJECT_ID = '44444444-4444-4444-8444-444444444444';
 const TRACK_ID = '55555555-5555-4555-8555-555555555555';
 const REGION_ID = '66666666-6666-4666-8666-666666666666';
 const PLUGIN_INSTANCE_ID = '77777777-7777-4777-8777-777777777777';
+const LOOP_SLOT_ID = '88888888-8888-4888-8888-888888888888';
 const INITIAL_PROJECT_METADATA = {
   id: PROJECT_ID,
   name: '테스트 프로젝트',
@@ -91,9 +93,9 @@ function createTestContext() {
 function createCurrentDocument(
   sessionStore: ReturnType<typeof createSessionStore>,
   audioSources: ProjectAudioSource[] = []
-): ProjectDocumentV2 {
+): ProjectDocumentV3 {
   const sessionState = sessionStore.getState();
-  return createProjectDocumentV2FromSession({
+  return createProjectDocumentV3FromSession({
     session: sessionState,
     audioSources,
     pluginCatalog: [...sessionState.pluginCatalog.values()],
@@ -158,6 +160,28 @@ function createLoadedDocumentV2(isEnabled = true): ProjectDocumentV2 {
   };
 }
 
+function createLoadedDocumentV3(): ProjectDocumentV3 {
+  const document = createLoadedDocumentV2();
+
+  return {
+    ...document,
+    schemaVersion: 3,
+    tracks: document.tracks.map(track => ({
+      ...track,
+      loopSlots: [
+        {
+          gain: 1,
+          id: LOOP_SLOT_ID,
+          lengthBars: 1,
+          quantizationBars: 1,
+          recordedTempoBpm: 140,
+          sourceId: SOURCE_ID,
+        },
+      ],
+    })),
+  };
+}
+
 function addPluginTrack(session: SessionState): void {
   session.addTrack({
     id: TRACK_ID,
@@ -207,7 +231,7 @@ describe('ProjectController', () => {
     expect(context.audioSourceRepository.create).toHaveBeenCalledWith(registration);
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        schemaVersion: 2,
+        schemaVersion: 3,
         project: INITIAL_PROJECT_METADATA,
         audioSources: [registration.metadata],
       })
@@ -221,7 +245,7 @@ describe('ProjectController', () => {
     expect(replaceProjectMetadata).toHaveBeenCalledWith(INITIAL_PROJECT_METADATA);
   });
 
-  it('Session Plugin 체인을 ProjectDocument v2에 저장한다', async () => {
+  it('Session Plugin 체인을 ProjectDocument v3에 저장한다', async () => {
     const context = createTestContext();
     addPluginTrack(context.sessionStore.getState());
 
@@ -229,7 +253,7 @@ describe('ProjectController', () => {
 
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        schemaVersion: 2,
+        schemaVersion: 3,
         tracks: [
           expect.objectContaining({
             id: TRACK_ID,
@@ -242,6 +266,51 @@ describe('ProjectController', () => {
                 parameters: [{ id: gainPluginManifest.parameters[0].id, value: 0.75 }],
               },
             ],
+          }),
+        ],
+      })
+    );
+  });
+
+  it('루프 슬롯과 연결 Source를 ProjectDocument v3에 저장한다', async () => {
+    const context = createTestContext();
+    const registration = createSourceRegistration();
+    context.audioSourceRegistry.restoreCommitted(registration);
+    context.audioSourceRegistry.attachLoopSlot({ loopSlotId: LOOP_SLOT_ID, sourceId: SOURCE_ID });
+    context.sessionStore.getState().addTrack({
+      id: TRACK_ID,
+      isMuted: false,
+      isSoloed: false,
+      loopSlots: [
+        {
+          errorMessage: null,
+          gain: 1,
+          id: LOOP_SLOT_ID,
+          lengthBars: 1,
+          quantizationBars: 1,
+          recordedTempoBpm: 120,
+          scheduledTimeSeconds: null,
+          sourceId: SOURCE_ID,
+          state: 'stopped',
+        },
+      ],
+      name: 'Loop Track',
+      pan: 0,
+      pluginInstances: [],
+      regions: [],
+      status: [],
+      volume: 1,
+    });
+
+    await context.controller.saveProject();
+
+    expect(context.projectRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        audioSources: [registration.metadata],
+        schemaVersion: 3,
+        tracks: [
+          expect.objectContaining({
+            loopSlots: [expect.objectContaining({ id: LOOP_SLOT_ID, sourceId: SOURCE_ID })],
           }),
         ],
       })
@@ -467,6 +536,41 @@ describe('ProjectController', () => {
         }),
       ],
     });
+  });
+
+  it('v3 루프 슬롯을 Source Registry와 AudioEngine 준비 요청에 복원한다', async () => {
+    const context = createTestContext();
+    const document = createLoadedDocumentV3();
+    const registration = createSourceRegistration();
+    context.projectRepository.load.mockResolvedValue(document);
+    context.audioSourceRepository.load.mockResolvedValue(registration.blob);
+    const prepareProjectGraph = vi.spyOn(context.audioEngine, 'prepareProjectGraph');
+
+    await context.controller.loadProject(LOADED_PROJECT_ID);
+
+    expect(context.sessionStore.getState().tracks.get(TRACK_ID)?.loopSlots).toEqual([
+      {
+        errorMessage: null,
+        gain: 1,
+        id: LOOP_SLOT_ID,
+        lengthBars: 1,
+        quantizationBars: 1,
+        recordedTempoBpm: 140,
+        scheduledTimeSeconds: null,
+        sourceId: SOURCE_ID,
+        state: 'stopped',
+      },
+    ]);
+    expect(context.audioSourceRegistry.resolve(SOURCE_ID)?.loopSlotIds).toEqual([LOOP_SLOT_ID]);
+    expect(prepareProjectGraph).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tracks: [
+          expect.objectContaining({
+            loops: [{ slotId: LOOP_SLOT_ID, url: 'blob:project-source-1' }],
+          }),
+        ],
+      })
+    );
   });
 
   it('v2의 비활성 Plugin 상태를 Session과 AudioEngine에 복원한다', async () => {
