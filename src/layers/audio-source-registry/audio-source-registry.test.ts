@@ -86,6 +86,7 @@ describe('AudioSourceRegistry', () => {
       objectUrl: 'blob:test-1',
       isCommitted: false,
       regionIds: [],
+      loopSlotIds: [],
     });
     expect(objectUrlAdapter.createObjectUrl).toHaveBeenCalledWith(registration.blob);
   });

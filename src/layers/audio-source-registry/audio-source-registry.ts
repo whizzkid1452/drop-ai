@@ -4,6 +4,7 @@ import { ProjectAudioSourceSchema, type ProjectAudioSource } from '../shared/typ
 import { AudioSourceRegistryError } from './errors';
 import type {
   AudioSourceAttachment,
+  AudioSourceLoopSlotAttachment,
   AudioSourceRegistration,
   IAudioSourceRegistry,
   IPreparedAudioSourceRegistryReplacement,
@@ -13,6 +14,7 @@ import type {
 import type { IObjectUrlAdapter } from './i-object-url-adapter';
 
 const RegionIdSchema = z.uuid('Invalid Region ID format');
+const LoopSlotIdSchema = z.uuid('Invalid Loop Slot ID format');
 
 interface StoredAudioSource {
   readonly metadata: ProjectAudioSource;
@@ -20,11 +22,13 @@ interface StoredAudioSource {
   readonly objectUrl: string;
   isCommitted: boolean;
   readonly regionIds: Set<string>;
+  readonly loopSlotIds: Set<string>;
 }
 
 interface RetiredAudioSourceRegistryState {
   readonly sources: Map<string, StoredAudioSource>;
   readonly sourceIdByRegionId: Map<string, string>;
+  readonly sourceIdByLoopSlotId: Map<string, string>;
 }
 
 type PreparedRegistryState = 'activated' | 'discarded' | 'prepared';
@@ -32,6 +36,7 @@ type PreparedRegistryState = 'activated' | 'discarded' | 'prepared';
 export class AudioSourceRegistry implements IAudioSourceRegistry {
   private sources = new Map<string, StoredAudioSource>();
   private sourceIdByRegionId = new Map<string, string>();
+  private sourceIdByLoopSlotId = new Map<string, string>();
   private mutationRevision = 0;
   private readonly pendingDetachedRegistryCleanup = new Set<AudioSourceRegistry>();
   private readonly pendingRetiredRegistryCleanup = new Set<RetiredAudioSourceRegistryState>();
@@ -91,6 +96,10 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
         assertPrepared();
         replacementRegistry.attach(attachment);
       },
+      attachLoopSlot: attachment => {
+        assertPrepared();
+        replacementRegistry.attachLoopSlot(attachment);
+      },
       resolve: sourceId => replacementRegistry.resolve(sourceId),
       listCommittedMetadata: () => replacementRegistry.listCommittedMetadata(),
       assertActivatable,
@@ -102,13 +111,20 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
         assertActivatable();
         const previousSources = this.sources;
         const previousSourceIdByRegionId = this.sourceIdByRegionId;
+        const previousSourceIdByLoopSlotId = this.sourceIdByLoopSlotId;
         this.sources = replacementRegistry.sources;
         this.sourceIdByRegionId = replacementRegistry.sourceIdByRegionId;
+        this.sourceIdByLoopSlotId = replacementRegistry.sourceIdByLoopSlotId;
         replacementRegistry.sources = new Map();
         replacementRegistry.sourceIdByRegionId = new Map();
+        replacementRegistry.sourceIdByLoopSlotId = new Map();
         this.mutationRevision += 1;
         state = 'activated';
-        retiredSources = this.createRetiredSources(previousSources, previousSourceIdByRegionId);
+        retiredSources = this.createRetiredSources(
+          previousSources,
+          previousSourceIdByRegionId,
+          previousSourceIdByLoopSlotId
+        );
         return retiredSources;
       },
       discard: () => {
@@ -173,6 +189,40 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
     this.mutationRevision += 1;
   }
 
+  attachLoopSlot({ sourceId, loopSlotId }: AudioSourceLoopSlotAttachment): void {
+    this.assertValidLoopSlotId(loopSlotId);
+    const source = this.getRequiredSource(sourceId);
+    const attachedSourceId = this.sourceIdByLoopSlotId.get(loopSlotId);
+    if (attachedSourceId) {
+      throw new AudioSourceRegistryError({
+        code: 'LOOP_SLOT_ID_CONFLICT',
+        message: `루프 슬롯 ID가 이미 다른 Source 연결에 사용 중입니다: ${loopSlotId}`,
+        details: { attachedSourceId, loopSlotId, requestedSourceId: sourceId },
+      });
+    }
+
+    source.loopSlotIds.add(loopSlotId);
+    source.isCommitted = true;
+    this.sourceIdByLoopSlotId.set(loopSlotId, sourceId);
+    this.mutationRevision += 1;
+  }
+
+  detachLoopSlot({ sourceId, loopSlotId }: AudioSourceLoopSlotAttachment): void {
+    this.assertValidLoopSlotId(loopSlotId);
+    const source = this.getRequiredSource(sourceId);
+    if (this.sourceIdByLoopSlotId.get(loopSlotId) !== sourceId) {
+      throw new AudioSourceRegistryError({
+        code: 'LOOP_SLOT_ATTACHMENT_NOT_FOUND',
+        message: `Source와 루프 슬롯의 연결을 찾을 수 없습니다: ${sourceId} / ${loopSlotId}`,
+        details: { loopSlotId, sourceId },
+      });
+    }
+
+    source.loopSlotIds.delete(loopSlotId);
+    this.sourceIdByLoopSlotId.delete(loopSlotId);
+    this.mutationRevision += 1;
+  }
+
   discardPending(sourceId: string): void {
     const source = this.sources.get(sourceId);
     if (!source) {
@@ -202,11 +252,11 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
       });
     }
 
-    if (source.regionIds.size > 0) {
+    if (source.regionIds.size > 0 || source.loopSlotIds.size > 0) {
       throw new AudioSourceRegistryError({
         code: 'SOURCE_STILL_ATTACHED',
         message: `Region이 연결된 Source는 제거할 수 없습니다: ${sourceId}`,
-        details: { regionIds: [...source.regionIds], sourceId },
+        details: { loopSlotIds: [...source.loopSlotIds], regionIds: [...source.regionIds], sourceId },
       });
     }
 
@@ -231,6 +281,7 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
 
       this.sources.delete(sourceId);
       source.regionIds.forEach(regionId => this.sourceIdByRegionId.delete(regionId));
+      source.loopSlotIds.forEach(loopSlotId => this.sourceIdByLoopSlotId.delete(loopSlotId));
       removedSourceCount += 1;
     });
 
@@ -279,6 +330,7 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
       objectUrl,
       isCommitted,
       regionIds: new Set(),
+      loopSlotIds: new Set(),
     };
     this.sources.set(metadata.id, source);
 
@@ -340,6 +392,7 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
       objectUrl: source.objectUrl,
       isCommitted: source.isCommitted,
       regionIds: [...source.regionIds],
+      loopSlotIds: [...source.loopSlotIds],
     };
   }
 
@@ -368,6 +421,18 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
     });
   }
 
+  private assertValidLoopSlotId(loopSlotId: string): void {
+    if (LoopSlotIdSchema.safeParse(loopSlotId).success) {
+      return;
+    }
+
+    throw new AudioSourceRegistryError({
+      code: 'INVALID_LOOP_SLOT_ID',
+      message: `루프 슬롯 ID 형식이 유효하지 않습니다: ${loopSlotId}`,
+      details: { loopSlotId },
+    });
+  }
+
   private removeSourceAndRevoke(sourceId: string, source: StoredAudioSource): void {
     try {
       this.objectUrlAdapter.revokeObjectUrl(source.objectUrl);
@@ -385,9 +450,10 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
 
   private createRetiredSources(
     sources: Map<string, StoredAudioSource>,
-    sourceIdByRegionId: Map<string, string>
+    sourceIdByRegionId: Map<string, string>,
+    sourceIdByLoopSlotId: Map<string, string>
   ): IRetiredAudioSourceRegistry {
-    const retiredState = { sources, sourceIdByRegionId };
+    const retiredState = { sources, sourceIdByLoopSlotId, sourceIdByRegionId };
     this.pendingRetiredRegistryCleanup.add(retiredState);
 
     return {
@@ -444,6 +510,7 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
     }
 
     retiredState.sourceIdByRegionId.clear();
+    retiredState.sourceIdByLoopSlotId.clear();
     this.pendingRetiredRegistryCleanup.delete(retiredState);
     return COMPLETE_RESOURCE_CLEANUP;
   }

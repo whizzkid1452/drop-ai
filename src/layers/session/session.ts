@@ -10,6 +10,44 @@ import type {
   PluginValidationResult,
 } from '../shared/types/plugin-state';
 import { insertArrayEntry, moveArrayEntry } from '../shared/array-order';
+import type { LoopLengthBars } from '../shared/loop-time';
+import type { LoopSlotRuntimeState } from '../shared/types/loop-state';
+
+export const DEFAULT_LOOP_SLOT_COUNT = 4;
+
+export interface LoopSlotState {
+  readonly id: string;
+  readonly sourceId: string | null;
+  readonly lengthBars: LoopLengthBars;
+  readonly quantizationBars: LoopLengthBars;
+  readonly recordedTempoBpm: number | null;
+  readonly gain: number;
+  readonly state: LoopSlotRuntimeState;
+  readonly scheduledTimeSeconds: number | null;
+  readonly errorMessage: string | null;
+}
+
+interface CreateDefaultLoopSlotsOptions {
+  readonly count?: number;
+  readonly createId?: () => string;
+}
+
+export function createDefaultLoopSlots({
+  count = DEFAULT_LOOP_SLOT_COUNT,
+  createId = () => globalThis.crypto.randomUUID(),
+}: CreateDefaultLoopSlotsOptions = {}): LoopSlotState[] {
+  return Array.from({ length: count }, () => ({
+    errorMessage: null,
+    gain: 1,
+    id: createId(),
+    lengthBars: 1,
+    quantizationBars: 1,
+    recordedTempoBpm: null,
+    scheduledTimeSeconds: null,
+    sourceId: null,
+    state: 'empty',
+  }));
+}
 
 interface RegionCommonState {
   id: string;
@@ -37,6 +75,7 @@ export interface TrackState {
   status: TrackStatus[];
   pluginInstances: PluginInstanceState[];
   regions: RegionState[];
+  loopSlots?: LoopSlotState[];
 }
 
 export interface ProjectSessionState {
@@ -85,6 +124,12 @@ interface UpdateTrackPluginInstancesRequest {
   readonly updatePluginInstances: (instances: readonly PluginInstanceState[]) => PluginInstanceState[];
 }
 
+interface UpdateLoopSlotRequest {
+  readonly trackId: string;
+  readonly slotId: string;
+  readonly updates: Partial<Omit<LoopSlotState, 'id'>>;
+}
+
 export interface SessionState {
   project: ProjectMetadata;
   isPlaying: boolean;
@@ -122,6 +167,7 @@ export interface SessionState {
   addTrack: (track: TrackState) => void;
   updateTrack: (id: string, updates: Partial<TrackState>) => void;
   removeTrack: (id: string) => void;
+  updateLoopSlot: (request: UpdateLoopSlotRequest) => void;
 
   replacePluginCatalogState: (pluginCatalogState: PluginCatalogStateInput) => void;
   addPluginLog: (entry: PluginLogEntry) => void;
@@ -211,6 +257,21 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
         const newTracks = new Map(state.tracks);
         newTracks.delete(id);
         return { tracks: newTracks };
+      }),
+    updateLoopSlot: ({ trackId, slotId, updates }) =>
+      set(state => {
+        const track = state.tracks.get(trackId);
+        const loopSlots = track?.loopSlots;
+        if (!track || !loopSlots?.some(slot => slot.id === slotId)) {
+          return state;
+        }
+
+        const tracks = new Map(state.tracks);
+        tracks.set(trackId, {
+          ...track,
+          loopSlots: loopSlots.map(slot => (slot.id === slotId ? { ...slot, ...updates } : slot)),
+        });
+        return { tracks };
       }),
 
     replacePluginCatalogState: ({ manifests, validationResults }) => {
@@ -313,6 +374,7 @@ function cloneProjectTracks(tracks: ReadonlyMap<string, TrackState>): Map<string
         status: [...track.status],
         pluginInstances: track.pluginInstances.map(clonePluginInstance),
         regions: track.regions.map(region => ({ ...region, status: [...region.status] })),
+        loopSlots: track.loopSlots?.map(slot => ({ ...slot })),
       },
     ])
   );

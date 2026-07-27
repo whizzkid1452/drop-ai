@@ -10,6 +10,14 @@ export const AudioCommandType = {
   PLAY: 'PLAY',
   PAUSE: 'PAUSE',
   STOP: 'STOP',
+  SET_AUDIO_INPUT_DEVICE: 'SET_AUDIO_INPUT_DEVICE',
+  SET_INPUT_MONITORING: 'SET_INPUT_MONITORING',
+  ARM_LOOP_SLOT: 'ARM_LOOP_SLOT',
+  CANCEL_LOOP_SLOT: 'CANCEL_LOOP_SLOT',
+  TRIGGER_LOOP_SLOT: 'TRIGGER_LOOP_SLOT',
+  STOP_LOOP_SLOT: 'STOP_LOOP_SLOT',
+  CLEAR_LOOP_SLOT: 'CLEAR_LOOP_SLOT',
+  STOP_ALL_LOOPS: 'STOP_ALL_LOOPS',
   SET_TEMPO: 'SET_TEMPO',
   SET_MASTER_VOLUME: 'SET_MASTER_VOLUME',
   SET_TRACK_NAME: 'SET_TRACK_NAME',
@@ -52,6 +60,11 @@ const SetExportRangeCommandSchema = z
 
 const pluginMemberIdSchema = z.string().min(1).max(255);
 const pluginParameterValueSchema = z.union([z.boolean(), z.number().finite(), z.string()]);
+const loopLengthBarsSchema = z.union([z.literal(1), z.literal(2), z.literal(4), z.literal(8)]);
+const loopSlotAddressSchema = {
+  slotId: z.uuid('Invalid Loop Slot ID format'),
+  trackId: z.uuid('Invalid Track ID format'),
+};
 
 const LoadRegionCommandSchema = z
   .strictObject({
@@ -119,6 +132,40 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.STOP),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_AUDIO_INPUT_DEVICE),
+    deviceId: z.string().trim().min(1).max(512).nullable(),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_INPUT_MONITORING),
+    trackId: z.uuid('Invalid Track ID format'),
+    enabled: z.boolean(),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.ARM_LOOP_SLOT),
+    ...loopSlotAddressSchema,
+    lengthBars: loopLengthBarsSchema,
+    quantizationBars: loopLengthBarsSchema,
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.CANCEL_LOOP_SLOT),
+    ...loopSlotAddressSchema,
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.TRIGGER_LOOP_SLOT),
+    ...loopSlotAddressSchema,
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.STOP_LOOP_SLOT),
+    ...loopSlotAddressSchema,
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.CLEAR_LOOP_SLOT),
+    ...loopSlotAddressSchema,
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.STOP_ALL_LOOPS),
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.SET_TEMPO),

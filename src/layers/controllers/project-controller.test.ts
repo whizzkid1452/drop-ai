@@ -500,6 +500,7 @@ describe('ProjectController', () => {
       return {
         restoreCommitted: value => prepared.restoreCommitted(value),
         attach: value => prepared.attach(value),
+        attachLoopSlot: value => prepared.attachLoopSlot(value),
         resolve: sourceId => prepared.resolve(sourceId),
         listCommittedMetadata: () => prepared.listCommittedMetadata(),
         assertActivatable: () => {
@@ -725,6 +726,7 @@ describe('ProjectController', () => {
     const preparedRegistry = {
       restoreCommitted: vi.fn(),
       attach: vi.fn(),
+      attachLoopSlot: vi.fn(),
       resolve: vi.fn().mockReturnValue(null),
       listCommittedMetadata: vi.fn().mockReturnValue([]),
       assertActivatable: vi.fn(),
