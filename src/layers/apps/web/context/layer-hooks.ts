@@ -7,6 +7,7 @@ import type { IPlaybackClockQuery } from '../../../queries/playback-clock-query'
 import type { IProjectCatalogQuery } from '../../../queries/project-catalog-query';
 import type { SessionState } from '../../../session/session';
 import type { AudioRuntimeCapabilities } from '../../../shared/utils/audio-runtime-capabilities';
+import type { IMidiInput } from '../../../midi-input/i-midi-input';
 import { useLayer } from './layer-context';
 
 export function useAudioRuntimeCapabilities(): AudioRuntimeCapabilities {
@@ -23,6 +24,10 @@ export function useAudioSourceStager(): IAudioSourceStager {
 
 export function useCommandExecutor(): CommandExecutor {
   return useLayer().commandExecutor;
+}
+
+export function useMidiInput(): IMidiInput {
+  return useLayer().midiInput;
 }
 
 export function useCommandHistory(): CommandHistorySnapshot {
