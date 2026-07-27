@@ -6,10 +6,14 @@ import { encodeAudioBufferToWav } from './encoders/wav-encoder';
 import { AudioEngineError, AudioEngineErrorCode, ERROR_MESSAGES } from './errors';
 import type {
   AudioProjectGraphPluginInstance,
+  ArmLoopRequest,
   ExportRequest,
   ExportTrack,
   IAudioEngine,
   InstallAudioPluginRequest,
+  LoadLoopRequest,
+  LoopRuntimeListener,
+  LoopSlotAddress,
   MoveAudioPluginRequest,
   IPreparedAudioProjectGraph,
   IRetiredAudioProjectGraph,
@@ -19,7 +23,12 @@ import type {
   RescheduleRegionRequest,
   SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
+  SetLiveInputMonitoringRequest,
+  StopAllLoopsRequest,
+  TriggerLoopRequest,
 } from './i-audio-engine';
+import type { ILoopAudioRuntime } from './loop-runtime/loop-runtime-contract';
+import { UnavailableLoopAudioRuntime } from './loop-runtime/unavailable-loop-audio-runtime';
 import type { IAudioPluginRuntime, IAudioPluginRuntimeFactory } from './plugins/audio-plugin-runtime';
 import { AudioPluginRuntimeError } from './plugins/errors';
 import { RegionRenderer, type RegionRenderParams } from './renderers/region-renderer';
@@ -48,6 +57,7 @@ interface AudioProjectGraphState {
 }
 
 interface AudioEngineOptions {
+  readonly loopRuntime?: ILoopAudioRuntime;
   readonly pluginRuntimeFactories?: readonly IAudioPluginRuntimeFactory[];
 }
 
@@ -120,6 +130,7 @@ export class AudioEngine implements IAudioEngine {
   private pluginRuntimes: Map<string, IAudioPluginRuntime[]> = new Map();
   private disabledPluginInstanceIds: Map<string, Set<string>> = new Map();
   private readonly pluginRuntimeFactories: ReadonlyMap<string, IAudioPluginRuntimeFactory>;
+  private readonly loopRuntime: ILoopAudioRuntime;
   private graphRevision = 0;
   private readonly mutedOutputs = new WeakSet<Tone.Gain>();
   private readonly disconnectedOutputs = new WeakSet<Tone.Gain>();
@@ -145,7 +156,11 @@ export class AudioEngine implements IAudioEngine {
   private readonly pendingPluginChainRecovery = new Map<string, PluginChainRecoveryState>();
   private pendingTransportRecovery: TransportSnapshot | null = null;
 
-  constructor({ pluginRuntimeFactories = [] }: AudioEngineOptions = {}) {
+  constructor({
+    loopRuntime = new UnavailableLoopAudioRuntime(),
+    pluginRuntimeFactories = [],
+  }: AudioEngineOptions = {}) {
+    this.loopRuntime = loopRuntime;
     this.pluginRuntimeFactories = createPluginRuntimeFactoryMap(pluginRuntimeFactories);
     this.output = this.createGraphOutput({ initialGain: 1, unmutedGain: 1 });
   }
@@ -179,6 +194,47 @@ export class AudioEngine implements IAudioEngine {
     return Tone.getTransport().seconds;
   }
 
+  setLiveInputDevice(deviceId: string | null): Promise<string | null> {
+    return this.loopRuntime.setInputDevice(deviceId);
+  }
+
+  setLiveInputMonitoring(request: SetLiveInputMonitoringRequest): Promise<void> {
+    const destination = request.enabled ? this.getExistingInput(request.trackId).input : null;
+    return this.loopRuntime.setMonitoring({ destination, enabled: request.enabled });
+  }
+
+  armLoop(request: ArmLoopRequest): Promise<void> {
+    return this.loopRuntime.arm({ ...request, destination: this.getExistingInput(request.trackId).input });
+  }
+
+  cancelLoop(address: LoopSlotAddress): void {
+    this.loopRuntime.cancel(address);
+  }
+
+  triggerLoop(request: TriggerLoopRequest): Promise<void> {
+    return this.loopRuntime.trigger(request);
+  }
+
+  stopLoop(request: TriggerLoopRequest): void {
+    this.loopRuntime.stop(request);
+  }
+
+  clearLoop(address: LoopSlotAddress): void {
+    this.loopRuntime.clear(address);
+  }
+
+  stopAllLoops(request: StopAllLoopsRequest): void {
+    this.loopRuntime.stopAll(request);
+  }
+
+  loadLoop(request: LoadLoopRequest): Promise<void> {
+    return this.loopRuntime.load({ ...request, destination: this.getExistingInput(request.trackId).input });
+  }
+
+  subscribeLoopEvents(listener: LoopRuntimeListener): () => void {
+    return this.loopRuntime.subscribe(listener);
+  }
+
   setMasterVolume(volume: number): void {
     this.ensureRuntimeReady();
     if (!this.mutedOutputs.has(this.output)) {
@@ -196,6 +252,7 @@ export class AudioEngine implements IAudioEngine {
 
   removeTrack(trackId: string): void {
     this.ensureRuntimeReady();
+    this.loopRuntime.clearTrack(trackId);
     const hadTrack = this.trackInputs.has(trackId) || this.channels.has(trackId) || this.players.has(trackId);
     if (hadTrack) {
       this.graphRevision += 1;

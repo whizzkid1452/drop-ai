@@ -246,6 +246,34 @@ describe('MockAudioEngine - Phase 2 검증', () => {
     });
   });
 
+  describe('Live Loop Control', () => {
+    it('루프 슬롯 상태 이벤트를 녹음 대기·재생·정지 순서로 발행한다', async () => {
+      await engine.addTrack('track-1');
+      const events: string[] = [];
+      engine.subscribeLoopEvents(event => {
+        if (event.type === 'STATE_CHANGED') {
+          events.push(event.state);
+        }
+      });
+
+      await engine.armLoop({
+        lengthBars: 1,
+        quantizationBars: 1,
+        slotId: 'slot-1',
+        tempoBpm: 120,
+        trackId: 'track-1',
+      });
+      await engine.triggerLoop({ quantizationBars: 1, slotId: 'slot-1', tempoBpm: 120, trackId: 'track-1' });
+      engine.stopLoop({ quantizationBars: 1, slotId: 'slot-1', tempoBpm: 120, trackId: 'track-1' });
+
+      expect(events).toEqual(['armed', 'playing', 'stopped']);
+    });
+
+    it('선택한 입력 장치 식별자를 반환한다', async () => {
+      await expect(engine.setLiveInputDevice('input-1')).resolves.toBe('input-1');
+    });
+  });
+
   describe('Export', () => {
     const exportRequest = {
       tracks: [
@@ -284,6 +312,16 @@ describe('MockAudioEngine - Phase 2 검증', () => {
       expect(typeof engine.stop).toBe('function');
       expect(typeof engine.setTime).toBe('function');
       expect(typeof engine.getCurrentTime).toBe('function');
+      expect(typeof engine.setLiveInputDevice).toBe('function');
+      expect(typeof engine.setLiveInputMonitoring).toBe('function');
+      expect(typeof engine.armLoop).toBe('function');
+      expect(typeof engine.cancelLoop).toBe('function');
+      expect(typeof engine.triggerLoop).toBe('function');
+      expect(typeof engine.stopLoop).toBe('function');
+      expect(typeof engine.clearLoop).toBe('function');
+      expect(typeof engine.stopAllLoops).toBe('function');
+      expect(typeof engine.loadLoop).toBe('function');
+      expect(typeof engine.subscribeLoopEvents).toBe('function');
       // Track Management
       expect(typeof engine.addTrack).toBe('function');
       expect(typeof engine.removeTrack).toBe('function');

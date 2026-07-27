@@ -3,8 +3,14 @@ import { COMPLETE_RESOURCE_CLEANUP } from '../shared/types/resource-cleanup';
 import { insertArrayEntry, moveArrayEntry } from '../shared/array-order';
 import type {
   ExportRequest,
+  ArmLoopRequest,
   IAudioEngine,
   InstallAudioPluginRequest,
+  LoadLoopRequest,
+  LoopRuntimeEvent,
+  LoopRuntimeListener,
+  LoopRuntimeState,
+  LoopSlotAddress,
   MoveAudioPluginRequest,
   IPreparedAudioProjectGraph,
   IRetiredAudioProjectGraph,
@@ -14,6 +20,9 @@ import type {
   RescheduleRegionRequest,
   SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
+  SetLiveInputMonitoringRequest,
+  StopAllLoopsRequest,
+  TriggerLoopRequest,
 } from './i-audio-engine';
 import type { PluginParameterValue } from '../shared/types/plugin-state';
 
@@ -37,6 +46,9 @@ export class MockAudioEngine implements IAudioEngine {
   private mockRegions: Map<string, Map<string, RegionData>> = new Map();
   private mockPlugins: Map<string, Map<string, MockPluginState>> = new Map();
   private graphRevision = 0;
+  private mockInputDeviceId: string | null = null;
+  private mockLoopStates = new Map<string, LoopRuntimeState>();
+  private readonly loopListeners = new Set<LoopRuntimeListener>();
 
   async play(): Promise<void> {
     console.log('[MockAudioEngine] Playing...');
@@ -60,6 +72,61 @@ export class MockAudioEngine implements IAudioEngine {
     return this.mockTime;
   }
 
+  async setLiveInputDevice(deviceId: string | null): Promise<string | null> {
+    this.mockInputDeviceId = deviceId;
+    return this.mockInputDeviceId;
+  }
+
+  async setLiveInputMonitoring(request: SetLiveInputMonitoringRequest): Promise<void> {
+    if (request.enabled) {
+      this.getTrack(request.trackId);
+    }
+  }
+
+  async armLoop(request: ArmLoopRequest): Promise<void> {
+    this.getTrack(request.trackId);
+    this.setMockLoopState(request, 'armed');
+  }
+
+  cancelLoop(address: LoopSlotAddress): void {
+    this.setMockLoopState(address, 'empty');
+  }
+
+  async triggerLoop(request: TriggerLoopRequest): Promise<void> {
+    this.setMockLoopState(request, 'playing');
+  }
+
+  stopLoop(request: TriggerLoopRequest): void {
+    this.setMockLoopState(request, 'stopped');
+  }
+
+  clearLoop(address: LoopSlotAddress): void {
+    this.mockLoopStates.delete(this.createLoopKey(address));
+    this.emitLoopEvent({ ...address, state: 'empty', type: 'STATE_CHANGED' });
+  }
+
+  stopAllLoops(_request: StopAllLoopsRequest): void {
+    void _request;
+    [...this.mockLoopStates.keys()].forEach(key => {
+      const [trackId, slotId] = key.split('\u0000');
+      this.setMockLoopState({ slotId, trackId }, 'stopped');
+    });
+  }
+
+  async loadLoop(request: LoadLoopRequest): Promise<void> {
+    this.getTrack(request.trackId);
+    this.setMockLoopState(request, 'stopped');
+  }
+
+  subscribeLoopEvents(listener: LoopRuntimeListener): () => void {
+    this.loopListeners.add(listener);
+    return () => this.loopListeners.delete(listener);
+  }
+
+  emitLoopEvent(event: LoopRuntimeEvent): void {
+    this.loopListeners.forEach(listener => listener(event));
+  }
+
   getMasterVolume(): number {
     return this.mockMasterVolume;
   }
@@ -79,6 +146,9 @@ export class MockAudioEngine implements IAudioEngine {
     this.mockTracks.delete(trackId);
     this.mockRegions.delete(trackId);
     this.mockPlugins.delete(trackId);
+    [...this.mockLoopStates.keys()]
+      .filter(key => key.startsWith(`${trackId}\u0000`))
+      .forEach(key => this.mockLoopStates.delete(key));
     this.graphRevision += 1;
     console.log(`[MockAudioEngine] Track ${trackId} removed`);
   }
@@ -345,6 +415,15 @@ export class MockAudioEngine implements IAudioEngine {
     if (!this.mockPlugins.has(trackId)) {
       this.mockPlugins.set(trackId, new Map());
     }
+  }
+
+  private createLoopKey(address: LoopSlotAddress): string {
+    return `${address.trackId}\u0000${address.slotId}`;
+  }
+
+  private setMockLoopState(address: LoopSlotAddress, state: LoopRuntimeState): void {
+    this.mockLoopStates.set(this.createLoopKey(address), state);
+    this.emitLoopEvent({ ...address, state, type: 'STATE_CHANGED' });
   }
 
   private getTrack(trackId: string): MockTrackState {
