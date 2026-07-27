@@ -88,6 +88,11 @@ export class MockAudioEngine implements IAudioEngine {
     this.setMockLoopState(request, 'armed');
   }
 
+  async armLoopOverdub(request: ArmLoopRequest): Promise<void> {
+    this.getTrack(request.trackId);
+    this.setMockLoopState(request, 'armed');
+  }
+
   cancelLoop(address: LoopSlotAddress): void {
     this.setMockLoopState(address, 'empty');
   }

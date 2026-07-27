@@ -3,13 +3,16 @@ import {
   PROJECT_DOCUMENT_SCHEMA_VERSION,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V3,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V4,
   ProjectDocumentSchema,
   ProjectDocumentV2Schema,
   ProjectDocumentV3Schema,
+  ProjectDocumentV4Schema,
   type ProjectDocument,
   type ProjectDocumentSnapshot,
   type ProjectDocumentV2,
   type ProjectDocumentV3,
+  type ProjectDocumentV4,
 } from './project-document.schema';
 
 export const ProjectDocumentReadErrorCode = {
@@ -34,10 +37,17 @@ export const PROJECT_DOCUMENT_V3_MIGRATION_INPUT_VERSIONS = [
   PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V3,
 ] as const;
+export const PROJECT_DOCUMENT_V4_MIGRATION_INPUT_VERSIONS = [
+  PROJECT_DOCUMENT_SCHEMA_VERSION,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V3,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V4,
+] as const;
 export const PROJECT_DOCUMENT_SNAPSHOT_SCHEMA_VERSIONS = [
   PROJECT_DOCUMENT_SCHEMA_VERSION,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V3,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V4,
 ] as const;
 
 const ProjectDocumentSchemaVersionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
@@ -257,6 +267,23 @@ function parseProjectDocumentV3(input: unknown, schemaVersion: number): ProjectD
   throw createInvalidDocumentError(schemaVersion, parseFailure);
 }
 
+function parseProjectDocumentV4(input: unknown, schemaVersion: number): ProjectDocumentV4 {
+  const clonedInput = cloneProjectDocumentInput(input, schemaVersion);
+  let parseFailure: unknown;
+
+  try {
+    const documentResult = ProjectDocumentV4Schema.safeParse(clonedInput);
+    if (documentResult.success) {
+      return documentResult.data;
+    }
+    parseFailure = documentResult.error;
+  } catch (cause) {
+    parseFailure = cause;
+  }
+
+  throw createInvalidDocumentError(schemaVersion, parseFailure);
+}
+
 function readProjectDocumentSchemaVersion(input: unknown): number {
   const topLevelObject = readTopLevelObject(input);
   const documentTypeProperty = readOwnDataProperty({
@@ -355,6 +382,27 @@ function migrateValidatedProjectDocumentV2ToV3(document: ProjectDocumentV2): Pro
   });
 }
 
+function migrateValidatedProjectDocumentV3ToV4(document: ProjectDocumentV3): ProjectDocumentV4 {
+  return ProjectDocumentV4Schema.parse({
+    ...document,
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V4,
+    tracks: document.tracks.map(track => ({
+      ...track,
+      loopSlots: track.loopSlots.map(loopSlot => ({ ...loopSlot, overdubSourceIds: [] })),
+      pluginInstances: track.pluginInstances.map(instance => ({
+        ...instance,
+        parameters: instance.parameters.map(parameter => ({ ...parameter })),
+      })),
+      regions: track.regions.map(region => ({ ...region })),
+    })),
+    audioSources: document.audioSources.map(source => ({ ...source })),
+    exportRange: document.exportRange ? { ...document.exportRange } : null,
+    mixer: { ...document.mixer },
+    project: { ...document.project },
+    timeline: { ...document.timeline },
+  });
+}
+
 function parseProjectDocumentJsonInput(json: string): unknown {
   try {
     return JSON.parse(json) as unknown;
@@ -421,6 +469,36 @@ export function readProjectDocumentV3(input: unknown): ProjectDocumentV3 {
   });
 }
 
+export function migrateProjectDocumentV3ToV4(document: ProjectDocumentV3): ProjectDocumentV4 {
+  return migrateValidatedProjectDocumentV3ToV4(readProjectDocumentV3(document));
+}
+
+export function readProjectDocumentV4(input: unknown): ProjectDocumentV4 {
+  const schemaVersion = readProjectDocumentSchemaVersion(input);
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION) {
+    const v1Document = parseCurrentProjectDocument(input, schemaVersion);
+    return migrateValidatedProjectDocumentV3ToV4(
+      migrateValidatedProjectDocumentV2ToV3(migrateValidatedProjectDocumentV1ToV2(v1Document))
+    );
+  }
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V2) {
+    return migrateValidatedProjectDocumentV3ToV4(
+      migrateValidatedProjectDocumentV2ToV3(parseProjectDocumentV2(input, schemaVersion))
+    );
+  }
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V3) {
+    return migrateValidatedProjectDocumentV3ToV4(parseProjectDocumentV3(input, schemaVersion));
+  }
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V4) {
+    return parseProjectDocumentV4(input, schemaVersion);
+  }
+
+  throw createUnsupportedSchemaVersionError({
+    schemaVersion,
+    supportedSchemaVersions: PROJECT_DOCUMENT_V4_MIGRATION_INPUT_VERSIONS,
+  });
+}
+
 export function readProjectDocumentSnapshot(input: unknown): ProjectDocumentSnapshot {
   const schemaVersion = readProjectDocumentSchemaVersion(input);
   if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION) {
@@ -431,6 +509,9 @@ export function readProjectDocumentSnapshot(input: unknown): ProjectDocumentSnap
   }
   if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V3) {
     return parseProjectDocumentV3(input, schemaVersion);
+  }
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V4) {
+    return parseProjectDocumentV4(input, schemaVersion);
   }
 
   throw createUnsupportedSchemaVersionError({
@@ -449,4 +530,8 @@ export function readProjectDocumentJsonV2(json: string): ProjectDocumentV2 {
 
 export function readProjectDocumentJsonV3(json: string): ProjectDocumentV3 {
   return readProjectDocumentV3(parseProjectDocumentJsonInput(json));
+}
+
+export function readProjectDocumentJsonV4(json: string): ProjectDocumentV4 {
+  return readProjectDocumentV4(parseProjectDocumentJsonInput(json));
 }

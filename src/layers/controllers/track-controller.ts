@@ -140,17 +140,10 @@ export class TrackController {
       sourceId: region.sourceId,
       regionId: region.id,
     }));
-    const loopSlotAttachments: TrackSourceAttachment[] = (track.loopSlots ?? []).flatMap(loopSlot =>
-      loopSlot.sourceId === null
-        ? []
-        : [
-            {
-              kind: 'loop-slot',
-              sourceId: loopSlot.sourceId,
-              loopSlotId: loopSlot.id,
-            },
-          ]
-    );
+    const loopSlotAttachments: TrackSourceAttachment[] = (track.loopSlots ?? []).flatMap(loopSlot => {
+      const sourceIds = loopSlot.sourceId === null ? [] : [loopSlot.sourceId, ...loopSlot.overdubSourceIds];
+      return sourceIds.map(sourceId => ({ kind: 'loop-slot' as const, sourceId, loopSlotId: loopSlot.id }));
+    });
 
     return [...regionAttachments, ...loopSlotAttachments];
   }

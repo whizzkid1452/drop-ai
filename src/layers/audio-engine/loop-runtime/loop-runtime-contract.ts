@@ -3,6 +3,7 @@ import type { ResourceCleanupResult } from '../../shared/types/resource-cleanup'
 import type { LoopSlotRuntimeState } from '../../shared/types/loop-state';
 
 export type LoopRuntimeState = LoopSlotRuntimeState;
+export type LoopCaptureMode = 'initial' | 'overdub';
 
 export interface LoopSlotAddress {
   readonly slotId: string;
@@ -42,6 +43,7 @@ export interface LoopRuntimeStateChangedEvent extends LoopSlotAddress {
 
 export interface LoopRecordingCompletedEvent extends LoopSlotAddress {
   readonly blob: Blob;
+  readonly captureMode: LoopCaptureMode;
   readonly durationSeconds: number;
   readonly recordedTempoBpm: number;
   readonly type: 'RECORDING_COMPLETED';
@@ -70,6 +72,7 @@ export interface SetLiveInputMonitoringRuntimeRequest {
 
 export interface ILoopAudioRuntime {
   arm(request: ArmLoopRuntimeRequest): Promise<void>;
+  overdub(request: ArmLoopRuntimeRequest): Promise<void>;
   cancel(address: LoopSlotAddress): void;
   clear(address: LoopSlotAddress): void;
   clearTrack(trackId: string): void;

@@ -26,4 +26,30 @@ describe('루프 명령 실행 경로', () => {
 
     expect(app.session.getState().tracks.get(TRACK_ID)?.loopSlots?.[0]?.state).toBe('armed');
   });
+
+  it('오버더빙 명령을 재생 중인 루프의 녹음 대기 상태로 전달한다', async () => {
+    const audioEngine = new MockAudioEngine();
+    const app = createApp({ audioEngine, projectRepository: new InMemoryProjectRepository() });
+    await app.commandExecutor.execute({ trackId: TRACK_ID, type: AudioCommandType.ADD_TRACK });
+    const slotId = app.session.getState().tracks.get(TRACK_ID)?.loopSlots?.[0]?.id;
+    expect(slotId).toBeDefined();
+    audioEngine.emitLoopEvent({
+      blob: new Blob(['loop'], { type: 'audio/wav' }),
+      captureMode: 'initial',
+      durationSeconds: 2,
+      recordedTempoBpm: 120,
+      slotId: slotId ?? '',
+      trackId: TRACK_ID,
+      type: 'RECORDING_COMPLETED',
+    });
+    audioEngine.emitLoopEvent({ slotId: slotId ?? '', state: 'playing', trackId: TRACK_ID, type: 'STATE_CHANGED' });
+
+    await app.commandExecutor.execute({
+      slotId: slotId ?? '',
+      trackId: TRACK_ID,
+      type: AudioCommandType.ARM_LOOP_OVERDUB,
+    });
+
+    expect(app.session.getState().tracks.get(TRACK_ID)?.loopSlots?.[0]?.state).toBe('armed');
+  });
 });

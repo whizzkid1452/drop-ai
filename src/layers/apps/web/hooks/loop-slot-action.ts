@@ -8,6 +8,20 @@ export interface CreateLoopSlotActionOptions {
   readonly trackId: string;
 }
 
+export function createLoopOverdubAction({
+  loopSlotId,
+  trackId,
+}: {
+  readonly loopSlotId: string;
+  readonly trackId: string;
+}): AudioCommand {
+  return { slotId: loopSlotId, trackId, type: AudioCommandType.ARM_LOOP_OVERDUB };
+}
+
+export function getLoopLayerCount(loopSlot: LoopSlotState): number {
+  return loopSlot.sourceId === null ? 0 : 1 + loopSlot.overdubSourceIds.length;
+}
+
 export function createLoopSlotAction({
   lengthBars,
   loopSlot,

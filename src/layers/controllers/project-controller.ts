@@ -13,8 +13,8 @@ import type {
   IRetiredAudioSourceRegistry,
 } from '../audio-source-registry/i-audio-source-registry';
 import {
-  createProjectDocumentV3FromSession,
-  createProjectRestoreSnapshotFromDocumentV3,
+  createProjectDocumentV4FromSession,
+  createProjectRestoreSnapshotFromDocumentV4,
   type ProjectRestoreSnapshot,
 } from '../project-document-mapper/project-document-mapper';
 import type { IProjectRepository } from '../project-repository/i-project-repository';
@@ -22,7 +22,7 @@ import type { SessionStore } from '../session/session';
 import type {
   ProjectAudioSource,
   ProjectDocumentSnapshot,
-  ProjectDocumentV3,
+  ProjectDocumentV4,
 } from '../shared/types/project-document.schema';
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
 import { ProjectLoadError, ProjectLoadErrorCode } from './project-load-error';
@@ -63,7 +63,7 @@ export class ProjectController {
   async saveProject(): Promise<void> {
     const registrations = this.dependencies.audioSourceRegistry.listCommittedRegistrations();
     const sessionState = this.dependencies.sessionStore.getState();
-    const document = createProjectDocumentV3FromSession({
+    const document = createProjectDocumentV4FromSession({
       session: sessionState,
       audioSources: registrations.map(registration => registration.metadata),
       pluginCatalog: [...sessionState.pluginCatalog.values()],
@@ -127,7 +127,7 @@ export class ProjectController {
     }
 
     const sessionState = this.dependencies.sessionStore.getState();
-    const snapshot = createProjectRestoreSnapshotFromDocumentV3({
+    const snapshot = createProjectRestoreSnapshotFromDocumentV4({
       document,
       pluginCatalog: [...sessionState.pluginCatalog.values()],
     });
@@ -168,9 +168,8 @@ export class ProjectController {
         registry.attach({ sourceId: region.sourceId, regionId: region.id });
       });
       (track.loopSlots ?? []).forEach(loopSlot => {
-        if (loopSlot.sourceId !== null) {
-          registry.attachLoopSlot({ sourceId: loopSlot.sourceId, loopSlotId: loopSlot.id });
-        }
+        const sourceIds = loopSlot.sourceId === null ? [] : [loopSlot.sourceId, ...loopSlot.overdubSourceIds];
+        sourceIds.forEach(sourceId => registry.attachLoopSlot({ sourceId, loopSlotId: loopSlot.id }));
       });
     });
   }
@@ -195,16 +194,17 @@ export class ProjectController {
         if (loopSlot.sourceId === null) {
           return [];
         }
-        const source = registry.resolve(loopSlot.sourceId);
-        if (!source) {
-          throw new ProjectLoadError({
-            code: ProjectLoadErrorCode.RUNTIME_AUDIO_SOURCE_NOT_FOUND,
-            message: `준비한 Runtime Source를 찾을 수 없습니다: ${loopSlot.sourceId}`,
-            details: { loopSlotId: loopSlot.id, sourceId: loopSlot.sourceId },
-          });
-        }
-
-        return [{ slotId: loopSlot.id, url: source.objectUrl }];
+        return [loopSlot.sourceId, ...loopSlot.overdubSourceIds].map(sourceId => {
+          const source = registry.resolve(sourceId);
+          if (!source) {
+            throw new ProjectLoadError({
+              code: ProjectLoadErrorCode.RUNTIME_AUDIO_SOURCE_NOT_FOUND,
+              message: `준비한 Runtime Source를 찾을 수 없습니다: ${sourceId}`,
+              details: { loopSlotId: loopSlot.id, sourceId },
+            });
+          }
+          return { slotId: loopSlot.id, url: source.objectUrl };
+        });
       }),
       regions: track.regions.map(region => {
         const source = registry.resolve(region.sourceId);
@@ -346,7 +346,7 @@ export class ProjectController {
     }
   }
 
-  private async saveDocument(document: ProjectDocumentV3): Promise<ProjectDocumentSnapshot> {
+  private async saveDocument(document: ProjectDocumentV4): Promise<ProjectDocumentSnapshot> {
     const storedDocument = await this.dependencies.projectRepository.load(document.project.id);
     if (!storedDocument) {
       return this.dependencies.projectRepository.create(document);

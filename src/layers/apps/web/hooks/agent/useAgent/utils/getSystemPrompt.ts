@@ -24,7 +24,9 @@ export interface AgentPromptTrack {
   name: string;
   pluginInstances: readonly PluginInstanceState[];
   regions: readonly AgentPromptRegion[];
-  loopSlots?: ReadonlyArray<Pick<LoopSlotState, 'id' | 'lengthBars' | 'quantizationBars' | 'sourceId' | 'state'>>;
+  loopSlots?: ReadonlyArray<
+    Pick<LoopSlotState, 'id' | 'lengthBars' | 'overdubSourceIds' | 'quantizationBars' | 'sourceId' | 'state'>
+  >;
 }
 
 interface AgentPromptExample {
@@ -58,6 +60,8 @@ const COMMAND_REFERENCE = {
     '{"type":"SET_INPUT_MONITORING","trackId":"<existing Track UUID>","enabled":<boolean>} - 입력 모니터링 설정',
   [AudioCommandType.ARM_LOOP_SLOT]:
     '{"type":"ARM_LOOP_SLOT","trackId":"<existing Track UUID>","slotId":"<existing Loop Slot UUID>","lengthBars":<1|2|4|8>,"quantizationBars":<1|2|4|8>} - 루프 녹음 대기',
+  [AudioCommandType.ARM_LOOP_OVERDUB]:
+    '{"type":"ARM_LOOP_OVERDUB","trackId":"<existing Track UUID>","slotId":"<existing Loop Slot UUID>"} - 재생 중인 루프에 별도 오버더빙 레이어 녹음',
   [AudioCommandType.CANCEL_LOOP_SLOT]:
     '{"type":"CANCEL_LOOP_SLOT","trackId":"<existing Track UUID>","slotId":"<existing Loop Slot UUID>"} - 루프 녹음 대기 취소',
   [AudioCommandType.TRIGGER_LOOP_SLOT]:
@@ -226,14 +230,15 @@ function createProjectContext(tracks: readonly AgentPromptTrack[]): AgentProject
 
     const visibleRegions: AgentPromptRegion[] = [];
     const visibleLoopSlots: Array<
-      Pick<LoopSlotState, 'id' | 'lengthBars' | 'quantizationBars' | 'sourceId' | 'state'>
+      Pick<LoopSlotState, 'id' | 'lengthBars' | 'overdubSourceIds' | 'quantizationBars' | 'sourceId' | 'state'>
     > = [];
     if (visiblePluginInstances.length === track.pluginInstances.length) {
       for (const [index, loopSlot] of (track.loopSlots ?? []).entries()) {
         const loopSlotLine =
           `  Loop Slot ${index + 1}: id=${loopSlot.id}, state=${loopSlot.state}, ` +
           `lengthBars=${loopSlot.lengthBars}, quantizationBars=${loopSlot.quantizationBars}, ` +
-          `source=${loopSlot.sourceId === null ? 'empty' : 'available'}`;
+          `source=${loopSlot.sourceId === null ? 'empty' : 'available'}, ` +
+          `layers=${loopSlot.sourceId === null ? 0 : 1 + loopSlot.overdubSourceIds.length}`;
         if (!tryAddLine(loopSlotLine)) {
           break;
         }
@@ -538,12 +543,12 @@ function createLoopExamples(tracks: readonly AgentPromptTrack[]): AgentPromptExa
     });
   } else if (firstLoopSlot.state === 'playing') {
     examples.push({
-      request: '첫 번째 루프 슬롯을 정지해줘',
+      request: '첫 번째 루프 슬롯에 오버더빙해줘',
       commands: [
         {
           slotId: firstLoopSlot.id,
           trackId: firstTrack.id,
-          type: AudioCommandType.STOP_LOOP_SLOT,
+          type: AudioCommandType.ARM_LOOP_OVERDUB,
         },
       ],
     });
@@ -632,7 +637,7 @@ ${renderCommandReference()}
 12. LOAD_PROJECT는 사용자가 Project UUID를 명시했을 때만 사용한다. Project UUID를 임의로 만들지 않고, 다른 명령과 같은 배열에 넣지 않는다.
 13. UNDO와 REDO는 사용자가 명시적으로 요청했을 때만 사용한다. UNDO와 REDO는 다른 명령과 같은 배열에 넣지 않는다.
 ${pluginSafetyRules.text}
-${pluginSafetyRules.nextRuleNumber}. Loop Slot 명령은 위 목록에 표시된 trackId와 slotId만 사용한다. 빈 슬롯만 ARM_LOOP_SLOT으로 녹음하고, stopped 슬롯만 TRIGGER_LOOP_SLOT으로 재생한다.
+${pluginSafetyRules.nextRuleNumber}. Loop Slot 명령은 위 목록에 표시된 trackId와 slotId만 사용한다. 빈 슬롯만 ARM_LOOP_SLOT으로 녹음하고, stopped 슬롯만 TRIGGER_LOOP_SLOT으로 재생하며, playing 슬롯만 ARM_LOOP_OVERDUB으로 오버더빙한다.
 ${pluginSafetyRules.nextRuleNumber + 1}. SET_AUDIO_INPUT_DEVICE는 사용자가 브라우저 장치 ID 또는 default를 명시했을 때만 사용한다. default는 deviceId=null로 쓴다.
 ${pluginSafetyRules.nextRuleNumber + 2}. 요청을 안전하게 실행할 정보가 부족하면 []를 반환한다. 지원하지 않는 요청도 []를 반환한다.
 

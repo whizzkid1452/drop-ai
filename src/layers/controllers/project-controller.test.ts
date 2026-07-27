@@ -231,7 +231,7 @@ describe('ProjectController', () => {
     expect(context.audioSourceRepository.create).toHaveBeenCalledWith(registration);
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        schemaVersion: 3,
+        schemaVersion: 4,
         project: INITIAL_PROJECT_METADATA,
         audioSources: [registration.metadata],
       })
@@ -245,7 +245,7 @@ describe('ProjectController', () => {
     expect(replaceProjectMetadata).toHaveBeenCalledWith(INITIAL_PROJECT_METADATA);
   });
 
-  it('Session Plugin 체인을 ProjectDocument v3에 저장한다', async () => {
+  it('Session Plugin 체인을 ProjectDocument v4에 저장한다', async () => {
     const context = createTestContext();
     addPluginTrack(context.sessionStore.getState());
 
@@ -253,7 +253,7 @@ describe('ProjectController', () => {
 
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        schemaVersion: 3,
+        schemaVersion: 4,
         tracks: [
           expect.objectContaining({
             id: TRACK_ID,
@@ -272,7 +272,7 @@ describe('ProjectController', () => {
     );
   });
 
-  it('루프 슬롯과 연결 Source를 ProjectDocument v3에 저장한다', async () => {
+  it('루프 슬롯과 연결 Source를 ProjectDocument v4에 저장한다', async () => {
     const context = createTestContext();
     const registration = createSourceRegistration();
     context.audioSourceRegistry.restoreCommitted(registration);
@@ -287,6 +287,7 @@ describe('ProjectController', () => {
           gain: 1,
           id: LOOP_SLOT_ID,
           lengthBars: 1,
+          overdubSourceIds: [],
           quantizationBars: 1,
           recordedTempoBpm: 120,
           scheduledTimeSeconds: null,
@@ -307,10 +308,10 @@ describe('ProjectController', () => {
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         audioSources: [registration.metadata],
-        schemaVersion: 3,
+        schemaVersion: 4,
         tracks: [
           expect.objectContaining({
-            loopSlots: [expect.objectContaining({ id: LOOP_SLOT_ID, sourceId: SOURCE_ID })],
+            loopSlots: [expect.objectContaining({ id: LOOP_SLOT_ID, overdubSourceIds: [], sourceId: SOURCE_ID })],
           }),
         ],
       })
@@ -326,7 +327,10 @@ describe('ProjectController', () => {
 
     expect(context.projectRepository.create).not.toHaveBeenCalled();
     expect(context.projectRepository.save).toHaveBeenCalledWith({
-      document: existingDocument,
+      document: expect.objectContaining({
+        project: existingDocument.project,
+        schemaVersion: 4,
+      }),
       expectedRevision: 0,
     });
     expect(context.sessionStore.getState().project.revision).toBe(1);
@@ -554,6 +558,7 @@ describe('ProjectController', () => {
         gain: 1,
         id: LOOP_SLOT_ID,
         lengthBars: 1,
+        overdubSourceIds: [],
         quantizationBars: 1,
         recordedTempoBpm: 140,
         scheduledTimeSeconds: null,

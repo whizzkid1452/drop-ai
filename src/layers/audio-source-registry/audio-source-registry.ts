@@ -28,7 +28,7 @@ interface StoredAudioSource {
 interface RetiredAudioSourceRegistryState {
   readonly sources: Map<string, StoredAudioSource>;
   readonly sourceIdByRegionId: Map<string, string>;
-  readonly sourceIdByLoopSlotId: Map<string, string>;
+  readonly sourceIdsByLoopSlotId: Map<string, Set<string>>;
 }
 
 type PreparedRegistryState = 'activated' | 'discarded' | 'prepared';
@@ -36,7 +36,7 @@ type PreparedRegistryState = 'activated' | 'discarded' | 'prepared';
 export class AudioSourceRegistry implements IAudioSourceRegistry {
   private sources = new Map<string, StoredAudioSource>();
   private sourceIdByRegionId = new Map<string, string>();
-  private sourceIdByLoopSlotId = new Map<string, string>();
+  private sourceIdsByLoopSlotId = new Map<string, Set<string>>();
   private mutationRevision = 0;
   private readonly pendingDetachedRegistryCleanup = new Set<AudioSourceRegistry>();
   private readonly pendingRetiredRegistryCleanup = new Set<RetiredAudioSourceRegistryState>();
@@ -111,19 +111,19 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
         assertActivatable();
         const previousSources = this.sources;
         const previousSourceIdByRegionId = this.sourceIdByRegionId;
-        const previousSourceIdByLoopSlotId = this.sourceIdByLoopSlotId;
+        const previousSourceIdsByLoopSlotId = this.sourceIdsByLoopSlotId;
         this.sources = replacementRegistry.sources;
         this.sourceIdByRegionId = replacementRegistry.sourceIdByRegionId;
-        this.sourceIdByLoopSlotId = replacementRegistry.sourceIdByLoopSlotId;
+        this.sourceIdsByLoopSlotId = replacementRegistry.sourceIdsByLoopSlotId;
         replacementRegistry.sources = new Map();
         replacementRegistry.sourceIdByRegionId = new Map();
-        replacementRegistry.sourceIdByLoopSlotId = new Map();
+        replacementRegistry.sourceIdsByLoopSlotId = new Map();
         this.mutationRevision += 1;
         state = 'activated';
         retiredSources = this.createRetiredSources(
           previousSources,
           previousSourceIdByRegionId,
-          previousSourceIdByLoopSlotId
+          previousSourceIdsByLoopSlotId
         );
         return retiredSources;
       },
@@ -192,25 +192,27 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
   attachLoopSlot({ sourceId, loopSlotId }: AudioSourceLoopSlotAttachment): void {
     this.assertValidLoopSlotId(loopSlotId);
     const source = this.getRequiredSource(sourceId);
-    const attachedSourceId = this.sourceIdByLoopSlotId.get(loopSlotId);
-    if (attachedSourceId) {
+    const attachedSourceIds = this.sourceIdsByLoopSlotId.get(loopSlotId) ?? new Set<string>();
+    if (attachedSourceIds.has(sourceId)) {
       throw new AudioSourceRegistryError({
         code: 'LOOP_SLOT_ID_CONFLICT',
-        message: `루프 슬롯 ID가 이미 다른 Source 연결에 사용 중입니다: ${loopSlotId}`,
-        details: { attachedSourceId, loopSlotId, requestedSourceId: sourceId },
+        message: `루프 슬롯에 같은 Source가 이미 연결되어 있습니다: ${loopSlotId}`,
+        details: { attachedSourceIds: [...attachedSourceIds], loopSlotId, requestedSourceId: sourceId },
       });
     }
 
     source.loopSlotIds.add(loopSlotId);
     source.isCommitted = true;
-    this.sourceIdByLoopSlotId.set(loopSlotId, sourceId);
+    attachedSourceIds.add(sourceId);
+    this.sourceIdsByLoopSlotId.set(loopSlotId, attachedSourceIds);
     this.mutationRevision += 1;
   }
 
   detachLoopSlot({ sourceId, loopSlotId }: AudioSourceLoopSlotAttachment): void {
     this.assertValidLoopSlotId(loopSlotId);
     const source = this.getRequiredSource(sourceId);
-    if (this.sourceIdByLoopSlotId.get(loopSlotId) !== sourceId) {
+    const attachedSourceIds = this.sourceIdsByLoopSlotId.get(loopSlotId);
+    if (!attachedSourceIds?.has(sourceId)) {
       throw new AudioSourceRegistryError({
         code: 'LOOP_SLOT_ATTACHMENT_NOT_FOUND',
         message: `Source와 루프 슬롯의 연결을 찾을 수 없습니다: ${sourceId} / ${loopSlotId}`,
@@ -219,7 +221,10 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
     }
 
     source.loopSlotIds.delete(loopSlotId);
-    this.sourceIdByLoopSlotId.delete(loopSlotId);
+    attachedSourceIds.delete(sourceId);
+    if (attachedSourceIds.size === 0) {
+      this.sourceIdsByLoopSlotId.delete(loopSlotId);
+    }
     this.mutationRevision += 1;
   }
 
@@ -281,7 +286,7 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
 
       this.sources.delete(sourceId);
       source.regionIds.forEach(regionId => this.sourceIdByRegionId.delete(regionId));
-      source.loopSlotIds.forEach(loopSlotId => this.sourceIdByLoopSlotId.delete(loopSlotId));
+      source.loopSlotIds.forEach(loopSlotId => this.deleteLoopSlotSourceId(loopSlotId, sourceId));
       removedSourceCount += 1;
     });
 
@@ -433,6 +438,14 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
     });
   }
 
+  private deleteLoopSlotSourceId(loopSlotId: string, sourceId: string): void {
+    const attachedSourceIds = this.sourceIdsByLoopSlotId.get(loopSlotId);
+    attachedSourceIds?.delete(sourceId);
+    if (attachedSourceIds?.size === 0) {
+      this.sourceIdsByLoopSlotId.delete(loopSlotId);
+    }
+  }
+
   private removeSourceAndRevoke(sourceId: string, source: StoredAudioSource): void {
     try {
       this.objectUrlAdapter.revokeObjectUrl(source.objectUrl);
@@ -451,9 +464,9 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
   private createRetiredSources(
     sources: Map<string, StoredAudioSource>,
     sourceIdByRegionId: Map<string, string>,
-    sourceIdByLoopSlotId: Map<string, string>
+    sourceIdsByLoopSlotId: Map<string, Set<string>>
   ): IRetiredAudioSourceRegistry {
-    const retiredState = { sources, sourceIdByLoopSlotId, sourceIdByRegionId };
+    const retiredState = { sources, sourceIdsByLoopSlotId, sourceIdByRegionId };
     this.pendingRetiredRegistryCleanup.add(retiredState);
 
     return {
@@ -510,7 +523,7 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
     }
 
     retiredState.sourceIdByRegionId.clear();
-    retiredState.sourceIdByLoopSlotId.clear();
+    retiredState.sourceIdsByLoopSlotId.clear();
     this.pendingRetiredRegistryCleanup.delete(retiredState);
     return COMPLETE_RESOURCE_CLEANUP;
   }

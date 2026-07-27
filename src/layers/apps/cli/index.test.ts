@@ -69,6 +69,7 @@ describe('내부 CLI 명령 변환', () => {
 
   it.each([
     ['cancel', AudioCommandType.CANCEL_LOOP_SLOT],
+    ['overdub', AudioCommandType.ARM_LOOP_OVERDUB],
     ['trigger', AudioCommandType.TRIGGER_LOOP_SLOT],
     ['stop', AudioCommandType.STOP_LOOP_SLOT],
     ['clear', AudioCommandType.CLEAR_LOOP_SLOT],

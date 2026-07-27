@@ -3,13 +3,16 @@ import { AudioSourceRegistry } from '../audio-source-registry/audio-source-regis
 import type { IObjectUrlAdapter } from '../audio-source-registry/i-object-url-adapter';
 import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { createSessionStore, type SessionStore } from '../session/session';
+import { MAX_LOOP_OVERDUB_LAYERS } from '../shared/loop-time';
 import { LoopController } from './loop-controller';
+import { ProjectStateErrorCode } from './project-state-error';
 import { TrackController } from './track-controller';
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
 const TRACK_ID = '22222222-2222-4222-8222-222222222222';
 const SLOT_ID = '33333333-3333-4333-8333-333333333333';
 const SOURCE_ID = '44444444-4444-4444-8444-444444444444';
+const OVERDUB_SOURCE_ID = '55555555-5555-4555-8555-555555555555';
 
 class ObjectUrlAdapterStub implements IObjectUrlAdapter {
   createObjectUrl(): string {
@@ -35,6 +38,7 @@ describe('LoopController', () => {
   let session: SessionStore;
 
   beforeEach(async () => {
+    const sourceIds = [SOURCE_ID, OVERDUB_SOURCE_ID];
     session = createSessionStore({ initialProjectMetadata: { id: PROJECT_ID, name: '테스트', revision: 0 } });
     session.getState().addTrack({
       id: TRACK_ID,
@@ -46,6 +50,7 @@ describe('LoopController', () => {
           gain: 1,
           id: SLOT_ID,
           lengthBars: 1,
+          overdubSourceIds: [],
           quantizationBars: 1,
           recordedTempoBpm: null,
           scheduledTimeSeconds: null,
@@ -66,7 +71,7 @@ describe('LoopController', () => {
     controller = new LoopController({
       audioEngine,
       audioSourceRegistry,
-      createSourceId: () => SOURCE_ID,
+      createSourceId: () => sourceIds.shift() ?? OVERDUB_SOURCE_ID,
       sessionStore: session,
     });
   });
@@ -83,6 +88,7 @@ describe('LoopController', () => {
 
     audioEngine.emitLoopEvent({
       blob,
+      captureMode: 'initial',
       durationSeconds: 2,
       recordedTempoBpm: 120,
       slotId: SLOT_ID,
@@ -97,10 +103,58 @@ describe('LoopController', () => {
     });
   });
 
+  it('재생 중인 루프의 오버더빙을 별도 Source로 연결한다', async () => {
+    audioEngine.emitLoopEvent({
+      blob: new Blob(['loop'], { type: 'audio/wav' }),
+      captureMode: 'initial',
+      durationSeconds: 2,
+      recordedTempoBpm: 120,
+      slotId: SLOT_ID,
+      trackId: TRACK_ID,
+      type: 'RECORDING_COMPLETED',
+    });
+    audioEngine.emitLoopEvent({ slotId: SLOT_ID, state: 'playing', trackId: TRACK_ID, type: 'STATE_CHANGED' });
+
+    await controller.overdub({ slotId: SLOT_ID, trackId: TRACK_ID });
+    audioEngine.emitLoopEvent({
+      blob: new Blob(['overdub'], { type: 'audio/wav' }),
+      captureMode: 'overdub',
+      durationSeconds: 2,
+      recordedTempoBpm: 120,
+      slotId: SLOT_ID,
+      trackId: TRACK_ID,
+      type: 'RECORDING_COMPLETED',
+    });
+
+    expect(readLoopSlot(session)).toMatchObject({
+      overdubSourceIds: [OVERDUB_SOURCE_ID],
+      sourceId: SOURCE_ID,
+    });
+    expect(audioSourceRegistry.resolve(SOURCE_ID)?.loopSlotIds).toEqual([SLOT_ID]);
+    expect(audioSourceRegistry.resolve(OVERDUB_SOURCE_ID)?.loopSlotIds).toEqual([SLOT_ID]);
+  });
+
+  it('저장 가능한 오버더빙 레이어 수를 넘으면 녹음을 시작하지 않는다', async () => {
+    session.getState().updateLoopSlot({
+      slotId: SLOT_ID,
+      trackId: TRACK_ID,
+      updates: {
+        overdubSourceIds: Array.from({ length: MAX_LOOP_OVERDUB_LAYERS }, (_, index) => `overdub-${index}`),
+        sourceId: SOURCE_ID,
+        state: 'playing',
+      },
+    });
+
+    await expect(controller.overdub({ slotId: SLOT_ID, trackId: TRACK_ID })).rejects.toMatchObject({
+      code: ProjectStateErrorCode.LOOP_SLOT_OVERDUB_LIMIT_REACHED,
+    });
+  });
+
   it('슬롯을 지우면 Source 연결과 등록 데이터도 제거한다', async () => {
     const blob = new Blob(['loop'], { type: 'audio/wav' });
     audioEngine.emitLoopEvent({
       blob,
+      captureMode: 'initial',
       durationSeconds: 2,
       recordedTempoBpm: 120,
       slotId: SLOT_ID,
@@ -117,6 +171,7 @@ describe('LoopController', () => {
   it('트랙을 지우면 루프 슬롯의 Source 연결도 분리한다', () => {
     audioEngine.emitLoopEvent({
       blob: new Blob(['loop'], { type: 'audio/wav' }),
+      captureMode: 'initial',
       durationSeconds: 2,
       recordedTempoBpm: 120,
       slotId: SLOT_ID,

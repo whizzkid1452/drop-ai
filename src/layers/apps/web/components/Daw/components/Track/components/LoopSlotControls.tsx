@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { useCommandExecutor } from '@/layers/apps/web/context/layer-hooks';
-import { createLoopSlotAction, getLoopSlotActionLabel } from '@/layers/apps/web/hooks/loop-slot-action';
-import type { LoopLengthBars } from '@/layers/shared/loop-time';
+import {
+  createLoopOverdubAction,
+  createLoopSlotAction,
+  getLoopLayerCount,
+  getLoopSlotActionLabel,
+} from '@/layers/apps/web/hooks/loop-slot-action';
+import { MAX_LOOP_OVERDUB_LAYERS, type LoopLengthBars } from '@/layers/shared/loop-time';
 import type { LoopSlotState } from '@/layers/session/session';
 import { AudioCommandType } from '@/layers/shared/types/audioCommand.schema';
 import * as styles from './LoopSlotControls.css';
@@ -40,12 +45,18 @@ function LoopSlotControl({
 
   const handlePrimaryAction = () => execute(createLoopSlotAction({ lengthBars, loopSlot, quantizationBars, trackId }));
   const canClear = loopSlot.sourceId !== null && loopSlot.state !== 'error';
+  const canOverdub =
+    loopSlot.sourceId !== null &&
+    loopSlot.state === 'playing' &&
+    loopSlot.overdubSourceIds.length < MAX_LOOP_OVERDUB_LAYERS;
 
   return (
     <div className={styles.slot} data-state={loopSlot.state}>
       <div className={styles.slotHeader}>
         <span>LOOP {index + 1}</span>
-        <span className={styles.state}>{loopSlot.state}</span>
+        <span className={styles.state}>
+          {loopSlot.state} · {getLoopLayerCount(loopSlot)}L
+        </span>
       </div>
       <div className={styles.slotActions}>
         <button
@@ -56,6 +67,16 @@ function LoopSlotControl({
         >
           {isPending ? '…' : getLoopSlotActionLabel(loopSlot.state)}
         </button>
+        {canOverdub ? (
+          <button
+            type="button"
+            className={styles.overdubButton}
+            disabled={isPending}
+            onClick={() => void execute(createLoopOverdubAction({ loopSlotId: loopSlot.id, trackId }))}
+          >
+            DUB
+          </button>
+        ) : null}
         {canClear ? (
           <button
             type="button"

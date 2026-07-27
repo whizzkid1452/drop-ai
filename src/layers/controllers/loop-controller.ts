@@ -7,6 +7,7 @@ import type {
 } from '../audio-engine/i-audio-engine';
 import type { IAudioSourceRegistry, RuntimeAudioSource } from '../audio-source-registry/i-audio-source-registry';
 import type { LoopSlotState, SessionStore } from '../session/session';
+import { MAX_LOOP_OVERDUB_LAYERS } from '../shared/loop-time';
 import { ProjectStateError, ProjectStateErrorCode } from './project-state-error';
 
 interface LoopControllerDependencies {
@@ -72,6 +73,30 @@ export class LoopController {
     });
   }
 
+  async overdub(address: LoopSlotAddress): Promise<void> {
+    const slot = this.#getLoopSlot(address);
+    if (slot.sourceId === null || slot.state !== 'playing') {
+      throw new ProjectStateError(
+        ProjectStateErrorCode.LOOP_SLOT_NOT_PLAYING,
+        `재생 중인 루프 슬롯만 오버더빙할 수 있습니다: ${address.slotId}`,
+        { ...address, state: slot.state }
+      );
+    }
+    if (slot.overdubSourceIds.length >= MAX_LOOP_OVERDUB_LAYERS) {
+      throw new ProjectStateError(
+        ProjectStateErrorCode.LOOP_SLOT_OVERDUB_LIMIT_REACHED,
+        `루프 슬롯의 오버더빙 레이어 한도에 도달했습니다: ${address.slotId}`,
+        { ...address, maximumOverdubLayerCount: MAX_LOOP_OVERDUB_LAYERS }
+      );
+    }
+    await this.#audioEngine.armLoopOverdub({
+      ...address,
+      lengthBars: slot.lengthBars,
+      quantizationBars: slot.quantizationBars,
+      tempoBpm: this.#sessionStore.getState().tempo,
+    });
+  }
+
   cancel(address: LoopSlotAddress): void {
     this.#getLoopSlot(address);
     this.#audioEngine.cancelLoop(address);
@@ -97,28 +122,29 @@ export class LoopController {
 
   async clear(address: LoopSlotAddress): Promise<void> {
     const slot = this.#getLoopSlot(address);
-    const source = this.#resolveAttachedSource(address, slot.sourceId);
+    const sources = this.#resolveAttachedSources(address, slot);
     this.#audioEngine.clearLoop(address);
-    if (source) {
-      try {
+    try {
+      sources.forEach(source => {
         this.#audioSourceRegistry.detachLoopSlot({ loopSlotId: address.slotId, sourceId: source.metadata.id });
-        this.#audioSourceRegistry.purgeUnused(source.metadata.id);
-      } catch (cause) {
-        await this.#restoreClearedLoop(address, source);
-        throw cause;
-      }
+      });
+    } catch (cause) {
+      await this.#restoreClearedLoop(address, sources);
+      throw cause;
     }
 
     this.#sessionStore.getState().updateLoopSlot({
       ...address,
       updates: {
         errorMessage: null,
+        overdubSourceIds: [],
         recordedTempoBpm: null,
         scheduledTimeSeconds: null,
         sourceId: null,
         state: 'empty',
       },
     });
+    sources.forEach(source => this.#audioSourceRegistry.purgeUnused(source.metadata.id));
   }
 
   stopAll(): void {
@@ -173,7 +199,10 @@ export class LoopController {
 
   #attachRecordedSource(event: Extract<LoopRuntimeEvent, { type: 'RECORDING_COMPLETED' }>): void {
     const slot = this.#getLoopSlot(event);
-    if (slot.sourceId !== null) {
+    const hasInvalidTarget =
+      (event.captureMode === 'initial' && slot.sourceId !== null) ||
+      (event.captureMode === 'overdub' && slot.sourceId === null);
+    if (hasInvalidTarget) {
       this.#sessionStore.getState().updateLoopSlot({
         ...event,
         updates: { errorMessage: '비어 있지 않은 루프 슬롯에 녹음 결과를 연결할 수 없습니다.', state: 'error' },
@@ -187,7 +216,7 @@ export class LoopController {
       metadata: {
         byteLength: event.blob.size,
         durationSeconds: event.durationSeconds,
-        fileName: `loop-${event.slotId}.wav`,
+        fileName: `loop-${event.slotId}-${event.captureMode}.wav`,
         id: sourceId,
         mimeType: event.blob.type || 'audio/wav',
       },
@@ -205,31 +234,35 @@ export class LoopController {
       updates: {
         errorMessage: null,
         recordedTempoBpm: event.recordedTempoBpm,
-        sourceId,
+        ...(event.captureMode === 'initial'
+          ? { sourceId }
+          : { overdubSourceIds: [...slot.overdubSourceIds, sourceId] }),
       },
     });
   }
 
-  #resolveAttachedSource(address: LoopSlotAddress, sourceId: string | null): RuntimeAudioSource | null {
-    if (sourceId === null) {
-      return null;
-    }
-    const source = this.#audioSourceRegistry.resolve(sourceId);
-    if (source?.loopSlotIds?.includes(address.slotId)) {
-      return source;
-    }
-    throw new ProjectStateError(
-      ProjectStateErrorCode.LOOP_SLOT_SOURCE_MISSING,
-      `루프 슬롯의 Source 연결을 찾을 수 없습니다: ${address.slotId}`,
-      { ...address, sourceId }
-    );
+  #resolveAttachedSources(address: LoopSlotAddress, slot: LoopSlotState): RuntimeAudioSource[] {
+    const sourceIds = slot.sourceId === null ? [] : [slot.sourceId, ...slot.overdubSourceIds];
+    return sourceIds.map(sourceId => {
+      const source = this.#audioSourceRegistry.resolve(sourceId);
+      if (source?.loopSlotIds?.includes(address.slotId)) {
+        return source;
+      }
+      throw new ProjectStateError(
+        ProjectStateErrorCode.LOOP_SLOT_SOURCE_MISSING,
+        `루프 슬롯의 Source 연결을 찾을 수 없습니다: ${address.slotId}`,
+        { ...address, sourceId }
+      );
+    });
   }
 
-  async #restoreClearedLoop(address: LoopSlotAddress, source: RuntimeAudioSource): Promise<void> {
-    const currentSource = this.#audioSourceRegistry.resolve(source.metadata.id);
-    if (currentSource && !currentSource.loopSlotIds?.includes(address.slotId)) {
-      this.#audioSourceRegistry.attachLoopSlot({ loopSlotId: address.slotId, sourceId: source.metadata.id });
+  async #restoreClearedLoop(address: LoopSlotAddress, sources: readonly RuntimeAudioSource[]): Promise<void> {
+    for (const source of sources) {
+      const currentSource = this.#audioSourceRegistry.resolve(source.metadata.id);
+      if (currentSource && !currentSource.loopSlotIds?.includes(address.slotId)) {
+        this.#audioSourceRegistry.attachLoopSlot({ loopSlotId: address.slotId, sourceId: source.metadata.id });
+      }
+      await this.#audioEngine.loadLoop({ ...address, url: source.objectUrl });
     }
-    await this.#audioEngine.loadLoop({ ...address, url: source.objectUrl });
   }
 }

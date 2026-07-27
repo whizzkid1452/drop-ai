@@ -13,6 +13,7 @@ export const AudioCommandType = {
   SET_AUDIO_INPUT_DEVICE: 'SET_AUDIO_INPUT_DEVICE',
   SET_INPUT_MONITORING: 'SET_INPUT_MONITORING',
   ARM_LOOP_SLOT: 'ARM_LOOP_SLOT',
+  ARM_LOOP_OVERDUB: 'ARM_LOOP_OVERDUB',
   CANCEL_LOOP_SLOT: 'CANCEL_LOOP_SLOT',
   TRIGGER_LOOP_SLOT: 'TRIGGER_LOOP_SLOT',
   STOP_LOOP_SLOT: 'STOP_LOOP_SLOT',
@@ -147,6 +148,10 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
     ...loopSlotAddressSchema,
     lengthBars: loopLengthBarsSchema,
     quantizationBars: loopLengthBarsSchema,
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.ARM_LOOP_OVERDUB),
+    ...loopSlotAddressSchema,
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.CANCEL_LOOP_SLOT),
