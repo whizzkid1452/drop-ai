@@ -38,6 +38,8 @@ import {
 } from '../shared/utils/audio-runtime-capabilities';
 import type { ProjectMetadata } from '../shared/types/project-document.schema';
 import type { PluginValidationResult } from '../shared/types/plugin-state';
+import { BrowserMidiInput } from '../midi-input/browser-midi-input';
+import type { IMidiInput } from '../midi-input/i-midi-input';
 
 const NEW_PROJECT_NAME = '새 프로젝트';
 
@@ -45,6 +47,7 @@ export interface AppInstance {
   readonly audioRuntimeCapabilities: AudioRuntimeCapabilities;
   readonly audioSourceResolver: IAudioSourceResolver;
   readonly audioSourceStager: IAudioSourceStager;
+  readonly midiInput: IMidiInput;
   session: SessionStore;
   commandExecutor: CommandExecutor;
   commandHistory: ICommandHistoryQuery;
@@ -60,6 +63,7 @@ export interface CreateAppOptions {
   audioRuntimeEnvironment?: AudioRuntimeEnvironment;
   initialProjectMetadata?: ProjectMetadata;
   initialPluginManifests?: readonly unknown[];
+  midiInput?: IMidiInput;
 }
 
 interface InitialPluginRegistrationOptions {
@@ -179,6 +183,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   const projectCatalog = new ProjectCatalogQuery(projectRepository);
   const audioRuntimeEnvironment = options.audioRuntimeEnvironment ?? readAudioRuntimeEnvironment();
   const audioRuntimeCapabilities = resolveAudioRuntimeCapabilities(audioRuntimeEnvironment);
+  const midiInput = options.midiInput ?? new BrowserMidiInput();
 
   return {
     audioRuntimeCapabilities,
@@ -186,6 +191,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     session,
     commandExecutor,
     commandHistory: commandHistoryQuery,
+    midiInput,
     playbackClock,
     projectCatalog,
   };

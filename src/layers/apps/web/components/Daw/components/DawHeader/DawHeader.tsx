@@ -8,6 +8,7 @@ import { AudioRuntimeStatus } from './AudioRuntimeStatus';
 import { MasterVolumeControl } from './MasterVolumeControl';
 import { TempoMetadataControl } from './TempoMetadataControl';
 import { AddTrackControl } from '../AddTrackControl/AddTrackControl';
+import { MidiLoopControl } from './MidiLoopControl';
 
 interface DawHeaderProps {
   trackCount: number;
@@ -23,6 +24,7 @@ export function DawHeader({ trackCount }: DawHeaderProps) {
         </div>
         <div className={styles.projectActions}>
           <AddTrackControl />
+          <MidiLoopControl />
           <UndoRedoControls />
           <LoadProjectControl />
           <SaveProjectButton />

@@ -285,6 +285,8 @@ Web JSON CLI도 파싱된 명령 배열을 `executeMany` 한 번으로 실행하
 
 라이브 루프 충돌 보호는 `CommandExecutor` 진입점에서 적용한다. `armed`, `recording`, `playing` 슬롯과 아직 경계 시각에 도달하지 않은 정지 예약 슬롯이 있으면 프로젝트 교체, 내보내기, 트랙 삭제, 플러그인 변경, 템포 변경을 거부한다. 동일한 검사는 Undo와 Redo가 내부 명령을 실행할 때도 적용한다. 루프 정지·취소·해제와 믹서 조작은 계속 허용한다.
 
+MIDI 입력 구현은 `IMidiInput` 뒤에 두고 `createApp`에서 조립한다. Web UI는 사용자 동작으로 권한을 요청한 뒤 Note On을 기존 `AudioCommand`로 변환한다. 노트 36~39는 선택한 트랙의 루프 슬롯 1~4에 대응하고, 노트 40은 모든 루프를 정지한다. 채널은 전체 또는 1~16 중 하나를 선택한다.
+
 ## Architecture (Layers)
 
 ```mermaid
