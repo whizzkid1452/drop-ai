@@ -7,6 +7,8 @@ type AudioRuntimeLevel = 'full' | 'limited' | 'standard';
 
 const blockerLabels: Record<AudioRuntimeBlocker, string> = {
   [AudioRuntimeBlocker.AUDIO_WORKLET_API_UNAVAILABLE]: 'AudioWorklet API',
+  [AudioRuntimeBlocker.GET_USER_MEDIA_API_UNAVAILABLE]: '오디오 입력 요청 API',
+  [AudioRuntimeBlocker.MEDIA_DEVICES_API_UNAVAILABLE]: '미디어 장치 API',
   [AudioRuntimeBlocker.CROSS_ORIGIN_ISOLATION_UNAVAILABLE]: '사이트 격리',
   [AudioRuntimeBlocker.INSECURE_CONTEXT]: '보안 연결(HTTPS 또는 localhost)',
   [AudioRuntimeBlocker.SHARED_ARRAY_BUFFER_UNAVAILABLE]: '공유 메모리 API',
@@ -28,13 +30,18 @@ const levelStyles: Record<AudioRuntimeLevel, string> = {
 function resolveAudioRuntimeLevel(capabilities: AudioRuntimeCapabilities): AudioRuntimeLevel {
   if (
     capabilities.meetsAudioWorkletPreconditions &&
+    capabilities.meetsLiveInputPreconditions &&
     capabilities.meetsWasmPreconditions &&
     capabilities.meetsSharedMemoryPreconditions
   ) {
     return 'full';
   }
 
-  if (capabilities.meetsAudioWorkletPreconditions && capabilities.meetsWasmPreconditions) {
+  if (
+    capabilities.meetsAudioWorkletPreconditions &&
+    capabilities.meetsLiveInputPreconditions &&
+    capabilities.meetsWasmPreconditions
+  ) {
     return 'standard';
   }
 
@@ -44,6 +51,7 @@ function resolveAudioRuntimeLevel(capabilities: AudioRuntimeCapabilities): Audio
 function collectBlockerLabels(capabilities: AudioRuntimeCapabilities): string[] {
   const blockers = [
     ...capabilities.blockers.audioWorklet,
+    ...capabilities.blockers.liveInput,
     ...capabilities.blockers.wasm,
     ...capabilities.blockers.sharedMemory,
   ];

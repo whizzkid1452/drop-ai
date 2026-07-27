@@ -9,9 +9,13 @@ function hasAudioWorkletApi(): boolean {
 }
 
 export function readAudioRuntimeEnvironment(): AudioRuntimeEnvironment {
+  const mediaDevices = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices;
+
   return {
     crossOriginIsolated: globalThis.crossOriginIsolated === true,
     hasAudioWorklet: hasAudioWorkletApi(),
+    hasGetUserMedia: typeof mediaDevices?.getUserMedia === 'function',
+    hasMediaDevices: mediaDevices !== undefined,
     hasSharedArrayBuffer: typeof SharedArrayBuffer !== 'undefined',
     hasWebAssembly: typeof WebAssembly !== 'undefined',
     isSecureContext: globalThis.isSecureContext === true,

@@ -12,6 +12,7 @@ describe('readAudioRuntimeEnvironment', () => {
     vi.stubGlobal('SharedArrayBuffer', class SharedArrayBufferStub {});
     vi.stubGlobal('WebAssembly', {});
     vi.stubGlobal('AudioWorkletNode', class AudioWorkletNodeStub {});
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn() } });
     vi.stubGlobal(
       'AudioContext',
       class AudioContextStub {
@@ -24,6 +25,8 @@ describe('readAudioRuntimeEnvironment', () => {
     expect(readAudioRuntimeEnvironment()).toEqual({
       crossOriginIsolated: true,
       hasAudioWorklet: true,
+      hasGetUserMedia: true,
+      hasMediaDevices: true,
       hasSharedArrayBuffer: true,
       hasWebAssembly: true,
       isSecureContext: true,
@@ -37,10 +40,13 @@ describe('readAudioRuntimeEnvironment', () => {
     vi.stubGlobal('WebAssembly', undefined);
     vi.stubGlobal('AudioWorkletNode', undefined);
     vi.stubGlobal('AudioContext', undefined);
+    vi.stubGlobal('navigator', undefined);
 
     expect(readAudioRuntimeEnvironment()).toEqual({
       crossOriginIsolated: false,
       hasAudioWorklet: false,
+      hasGetUserMedia: false,
+      hasMediaDevices: false,
       hasSharedArrayBuffer: false,
       hasWebAssembly: false,
       isSecureContext: false,
