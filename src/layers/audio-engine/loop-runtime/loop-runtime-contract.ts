@@ -1,6 +1,7 @@
 import type { LoopLengthBars } from '../../shared/loop-time';
+import type { LoopSlotRuntimeState } from '../../shared/types/loop-state';
 
-export type LoopRuntimeState = 'armed' | 'empty' | 'error' | 'playing' | 'recording' | 'stopped';
+export type LoopRuntimeState = LoopSlotRuntimeState;
 
 export interface LoopSlotAddress {
   readonly slotId: string;

@@ -11,11 +11,17 @@ export interface AudioSourceAttachment {
   readonly regionId: string;
 }
 
+export interface AudioSourceLoopSlotAttachment {
+  readonly sourceId: string;
+  readonly loopSlotId: string;
+}
+
 export interface RuntimeAudioSource {
   readonly metadata: Readonly<ProjectAudioSource>;
   readonly objectUrl: string;
   readonly isCommitted: boolean;
   readonly regionIds: readonly string[];
+  readonly loopSlotIds?: readonly string[];
 }
 
 export interface IAudioSourceStager {
@@ -39,6 +45,7 @@ export interface IRetiredAudioSourceRegistry {
 export interface IPreparedAudioSourceRegistryReplacement extends IAudioSourceResolver {
   restoreCommitted(registration: AudioSourceRegistration): RuntimeAudioSource;
   attach(attachment: AudioSourceAttachment): void;
+  attachLoopSlot(attachment: AudioSourceLoopSlotAttachment): void;
   assertActivatable(): void;
   activate(): IRetiredAudioSourceRegistry;
   discard(): ResourceCleanupResult;
@@ -55,7 +62,9 @@ export interface IAudioSourceRegistry
     IAudioSourceRegistryReplacementCoordinator {
   restoreCommitted(registration: AudioSourceRegistration): RuntimeAudioSource;
   attach(attachment: AudioSourceAttachment): void;
+  attachLoopSlot(attachment: AudioSourceLoopSlotAttachment): void;
   detach(attachment: AudioSourceAttachment): void;
+  detachLoopSlot(attachment: AudioSourceLoopSlotAttachment): void;
   purgeUnused(sourceId: string): void;
   clear(): void;
 }

@@ -50,6 +50,21 @@ export const AGENT_PLUGIN_CONTEXT_MAX_CHARACTERS = 1200;
 const EXAMPLE_PROJECT_ID = '99999999-9999-4999-8999-999999999999';
 
 const COMMAND_REFERENCE = {
+  [AudioCommandType.SET_AUDIO_INPUT_DEVICE]:
+    '{"type":"SET_AUDIO_INPUT_DEVICE","deviceId":"<browser audio input device ID or null>"} - 실시간 입력 장치 선택',
+  [AudioCommandType.SET_INPUT_MONITORING]:
+    '{"type":"SET_INPUT_MONITORING","trackId":"<existing Track UUID>","enabled":<boolean>} - 입력 모니터링 설정',
+  [AudioCommandType.ARM_LOOP_SLOT]:
+    '{"type":"ARM_LOOP_SLOT","trackId":"<existing Track UUID>","slotId":"<existing Loop Slot UUID>","lengthBars":<1|2|4|8>,"quantizationBars":<1|2|4|8>} - 루프 녹음 대기',
+  [AudioCommandType.CANCEL_LOOP_SLOT]:
+    '{"type":"CANCEL_LOOP_SLOT","trackId":"<existing Track UUID>","slotId":"<existing Loop Slot UUID>"} - 루프 녹음 대기 취소',
+  [AudioCommandType.TRIGGER_LOOP_SLOT]:
+    '{"type":"TRIGGER_LOOP_SLOT","trackId":"<existing Track UUID>","slotId":"<existing Loop Slot UUID>"} - 루프 재생 예약',
+  [AudioCommandType.STOP_LOOP_SLOT]:
+    '{"type":"STOP_LOOP_SLOT","trackId":"<existing Track UUID>","slotId":"<existing Loop Slot UUID>"} - 루프 정지 예약',
+  [AudioCommandType.CLEAR_LOOP_SLOT]:
+    '{"type":"CLEAR_LOOP_SLOT","trackId":"<existing Track UUID>","slotId":"<existing Loop Slot UUID>"} - 루프 슬롯 비우기',
+  [AudioCommandType.STOP_ALL_LOOPS]: '{"type":"STOP_ALL_LOOPS"} - 모든 루프 정지 예약',
   [AudioCommandType.UNDO]: '{"type":"UNDO"} - 마지막 편집 실행 취소',
   [AudioCommandType.REDO]: '{"type":"REDO"} - 마지막으로 취소한 편집 다시 실행',
   [AudioCommandType.ADD_TRACK]: '{"type":"ADD_TRACK","trackId":"<new UUID>"} - 빈 Track 추가. 현재 Agent 생성은 금지',

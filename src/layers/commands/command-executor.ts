@@ -150,6 +150,38 @@ export class CommandExecutor {
         this.controller.playback.handleStop();
         return;
 
+      case AudioCommandType.SET_AUDIO_INPUT_DEVICE:
+        await this.controller.loop.setInputDevice(validatedCommand.deviceId);
+        return;
+
+      case AudioCommandType.SET_INPUT_MONITORING:
+        await this.controller.loop.setMonitoring(validatedCommand);
+        return;
+
+      case AudioCommandType.ARM_LOOP_SLOT:
+        await this.controller.loop.arm(validatedCommand);
+        return;
+
+      case AudioCommandType.CANCEL_LOOP_SLOT:
+        this.controller.loop.cancel(validatedCommand);
+        return;
+
+      case AudioCommandType.TRIGGER_LOOP_SLOT:
+        await this.controller.loop.trigger(validatedCommand);
+        return;
+
+      case AudioCommandType.STOP_LOOP_SLOT:
+        this.controller.loop.stop(validatedCommand);
+        return;
+
+      case AudioCommandType.CLEAR_LOOP_SLOT:
+        await this.controller.loop.clear(validatedCommand);
+        return;
+
+      case AudioCommandType.STOP_ALL_LOOPS:
+        this.controller.loop.stopAll();
+        return;
+
       case AudioCommandType.SET_TEMPO:
         this.controller.playback.handleSetTempo(validatedCommand.tempo);
         return;

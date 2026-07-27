@@ -11,6 +11,7 @@ import { ExportController } from './export-controller';
 import { ProjectController } from './project-controller';
 import { PluginController } from './plugin-controller';
 import { MixerController } from './mixer-controller';
+import { LoopController } from './loop-controller';
 
 interface AppControllerDependencies {
   sessionStore: SessionStore;
@@ -32,6 +33,7 @@ export class AppController {
   public readonly project: ProjectController;
   public readonly plugin: PluginController;
   public readonly mixer: MixerController;
+  public readonly loop: LoopController;
 
   constructor({
     sessionStore,
@@ -54,5 +56,6 @@ export class AppController {
     });
     this.plugin = new PluginController({ pluginHost, sessionStore, audioEngine });
     this.mixer = new MixerController({ sessionStore, audioEngine });
+    this.loop = new LoopController({ sessionStore, audioEngine, audioSourceRegistry });
   }
 }

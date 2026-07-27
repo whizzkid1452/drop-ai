@@ -1,6 +1,6 @@
 import type { IAudioEngine } from '../audio-engine/i-audio-engine';
-import type { AudioSourceAttachment, IAudioSourceRegistry } from '../audio-source-registry/i-audio-source-registry';
-import type { SessionStore, TrackState } from '../session/session';
+import type { IAudioSourceRegistry } from '../audio-source-registry/i-audio-source-registry';
+import { createDefaultLoopSlots, type SessionStore, type TrackState } from '../session/session';
 import { ProjectMutationCompensationError } from './project-mutation-compensation-error';
 import { ProjectStateError, ProjectStateErrorCode } from './project-state-error';
 
@@ -9,6 +9,18 @@ interface TrackControllerDependencies {
   audioEngine: IAudioEngine;
   audioSourceRegistry: IAudioSourceRegistry;
 }
+
+type TrackSourceAttachment =
+  | {
+      kind: 'region';
+      sourceId: string;
+      regionId: string;
+    }
+  | {
+      kind: 'loop-slot';
+      sourceId: string;
+      loopSlotId: string;
+    };
 
 export class TrackController {
   private readonly sessionStore: SessionStore;
@@ -38,6 +50,7 @@ export class TrackController {
       status: [],
       pluginInstances: [],
       regions: [],
+      loopSlots: createDefaultLoopSlots(),
     });
   }
 
@@ -121,31 +134,54 @@ export class TrackController {
     });
   }
 
-  private getSourceAttachments(track: TrackState): AudioSourceAttachment[] {
-    return track.regions.map(region => ({ sourceId: region.sourceId, regionId: region.id }));
+  private getSourceAttachments(track: TrackState): TrackSourceAttachment[] {
+    const regionAttachments: TrackSourceAttachment[] = track.regions.map(region => ({
+      kind: 'region',
+      sourceId: region.sourceId,
+      regionId: region.id,
+    }));
+    const loopSlotAttachments: TrackSourceAttachment[] = (track.loopSlots ?? []).flatMap(loopSlot =>
+      loopSlot.sourceId === null
+        ? []
+        : [
+            {
+              kind: 'loop-slot',
+              sourceId: loopSlot.sourceId,
+              loopSlotId: loopSlot.id,
+            },
+          ]
+    );
+
+    return [...regionAttachments, ...loopSlotAttachments];
   }
 
-  private validateSourceAttachments(attachments: readonly AudioSourceAttachment[]): void {
+  private validateSourceAttachments(attachments: readonly TrackSourceAttachment[]): void {
     attachments.forEach(attachment => {
       const source = this.audioSourceRegistry.resolve(attachment.sourceId);
-      if (source?.regionIds.includes(attachment.regionId)) {
+      const isAttached =
+        attachment.kind === 'region'
+          ? source?.regionIds.includes(attachment.regionId)
+          : source?.loopSlotIds?.includes(attachment.loopSlotId);
+      if (isAttached) {
         return;
       }
 
       throw new ProjectStateError(
-        ProjectStateErrorCode.REGION_SOURCE_MISSING,
-        `Region의 Source 연결을 찾을 수 없습니다: ${attachment.regionId}`,
+        attachment.kind === 'region'
+          ? ProjectStateErrorCode.REGION_SOURCE_MISSING
+          : ProjectStateErrorCode.LOOP_SLOT_SOURCE_MISSING,
+        `Source 연결을 찾을 수 없습니다: ${this.getAttachmentId(attachment)}`,
         { ...attachment }
       );
     });
   }
 
-  private detachSourceAttachments(attachments: readonly AudioSourceAttachment[]): AudioSourceAttachment[] {
-    const detachedAttachments: AudioSourceAttachment[] = [];
+  private detachSourceAttachments(attachments: readonly TrackSourceAttachment[]): TrackSourceAttachment[] {
+    const detachedAttachments: TrackSourceAttachment[] = [];
 
     try {
       attachments.forEach(attachment => {
-        this.audioSourceRegistry.detach(attachment);
+        this.detachSourceAttachment(attachment);
         detachedAttachments.push(attachment);
       });
     } catch (cause) {
@@ -165,16 +201,16 @@ export class TrackController {
     cause,
     failedPhase,
   }: {
-    attachments: readonly AudioSourceAttachment[];
+    attachments: readonly TrackSourceAttachment[];
     cause: unknown;
     failedPhase: string;
   }): void {
     const compensationFailures = attachments.flatMap(attachment => {
       try {
-        this.audioSourceRegistry.attach(attachment);
+        this.restoreSourceAttachment(attachment);
         return [];
       } catch (compensationCause) {
-        return [{ step: `Source 연결 복원: ${attachment.regionId}`, cause: compensationCause }];
+        return [{ step: `Source 연결 복원: ${this.getAttachmentId(attachment)}`, cause: compensationCause }];
       }
     });
 
@@ -186,5 +222,27 @@ export class TrackController {
         compensationFailures,
       });
     }
+  }
+
+  private detachSourceAttachment(attachment: TrackSourceAttachment): void {
+    if (attachment.kind === 'region') {
+      this.audioSourceRegistry.detach(attachment);
+      return;
+    }
+
+    this.audioSourceRegistry.detachLoopSlot(attachment);
+  }
+
+  private restoreSourceAttachment(attachment: TrackSourceAttachment): void {
+    if (attachment.kind === 'region') {
+      this.audioSourceRegistry.attach(attachment);
+      return;
+    }
+
+    this.audioSourceRegistry.attachLoopSlot(attachment);
+  }
+
+  private getAttachmentId(attachment: TrackSourceAttachment): string {
+    return attachment.kind === 'region' ? attachment.regionId : attachment.loopSlotId;
   }
 }

@@ -478,6 +478,14 @@ export function createCommandHistoryEntry({
     case AudioCommandType.PLAY:
     case AudioCommandType.PAUSE:
     case AudioCommandType.STOP:
+    case AudioCommandType.SET_AUDIO_INPUT_DEVICE:
+    case AudioCommandType.SET_INPUT_MONITORING:
+    case AudioCommandType.ARM_LOOP_SLOT:
+    case AudioCommandType.CANCEL_LOOP_SLOT:
+    case AudioCommandType.TRIGGER_LOOP_SLOT:
+    case AudioCommandType.STOP_LOOP_SLOT:
+    case AudioCommandType.CLEAR_LOOP_SLOT:
+    case AudioCommandType.STOP_ALL_LOOPS:
     case AudioCommandType.SET_CURRENT_TIME:
     case AudioCommandType.SPLIT_REGION:
     case AudioCommandType.EXPORT_AUDIO:
