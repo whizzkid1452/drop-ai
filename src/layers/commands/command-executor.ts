@@ -8,6 +8,7 @@ import {
 } from '../shared/types/audioCommand.schema';
 import type { ICommandHistory } from './command-history';
 import { createCommandHistoryEntry } from './create-command-history-entry';
+import { assertLiveOperationAllowed } from './live-operation-guard';
 
 export type CommandExecutionResult = Blob | void;
 export type CommandBatchExecutionResult = readonly CommandExecutionResult[];
@@ -117,6 +118,8 @@ export class CommandExecutor {
   }
 
   private async executeWithoutHistory(validatedCommand: AudioCommand): Promise<CommandExecutionResult> {
+    assertLiveOperationAllowed({ command: validatedCommand, session: this.sessionStore.getState() });
+
     if (validatedCommand.type === AudioCommandType.UNDO) {
       await this.commandHistory.undo();
       return;
