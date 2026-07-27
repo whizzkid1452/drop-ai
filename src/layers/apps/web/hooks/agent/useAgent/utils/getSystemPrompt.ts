@@ -4,6 +4,7 @@ import {
   type AudioCommandType as AudioCommandName,
 } from '@/types/audioCommand.schema';
 import type { PluginCatalogEntry, PluginInstanceState, PluginParameterDefinition } from '@/types/plugin-state';
+import type { LoopSlotState } from '@/layers/session/session';
 
 export type AgentPromptPlugin = PluginCatalogEntry;
 
@@ -23,6 +24,7 @@ export interface AgentPromptTrack {
   name: string;
   pluginInstances: readonly PluginInstanceState[];
   regions: readonly AgentPromptRegion[];
+  loopSlots?: ReadonlyArray<Pick<LoopSlotState, 'id' | 'lengthBars' | 'quantizationBars' | 'sourceId' | 'state'>>;
 }
 
 interface AgentPromptExample {
@@ -190,8 +192,10 @@ function createProjectContext(tracks: readonly AgentPromptTrack[]): AgentProject
   const lines: string[] = [];
   const visibleTracks: AgentPromptTrack[] = [];
   let characterCount = 0;
+  let visibleLoopSlotCount = 0;
   let visiblePluginInstanceCount = 0;
   let visibleRegionCount = 0;
+  const totalLoopSlotCount = tracks.reduce((count, track) => count + (track.loopSlots?.length ?? 0), 0);
   const totalPluginInstanceCount = tracks.reduce((count, track) => count + track.pluginInstances.length, 0);
   const totalRegionCount = tracks.reduce((count, track) => count + track.regions.length, 0);
 
@@ -221,7 +225,26 @@ function createProjectContext(tracks: readonly AgentPromptTrack[]): AgentProject
     }
 
     const visibleRegions: AgentPromptRegion[] = [];
+    const visibleLoopSlots: Array<
+      Pick<LoopSlotState, 'id' | 'lengthBars' | 'quantizationBars' | 'sourceId' | 'state'>
+    > = [];
     if (visiblePluginInstances.length === track.pluginInstances.length) {
+      for (const [index, loopSlot] of (track.loopSlots ?? []).entries()) {
+        const loopSlotLine =
+          `  Loop Slot ${index + 1}: id=${loopSlot.id}, state=${loopSlot.state}, ` +
+          `lengthBars=${loopSlot.lengthBars}, quantizationBars=${loopSlot.quantizationBars}, ` +
+          `source=${loopSlot.sourceId === null ? 'empty' : 'available'}`;
+        if (!tryAddLine(loopSlotLine)) {
+          break;
+        }
+        visibleLoopSlots.push(loopSlot);
+        visibleLoopSlotCount += 1;
+      }
+    }
+    if (
+      visiblePluginInstances.length === track.pluginInstances.length &&
+      visibleLoopSlots.length === (track.loopSlots?.length ?? 0)
+    ) {
       for (const [index, region] of track.regions.entries()) {
         const regionLine =
           `  Region ${index + 1}: id=${region.id}, startTime=${region.startTime}, endTime=${region.endTime}, ` +
@@ -236,21 +259,32 @@ function createProjectContext(tracks: readonly AgentPromptTrack[]): AgentProject
         visibleRegionCount += 1;
       }
     }
-    visibleTracks.push({ ...track, pluginInstances: visiblePluginInstances, regions: visibleRegions });
+    visibleTracks.push({
+      ...track,
+      loopSlots: visibleLoopSlots,
+      pluginInstances: visiblePluginInstances,
+      regions: visibleRegions,
+    });
 
-    if (visiblePluginInstances.length < track.pluginInstances.length || visibleRegions.length < track.regions.length) {
+    if (
+      visiblePluginInstances.length < track.pluginInstances.length ||
+      visibleLoopSlots.length < (track.loopSlots?.length ?? 0) ||
+      visibleRegions.length < track.regions.length
+    ) {
       break;
     }
   }
 
   if (
     visibleTracks.length < tracks.length ||
+    visibleLoopSlotCount < totalLoopSlotCount ||
     visiblePluginInstanceCount < totalPluginInstanceCount ||
     visibleRegionCount < totalRegionCount
   ) {
     lines.push(
       `(Project context truncated: shown ${visibleTracks.length}/${tracks.length} Tracks, ` +
         `${visiblePluginInstanceCount}/${totalPluginInstanceCount} Plugin instances, ` +
+        `${visibleLoopSlotCount}/${totalLoopSlotCount} Loop Slots, ` +
         `${visibleRegionCount}/${totalRegionCount} Regions)`
     );
   }
@@ -465,8 +499,66 @@ function createPluginExamples(
   return examples;
 }
 
+function createLoopExamples(tracks: readonly AgentPromptTrack[]): AgentPromptExample[] {
+  const firstTrack = tracks.find(track => (track.loopSlots?.length ?? 0) > 0);
+  const firstLoopSlot = firstTrack?.loopSlots?.[0];
+  if (!firstTrack || !firstLoopSlot) {
+    return [];
+  }
+
+  const examples: AgentPromptExample[] = [
+    {
+      request: '첫 번째 루프 슬롯 입력 모니터링을 켜줘',
+      commands: [{ enabled: true, trackId: firstTrack.id, type: AudioCommandType.SET_INPUT_MONITORING }],
+    },
+  ];
+  if (firstLoopSlot.state === 'empty') {
+    examples.push({
+      request: '첫 번째 루프 슬롯을 2마디 길이로 녹음해줘',
+      commands: [
+        {
+          lengthBars: 2,
+          quantizationBars: firstLoopSlot.quantizationBars,
+          slotId: firstLoopSlot.id,
+          trackId: firstTrack.id,
+          type: AudioCommandType.ARM_LOOP_SLOT,
+        },
+      ],
+    });
+  } else if (firstLoopSlot.state === 'stopped') {
+    examples.push({
+      request: '첫 번째 루프 슬롯을 재생해줘',
+      commands: [
+        {
+          slotId: firstLoopSlot.id,
+          trackId: firstTrack.id,
+          type: AudioCommandType.TRIGGER_LOOP_SLOT,
+        },
+      ],
+    });
+  } else if (firstLoopSlot.state === 'playing') {
+    examples.push({
+      request: '첫 번째 루프 슬롯을 정지해줘',
+      commands: [
+        {
+          slotId: firstLoopSlot.id,
+          trackId: firstTrack.id,
+          type: AudioCommandType.STOP_LOOP_SLOT,
+        },
+      ],
+    });
+  }
+
+  return examples;
+}
+
 function renderExamples(tracks: readonly AgentPromptTrack[], plugins: readonly AgentPromptPlugin[]): string {
-  return [...AGENT_PROMPT_EXAMPLES, ...createTargetExamples(tracks), ...createPluginExamples(tracks, plugins)]
+  return [
+    ...AGENT_PROMPT_EXAMPLES,
+    ...createTargetExamples(tracks),
+    ...createPluginExamples(tracks, plugins),
+    ...createLoopExamples(tracks),
+  ]
     .map(example => `"${example.request}" → ${JSON.stringify(example.commands)}`)
     .join('\n');
 }
@@ -540,7 +632,9 @@ ${renderCommandReference()}
 12. LOAD_PROJECT는 사용자가 Project UUID를 명시했을 때만 사용한다. Project UUID를 임의로 만들지 않고, 다른 명령과 같은 배열에 넣지 않는다.
 13. UNDO와 REDO는 사용자가 명시적으로 요청했을 때만 사용한다. UNDO와 REDO는 다른 명령과 같은 배열에 넣지 않는다.
 ${pluginSafetyRules.text}
-${pluginSafetyRules.nextRuleNumber}. 요청을 안전하게 실행할 정보가 부족하면 []를 반환한다. 지원하지 않는 요청도 []를 반환한다.
+${pluginSafetyRules.nextRuleNumber}. Loop Slot 명령은 위 목록에 표시된 trackId와 slotId만 사용한다. 빈 슬롯만 ARM_LOOP_SLOT으로 녹음하고, stopped 슬롯만 TRIGGER_LOOP_SLOT으로 재생한다.
+${pluginSafetyRules.nextRuleNumber + 1}. SET_AUDIO_INPUT_DEVICE는 사용자가 브라우저 장치 ID 또는 default를 명시했을 때만 사용한다. default는 deviceId=null로 쓴다.
+${pluginSafetyRules.nextRuleNumber + 2}. 요청을 안전하게 실행할 정보가 부족하면 []를 반환한다. 지원하지 않는 요청도 []를 반환한다.
 
 # 예시
 ${renderExamples(projectContext.visibleTracks, pluginContext.visiblePlugins)}

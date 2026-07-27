@@ -13,6 +13,7 @@ const SOURCE_ID = '33333333-3333-4333-8333-333333333333';
 const PROJECT_ID = '44444444-4444-4444-8444-444444444444';
 const PLUGIN_INSTANCE_ID = '55555555-5555-4555-8555-555555555555';
 const PLUGIN_MANIFEST_ID = 'builtin.gain';
+const LOOP_SLOT_ID = '66666666-6666-4666-8666-666666666666';
 
 type CliCommandExecutor = Pick<CommandExecutor, 'execute' | 'executeMany'>;
 
@@ -50,6 +51,61 @@ describe('내부 CLI 명령 변환', () => {
     await commands.stop.fn();
 
     expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.STOP });
+  });
+
+  it('loop arm을 길이와 정량화가 있는 ARM_LOOP_SLOT 명령으로 실행한다', async () => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    await commands.loop.fn('arm', TRACK_ID, LOOP_SLOT_ID, '4', '2');
+
+    expect(execute).toHaveBeenCalledWith({
+      lengthBars: 4,
+      quantizationBars: 2,
+      slotId: LOOP_SLOT_ID,
+      trackId: TRACK_ID,
+      type: AudioCommandType.ARM_LOOP_SLOT,
+    });
+  });
+
+  it.each([
+    ['cancel', AudioCommandType.CANCEL_LOOP_SLOT],
+    ['trigger', AudioCommandType.TRIGGER_LOOP_SLOT],
+    ['stop', AudioCommandType.STOP_LOOP_SLOT],
+    ['clear', AudioCommandType.CLEAR_LOOP_SLOT],
+  ])('loop %s를 슬롯 명령으로 실행한다', async (subcommand, type) => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    await commands.loop.fn(subcommand, TRACK_ID, LOOP_SLOT_ID);
+
+    expect(execute).toHaveBeenCalledWith({ slotId: LOOP_SLOT_ID, trackId: TRACK_ID, type });
+  });
+
+  it('loop stop-all을 STOP_ALL_LOOPS 명령으로 실행한다', async () => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    await commands.loop.fn('stop-all');
+
+    expect(execute).toHaveBeenCalledWith({ type: AudioCommandType.STOP_ALL_LOOPS });
+  });
+
+  it('input monitor를 SET_INPUT_MONITORING 명령으로 실행한다', async () => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    await commands.input.fn('monitor', TRACK_ID, 'true');
+
+    expect(execute).toHaveBeenCalledWith({
+      enabled: true,
+      trackId: TRACK_ID,
+      type: AudioCommandType.SET_INPUT_MONITORING,
+    });
+  });
+
+  it('input device default를 기본 입력 장치 선택 명령으로 실행한다', async () => {
+    const commands = createCliCommands(commandExecutor, defaultState);
+
+    await commands.input.fn('device', 'default');
+
+    expect(execute).toHaveBeenCalledWith({ deviceId: null, type: AudioCommandType.SET_AUDIO_INPUT_DEVICE });
   });
 
   it('undo를 UNDO 명령으로 실행한다', async () => {
@@ -506,6 +562,8 @@ describe('내부 CLI 명령 변환', () => {
     expect(result).toContain('plugin move <trackId> <instanceId> <targetIndex>');
     expect(result).toContain('plugin enable <trackId> <instanceId> <true|false>');
     expect(result).toContain('plugin set <trackId> <instanceId> <parameterId> <number|boolean|string> <value>');
+    expect(result).toContain('loop arm <trackId> <slotId> [lengthBars] [quantizationBars]');
+    expect(result).toContain('input monitor <trackId> <true|false>');
     expect(result).toContain('save');
     expect(result).not.toContain('--help');
   });

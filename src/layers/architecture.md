@@ -109,6 +109,10 @@ CommandExecutor와 PluginController를 거쳐 이 API를 호출한다. Web JSON 
 CommandExecutor 경로를 사용한다. Web Track UI는 Session catalog의 Parameter type을 number slider·boolean checkbox·enum
 select로 표시하고, 위·아래 버튼은 처리 순서를 한 칸씩 바꾼다. 설치·제거·처리 순서·활성화 상태·Parameter 변경은 UI에서 상태를 직접 바꾸지 않고 같은 AudioCommand와 CommandExecutor 경로를
 사용한다. 현재 UI는 manifest가 선언한 별도 배치 정보가 아니라 Parameter type 기반의 공통 배치를 사용한다.
+Live Loop 조작도 같은 경로를 사용한다. Web Track UI는 Session의 Loop Slot 상태에 따라 녹음 대기·취소·재생·정지·비우기
+명령을 선택하고, 길이와 정량화 단위는 1·2·4·8마디 중에서 받는다. 입력 모니터링과 기본 입력 선택도 AudioCommand로
+전달한다. 내부 CLI는 `loop arm|cancel|trigger|stop|clear|stop-all`과 `input device|monitor`를 지원한다. Agent Prompt는
+실제 Track·Loop Slot ID와 상태를 제공하고, 목록에 없는 ID 생성이나 상태와 맞지 않는 조작을 금지한다.
 
 영구 저장 형식은 Shared의 `ProjectDocumentSchema`, `ProjectDocumentV2Schema`, `ProjectDocumentV3Schema`로 검증한다. v1은 Track·Region과 오디오
 Source 메타데이터를 절대 초 단위로 저장하고, Region은 임시 URL이 아닌 안정적인 Source ID를 참조한다. `File`, `Blob`, Object URL,

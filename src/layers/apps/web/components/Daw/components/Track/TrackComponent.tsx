@@ -11,6 +11,7 @@ import { TrackNameControl } from './components/TrackNameControl';
 import { TrackPluginControls } from './components/TrackPluginControls';
 import { TrackRegionImportControl } from './components/TrackRegionImportControl';
 import { TrackVolumeController } from './components/TrackVolumeController';
+import { LoopSlotControls } from './components/LoopSlotControls';
 import { RegionComponent } from './RegionComponent';
 import * as styles from './Track.css.ts';
 import type { WaveformRenderData } from '@/layers/apps/web/components/Daw/components/TrackList/waveform-render-cache';
@@ -172,6 +173,9 @@ export const TrackComponent = memo(function TrackComponent({
           </div>
         ) : null}
         <TrackPluginControls trackId={track.id} pluginInstances={track.pluginInstances} />
+        {(track.loopSlots?.length ?? 0) > 0 ? (
+          <LoopSlotControls loopSlots={track.loopSlots ?? []} trackId={track.id} />
+        ) : null}
       </div>
       <div className={styles.trackTimeline} aria-label={`${track.name} timeline`}>
         {track.regions.map(region => (

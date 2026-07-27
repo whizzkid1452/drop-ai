@@ -13,6 +13,7 @@ const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
 const SOURCE_ID = '33333333-3333-4333-8333-333333333333';
 const PLUGIN_INSTANCE_ID = '44444444-4444-4444-8444-444444444444';
+const LOOP_SLOT_ID = '55555555-5555-4555-8555-555555555555';
 const plugins: AgentPromptPlugin[] = [
   {
     id: 'builtin.channel-tools',
@@ -39,6 +40,15 @@ const tracks: AgentPromptTrack[] = [
     id: TRACK_ID,
     index: 0,
     name: '보컬',
+    loopSlots: [
+      {
+        id: LOOP_SLOT_ID,
+        lengthBars: 1,
+        quantizationBars: 1,
+        sourceId: null,
+        state: 'empty',
+      },
+    ],
     pluginInstances: [
       {
         id: PLUGIN_INSTANCE_ID,
@@ -113,6 +123,24 @@ describe('Agent 시스템 Prompt', () => {
       `Region 1: id=${REGION_ID}, startTime=1, endTime=4.5, sourceStartTime=2, duration=3.5, ` +
         `sourceId=${SOURCE_ID}, source=available`
     );
+  });
+
+  it('루프 슬롯의 실제 식별자와 상태를 전달하고 해당 슬롯 녹음 예시를 만든다', () => {
+    const prompt = getSystemPrompt({ tracks });
+
+    expect(prompt).toContain(`Loop Slot 1: id=${LOOP_SLOT_ID}, state=empty`);
+    expect(prompt).toContain(
+      JSON.stringify([
+        {
+          lengthBars: 2,
+          quantizationBars: 1,
+          slotId: LOOP_SLOT_ID,
+          trackId: TRACK_ID,
+          type: AudioCommandType.ARM_LOOP_SLOT,
+        },
+      ])
+    );
+    expect(prompt).toContain('위 목록에 표시된 trackId와 slotId만 사용한다');
   });
 
   it('Region 소스가 없으면 사용할 수 없다고 표시한다', () => {

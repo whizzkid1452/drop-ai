@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { CommandExecutor } from '../../commands/command-executor';
 import type { PluginParameterValue } from '../../shared/types/plugin-state';
+import type { LoopLengthBars } from '../../shared/loop-time';
 import { AudioCommandSchema, AudioCommandType } from '../../shared/types/audioCommand.schema';
 import { useCommandExecutor, useSession } from '../web/context/layer-hooks';
 
@@ -20,6 +21,8 @@ const PLUGIN_REMOVE_USAGE = 'plugin remove <trackId> <instanceId>';
 const PLUGIN_MOVE_USAGE = 'plugin move <trackId> <instanceId> <targetIndex>';
 const PLUGIN_ENABLE_USAGE = 'plugin enable <trackId> <instanceId> <true|false>';
 const PLUGIN_SET_USAGE = 'plugin set <trackId> <instanceId> <parameterId> <number|boolean|string> <value>';
+const LOOP_ARM_USAGE = 'loop arm <trackId> <slotId> [lengthBars] [quantizationBars]';
+const INPUT_MONITOR_USAGE = 'input monitor <trackId> <true|false>';
 
 interface CliState {
   isPlaying: boolean;
@@ -55,6 +58,73 @@ function parseBoolean(rawValue: string): boolean | null {
     return true;
   }
   return rawValue === 'false' ? false : null;
+}
+
+function parseLoopLengthBars(rawValue: string | undefined, defaultValue: LoopLengthBars): LoopLengthBars | null {
+  if (rawValue === undefined) {
+    return defaultValue;
+  }
+  const parsedValue = Number(rawValue);
+  return parsedValue === 1 || parsedValue === 2 || parsedValue === 4 || parsedValue === 8 ? parsedValue : null;
+}
+
+async function executeLoopCommand(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
+  const [subcommand, trackId, slotId, lengthBarsValue, quantizationBarsValue] = args;
+  if (subcommand === 'stop-all') {
+    await commandExecutor.execute({ type: AudioCommandType.STOP_ALL_LOOPS });
+    return 'All loops scheduled to stop.';
+  }
+  if (!trackId || !slotId) {
+    return `Error: Usage: ${LOOP_ARM_USAGE}`;
+  }
+  if (subcommand === 'arm') {
+    const lengthBars = parseLoopLengthBars(lengthBarsValue, 1);
+    const quantizationBars = parseLoopLengthBars(quantizationBarsValue, 1);
+    if (lengthBars === null || quantizationBars === null) {
+      return 'Error: Loop length and quantization must be 1, 2, 4, or 8 bars.';
+    }
+    await commandExecutor.execute({
+      lengthBars,
+      quantizationBars,
+      slotId,
+      trackId,
+      type: AudioCommandType.ARM_LOOP_SLOT,
+    });
+    return `Loop slot ${slotId} armed.`;
+  }
+
+  const commandTypes = {
+    cancel: AudioCommandType.CANCEL_LOOP_SLOT,
+    clear: AudioCommandType.CLEAR_LOOP_SLOT,
+    stop: AudioCommandType.STOP_LOOP_SLOT,
+    trigger: AudioCommandType.TRIGGER_LOOP_SLOT,
+  } as const;
+  const type = commandTypes[subcommand as keyof typeof commandTypes];
+  if (!type) {
+    return `Error: Usage: ${LOOP_ARM_USAGE} | loop cancel|trigger|stop|clear <trackId> <slotId> | loop stop-all`;
+  }
+  await commandExecutor.execute({ slotId, trackId, type });
+  return `Loop slot ${slotId} ${subcommand} requested.`;
+}
+
+async function executeInputCommand(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
+  const [subcommand, target, rawEnabled] = args;
+  if (subcommand === 'device' && target) {
+    await commandExecutor.execute({
+      deviceId: target === 'default' ? null : target,
+      type: AudioCommandType.SET_AUDIO_INPUT_DEVICE,
+    });
+    return `Audio input device set to ${target}.`;
+  }
+  if (subcommand === 'monitor' && target && rawEnabled) {
+    const enabled = parseBoolean(rawEnabled);
+    if (enabled === null) {
+      return `Error: Usage: ${INPUT_MONITOR_USAGE}`;
+    }
+    await commandExecutor.execute({ enabled, trackId: target, type: AudioCommandType.SET_INPUT_MONITORING });
+    return `Input monitoring for ${target} set to ${enabled}.`;
+  }
+  return `Error: Usage: input device <deviceId|default> | ${INPUT_MONITOR_USAGE}`;
 }
 
 async function executeTrackCommand(commandExecutor: CliCommandExecutor, args: string[]): Promise<string> {
@@ -420,6 +490,16 @@ export const createCliCommands = (commandExecutor: CliCommandExecutor, state: Cl
       description: 'Track management',
       usage: 'track add <trackId> | track remove <trackId> | track rename <trackId> <name>',
       fn: (...args: string[]) => executeTrackCommand(commandExecutor, args),
+    },
+    loop: {
+      description: 'Live loop slot control',
+      usage: `${LOOP_ARM_USAGE} | loop cancel|trigger|stop|clear <trackId> <slotId> | loop stop-all`,
+      fn: (...args: string[]) => executeLoopCommand(commandExecutor, args),
+    },
+    input: {
+      description: 'Live audio input control',
+      usage: `input device <deviceId|default> | ${INPUT_MONITOR_USAGE}`,
+      fn: (...args: string[]) => executeInputCommand(commandExecutor, args),
     },
     plugin: {
       description: 'Plugin management',

@@ -57,6 +57,13 @@ export function createAgentPromptTracks(
     index,
     name: track.name,
     pluginInstances: track.pluginInstances.map(clonePluginInstance),
+    loopSlots: (track.loopSlots ?? []).map(loopSlot => ({
+      id: loopSlot.id,
+      lengthBars: loopSlot.lengthBars,
+      quantizationBars: loopSlot.quantizationBars,
+      sourceId: loopSlot.sourceId,
+      state: loopSlot.state,
+    })),
     regions: track.regions.map(region => ({
       id: region.id,
       startTime: region.startTime,
