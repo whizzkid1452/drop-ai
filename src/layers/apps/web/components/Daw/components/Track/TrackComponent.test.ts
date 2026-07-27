@@ -45,6 +45,10 @@ vi.mock('./components/TrackVolumeController', () => ({
   TrackVolumeController: () => null,
 }));
 
+vi.mock('./components/LoopSlotControls', () => ({
+  LoopSlotControls: () => null,
+}));
+
 vi.mock('./components/TrackNameControl', async () => {
   const { createElement: createMockElement } = await import('react');
 
