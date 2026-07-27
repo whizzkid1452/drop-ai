@@ -185,6 +185,32 @@ describe('QuantizedLoopRuntime', () => {
     expect(playback.players[0].stopAt).toHaveBeenCalledWith(31.5);
   });
 
+  it('오버더빙을 별도 Player로 추가하고 기존 Player를 유지한다', async () => {
+    const { pcmCapture, playback, runtime } = createRuntime();
+    const events = vi.fn();
+    runtime.subscribe(events);
+    await runtime.arm({ ...address, destination, lengthBars: 1, quantizationBars: 1, tempoBpm: 120 });
+    pcmCapture.completions[0].resolve({ channels: [new Float32Array([0.1])], sampleRate: 48_000 });
+    await vi.waitFor(() => expect(playback.players).toHaveLength(1));
+    const basePlayer = playback.players[0];
+
+    await runtime.overdub({ ...address, destination, lengthBars: 1, quantizationBars: 1, tempoBpm: 120 });
+    pcmCapture.completions[1].resolve({ channels: [new Float32Array([0.2])], sampleRate: 48_000 });
+    await vi.waitFor(() => expect(playback.players).toHaveLength(2));
+
+    expect(basePlayer.dispose).not.toHaveBeenCalled();
+    expect(playback.players[1].startAt).toHaveBeenCalledOnce();
+    expect(events).toHaveBeenCalledWith(
+      expect.objectContaining({ captureMode: 'overdub', type: 'RECORDING_COMPLETED' })
+    );
+
+    playback.transportTimeSeconds = 2.5;
+    playback.contextTimeSeconds = 30;
+    runtime.stop({ ...address, quantizationBars: 1, tempoBpm: 120 });
+    expect(basePlayer.stopAt).toHaveBeenCalledWith(31.5);
+    expect(playback.players[1].stopAt).toHaveBeenCalledWith(31.5);
+  });
+
   it('프로젝트 루프를 준비한 뒤 activate 시점에만 기존 루프와 교체한다', async () => {
     const { playback, runtime } = createRuntime();
     await runtime.load({ ...address, destination, url: 'data:audio/wav;base64,AA==' });

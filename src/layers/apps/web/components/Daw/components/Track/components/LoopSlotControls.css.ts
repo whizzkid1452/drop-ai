@@ -50,8 +50,9 @@ export const slotHeader = style({
 });
 
 export const state = style({ overflow: 'hidden', color: '#ff78e3', textOverflow: 'ellipsis' });
-export const slotActions = style({ display: 'grid', gridTemplateColumns: '1fr auto', gap: '3px', marginTop: '3px' });
-export const primaryButton = style({ ...compactButton, background: '#43494c' });
+export const slotActions = style({ display: 'flex', gap: '3px', marginTop: '3px' });
+export const primaryButton = style({ ...compactButton, flex: 1, background: '#43494c' });
+export const overdubButton = style({ ...compactButton, flex: 1, background: '#355f4e', color: '#e9fff6' });
 export const clearButton = style({ ...compactButton, minWidth: '22px', color: '#e2a59c' });
 
 export const slotSettings = style({

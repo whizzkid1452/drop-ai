@@ -10,6 +10,7 @@ import type {
   IPreparedLoopRuntimeReplacement,
   IRetiredLoopRuntime,
   LoadLoopRuntimeRequest,
+  LoopCaptureMode,
   LoopRuntimeEvent,
   LoopRuntimeListener,
   LoopSlotAddress,
@@ -26,6 +27,7 @@ interface QuantizedLoopRuntimeOptions {
 }
 
 interface PendingLoopCapture {
+  readonly captureMode: LoopCaptureMode;
   readonly destination: AudioNode;
   readonly durationSeconds: number;
   readonly recordedTempoBpm: number;
@@ -34,7 +36,7 @@ interface PendingLoopCapture {
 }
 
 interface LoopPlaybackEntry {
-  readonly player: ILoopPlayer;
+  readonly players: ILoopPlayer[];
 }
 
 type PreparedLoopReplacementState = 'activated' | 'discarded' | 'prepared';
@@ -69,6 +71,15 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
   }
 
   async arm(request: ArmLoopRuntimeRequest): Promise<void> {
+    await this.#scheduleCapture(request, 'initial');
+  }
+
+  async overdub(request: ArmLoopRuntimeRequest): Promise<void> {
+    this.#getPlaybackEntry(request);
+    await this.#scheduleCapture(request, 'overdub');
+  }
+
+  async #scheduleCapture(request: ArmLoopRuntimeRequest, captureMode: LoopCaptureMode): Promise<void> {
     const key = createLoopKey(request);
     const address = { slotId: request.slotId, trackId: request.trackId };
     if (this.#pendingCaptures.has(key)) {
@@ -98,6 +109,7 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
     });
 
     const pendingCapture = {
+      captureMode,
       destination: request.destination,
       durationSeconds,
       quantizationBars: request.quantizationBars,
@@ -128,16 +140,16 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
     }
     this.#pendingCaptures.delete(key);
     this.#revision += 1;
-    this.#revision += 1;
     pendingCapture.session.cancel();
-    this.#emit({ ...address, state: this.#playbackEntries.has(key) ? 'stopped' : 'empty', type: 'STATE_CHANGED' });
+    const state = pendingCapture.captureMode === 'overdub' ? 'playing' : 'empty';
+    this.#emit({ ...address, state, type: 'STATE_CHANGED' });
   }
 
   clear(address: LoopSlotAddress): void {
     this.cancel(address);
     const key = createLoopKey(address);
     const entry = this.#playbackEntries.get(key);
-    entry?.player.dispose();
+    entry?.players.forEach(player => player.dispose());
     if (this.#playbackEntries.delete(key)) {
       this.#revision += 1;
     }
@@ -156,7 +168,7 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
 
   async load(request: LoadLoopRuntimeRequest): Promise<void> {
     const audioBuffer = await this.#loadAudioBuffer(request.url);
-    this.#replacePlayer(request, audioBuffer);
+    this.#appendPlayer(request, audioBuffer);
     this.#emit({ ...request, state: 'stopped', type: 'STATE_CHANGED' });
   }
 
@@ -170,13 +182,14 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
     try {
       for (const request of requests) {
         const key = createLoopKey(request);
-        if (preparedEntries.has(key)) {
-          throw new Error(`중복된 루프 슬롯입니다: ${request.slotId}`);
-        }
         const audioBuffer = await this.#loadAudioBuffer(request.url);
-        preparedEntries.set(key, {
-          player: this.#playback.createPlayer({ audioBuffer, destination: request.destination }),
-        });
+        const player = this.#playback.createPlayer({ audioBuffer, destination: request.destination });
+        const entry = preparedEntries.get(key);
+        if (entry) {
+          entry.players.push(player);
+        } else {
+          preparedEntries.set(key, { players: [player] });
+        }
       }
     } catch (cause) {
       this.#disposePlaybackEntries(preparedEntries);
@@ -215,7 +228,8 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
   stop(request: TriggerLoopRequest): void {
     const entry = this.#getPlaybackEntry(request);
     const boundaryTimeSeconds = this.#resolveBoundaryTime(request);
-    entry.player.stopAt(this.#toContextTime(boundaryTimeSeconds));
+    const contextTimeSeconds = this.#toContextTime(boundaryTimeSeconds);
+    entry.players.forEach(player => player.stopAt(contextTimeSeconds));
     this.#emit({ ...request, scheduledTimeSeconds: boundaryTimeSeconds, state: 'stopped', type: 'STATE_CHANGED' });
   }
 
@@ -235,7 +249,8 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
     await this.#playback.prepare();
     const entry = this.#getPlaybackEntry(request);
     const boundaryTimeSeconds = this.#resolveBoundaryTime(request);
-    entry.player.startAt(this.#toContextTime(boundaryTimeSeconds));
+    const contextTimeSeconds = this.#toContextTime(boundaryTimeSeconds);
+    entry.players.forEach(player => player.startAt(contextTimeSeconds));
     this.#emit({ ...request, scheduledTimeSeconds: boundaryTimeSeconds, state: 'playing', type: 'STATE_CHANGED' });
   }
 
@@ -252,7 +267,10 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
 
     const audioBuffer = this.#playback.createAudioBuffer(capturedPcm);
     const blob = this.#encodeAudioBuffer(audioBuffer);
-    const player = this.#replacePlayer({ ...address, destination: pendingCapture.destination }, audioBuffer);
+    const player =
+      pendingCapture.captureMode === 'initial'
+        ? this.#replacePlayers({ ...address, destination: pendingCapture.destination }, audioBuffer)
+        : this.#appendPlayer({ ...address, destination: pendingCapture.destination }, audioBuffer);
     const nextBoundaryTimeSeconds = this.#resolveBoundaryTime({
       ...address,
       quantizationBars: pendingCapture.quantizationBars,
@@ -262,6 +280,7 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
     this.#emit({
       ...address,
       blob,
+      captureMode: pendingCapture.captureMode,
       durationSeconds: pendingCapture.durationSeconds,
       recordedTempoBpm: pendingCapture.recordedTempoBpm,
       type: 'RECORDING_COMPLETED',
@@ -292,14 +311,28 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
     return entry;
   }
 
-  #replacePlayer(
+  #replacePlayers(
     request: LoopSlotAddress & { readonly destination: AudioNode },
     audioBuffer: AudioBuffer
   ): ILoopPlayer {
     const key = createLoopKey(request);
-    this.#playbackEntries.get(key)?.player.dispose();
+    this.#playbackEntries.get(key)?.players.forEach(player => player.dispose());
     const player = this.#playback.createPlayer({ audioBuffer, destination: request.destination });
-    this.#playbackEntries.set(key, { player });
+    this.#playbackEntries.set(key, { players: [player] });
+    this.#revision += 1;
+    return player;
+  }
+
+  #appendPlayer(request: LoopSlotAddress & { readonly destination: AudioNode }, audioBuffer: AudioBuffer): ILoopPlayer {
+    // 오버더빙은 원본 Player를 교체하지 않아 각 녹음 레이어를 별도 Source로 보존한다.
+    const key = createLoopKey(request);
+    const player = this.#playback.createPlayer({ audioBuffer, destination: request.destination });
+    const entry = this.#playbackEntries.get(key);
+    if (entry) {
+      entry.players.push(player);
+    } else {
+      this.#playbackEntries.set(key, { players: [player] });
+    }
     this.#revision += 1;
     return player;
   }
@@ -362,11 +395,19 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
   #disposePlaybackEntries(entries: Map<string, LoopPlaybackEntry>): ResourceCleanupResult {
     let failedResourceCount = 0;
     entries.forEach((entry, key) => {
-      try {
-        entry.player.dispose();
+      const failedPlayers = entry.players.filter(player => {
+        try {
+          player.dispose();
+          return false;
+        } catch {
+          failedResourceCount += 1;
+          return true;
+        }
+      });
+      if (failedPlayers.length === 0) {
         entries.delete(key);
-      } catch {
-        failedResourceCount += 1;
+      } else {
+        entry.players.splice(0, entry.players.length, ...failedPlayers);
       }
     });
 

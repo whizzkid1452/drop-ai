@@ -18,6 +18,7 @@ export const DEFAULT_LOOP_SLOT_COUNT = 4;
 export interface LoopSlotState {
   readonly id: string;
   readonly sourceId: string | null;
+  readonly overdubSourceIds: readonly string[];
   readonly lengthBars: LoopLengthBars;
   readonly quantizationBars: LoopLengthBars;
   readonly recordedTempoBpm: number | null;
@@ -41,6 +42,7 @@ export function createDefaultLoopSlots({
     gain: 1,
     id: createId(),
     lengthBars: 1,
+    overdubSourceIds: [],
     quantizationBars: 1,
     recordedTempoBpm: null,
     scheduledTimeSeconds: null,
@@ -374,7 +376,7 @@ function cloneProjectTracks(tracks: ReadonlyMap<string, TrackState>): Map<string
         status: [...track.status],
         pluginInstances: track.pluginInstances.map(clonePluginInstance),
         regions: track.regions.map(region => ({ ...region, status: [...region.status] })),
-        loopSlots: track.loopSlots?.map(slot => ({ ...slot })),
+        loopSlots: track.loopSlots?.map(slot => ({ ...slot, overdubSourceIds: [...slot.overdubSourceIds] })),
       },
     ])
   );

@@ -481,6 +481,7 @@ export function createCommandHistoryEntry({
     case AudioCommandType.SET_AUDIO_INPUT_DEVICE:
     case AudioCommandType.SET_INPUT_MONITORING:
     case AudioCommandType.ARM_LOOP_SLOT:
+    case AudioCommandType.ARM_LOOP_OVERDUB:
     case AudioCommandType.CANCEL_LOOP_SLOT:
     case AudioCommandType.TRIGGER_LOOP_SLOT:
     case AudioCommandType.STOP_LOOP_SLOT:

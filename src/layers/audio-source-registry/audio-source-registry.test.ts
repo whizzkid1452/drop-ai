@@ -10,6 +10,7 @@ const SOURCE_ID = '11111111-1111-4111-8111-111111111111';
 const SECOND_SOURCE_ID = '22222222-2222-4222-8222-222222222222';
 const REGION_ID = '33333333-3333-4333-8333-333333333333';
 const THIRD_SOURCE_ID = '44444444-4444-4444-8444-444444444444';
+const LOOP_SLOT_ID = '55555555-5555-4555-8555-555555555555';
 
 class FakeObjectUrlAdapter implements IObjectUrlAdapter {
   private nextUrlIndex = 0;
@@ -65,6 +66,18 @@ describe('AudioSourceRegistry', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('같은 루프 슬롯에 여러 Source 레이어를 독립적으로 연결한다', () => {
+    registry.stage(createRegistration(SOURCE_ID));
+    registry.stage(createRegistration(SECOND_SOURCE_ID));
+
+    registry.attachLoopSlot({ loopSlotId: LOOP_SLOT_ID, sourceId: SOURCE_ID });
+    registry.attachLoopSlot({ loopSlotId: LOOP_SLOT_ID, sourceId: SECOND_SOURCE_ID });
+    registry.detachLoopSlot({ loopSlotId: LOOP_SLOT_ID, sourceId: SOURCE_ID });
+
+    expect(registry.resolve(SOURCE_ID)?.loopSlotIds).toEqual([]);
+    expect(registry.resolve(SECOND_SOURCE_ID)?.loopSlotIds).toEqual([LOOP_SLOT_ID]);
   });
 
   it('Source를 pending 상태로 등록하고 외부에 복사본만 반환한다', () => {

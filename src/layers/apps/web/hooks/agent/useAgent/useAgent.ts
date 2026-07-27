@@ -60,6 +60,7 @@ export function createAgentPromptTracks(
     loopSlots: (track.loopSlots ?? []).map(loopSlot => ({
       id: loopSlot.id,
       lengthBars: loopSlot.lengthBars,
+      overdubSourceIds: [...loopSlot.overdubSourceIds],
       quantizationBars: loopSlot.quantizationBars,
       sourceId: loopSlot.sourceId,
       state: loopSlot.state,

@@ -23,6 +23,11 @@ export class UnavailableLoopAudioRuntime implements ILoopAudioRuntime {
     throwRuntimeUnavailable();
   }
 
+  async overdub(_request: ArmLoopRuntimeRequest): Promise<void> {
+    void _request;
+    throwRuntimeUnavailable();
+  }
+
   cancel(_address: LoopSlotAddress): void {
     void _address;
   }

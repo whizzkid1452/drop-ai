@@ -165,6 +165,10 @@ export class CommandExecutor {
         await this.controller.loop.arm(validatedCommand);
         return;
 
+      case AudioCommandType.ARM_LOOP_OVERDUB:
+        await this.controller.loop.overdub(validatedCommand);
+        return;
+
       case AudioCommandType.CANCEL_LOOP_SLOT:
         this.controller.loop.cancel(validatedCommand);
         return;

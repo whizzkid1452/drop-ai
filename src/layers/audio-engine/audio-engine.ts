@@ -212,6 +212,10 @@ export class AudioEngine implements IAudioEngine {
     return this.loopRuntime.arm({ ...request, destination: this.getExistingInput(request.trackId).input });
   }
 
+  armLoopOverdub(request: ArmLoopRequest): Promise<void> {
+    return this.loopRuntime.overdub({ ...request, destination: this.getExistingInput(request.trackId).input });
+  }
+
   cancelLoop(address: LoopSlotAddress): void {
     this.loopRuntime.cancel(address);
   }

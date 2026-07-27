@@ -44,6 +44,7 @@ const tracks: AgentPromptTrack[] = [
       {
         id: LOOP_SLOT_ID,
         lengthBars: 1,
+        overdubSourceIds: [],
         quantizationBars: 1,
         sourceId: null,
         state: 'empty',
@@ -141,6 +142,39 @@ describe('Agent 시스템 Prompt', () => {
       ])
     );
     expect(prompt).toContain('위 목록에 표시된 trackId와 slotId만 사용한다');
+  });
+
+  it('재생 중인 루프의 레이어 수와 오버더빙 예시를 제공한다', () => {
+    const prompt = getSystemPrompt({
+      tracks: [
+        {
+          ...tracks[0],
+          loopSlots: [
+            {
+              ...tracks[0].loopSlots?.[0],
+              id: LOOP_SLOT_ID,
+              lengthBars: 1,
+              overdubSourceIds: ['66666666-6666-4666-8666-666666666666'],
+              quantizationBars: 1,
+              sourceId: SOURCE_ID,
+              state: 'playing',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(prompt).toContain('layers=2');
+    expect(prompt).toContain(
+      JSON.stringify([
+        {
+          slotId: LOOP_SLOT_ID,
+          trackId: TRACK_ID,
+          type: AudioCommandType.ARM_LOOP_OVERDUB,
+        },
+      ])
+    );
+    expect(prompt).toContain('playing 슬롯만 ARM_LOOP_OVERDUB');
   });
 
   it('Region 소스가 없으면 사용할 수 없다고 표시한다', () => {

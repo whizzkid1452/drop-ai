@@ -397,6 +397,10 @@ class LoopRuntimeStub implements ILoopAudioRuntime {
     void _request;
   }
 
+  async overdub(_request: ArmLoopRuntimeRequest): Promise<void> {
+    void _request;
+  }
+
   cancel(_address: LoopSlotAddress): void {
     void _address;
   }

@@ -1,4 +1,5 @@
 export const DEFAULT_BEATS_PER_BAR = 4;
+export const MAX_LOOP_OVERDUB_LAYERS = 64;
 export const SUPPORTED_LOOP_LENGTH_BARS = [1, 2, 4, 8] as const;
 
 export type LoopLengthBars = (typeof SUPPORTED_LOOP_LENGTH_BARS)[number];

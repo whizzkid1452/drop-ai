@@ -12,25 +12,31 @@ import {
   readProjectDocument,
   readProjectDocumentV2,
   readProjectDocumentV3,
+  readProjectDocumentV4,
 } from '../shared/types/project-document-reader';
 import {
   PROJECT_DOCUMENT_SCHEMA_VERSION,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V3,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V4,
   ProjectDocumentSchema,
   ProjectDocumentV2Schema,
   ProjectDocumentV3Schema,
+  ProjectDocumentV4Schema,
   type ProjectAudioSource,
   type ProjectDocument,
   type ProjectDocumentV2,
   type ProjectDocumentV3,
+  type ProjectDocumentV4,
   type ProjectDocumentSnapshot,
   type ProjectLoopSlot,
+  type ProjectLoopSlotV4,
   type ProjectPluginInstance,
   type ProjectRegion,
   type ProjectTrack,
   type ProjectTrackV2,
   type ProjectTrackV3,
+  type ProjectTrackV4,
 } from '../shared/types/project-document.schema';
 import { ProjectDocumentMappingError, ProjectDocumentMappingErrorCode } from './errors';
 
@@ -46,6 +52,7 @@ export interface CreateProjectDocumentV2FromSessionOptions extends CreateProject
 }
 
 export type CreateProjectDocumentV3FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
+export type CreateProjectDocumentV4FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 
 export interface ProjectRestoreSnapshot {
   readonly session: SessionProjectSnapshot;
@@ -62,6 +69,8 @@ export interface CreateProjectRestoreSnapshotFromDocumentV3Options {
   readonly pluginCatalog: readonly PluginCatalogEntry[];
 }
 
+export type CreateProjectRestoreSnapshotFromDocumentV4Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
+
 interface SessionTrackEntry {
   readonly mapKey: string;
   readonly track: TrackState;
@@ -72,6 +81,7 @@ interface SessionTrackV2Entry extends SessionTrackEntry {
 }
 
 type SessionTrackV3Entry = SessionTrackV2Entry;
+type SessionTrackV4Entry = SessionTrackV2Entry;
 
 interface ValidatePluginInstanceForMappingOptions {
   readonly instance: ProjectPluginInstance;
@@ -155,6 +165,32 @@ export function createProjectDocumentV3FromSession({
   return parseSessionDocumentCandidateV3(documentCandidate);
 }
 
+export function createProjectDocumentV4FromSession({
+  session,
+  audioSources,
+  pluginCatalog,
+}: CreateProjectDocumentV4FromSessionOptions): ProjectDocumentV4 {
+  const documentCandidate = {
+    documentType: 'drop-ai-project',
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V4,
+    project: { ...session.project },
+    timeline: {
+      timeUnit: 'seconds',
+      tempoBpm: session.tempo,
+    },
+    mixer: {
+      masterVolume: session.masterVolume,
+    },
+    exportRange: createExportRange(session),
+    audioSources: audioSources.map(source => ({ ...source })),
+    tracks: [...session.tracks.entries()].map(([mapKey, track]) =>
+      createProjectTrackV4({ mapKey, track, pluginCatalog })
+    ),
+  };
+
+  return parseSessionDocumentCandidateV4(documentCandidate);
+}
+
 export function createProjectRestoreSnapshotFromDocument(document: ProjectDocument): ProjectRestoreSnapshot {
   const validatedDocument = readDocumentForMapping(document);
   const tracks = new Map<string, TrackState>();
@@ -209,6 +245,30 @@ export function createProjectRestoreSnapshotFromDocumentV3({
 
   validatedDocument.tracks.forEach(track => {
     tracks.set(track.id, createSessionTrackV3({ track, pluginCatalog }));
+  });
+
+  return {
+    session: {
+      project: { ...validatedDocument.project },
+      tempo: validatedDocument.timeline.tempoBpm,
+      masterVolume: validatedDocument.mixer.masterVolume,
+      exportStartTime: validatedDocument.exportRange?.startTimeSeconds ?? null,
+      exportEndTime: validatedDocument.exportRange?.endTimeSeconds ?? null,
+      tracks,
+    },
+    audioSources: validatedDocument.audioSources.map(source => ({ ...source })),
+  };
+}
+
+export function createProjectRestoreSnapshotFromDocumentV4({
+  document,
+  pluginCatalog,
+}: CreateProjectRestoreSnapshotFromDocumentV4Options): ProjectRestoreSnapshot {
+  const validatedDocument = readDocumentV4ForMapping(document);
+  const tracks = new Map<string, TrackState>();
+
+  validatedDocument.tracks.forEach(track => {
+    tracks.set(track.id, createSessionTrackV4({ track, pluginCatalog }));
   });
 
   return {
@@ -288,11 +348,39 @@ function createProjectTrackV3({ mapKey, track, pluginCatalog }: SessionTrackV3En
   };
 }
 
+function createProjectTrackV4({ mapKey, track, pluginCatalog }: SessionTrackV4Entry): ProjectTrackV4 {
+  const projectTrackV2 = createProjectTrackV2({ mapKey, track, pluginCatalog });
+
+  return {
+    ...projectTrackV2,
+    loopSlots: (track.loopSlots ?? createDefaultLoopSlots()).map(createProjectLoopSlotV4),
+  };
+}
+
 function createProjectLoopSlot(loopSlot: LoopSlotState): ProjectLoopSlot {
+  if (loopSlot.overdubSourceIds.length > 0) {
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
+      message: '오버더빙 레이어는 ProjectDocument v3에 저장할 수 없습니다.',
+      details: { loopSlotId: loopSlot.id, reason: 'OVERDUB_REQUIRES_PROJECT_DOCUMENT_V4' },
+    });
+  }
   return {
     gain: loopSlot.gain,
     id: loopSlot.id,
     lengthBars: loopSlot.lengthBars,
+    quantizationBars: loopSlot.quantizationBars,
+    recordedTempoBpm: loopSlot.recordedTempoBpm,
+    sourceId: loopSlot.sourceId,
+  };
+}
+
+function createProjectLoopSlotV4(loopSlot: LoopSlotState): ProjectLoopSlotV4 {
+  return {
+    gain: loopSlot.gain,
+    id: loopSlot.id,
+    lengthBars: loopSlot.lengthBars,
+    overdubSourceIds: [...loopSlot.overdubSourceIds],
     quantizationBars: loopSlot.quantizationBars,
     recordedTempoBpm: loopSlot.recordedTempoBpm,
     sourceId: loopSlot.sourceId,
@@ -485,6 +573,36 @@ function parseSessionDocumentCandidateV3(documentCandidate: unknown): ProjectDoc
   }
 }
 
+function parseSessionDocumentCandidateV4(documentCandidate: unknown): ProjectDocumentV4 {
+  try {
+    const result = ProjectDocumentV4Schema.safeParse(documentCandidate);
+    if (result.success) {
+      return result.data;
+    }
+
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
+      message: 'Session 프로젝트 상태를 유효한 ProjectDocument v4로 변환할 수 없습니다.',
+      details: {
+        issues: result.error.issues,
+        reason: 'PROJECT_DOCUMENT_SCHEMA_VIOLATION',
+      },
+      cause: result.error,
+    });
+  } catch (cause) {
+    if (cause instanceof ProjectDocumentMappingError) {
+      throw cause;
+    }
+
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
+      message: 'Session 프로젝트 상태를 읽을 수 없습니다.',
+      details: { reason: 'PROJECT_DOCUMENT_SCHEMA_VIOLATION' },
+      cause,
+    });
+  }
+}
+
 function readDocumentForMapping(document: ProjectDocument): ProjectDocument {
   try {
     return readProjectDocument(document);
@@ -518,6 +636,19 @@ function readDocumentV3ForMapping(document: ProjectDocumentSnapshot): ProjectDoc
     throw new ProjectDocumentMappingError({
       code: ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT,
       message: '복원할 ProjectDocument v3가 유효하지 않습니다.',
+      details: { reason: 'PROJECT_DOCUMENT_READ_FAILED' },
+      cause,
+    });
+  }
+}
+
+function readDocumentV4ForMapping(document: ProjectDocumentSnapshot): ProjectDocumentV4 {
+  try {
+    return readProjectDocumentV4(document);
+  } catch (cause) {
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT,
+      message: '복원할 ProjectDocument v4가 유효하지 않습니다.',
       details: { reason: 'PROJECT_DOCUMENT_READ_FAILED' },
       cause,
     });
@@ -586,6 +717,37 @@ function createSessionLoopSlot(loopSlot: ProjectLoopSlot): LoopSlotState {
     gain: loopSlot.gain,
     id: loopSlot.id,
     lengthBars: loopSlot.lengthBars,
+    overdubSourceIds: [],
+    quantizationBars: loopSlot.quantizationBars,
+    recordedTempoBpm: loopSlot.recordedTempoBpm,
+    scheduledTimeSeconds: null,
+    sourceId: loopSlot.sourceId,
+    state: loopSlot.sourceId === null ? 'empty' : 'stopped',
+  };
+}
+
+function createSessionTrackV4({
+  track,
+  pluginCatalog,
+}: {
+  readonly track: ProjectTrackV4;
+  readonly pluginCatalog: readonly PluginCatalogEntry[];
+}): TrackState {
+  const sessionTrackV2 = createSessionTrackV2({ track, pluginCatalog });
+
+  return {
+    ...sessionTrackV2,
+    loopSlots: track.loopSlots.length === 0 ? createDefaultLoopSlots() : track.loopSlots.map(createSessionLoopSlotV4),
+  };
+}
+
+function createSessionLoopSlotV4(loopSlot: ProjectLoopSlotV4): LoopSlotState {
+  return {
+    errorMessage: null,
+    gain: loopSlot.gain,
+    id: loopSlot.id,
+    lengthBars: loopSlot.lengthBars,
+    overdubSourceIds: [...loopSlot.overdubSourceIds],
     quantizationBars: loopSlot.quantizationBars,
     recordedTempoBpm: loopSlot.recordedTempoBpm,
     scheduledTimeSeconds: null,

@@ -96,12 +96,13 @@ async function executeLoopCommand(commandExecutor: CliCommandExecutor, args: str
   const commandTypes = {
     cancel: AudioCommandType.CANCEL_LOOP_SLOT,
     clear: AudioCommandType.CLEAR_LOOP_SLOT,
+    overdub: AudioCommandType.ARM_LOOP_OVERDUB,
     stop: AudioCommandType.STOP_LOOP_SLOT,
     trigger: AudioCommandType.TRIGGER_LOOP_SLOT,
   } as const;
   const type = commandTypes[subcommand as keyof typeof commandTypes];
   if (!type) {
-    return `Error: Usage: ${LOOP_ARM_USAGE} | loop cancel|trigger|stop|clear <trackId> <slotId> | loop stop-all`;
+    return `Error: Usage: ${LOOP_ARM_USAGE} | loop cancel|overdub|trigger|stop|clear <trackId> <slotId> | loop stop-all`;
   }
   await commandExecutor.execute({ slotId, trackId, type });
   return `Loop slot ${slotId} ${subcommand} requested.`;
@@ -493,7 +494,7 @@ export const createCliCommands = (commandExecutor: CliCommandExecutor, state: Cl
     },
     loop: {
       description: 'Live loop slot control',
-      usage: `${LOOP_ARM_USAGE} | loop cancel|trigger|stop|clear <trackId> <slotId> | loop stop-all`,
+      usage: `${LOOP_ARM_USAGE} | loop cancel|overdub|trigger|stop|clear <trackId> <slotId> | loop stop-all`,
       fn: (...args: string[]) => executeLoopCommand(commandExecutor, args),
     },
     input: {

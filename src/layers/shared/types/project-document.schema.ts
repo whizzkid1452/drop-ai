@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import { calculateFiniteRegionSourceEndTime, isRegionSourceRangeWithinDuration } from '../audio-source-range';
+import { MAX_LOOP_OVERDUB_LAYERS } from '../loop-time';
 import { calculateFiniteRegionEndTime } from '../region-timeline';
 
 export const PROJECT_DOCUMENT_SCHEMA_VERSION = 1 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V2 = 2 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V3 = 3 as const;
+export const PROJECT_DOCUMENT_SCHEMA_VERSION_V4 = 4 as const;
 
 const MAX_NAME_LENGTH = 255;
 const MAX_MIME_TYPE_LENGTH = 255;
@@ -119,6 +121,28 @@ export const ProjectTrackV3Schema = z.strictObject({
   regions: z.array(ProjectRegionSchema),
 });
 
+export const ProjectLoopSlotV4Schema = ProjectLoopSlotSchema.safeExtend({
+  overdubSourceIds: z.array(z.uuid('Invalid Source ID format')).max(MAX_LOOP_OVERDUB_LAYERS),
+})
+  .refine(slot => slot.sourceId !== null || slot.overdubSourceIds.length === 0, {
+    message: 'Loop Slot overdub Sources require a base Source',
+    path: ['overdubSourceIds'],
+  })
+  .refine(
+    slot => {
+      const sourceIds = slot.sourceId === null ? slot.overdubSourceIds : [slot.sourceId, ...slot.overdubSourceIds];
+      return new Set(sourceIds).size === sourceIds.length;
+    },
+    {
+      message: 'Loop Slot Source IDs must be unique',
+      path: ['overdubSourceIds'],
+    }
+  );
+
+export const ProjectTrackV4Schema = ProjectTrackV3Schema.safeExtend({
+  loopSlots: z.array(ProjectLoopSlotV4Schema).max(MAX_LOOP_SLOTS),
+});
+
 const ProjectExportRangeSchema = z
   .strictObject({
     startTimeSeconds: z.number().nonnegative(),
@@ -189,6 +213,26 @@ const ProjectDocumentV3BaseSchema = z.strictObject({
   tracks: z.array(ProjectTrackV3Schema),
 });
 
+const ProjectDocumentV4BaseSchema = z.strictObject({
+  documentType: z.literal('drop-ai-project'),
+  schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V4),
+  project: z.strictObject({
+    id: z.uuid('Invalid Project ID format'),
+    name: nonBlankNameSchema,
+    revision: z.number().int().nonnegative(),
+  }),
+  timeline: z.strictObject({
+    timeUnit: z.literal('seconds'),
+    tempoBpm: z.number().positive(),
+  }),
+  mixer: z.strictObject({
+    masterVolume: normalizedAudioValueSchema,
+  }),
+  exportRange: ProjectExportRangeSchema.nullable(),
+  audioSources: z.array(ProjectAudioSourceSchema),
+  tracks: z.array(ProjectTrackV4Schema),
+});
+
 interface IdentifiedDocumentPath {
   id: string;
   path: Array<string | number>;
@@ -203,14 +247,24 @@ interface DuplicateIdValidationOptions {
 type RefinableProjectDocument =
   | z.infer<typeof ProjectDocumentV1BaseSchema>
   | z.infer<typeof ProjectDocumentV2BaseSchema>
-  | z.infer<typeof ProjectDocumentV3BaseSchema>;
+  | z.infer<typeof ProjectDocumentV3BaseSchema>
+  | z.infer<typeof ProjectDocumentV4BaseSchema>;
 type RefinableProjectTrack =
   | z.infer<typeof ProjectTrackSchema>
   | z.infer<typeof ProjectTrackV2Schema>
-  | z.infer<typeof ProjectTrackV3Schema>;
+  | z.infer<typeof ProjectTrackV3Schema>
+  | z.infer<typeof ProjectTrackV4Schema>;
 
-function isProjectTrackV3(track: RefinableProjectTrack): track is z.infer<typeof ProjectTrackV3Schema> {
+function isProjectTrackWithLoopSlots(
+  track: RefinableProjectTrack
+): track is z.infer<typeof ProjectTrackV3Schema> | z.infer<typeof ProjectTrackV4Schema> {
   return 'loopSlots' in track;
+}
+
+function getLoopSlotSourceIds(
+  slot: z.infer<typeof ProjectLoopSlotSchema> | z.infer<typeof ProjectLoopSlotV4Schema>
+): readonly string[] {
+  return slot.sourceId === null ? [] : [slot.sourceId, ...('overdubSourceIds' in slot ? slot.overdubSourceIds : [])];
 }
 
 function addDuplicateIdIssues({ entries, label, context }: DuplicateIdValidationOptions): void {
@@ -251,7 +305,7 @@ function validateProjectRelations(document: RefinableProjectDocument, context: z
   addDuplicateIdIssues({ entries: regionEntries, label: 'Region', context });
 
   const loopSlotEntries = document.tracks.flatMap((track, trackIndex) =>
-    isProjectTrackV3(track)
+    isProjectTrackWithLoopSlots(track)
       ? track.loopSlots.map((slot, slotIndex) => ({
           id: slot.id,
           path: ['tracks', trackIndex, 'loopSlots', slotIndex, 'id'],
@@ -294,26 +348,34 @@ function validateProjectRelations(document: RefinableProjectDocument, context: z
       });
     });
 
-    if (!isProjectTrackV3(track)) {
+    if (!isProjectTrackWithLoopSlots(track)) {
       return;
     }
 
     track.loopSlots.forEach((slot, slotIndex) => {
-      if (slot.sourceId === null || sourcesById.has(slot.sourceId)) {
-        return;
-      }
-
-      context.addIssue({
-        code: 'custom',
-        message: `Loop Slot references a missing Source ID: ${slot.sourceId}`,
-        path: ['tracks', trackIndex, 'loopSlots', slotIndex, 'sourceId'],
+      getLoopSlotSourceIds(slot).forEach((sourceId, sourceIndex) => {
+        if (sourcesById.has(sourceId)) {
+          return;
+        }
+        const sourcePath =
+          sourceIndex === 0
+            ? ['tracks', trackIndex, 'loopSlots', slotIndex, 'sourceId']
+            : ['tracks', trackIndex, 'loopSlots', slotIndex, 'overdubSourceIds', sourceIndex - 1];
+        context.addIssue({
+          code: 'custom',
+          message: `Loop Slot references a missing Source ID: ${sourceId}`,
+          path: sourcePath,
+        });
       });
     });
   });
 }
 
 function validatePluginState(
-  document: z.infer<typeof ProjectDocumentV2BaseSchema> | z.infer<typeof ProjectDocumentV3BaseSchema>,
+  document:
+    | z.infer<typeof ProjectDocumentV2BaseSchema>
+    | z.infer<typeof ProjectDocumentV3BaseSchema>
+    | z.infer<typeof ProjectDocumentV4BaseSchema>,
   context: z.RefinementCtx
 ): void {
   const instanceEntries = document.tracks.flatMap((track, trackIndex) =>
@@ -344,6 +406,10 @@ export const ProjectDocumentV3Schema = ProjectDocumentV3BaseSchema.superRefine((
   validateProjectRelations(document, context);
   validatePluginState(document, context);
 });
+export const ProjectDocumentV4Schema = ProjectDocumentV4BaseSchema.superRefine((document, context) => {
+  validateProjectRelations(document, context);
+  validatePluginState(document, context);
+});
 
 export type ProjectAudioSource = z.infer<typeof ProjectAudioSourceSchema>;
 export type ProjectRegion = z.infer<typeof ProjectRegionSchema>;
@@ -357,4 +423,7 @@ export type ProjectDocumentV2 = z.infer<typeof ProjectDocumentV2Schema>;
 export type ProjectLoopSlot = z.infer<typeof ProjectLoopSlotSchema>;
 export type ProjectTrackV3 = z.infer<typeof ProjectTrackV3Schema>;
 export type ProjectDocumentV3 = z.infer<typeof ProjectDocumentV3Schema>;
-export type ProjectDocumentSnapshot = ProjectDocument | ProjectDocumentV2 | ProjectDocumentV3;
+export type ProjectLoopSlotV4 = z.infer<typeof ProjectLoopSlotV4Schema>;
+export type ProjectTrackV4 = z.infer<typeof ProjectTrackV4Schema>;
+export type ProjectDocumentV4 = z.infer<typeof ProjectDocumentV4Schema>;
+export type ProjectDocumentSnapshot = ProjectDocument | ProjectDocumentV2 | ProjectDocumentV3 | ProjectDocumentV4;

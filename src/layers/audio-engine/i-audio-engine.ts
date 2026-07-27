@@ -152,6 +152,7 @@ export interface IAudioEngine {
   setLiveInputDevice(deviceId: string | null): Promise<string | null>;
   setLiveInputMonitoring(request: SetLiveInputMonitoringRequest): Promise<void>;
   armLoop(request: ArmLoopRequest): Promise<void>;
+  armLoopOverdub(request: ArmLoopRequest): Promise<void>;
   cancelLoop(address: LoopSlotAddress): void;
   triggerLoop(request: TriggerLoopRequest): Promise<void>;
   stopLoop(request: TriggerLoopRequest): void;
