@@ -23,7 +23,14 @@ export function createWebAuthClient(environment: WebAuthEnvironment): IAuthClien
     onAuthStateChange: listener => {
       supabaseClient.auth.onAuthStateChange((_event, session) => {
         // Supabase 객체가 UI 계층으로 퍼지지 않도록 필요한 사용자 식별 정보만 전달한다.
-        listener(session ? { user: { id: session.user.id, email: session.user.email } } : null);
+        listener(
+          session
+            ? {
+                access_token: session.access_token,
+                user: { id: session.user.id, email: session.user.email },
+              }
+            : null
+        );
       });
     },
     signInWithOtp: async request => {

@@ -42,11 +42,14 @@ import { BrowserMidiInput } from '../midi-input/browser-midi-input';
 import type { IMidiInput } from '../midi-input/i-midi-input';
 import type { IAuthClient } from '../auth/i-auth-client';
 import { UnavailableAuthClient } from '../auth/unavailable-auth-client';
+import type { IBillingClient } from '../billing/i-billing-client';
+import { UnavailableBillingClient } from '../billing/unavailable-billing-client';
 
 const NEW_PROJECT_NAME = '새 프로젝트';
 
 export interface AppInstance {
   readonly authClient: IAuthClient;
+  readonly billingClient: IBillingClient;
   readonly audioRuntimeCapabilities: AudioRuntimeCapabilities;
   readonly audioSourceResolver: IAudioSourceResolver;
   readonly audioSourceStager: IAudioSourceStager;
@@ -60,6 +63,7 @@ export interface AppInstance {
 
 export interface CreateAppOptions {
   authClient?: IAuthClient;
+  billingClient?: IBillingClient;
   audioEngine?: IAudioEngine;
   audioSourceRegistry?: IAudioSourceRegistry;
   audioSourceRepository?: IAudioSourceRepository;
@@ -189,9 +193,11 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   const audioRuntimeCapabilities = resolveAudioRuntimeCapabilities(audioRuntimeEnvironment);
   const midiInput = options.midiInput ?? new BrowserMidiInput();
   const authClient = options.authClient ?? new UnavailableAuthClient();
+  const billingClient = options.billingClient ?? new UnavailableBillingClient();
 
   return {
     authClient,
+    billingClient,
     audioRuntimeCapabilities,
     ...audioSourceCapabilities,
     session,

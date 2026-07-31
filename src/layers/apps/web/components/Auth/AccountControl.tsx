@@ -41,6 +41,9 @@ export function AccountControl() {
       <span className={styles.email} title={authSnapshot.user.email ?? authSnapshot.user.id}>
         {authSnapshot.user.email ?? 'SIGNED IN'}
       </span>
+      <Link className={styles.action} to="/billing">
+        PRO
+      </Link>
       <button className={styles.action} type="button" onClick={handleSignOut} disabled={isPending}>
         {isPending ? '...' : 'LOG OUT'}
       </button>

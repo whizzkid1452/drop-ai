@@ -9,6 +9,7 @@ interface SupabaseAuthResult {
 }
 
 export interface SupabaseSession {
+  readonly access_token: string;
   readonly user: {
     readonly id: string;
     readonly email?: string;
@@ -29,12 +30,15 @@ const INITIAL_AUTH_SNAPSHOT: AuthSnapshot = { status: 'loading', user: null };
 export class SupabaseAuthClient implements IAuthClient {
   private readonly listeners = new Set<() => void>();
   private snapshot: AuthSnapshot = INITIAL_AUTH_SNAPSHOT;
+  private accessToken: string | null = null;
 
   constructor(private readonly authPort: SupabaseAuthPort) {
     this.authPort.onAuthStateChange(session => this.replaceSession(session));
   }
 
   getSnapshot = (): AuthSnapshot => this.snapshot;
+
+  getAccessToken = (): string | null => this.accessToken;
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -55,6 +59,7 @@ export class SupabaseAuthClient implements IAuthClient {
   }
 
   private replaceSession(session: SupabaseSession | null): void {
+    this.accessToken = session?.access_token ?? null;
     this.snapshot = session
       ? {
           status: 'authenticated',

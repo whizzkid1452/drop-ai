@@ -16,6 +16,7 @@ export interface MagicLinkSignInRequest {
 
 export interface IAuthClient {
   getSnapshot(): AuthSnapshot;
+  getAccessToken(): string | null;
   subscribe(listener: () => void): () => void;
   signInWithMagicLink(request: MagicLinkSignInRequest): Promise<void>;
   signOut(): Promise<void>;

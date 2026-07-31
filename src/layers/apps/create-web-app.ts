@@ -1,4 +1,5 @@
 import { createWebAuthClient } from './web/auth/create-web-auth-client';
+import { createWebBillingClient } from './web/billing/create-web-billing-client';
 import { createApp, type AppInstance } from './create-app';
 
 export function createWebApp(): AppInstance {
@@ -6,6 +7,7 @@ export function createWebApp(): AppInstance {
     supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
     supabasePublishableKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
   });
+  const billingClient = createWebBillingClient(authClient);
 
-  return createApp({ authClient });
+  return createApp({ authClient, billingClient });
 }
