@@ -9,6 +9,7 @@ import { MasterVolumeControl } from './MasterVolumeControl';
 import { TempoMetadataControl } from './TempoMetadataControl';
 import { AddTrackControl } from '../AddTrackControl/AddTrackControl';
 import { MidiLoopControl } from './MidiLoopControl';
+import { AccountControl } from '@/layers/apps/web/components/Auth/AccountControl';
 
 interface DawHeaderProps {
   trackCount: number;
@@ -29,6 +30,7 @@ export function DawHeader({ trackCount }: DawHeaderProps) {
           <LoadProjectControl />
           <SaveProjectButton />
           <ExportButton />
+          <AccountControl />
         </div>
       </div>
       <div className={styles.transportBar}>

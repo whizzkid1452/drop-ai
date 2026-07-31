@@ -23,6 +23,12 @@ export const cardGroup = style({
   gap: '0.5rem', // gap-2 느낌
 });
 
+export const accountControl = style({
+  position: 'absolute',
+  top: '16px',
+  right: '16px',
+});
+
 export const hero = style({
   display: 'flex',
   flexDirection: 'column',
