@@ -5,10 +5,10 @@ import { AppRouter } from '@/layers/apps/web/router/AppRouter';
 import { AnalyticsTracker } from '@/layers/apps/web/components/common/AnalyticsTracker';
 import { WebLLMPreloader } from '@/layers/apps/web/components/common/web-llm-preloader';
 import { LayerProvider } from './layers/apps/web/context/layer-provider';
-import { createApp } from './layers/apps/create-app';
+import { createWebApp } from './layers/apps/create-web-app';
 
 function App() {
-  const app = useMemo(() => createApp(), []);
+  const app = useMemo(() => createWebApp(), []);
 
   return (
     <LayerProvider app={app}>

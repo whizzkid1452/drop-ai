@@ -14,6 +14,7 @@ const componentMocks = vi.hoisted(() => ({
   playbackControls: vi.fn(() => null),
   addTrackControl: vi.fn(() => null),
   midiLoopControl: vi.fn(() => null),
+  accountControl: vi.fn(() => null),
 }));
 
 vi.mock('./AudioRuntimeStatus', () => ({
@@ -56,6 +57,10 @@ vi.mock('./MidiLoopControl', () => ({
   MidiLoopControl: componentMocks.midiLoopControl,
 }));
 
+vi.mock('@/layers/apps/web/components/Auth/AccountControl', () => ({
+  AccountControl: componentMocks.accountControl,
+}));
+
 vi.mock('../../DawPage.css.ts', () => ({
   header: 'header',
   headerIdentity: 'headerIdentity',
@@ -93,6 +98,7 @@ afterEach(() => {
   componentMocks.playbackControls.mockClear();
   componentMocks.addTrackControl.mockClear();
   componentMocks.midiLoopControl.mockClear();
+  componentMocks.accountControl.mockClear();
 });
 
 describe('DawHeader', () => {
@@ -112,5 +118,6 @@ describe('DawHeader', () => {
     expect(componentMocks.playbackControls).toHaveBeenCalledWith({ layout: 'inline' }, undefined);
     expect(componentMocks.addTrackControl).toHaveBeenCalledTimes(1);
     expect(componentMocks.midiLoopControl).toHaveBeenCalledTimes(1);
+    expect(componentMocks.accountControl).toHaveBeenCalledTimes(1);
   });
 });

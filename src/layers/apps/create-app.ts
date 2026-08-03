@@ -40,10 +40,13 @@ import type { ProjectMetadata } from '../shared/types/project-document.schema';
 import type { PluginValidationResult } from '../shared/types/plugin-state';
 import { BrowserMidiInput } from '../midi-input/browser-midi-input';
 import type { IMidiInput } from '../midi-input/i-midi-input';
+import type { IAuthClient } from '../auth/i-auth-client';
+import { UnavailableAuthClient } from '../auth/unavailable-auth-client';
 
 const NEW_PROJECT_NAME = '새 프로젝트';
 
 export interface AppInstance {
+  readonly authClient: IAuthClient;
   readonly audioRuntimeCapabilities: AudioRuntimeCapabilities;
   readonly audioSourceResolver: IAudioSourceResolver;
   readonly audioSourceStager: IAudioSourceStager;
@@ -56,6 +59,7 @@ export interface AppInstance {
 }
 
 export interface CreateAppOptions {
+  authClient?: IAuthClient;
   audioEngine?: IAudioEngine;
   audioSourceRegistry?: IAudioSourceRegistry;
   audioSourceRepository?: IAudioSourceRepository;
@@ -184,8 +188,10 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   const audioRuntimeEnvironment = options.audioRuntimeEnvironment ?? readAudioRuntimeEnvironment();
   const audioRuntimeCapabilities = resolveAudioRuntimeCapabilities(audioRuntimeEnvironment);
   const midiInput = options.midiInput ?? new BrowserMidiInput();
+  const authClient = options.authClient ?? new UnavailableAuthClient();
 
   return {
+    authClient,
     audioRuntimeCapabilities,
     ...audioSourceCapabilities,
     session,

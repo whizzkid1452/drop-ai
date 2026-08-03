@@ -4,6 +4,7 @@ import type { AudioFile } from '@/types/audioFile';
 import { AudioFileDrop } from '@/layers/apps/web/components/common/FileDrop/AudioFileDrop';
 import * as styles from './DropPage.css.ts';
 import { useSession } from '@/layers/apps/web/context/layer-hooks';
+import { AccountControl } from '@/layers/apps/web/components/Auth/AccountControl';
 
 export function DropPage() {
   const navigate = useNavigate();
@@ -22,6 +23,9 @@ export function DropPage() {
 
   return (
     <div className={styles.container}>
+      <div className={styles.accountControl}>
+        <AccountControl />
+      </div>
       <div className={styles.cardGroup}>
         <AudioFileDrop onAudioFileDrop={onAudioFileDrop} />
       </div>

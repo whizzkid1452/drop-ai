@@ -8,10 +8,20 @@ import type { IProjectCatalogQuery } from '../../../queries/project-catalog-quer
 import type { SessionState } from '../../../session/session';
 import type { AudioRuntimeCapabilities } from '../../../shared/utils/audio-runtime-capabilities';
 import type { IMidiInput } from '../../../midi-input/i-midi-input';
+import type { AuthSnapshot, IAuthClient } from '../../../auth/i-auth-client';
 import { useLayer } from './layer-context';
 
 export function useAudioRuntimeCapabilities(): AudioRuntimeCapabilities {
   return useLayer().audioRuntimeCapabilities;
+}
+
+export function useAuthClient(): IAuthClient {
+  return useLayer().authClient;
+}
+
+export function useAuthSnapshot(): AuthSnapshot {
+  const authClient = useAuthClient();
+  return useSyncExternalStore(authClient.subscribe, authClient.getSnapshot, authClient.getSnapshot);
 }
 
 export function useAudioSourceResolver(): IAudioSourceResolver {
