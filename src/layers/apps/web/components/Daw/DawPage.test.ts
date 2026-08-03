@@ -5,11 +5,12 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DawPage } from './DawPage';
 
+const layerMocks = {
+  tracks: new Map<string, { regions: Array<{ duration: number; startTime: number }> }>(),
+};
+
 vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
-  useSession: (selector: (state: { tracks: Map<string, never> }) => unknown) =>
-    selector({
-      tracks: new Map<string, never>(),
-    }),
+  useSession: (selector: (state: typeof layerMocks) => unknown) => selector(layerMocks),
 }));
 
 vi.mock('./components/DawHeader/DawHeader', () => ({
@@ -62,9 +63,32 @@ afterEach(() => {
     mountedRoots.splice(0).forEach(root => root.unmount());
   });
   document.body.replaceChildren();
+  layerMocks.tracks = new Map();
 });
 
 describe('DawPage 타임라인 스크롤', () => {
+  it('프로젝트 길이와 배율로 계산한 타임라인 폭을 화면에 전달한다', () => {
+    layerMocks.tracks = new Map([
+      [
+        'track-1',
+        {
+          regions: [{ duration: 49, startTime: 0 }],
+        },
+      ],
+    ]);
+
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    mountedRoots.push(root);
+
+    act(() => root.render(createElement(DawPage)));
+
+    const mainContent = host.querySelector<HTMLElement>('.mainContent');
+
+    expect(mainContent?.style.getPropertyValue('--timeline-content-width')).toBe('1140px');
+  });
+
   it('Shift와 세로 휠 입력을 가로 스크롤로 변환한다', () => {
     const host = document.createElement('div');
     document.body.append(host);

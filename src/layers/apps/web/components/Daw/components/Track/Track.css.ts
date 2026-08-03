@@ -2,6 +2,7 @@ import { style } from '@vanilla-extract/css';
 
 const TRACK_HEADER_WIDTH = '248px';
 const TIMELINE_MIN_WIDTH = '640px';
+const TIMELINE_CONTENT_WIDTH = `var(--timeline-content-width, ${TIMELINE_MIN_WIDTH})`;
 
 const controlButton = style({
   minWidth: '26px',
@@ -37,14 +38,17 @@ const controlButton = style({
 
 export const trackRow = style({
   display: 'grid',
-  gridTemplateColumns: `${TRACK_HEADER_WIDTH} minmax(${TIMELINE_MIN_WIDTH}, 1fr)`,
-  minWidth: `calc(${TRACK_HEADER_WIDTH} + ${TIMELINE_MIN_WIDTH})`,
+  gridTemplateColumns: `${TRACK_HEADER_WIDTH} minmax(${TIMELINE_CONTENT_WIDTH}, 1fr)`,
+  minWidth: `calc(${TRACK_HEADER_WIDTH} + ${TIMELINE_CONTENT_WIDTH})`,
   minHeight: '128px',
   borderBottom: '1px solid #090b0c',
   backgroundColor: '#1c1f21',
 });
 
 export const trackHeader = style({
+  position: 'sticky',
+  left: 0,
+  zIndex: 11,
   minWidth: 0,
   padding: '7px 8px 7px 30px',
   display: 'flex',
