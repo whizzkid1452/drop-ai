@@ -8,7 +8,7 @@ import {
   useKeyboardShortcutAction,
 } from '@/layers/apps/web/keyboard-shortcuts/keyboard-shortcuts';
 import { AudioCommandType } from '@/types/audioCommand.schema';
-import { getMaxDuration } from './get-max-duration';
+import { getMaxDuration } from '../../get-max-duration';
 
 // ...
 

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo, type CSSProperties } from 'react';
 import { DawHeader } from './components/DawHeader/DawHeader';
 import { TrackList } from './components/TrackList/TrackList';
 import { Terminal } from './components/Terminals/Terminal';
@@ -17,6 +17,8 @@ import {
   DEFAULT_TIMELINE_PIXELS_PER_SECOND,
   TIMELINE_ZOOM_FACTOR,
 } from './timeline-zoom';
+import { getMaxDuration } from './get-max-duration';
+import { getTimelineContentWidth } from './timeline-content-width';
 
 const CHAT_PANEL_MIN_WIDTH = 280;
 const CHAT_PANEL_MAX_WIDTH = 600;
@@ -24,6 +26,10 @@ const CHAT_PANEL_DEFAULT_WIDTH = 350;
 const WHEEL_DELTA_MODE_LINE = 1;
 const WHEEL_DELTA_MODE_PAGE = 2;
 const WHEEL_LINE_DISTANCE = 16;
+
+type TimelineWidthStyle = CSSProperties & {
+  '--timeline-content-width': string;
+};
 
 function getShiftWheelHorizontalDelta(event: WheelEvent, pageWidth: number): number | null {
   if (!event.shiftKey || event.ctrlKey || event.metaKey || event.deltaX !== 0 || event.deltaY === 0) {
@@ -42,7 +48,8 @@ function getShiftWheelHorizontalDelta(event: WheelEvent, pageWidth: number): num
 }
 
 export function DawPage() {
-  const trackCount = useSession(state => state.tracks.size);
+  const tracks = useSession(state => state.tracks);
+  const trackCount = tracks.size;
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
   const [chatPanelWidth, setChatPanelWidth] = useState(CHAT_PANEL_DEFAULT_WIDTH);
@@ -51,6 +58,18 @@ export function DawPage() {
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(CHAT_PANEL_DEFAULT_WIDTH);
   const mainContentRef = useRef<HTMLDivElement>(null);
+  const timelineContentWidth = useMemo(
+    () =>
+      getTimelineContentWidth({
+        durationSeconds: getMaxDuration(Array.from(tracks.values())),
+        pixelsPerSecond,
+      }),
+    [pixelsPerSecond, tracks]
+  );
+  const timelineWidthStyle: TimelineWidthStyle = {
+    // Region은 절대 위치 요소이므로 명시적 폭이 없으면 상위 scrollWidth를 늘리지 못한다.
+    '--timeline-content-width': `${timelineContentWidth}px`,
+  };
 
   useGlobalKeyboardShortcuts();
   useKeyboardShortcutAction(KeyboardShortcutAction.TOGGLE_INSPECTOR, () => {
@@ -158,7 +177,7 @@ export function DawPage() {
         <TrackInfoSidebar />
       </div>
 
-      <div ref={mainContentRef} className={styles.mainContent}>
+      <div ref={mainContentRef} className={styles.mainContent} style={timelineWidthStyle}>
         <DawHeader trackCount={trackCount} />
         <div className={styles.timelineHeader}>
           <div className={styles.trackHeaderRuler}>

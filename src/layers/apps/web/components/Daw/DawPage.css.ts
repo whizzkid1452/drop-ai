@@ -2,6 +2,7 @@ import { style } from '@vanilla-extract/css';
 
 const TRACK_HEADER_WIDTH = '248px';
 const TIMELINE_MIN_WIDTH = '640px';
+const TIMELINE_CONTENT_WIDTH = `var(--timeline-content-width, ${TIMELINE_MIN_WIDTH})`;
 
 const dockToggle = style({
   position: 'absolute',
@@ -156,8 +157,10 @@ export const leftToggleButtonOpen = style({
 export const header = style({
   position: 'sticky',
   top: 0,
+  left: 0,
   zIndex: 18,
-  minWidth: `calc(${TRACK_HEADER_WIDTH} + ${TIMELINE_MIN_WIDTH})`,
+  width: '100%',
+  minWidth: 0,
   flexShrink: 0,
   backgroundColor: '#262a2c',
   borderBottom: '1px solid #090b0c',
@@ -266,14 +269,17 @@ export const timelineHeader = style({
   top: '80px',
   zIndex: 15,
   display: 'grid',
-  gridTemplateColumns: `${TRACK_HEADER_WIDTH} minmax(${TIMELINE_MIN_WIDTH}, 1fr)`,
-  minWidth: `calc(${TRACK_HEADER_WIDTH} + ${TIMELINE_MIN_WIDTH})`,
+  gridTemplateColumns: `${TRACK_HEADER_WIDTH} minmax(${TIMELINE_CONTENT_WIDTH}, 1fr)`,
+  minWidth: `calc(${TRACK_HEADER_WIDTH} + ${TIMELINE_CONTENT_WIDTH})`,
   flexShrink: 0,
   borderBottom: '1px solid #080a0b',
   boxShadow: '0 2px 5px rgba(0, 0, 0, 0.3)',
 });
 
 export const trackHeaderRuler = style({
+  position: 'sticky',
+  left: 0,
+  zIndex: 16,
   minHeight: '44px',
   padding: '0 9px 0 30px',
   display: 'flex',
