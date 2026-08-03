@@ -55,6 +55,7 @@ export function DawPage() {
   const [chatPanelWidth, setChatPanelWidth] = useState(CHAT_PANEL_DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
   const [pixelsPerSecond, setPixelsPerSecond] = useState(DEFAULT_TIMELINE_PIXELS_PER_SECOND);
+  const [requestedTrackId, setRequestedTrackId] = useState<string | null>(null);
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(CHAT_PANEL_DEFAULT_WIDTH);
   const mainContentRef = useRef<HTMLDivElement>(null);
@@ -70,6 +71,9 @@ export function DawPage() {
     // Region은 절대 위치 요소이므로 명시적 폭이 없으면 상위 scrollWidth를 늘리지 못한다.
     '--timeline-content-width': `${timelineContentWidth}px`,
   };
+  const firstTrackId = tracks.keys().next().value ?? null;
+  // 선택했던 Track이 삭제되면 Inspector가 빈 ID를 유지하지 않고 첫 Track으로 즉시 전환한다.
+  const selectedTrackId = requestedTrackId !== null && tracks.has(requestedTrackId) ? requestedTrackId : firstTrackId;
 
   useGlobalKeyboardShortcuts();
   useKeyboardShortcutAction(KeyboardShortcutAction.TOGGLE_INSPECTOR, () => {
@@ -174,7 +178,7 @@ export function DawPage() {
       </button>
 
       <div className={`${styles.leftPanel} ${!isTrackInfoOpen ? styles.leftPanelCollapsed : ''}`}>
-        <TrackInfoSidebar />
+        {isTrackInfoOpen ? <TrackInfoSidebar selectedTrackId={selectedTrackId} /> : null}
       </div>
 
       <div ref={mainContentRef} className={styles.mainContent} style={timelineWidthStyle}>
@@ -192,7 +196,12 @@ export function DawPage() {
             <TimeRuler pixelsPerSecond={pixelsPerSecond} />
           </div>
         </div>
-        <TrackList pixelsPerSecond={pixelsPerSecond} setPixelsPerSecond={setPixelsPerSecond} />
+        <TrackList
+          pixelsPerSecond={pixelsPerSecond}
+          selectedTrackId={selectedTrackId}
+          setPixelsPerSecond={setPixelsPerSecond}
+          onTrackSelect={setRequestedTrackId}
+        />
       </div>
       <div
         className={`${styles.cliPanel} ${!isTerminalOpen ? styles.cliPanelCollapsed : ''} ${isResizing ? styles.cliPanelResizing : ''}`}

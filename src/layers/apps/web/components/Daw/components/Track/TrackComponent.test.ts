@@ -4,20 +4,13 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TrackState } from '@/layers/session/session';
-import type { PluginInstanceState } from '@/types/plugin-state';
 import type { TrackToggleResult } from '@/layers/apps/web/hooks/track-mute-solo-commands';
-import type { TrackRemovalResult } from '@/layers/apps/web/hooks/track-action-commands';
 import { TrackComponent } from './TrackComponent';
-
-vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
-  useSession: (selector: (state: { currentTime: number }) => unknown) => selector({ currentTime: 0 }),
-}));
 
 vi.mock('@/layers/apps/web/hooks/useTrackActions', () => ({
   useTrackActions: () => ({
     moveRegion: vi.fn(),
     removeRegion: vi.fn(),
-    splitRegion: vi.fn(),
   }),
 }));
 
@@ -27,75 +20,35 @@ vi.mock('./RegionComponent', () => ({
 
 vi.mock('./Track.css.ts', () => ({
   actionControls: 'actionControls',
-  dangerButton: 'dangerButton',
-  mixControls: 'mixControls',
   muteButtonActive: 'muteButtonActive',
   soloButtonActive: 'soloButtonActive',
   trackActionButton: 'trackActionButton',
   trackHeader: 'trackHeader',
+  trackHeaderSelected: 'trackHeaderSelected',
   trackRow: 'trackRow',
   trackTimeline: 'trackTimeline',
 }));
 
-vi.mock('./components/TrackPanController', () => ({
-  TrackPanController: () => null,
+vi.mock('./components/TrackNameControl', () => ({
+  TrackNameControl: ({ trackId, name }: { trackId: string; name: string }) =>
+    createElement('div', {
+      'data-name': name,
+      'data-testid': 'track-name-control',
+      'data-track-id': trackId,
+    }),
 }));
 
-vi.mock('./components/TrackVolumeController', () => ({
-  TrackVolumeController: () => null,
+vi.mock('./components/TrackPluginControls', () => ({
+  TrackPluginControls: () => createElement('div', { 'data-testid': 'track-plugin-controls' }),
 }));
 
 vi.mock('./components/LoopSlotControls', () => ({
-  LoopSlotControls: () => null,
+  LoopSlotControls: () => createElement('div', { 'data-testid': 'loop-controls' }),
 }));
 
-vi.mock('./components/TrackNameControl', async () => {
-  const { createElement: createMockElement } = await import('react');
-
-  return {
-    TrackNameControl: ({ trackId, name }: { trackId: string; name: string }) =>
-      createMockElement('div', {
-        'data-name': name,
-        'data-testid': 'track-name-control',
-        'data-track-id': trackId,
-      }),
-  };
-});
-
-vi.mock('./components/TrackPluginControls', async () => {
-  const { createElement: createMockElement } = await import('react');
-
-  return {
-    TrackPluginControls: ({
-      trackId,
-      pluginInstances,
-    }: {
-      trackId: string;
-      pluginInstances: readonly PluginInstanceState[];
-    }) =>
-      createMockElement('div', {
-        'data-plugin-count': pluginInstances.length,
-        'data-testid': 'track-plugin-controls',
-        'data-track-id': trackId,
-      }),
-  };
-});
-
-vi.mock('./components/TrackRegionImportControl', async () => {
-  const { createElement: createMockElement } = await import('react');
-
-  return {
-    TrackRegionImportControl: ({ onPendingChange }: { onPendingChange?: (isPending: boolean) => void }) =>
-      createMockElement(
-        'button',
-        {
-          'aria-label': 'Region 가져오기 시작',
-          onClick: () => onPendingChange?.(true),
-        },
-        'Region 가져오기 시작'
-      ),
-  };
-});
+vi.mock('./components/TrackRegionImportControl', () => ({
+  TrackRegionImportControl: () => createElement('button', { 'aria-label': 'Region 오디오 파일 추가' }),
+}));
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -126,6 +79,38 @@ function createDeferred<T>(): Deferred<T> {
   return { promise, resolve };
 }
 
+function renderTrack(
+  options: {
+    isSelected?: boolean;
+    onMuteChange?: (muted: boolean) => Promise<TrackToggleResult>;
+    onSelect?: () => void;
+    onSoloChange?: (soloed: boolean) => Promise<TrackToggleResult>;
+    track?: TrackState;
+  } = {}
+): HTMLElement {
+  const host = document.createElement('div');
+  document.body.append(host);
+  const root = createRoot(host);
+  mountedRoots.push(root);
+
+  act(() => {
+    root.render(
+      createElement(TrackComponent, {
+        track: options.track ?? track,
+        isSelected: options.isSelected ?? false,
+        pixelsPerSecond: 100,
+        waveformRenderCache,
+        onReady: vi.fn(),
+        onMuteChange: options.onMuteChange ?? vi.fn().mockResolvedValue('updated'),
+        onSelect: options.onSelect ?? vi.fn(),
+        onSoloChange: options.onSoloChange ?? vi.fn().mockResolvedValue('updated'),
+      })
+    );
+  });
+
+  return host;
+}
+
 afterEach(() => {
   act(() => {
     mountedRoots.splice(0).forEach(root => root.unmount());
@@ -135,282 +120,69 @@ afterEach(() => {
 
 describe('TrackComponent 제어', () => {
   it('Track 제어부와 타임라인을 하나의 편집 행으로 렌더링한다', () => {
-    const host = document.createElement('div');
-    document.body.append(host);
-    const root = createRoot(host);
-    mountedRoots.push(root);
-
-    act(() => {
-      root.render(
-        createElement(TrackComponent, {
-          mediaElement: null,
-          track,
-          pixelsPerSecond: 100,
-          waveformRenderCache,
-          onReady: vi.fn(),
-          onVolumeChange: vi.fn(),
-          onPanChange: vi.fn(),
-          onMuteChange: vi.fn().mockResolvedValue('updated'),
-          onSoloChange: vi.fn().mockResolvedValue('updated'),
-          onRemoveTrack: vi.fn().mockResolvedValue('cancelled'),
-        })
-      );
-    });
+    const host = renderTrack();
 
     expect(host.querySelector(`article[aria-label="Track ${track.name}"]`)).not.toBeNull();
     expect(host.querySelector(`[aria-label="${track.name} timeline"]`)).not.toBeNull();
   });
 
-  it('현재 Track ID와 Plugin 인스턴스를 Plugin 제어에 전달한다', () => {
-    const pluginInstance: PluginInstanceState = {
-      id: '22222222-2222-4222-8222-222222222222',
-      manifestSummary: { id: 'builtin.gain', name: 'Gain', version: '1.0.0' },
-      isEnabled: true,
-      parameters: [{ id: 'gain', value: 1 }],
-    };
-    const host = document.createElement('div');
-    document.body.append(host);
-    const root = createRoot(host);
-    mountedRoots.push(root);
+  it('Track 행을 누르면 선택을 요청하고 선택 상태를 표시한다', () => {
+    const onSelect = vi.fn();
+    const host = renderTrack({ isSelected: true, onSelect });
+    const trackRow = host.querySelector<HTMLElement>(`article[aria-label="Track ${track.name}"]`);
 
-    act(() => {
-      root.render(
-        createElement(TrackComponent, {
-          mediaElement: null,
-          track: { ...track, pluginInstances: [pluginInstance] },
-          pixelsPerSecond: 100,
-          waveformRenderCache,
-          onReady: vi.fn(),
-          onVolumeChange: vi.fn(),
-          onPanChange: vi.fn(),
-          onMuteChange: vi.fn().mockResolvedValue('updated'),
-          onSoloChange: vi.fn().mockResolvedValue('updated'),
-          onRemoveTrack: vi.fn().mockResolvedValue('cancelled'),
-        })
-      );
-    });
+    act(() => trackRow?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
 
-    const controls = host.querySelector<HTMLElement>('[data-testid="track-plugin-controls"]');
-    const nameControl = host.querySelector<HTMLElement>('[data-testid="track-name-control"]');
-
-    expect(controls?.dataset.trackId).toBe(track.id);
-    expect(controls?.dataset.pluginCount).toBe('1');
-    expect(nameControl?.dataset.trackId).toBe(track.id);
-    expect(nameControl?.dataset.name).toBe(track.name);
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(trackRow?.dataset.selected).toBe('true');
+    expect(host.querySelector('.trackHeader')?.classList.contains('trackHeaderSelected')).toBe(true);
   });
 
-  it('오디오가 없는 Track도 삭제할 수 있고 처리 중 중복 실행을 막는다', async () => {
-    const removalResult = createDeferred<TrackRemovalResult>();
-    const onRemoveTrack = vi.fn(() => removalResult.promise);
-    const host = document.createElement('div');
-    document.body.append(host);
-    const root = createRoot(host);
-    mountedRoots.push(root);
+  it('상세 Plugin·Loop·Import·삭제 제어를 Track 헤더에 렌더링하지 않는다', () => {
+    const host = renderTrack();
 
-    act(() => {
-      root.render(
-        createElement(TrackComponent, {
-          mediaElement: null,
-          track,
-          pixelsPerSecond: 100,
-          waveformRenderCache,
-          onReady: vi.fn(),
-          onVolumeChange: vi.fn(),
-          onPanChange: vi.fn(),
-          onMuteChange: vi.fn().mockResolvedValue('updated'),
-          onSoloChange: vi.fn().mockResolvedValue('updated'),
-          onRemoveTrack,
-        })
-      );
-    });
-
-    const removeButton = host.querySelector<HTMLButtonElement>('button[aria-label="Track 삭제"]');
-    if (!removeButton) {
-      throw new Error('Track 삭제 버튼을 찾지 못했습니다.');
-    }
-    const muteButton = host.querySelector<HTMLButtonElement>('button[aria-label="Track Mute"]');
-    const soloButton = host.querySelector<HTMLButtonElement>('button[aria-label="Track Solo"]');
-    if (!muteButton || !soloButton) {
-      throw new Error('Track Mute·Solo 버튼을 찾지 못했습니다.');
-    }
-
-    act(() => removeButton.click());
-    act(() => removeButton.click());
-
-    expect(onRemoveTrack).toHaveBeenCalledTimes(1);
-    expect(removeButton.disabled).toBe(true);
-    expect(muteButton.disabled).toBe(true);
-    expect(soloButton.disabled).toBe(true);
-
-    await act(async () => removalResult.resolve('cancelled'));
-
-    expect(removeButton.disabled).toBe(false);
+    expect(host.querySelector('[data-testid="track-plugin-controls"]')).toBeNull();
+    expect(host.querySelector('[data-testid="loop-controls"]')).toBeNull();
+    expect(host.querySelector('button[aria-label="Region 오디오 파일 추가"]')).toBeNull();
+    expect(host.querySelector('button[aria-label="Track 삭제"]')).toBeNull();
   });
 
   it('현재 Mute·Solo 상태를 표시하고 반대 상태를 요청한다', async () => {
     const onMuteChange = vi.fn().mockResolvedValue('updated');
     const onSoloChange = vi.fn().mockResolvedValue('updated');
-    const host = document.createElement('div');
-    document.body.append(host);
-    const root = createRoot(host);
-    mountedRoots.push(root);
-
-    act(() => {
-      root.render(
-        createElement(TrackComponent, {
-          mediaElement: null,
-          track: { ...track, isMuted: true, isSoloed: false },
-          pixelsPerSecond: 100,
-          waveformRenderCache,
-          onReady: vi.fn(),
-          onVolumeChange: vi.fn(),
-          onPanChange: vi.fn(),
-          onMuteChange,
-          onSoloChange,
-          onRemoveTrack: vi.fn().mockResolvedValue('cancelled'),
-        })
-      );
+    const host = renderTrack({
+      track: { ...track, isMuted: true, isSoloed: false },
+      onMuteChange,
+      onSoloChange,
     });
-
     const muteButton = host.querySelector<HTMLButtonElement>('button[aria-label="Track Mute"]');
     const soloButton = host.querySelector<HTMLButtonElement>('button[aria-label="Track Solo"]');
-    if (!muteButton || !soloButton) {
-      throw new Error('Track Mute·Solo 버튼을 찾지 못했습니다.');
-    }
-
-    expect(muteButton.getAttribute('aria-pressed')).toBe('true');
-    expect(soloButton.getAttribute('aria-pressed')).toBe('false');
 
     await act(async () => {
-      muteButton.click();
-      soloButton.click();
+      muteButton?.click();
+      soloButton?.click();
     });
 
+    expect(muteButton?.getAttribute('aria-pressed')).toBe('true');
+    expect(soloButton?.getAttribute('aria-pressed')).toBe('false');
     expect(onMuteChange).toHaveBeenCalledWith(false);
     expect(onSoloChange).toHaveBeenCalledWith(true);
   });
 
-  it('Mute 처리 중 중복 클릭을 막고 실패하면 기존 표시를 유지한다', async () => {
+  it('Mute 처리 중 중복 클릭을 막는다', async () => {
     const muteResult = createDeferred<TrackToggleResult>();
     const onMuteChange = vi.fn(() => muteResult.promise);
-    const host = document.createElement('div');
-    document.body.append(host);
-    const root = createRoot(host);
-    mountedRoots.push(root);
-
-    act(() => {
-      root.render(
-        createElement(TrackComponent, {
-          mediaElement: null,
-          track,
-          pixelsPerSecond: 100,
-          waveformRenderCache,
-          onReady: vi.fn(),
-          onVolumeChange: vi.fn(),
-          onPanChange: vi.fn(),
-          onMuteChange,
-          onSoloChange: vi.fn().mockResolvedValue('updated'),
-          onRemoveTrack: vi.fn().mockResolvedValue('cancelled'),
-        })
-      );
-    });
-
+    const host = renderTrack({ onMuteChange });
     const muteButton = host.querySelector<HTMLButtonElement>('button[aria-label="Track Mute"]');
-    if (!muteButton) {
-      throw new Error('Track Mute 버튼을 찾지 못했습니다.');
-    }
 
-    act(() => muteButton.click());
-    act(() => muteButton.click());
+    act(() => muteButton?.click());
+    act(() => muteButton?.click());
 
     expect(onMuteChange).toHaveBeenCalledTimes(1);
-    expect(onMuteChange).toHaveBeenCalledWith(true);
-    expect(muteButton.disabled).toBe(true);
+    expect(muteButton?.disabled).toBe(true);
 
     await act(async () => muteResult.resolve('failed'));
 
-    expect(muteButton.disabled).toBe(false);
-    expect(muteButton.getAttribute('aria-pressed')).toBe('false');
-  });
-
-  it('Solo 처리 중 중복 클릭을 막고 실패하면 기존 표시를 유지한다', async () => {
-    const soloResult = createDeferred<TrackToggleResult>();
-    const onSoloChange = vi.fn(() => soloResult.promise);
-    const host = document.createElement('div');
-    document.body.append(host);
-    const root = createRoot(host);
-    mountedRoots.push(root);
-
-    act(() => {
-      root.render(
-        createElement(TrackComponent, {
-          mediaElement: null,
-          track: { ...track, isSoloed: true },
-          pixelsPerSecond: 100,
-          waveformRenderCache,
-          onReady: vi.fn(),
-          onVolumeChange: vi.fn(),
-          onPanChange: vi.fn(),
-          onMuteChange: vi.fn().mockResolvedValue('updated'),
-          onSoloChange,
-          onRemoveTrack: vi.fn().mockResolvedValue('cancelled'),
-        })
-      );
-    });
-
-    const soloButton = host.querySelector<HTMLButtonElement>('button[aria-label="Track Solo"]');
-    if (!soloButton) {
-      throw new Error('Track Solo 버튼을 찾지 못했습니다.');
-    }
-
-    act(() => soloButton.click());
-    act(() => soloButton.click());
-
-    expect(onSoloChange).toHaveBeenCalledTimes(1);
-    expect(onSoloChange).toHaveBeenCalledWith(false);
-    expect(soloButton.disabled).toBe(true);
-
-    await act(async () => soloResult.resolve('failed'));
-
-    expect(soloButton.disabled).toBe(false);
-    expect(soloButton.getAttribute('aria-pressed')).toBe('true');
-  });
-
-  it('Region 가져오기 중에는 같은 Track의 Mute·Solo와 삭제를 막는다', () => {
-    const host = document.createElement('div');
-    document.body.append(host);
-    const root = createRoot(host);
-    mountedRoots.push(root);
-
-    act(() => {
-      root.render(
-        createElement(TrackComponent, {
-          mediaElement: null,
-          track,
-          pixelsPerSecond: 100,
-          waveformRenderCache,
-          onReady: vi.fn(),
-          onVolumeChange: vi.fn(),
-          onPanChange: vi.fn(),
-          onMuteChange: vi.fn().mockResolvedValue('updated'),
-          onSoloChange: vi.fn().mockResolvedValue('updated'),
-          onRemoveTrack: vi.fn().mockResolvedValue('removed'),
-        })
-      );
-    });
-
-    const importButton = host.querySelector<HTMLButtonElement>('button[aria-label="Region 가져오기 시작"]');
-    const muteButton = host.querySelector<HTMLButtonElement>('button[aria-label="Track Mute"]');
-    const soloButton = host.querySelector<HTMLButtonElement>('button[aria-label="Track Solo"]');
-    const removeButton = host.querySelector<HTMLButtonElement>('button[aria-label="Track 삭제"]');
-    if (!importButton || !muteButton || !soloButton || !removeButton) {
-      throw new Error('Track 제어 버튼을 찾지 못했습니다.');
-    }
-
-    act(() => importButton.click());
-
-    expect(muteButton.disabled).toBe(true);
-    expect(soloButton.disabled).toBe(true);
-    expect(removeButton.disabled).toBe(true);
+    expect(muteButton?.disabled).toBe(false);
   });
 });

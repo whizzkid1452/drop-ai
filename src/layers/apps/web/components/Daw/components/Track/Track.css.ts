@@ -40,7 +40,7 @@ export const trackRow = style({
   display: 'grid',
   gridTemplateColumns: `${TRACK_HEADER_WIDTH} minmax(${TIMELINE_CONTENT_WIDTH}, 1fr)`,
   minWidth: `calc(${TRACK_HEADER_WIDTH} + ${TIMELINE_CONTENT_WIDTH})`,
-  minHeight: '128px',
+  minHeight: '76px',
   borderBottom: '1px solid #090b0c',
   backgroundColor: '#1c1f21',
 });
@@ -61,10 +61,15 @@ export const trackHeader = style({
   boxShadow: 'inset -1px 0 0 #3a3f42, inset 0 1px 0 #383d40',
 });
 
+export const trackHeaderSelected = style({
+  boxShadow: 'inset 3px 0 0 #ff4fd8, inset -1px 0 0 #3a3f42, inset 0 1px 0 #383d40',
+  background: 'linear-gradient(90deg, #362b34 0%, #292a2d 100%)',
+});
+
 export const trackTimeline = style({
   position: 'relative',
   minWidth: 0,
-  minHeight: '128px',
+  minHeight: '76px',
   overflow: 'hidden',
   backgroundColor: '#202426',
   backgroundImage:
@@ -95,20 +100,6 @@ export const soloButtonActive = style({
   color: '#fff5fd',
 });
 
-export const dangerButton = style({
-  marginLeft: 'auto',
-  color: '#d9a39b',
-});
-
-export const mixControls = style({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '4px',
-  padding: '5px 6px',
-  border: '1px solid #171a1c',
-  backgroundColor: '#202426',
-});
-
 export const controls = style({
   width: '100%',
   minWidth: 0,
@@ -121,8 +112,6 @@ export const controlGroup = style({
   alignItems: 'center',
   gap: '5px',
 });
-
-export const actionButton = style([controlButton]);
 
 export const sliderLabel = style({
   color: '#aeb3b5',
