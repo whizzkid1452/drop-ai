@@ -200,6 +200,7 @@ export function DawPage() {
           pixelsPerSecond={pixelsPerSecond}
           selectedTrackId={selectedTrackId}
           setPixelsPerSecond={setPixelsPerSecond}
+          timelineViewportRef={mainContentRef}
           onTrackSelect={setRequestedTrackId}
         />
       </div>

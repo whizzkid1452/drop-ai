@@ -9,6 +9,8 @@ import { calculateRegionDragStartTime } from '@/layers/apps/web/hooks/calculate-
 import type { WaveformRenderData } from '../TrackList/waveform-render-cache';
 
 const MISSING_AUDIO_SOURCE_MESSAGE = '오디오 소스를 찾을 수 없습니다.';
+// Region의 상·하 1px 테두리를 제외해야 WaveSurfer 캔버스가 76px Track 안에서 잘리지 않는다.
+const TRACK_WAVEFORM_HEIGHT = 74;
 
 interface RegionDragSession {
   pointerId: number;
@@ -211,7 +213,7 @@ export const RegionComponent = ({
         >
           <WavesurferPlayer
             duration={waveformRenderSelection.current.renderData?.duration}
-            height={126}
+            height={TRACK_WAVEFORM_HEIGHT}
             peaks={waveformRenderSelection.current.renderData?.peaks}
             waveColor="#ff8fe8"
             progressColor="#ffc4f2"
