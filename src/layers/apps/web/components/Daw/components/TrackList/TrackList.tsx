@@ -1,5 +1,6 @@
 ﻿import { useEffect, useRef, useState, useCallback } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
+import type { RefObject } from 'react';
 import { TrackComponent, type RegionWaveSurferReadyEvent } from '../Track/TrackComponent';
 import {
   createRegionWaveSurferKey,
@@ -18,9 +19,16 @@ interface TrackListProps {
   pixelsPerSecond: number;
   selectedTrackId: string | null;
   setPixelsPerSecond: (value: number) => void;
+  timelineViewportRef: RefObject<HTMLDivElement | null>;
 }
 
-export function TrackList({ onTrackSelect, pixelsPerSecond, selectedTrackId, setPixelsPerSecond }: TrackListProps) {
+export function TrackList({
+  onTrackSelect,
+  pixelsPerSecond,
+  selectedTrackId,
+  setPixelsPerSecond,
+  timelineViewportRef,
+}: TrackListProps) {
   const tracks = useSession(state => state.tracks);
   const trackArray = Array.from(tracks.values());
   const commandExecutor = useCommandExecutor();
@@ -128,7 +136,7 @@ export function TrackList({ onTrackSelect, pixelsPerSecond, selectedTrackId, set
   return (
     <div className={styles.trackList}>
       <div ref={containerRef} className={styles.tracksContainer}>
-        <Cursor pixelsPerSecond={pixelsPerSecond} />
+        <Cursor pixelsPerSecond={pixelsPerSecond} timelineViewportRef={timelineViewportRef} />
         {trackArray.map(track => (
           <TrackComponent
             key={track.id}

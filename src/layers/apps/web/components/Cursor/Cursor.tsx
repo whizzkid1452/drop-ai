@@ -1,12 +1,13 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, type RefObject } from 'react';
 import { usePlaybackClock, useSession } from '@/layers/apps/web/context/layer-hooks';
 import * as styles from './Cursor.css.ts';
 
 interface CursorProps {
   pixelsPerSecond: number;
+  timelineViewportRef: RefObject<HTMLElement | null>;
 }
 
-export const Cursor = ({ pixelsPerSecond }: CursorProps) => {
+export const Cursor = ({ pixelsPerSecond, timelineViewportRef }: CursorProps) => {
   const cursorRef = useRef<HTMLDivElement>(null);
   const rAF = useRef<number>(0);
   const isPlaying = useSession(state => state.isPlaying);
@@ -18,6 +19,8 @@ export const Cursor = ({ pixelsPerSecond }: CursorProps) => {
       if (cursorRef.current) {
         const x = time * pixelsPerSecond;
         cursorRef.current.style.transform = `translateX(${x}px)`;
+        // 고정 Track 헤더 열로 이동한 플레이헤드는 스크롤 콘텐츠 위에 겹치지 않도록 숨긴다.
+        cursorRef.current.style.visibility = x < (timelineViewportRef.current?.scrollLeft ?? 0) ? 'hidden' : 'visible';
       }
     };
 
@@ -26,6 +29,13 @@ export const Cursor = ({ pixelsPerSecond }: CursorProps) => {
       updatePosition(time);
       rAF.current = requestAnimationFrame(animate);
     };
+
+    const handleViewportScroll = () => {
+      updatePosition(isPlaying ? playbackClock.getCurrentTime() : currentTime);
+    };
+
+    const timelineViewport = timelineViewportRef.current;
+    timelineViewport?.addEventListener('scroll', handleViewportScroll);
 
     // Start/stop animation based on isPlaying state
     if (isPlaying) {
@@ -38,8 +48,9 @@ export const Cursor = ({ pixelsPerSecond }: CursorProps) => {
 
     return () => {
       cancelAnimationFrame(rAF.current);
+      timelineViewport?.removeEventListener('scroll', handleViewportScroll);
     };
-  }, [isPlaying, currentTime, pixelsPerSecond, playbackClock]);
+  }, [isPlaying, currentTime, pixelsPerSecond, playbackClock, timelineViewportRef]);
 
   return <div ref={cursorRef} className={styles.cursor} />;
 };

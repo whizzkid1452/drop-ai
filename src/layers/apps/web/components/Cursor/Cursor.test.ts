@@ -23,12 +23,14 @@ const mountedRoots: Root[] = [];
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function renderCursor() {
+function renderCursor(timelineViewport: HTMLDivElement | null = null) {
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
   mountedRoots.push(root);
-  act(() => root.render(createElement(Cursor, { pixelsPerSecond: 10 })));
+  act(() =>
+    root.render(createElement(Cursor, { pixelsPerSecond: 10, timelineViewportRef: { current: timelineViewport } }))
+  );
 
   const cursor = host.querySelector<HTMLDivElement>('.cursor');
   if (!cursor) {
@@ -76,5 +78,23 @@ describe('Cursor', () => {
 
     expect(layerMocks.getCurrentTime).not.toHaveBeenCalled();
     expect(cursor.style.transform).toBe('translateX(40px)');
+  });
+
+  it('가로 스크롤로 Track 헤더 열에 들어간 플레이헤드를 숨긴다', () => {
+    layerMocks.isPlaying = false;
+    layerMocks.currentTime = 4;
+    vi.stubGlobal('requestAnimationFrame', vi.fn());
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const timelineViewport = document.createElement('div');
+    timelineViewport.scrollLeft = 50;
+
+    const cursor = renderCursor(timelineViewport);
+
+    expect(cursor.style.visibility).toBe('hidden');
+
+    timelineViewport.scrollLeft = 30;
+    act(() => timelineViewport.dispatchEvent(new Event('scroll')));
+
+    expect(cursor.style.visibility).toBe('visible');
   });
 });

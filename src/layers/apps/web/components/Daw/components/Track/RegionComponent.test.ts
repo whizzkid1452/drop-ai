@@ -13,7 +13,12 @@ const { renderWaveSurferPlayer, resolveAudioSource } = vi.hoisted(() => ({
 }));
 
 vi.mock('@wavesurfer/react', () => ({
-  default: (props: { duration?: number; peaks?: Array<Float32Array | number[]>; url: string }) => {
+  default: (props: {
+    duration?: number;
+    height?: number | 'auto';
+    peaks?: Array<Float32Array | number[]>;
+    url: string;
+  }) => {
     renderWaveSurferPlayer(props);
     return createElement('div', { 'data-audio-url': props.url });
   },
@@ -171,6 +176,28 @@ describe('RegionComponent 오디오 소스', () => {
     expect(resolveAudioSource).toHaveBeenCalledWith(sourceBackedRegion.sourceId);
     expect(host.querySelector('[data-audio-url="blob:source"]')).not.toBeNull();
     expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('Track 높이에 맞춰 파형 전체를 렌더링한다', () => {
+    resolveAudioSource.mockReturnValue({
+      metadata: {
+        id: sourceId,
+        fileName: 'source.wav',
+        mimeType: 'audio/wav',
+        byteLength: 100,
+        durationSeconds: 3,
+      },
+      objectUrl: 'blob:source',
+      isCommitted: true,
+      regionIds: [sourceBackedRegion.id],
+    });
+
+    renderRegion({
+      region: sourceBackedRegion,
+      onMove: vi.fn().mockResolvedValue(undefined),
+    });
+
+    expect(renderWaveSurferPlayer).toHaveBeenCalledWith(expect.objectContaining({ height: 74 }));
   });
 
   it('같은 runtime source의 캐시된 파형 데이터를 WaveSurfer에 전달한다', () => {
