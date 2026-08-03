@@ -13,3 +13,11 @@ export const FREE_ACCOUNT_ENTITLEMENT: AccountEntitlement = {
   status: 'active',
   currentPeriodEnd: null,
 };
+
+export function hasActiveProEntitlement(entitlement: AccountEntitlement, now = new Date()): boolean {
+  if (entitlement.planCode !== 'pro' || entitlement.status !== 'active' || !entitlement.currentPeriodEnd) {
+    return false;
+  }
+
+  return Date.parse(entitlement.currentPeriodEnd) > now.getTime();
+}

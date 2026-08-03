@@ -45,6 +45,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@supabase/supabase-js": "^2.110.8",
     "@tanstack/react-query": "^5.62.13",
+    "@tosspayments/tosspayments-sdk": "^2.7.1",
     "@wavesurfer/react": "^1.0.12",
     "es-toolkit": "^1.43.0",
     "react": "^19.0.0",

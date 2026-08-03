@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AgentTerminal } from './AgentTerminal/AgentTerminal';
+import { AgentTerminalAccess } from './AgentTerminalAccess';
 import { CliTerminal } from './CliTerminal/CliTerminal';
 import * as styles from './Terminal.css.ts';
 
@@ -14,7 +14,7 @@ export function Terminal() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.content}>{activeTerminal === 'AGENT' ? <AgentTerminal /> : <CliTerminal />}</div>
+      <div className={styles.content}>{activeTerminal === 'AGENT' ? <AgentTerminalAccess /> : <CliTerminal />}</div>
       <div className={styles.footer}>
         <button
           className={styles.toggleButton}

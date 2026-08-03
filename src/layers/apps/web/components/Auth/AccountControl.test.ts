@@ -60,8 +60,11 @@ describe('AccountControl', () => {
     };
     const host = renderAccountControl();
     const signOutButton = host.querySelector('button');
+    const billingLink = host.querySelector('a');
 
     expect(host.textContent).toContain('user@example.com');
+    expect(billingLink?.getAttribute('href')).toBe('/billing');
+    expect(billingLink?.textContent).toBe('PRO');
 
     await act(async () => signOutButton?.click());
 

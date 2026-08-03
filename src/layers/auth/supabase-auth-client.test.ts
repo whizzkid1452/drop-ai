@@ -39,12 +39,23 @@ describe('SupabaseAuthClient', () => {
     emitSession(null);
     expect(authClient.getSnapshot()).toEqual({ status: 'anonymous', user: null });
 
-    emitSession({ user: { id: 'user-1', email: 'user@example.com' } });
+    emitSession({ access_token: 'access-token-1', user: { id: 'user-1', email: 'user@example.com' } });
     expect(authClient.getSnapshot()).toEqual({
       status: 'authenticated',
       user: { id: 'user-1', email: 'user@example.com' },
     });
+    expect(authClient.getAccessToken()).toBe('access-token-1');
     expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it('로그아웃 상태로 바뀌면 서버 요청용 access token을 제거한다', () => {
+    const { authPort, emitSession } = createAuthPortHarness();
+    const authClient = new SupabaseAuthClient(authPort);
+
+    emitSession({ access_token: 'access-token-1', user: { id: 'user-1' } });
+    emitSession(null);
+
+    expect(authClient.getAccessToken()).toBeNull();
   });
 
   it('Magic Link 요청에 이메일과 callback URL을 전달한다', async () => {

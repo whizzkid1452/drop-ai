@@ -10,6 +10,7 @@ import type { AudioRuntimeCapabilities } from '../../../shared/utils/audio-runti
 import type { IMidiInput } from '../../../midi-input/i-midi-input';
 import type { AuthSnapshot, IAuthClient } from '../../../auth/i-auth-client';
 import { useLayer } from './layer-context';
+import type { IBillingClient } from '../../../billing/i-billing-client';
 
 export function useAudioRuntimeCapabilities(): AudioRuntimeCapabilities {
   return useLayer().audioRuntimeCapabilities;
@@ -17,6 +18,10 @@ export function useAudioRuntimeCapabilities(): AudioRuntimeCapabilities {
 
 export function useAuthClient(): IAuthClient {
   return useLayer().authClient;
+}
+
+export function useBillingClient(): IBillingClient {
+  return useLayer().billingClient;
 }
 
 export function useAuthSnapshot(): AuthSnapshot {

@@ -34,6 +34,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.62.13
         version: 5.90.5(react@19.2.1)
+      '@tosspayments/tosspayments-sdk':
+        specifier: ^2.7.1
+        version: 2.7.1
       '@wavesurfer/react':
         specifier: ^1.0.12
         version: 1.0.12(react@19.2.1)(wavesurfer.js@7.10.1)
@@ -1184,6 +1187,10 @@ packages:
       { integrity: sha512-pN+8UWpxZkEJ/Rnnj2v2Sxpx1WFlaa9L6a4UO89p6tTQbeo+m0MS8oYDjbggrR8QcTyjKoYWKS3xJQGr3ExT8Q== }
     peerDependencies:
       react: ^18 || ^19
+
+  '@tosspayments/tosspayments-sdk@2.7.1':
+    resolution:
+      { integrity: sha512-nHInxgFvFGm1VtaCS+IPLdtmE+B2a+MCYE9Meq0aR/0L0hAgoGllLS4ciQGb1RtLvp3mHcj3lL80XMi4BqQ7uw== }
 
   '@types/babel__core@7.20.5':
     resolution:
@@ -4065,6 +4072,8 @@ snapshots:
     dependencies:
       '@tanstack/query-core': 5.90.5
       react: 19.2.1
+
+  '@tosspayments/tosspayments-sdk@2.7.1': {}
 
   '@types/babel__core@7.20.5':
     dependencies:

@@ -5,6 +5,8 @@ const UNAVAILABLE_AUTH_SNAPSHOT: AuthSnapshot = { status: 'unavailable', user: n
 export class UnavailableAuthClient implements IAuthClient {
   getSnapshot = (): AuthSnapshot => UNAVAILABLE_AUTH_SNAPSHOT;
 
+  getAccessToken = (): null => null;
+
   subscribe = (): (() => void) => () => undefined;
 
   async signInWithMagicLink(): Promise<void> {
