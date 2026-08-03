@@ -18,7 +18,15 @@ vi.mock('./components/DawHeader/DawHeader', () => ({
 }));
 
 vi.mock('./components/TrackList/TrackList', () => ({
-  TrackList: () => createElement('div', { 'data-testid': 'track-list' }),
+  TrackList: ({ onTrackSelect }: { onTrackSelect: (trackId: string) => void }) =>
+    createElement(
+      'button',
+      {
+        'aria-label': '두 번째 Track 선택',
+        onClick: () => onTrackSelect('track-2'),
+      },
+      '두 번째 Track 선택'
+    ),
 }));
 
 vi.mock('./components/Terminals/Terminal', () => ({
@@ -26,7 +34,8 @@ vi.mock('./components/Terminals/Terminal', () => ({
 }));
 
 vi.mock('./components/TrackInfoSidebar/TrackInfoSidebar', () => ({
-  TrackInfoSidebar: () => null,
+  TrackInfoSidebar: ({ selectedTrackId }: { selectedTrackId: string | null }) =>
+    createElement('div', { 'data-selected-track-id': selectedTrackId ?? '', 'data-testid': 'track-inspector' }),
 }));
 
 vi.mock('./components/TimeRuler/TimeRuler', () => ({
@@ -123,6 +132,35 @@ describe('DawPage 타임라인 스크롤', () => {
 
     expect(mainContent.scrollLeft).toBe(120);
     expect(wheelEvent.defaultPrevented).toBe(true);
+  });
+});
+
+describe('DawPage Track 선택', () => {
+  it('첫 Track을 기본 선택하고 TrackList 선택을 Inspector에 전달한다', () => {
+    layerMocks.tracks = new Map([
+      ['track-1', { regions: [] }],
+      ['track-2', { regions: [] }],
+    ]);
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    mountedRoots.push(root);
+
+    act(() => root.render(createElement(DawPage)));
+
+    expect(host.querySelector('[data-testid="track-inspector"]')).toBeNull();
+
+    const inspectorToggle = host.querySelector<HTMLButtonElement>('button[aria-label="Open track inspector"]');
+    act(() => inspectorToggle?.click());
+
+    const inspector = host.querySelector<HTMLElement>('[data-testid="track-inspector"]');
+    const selectSecondTrack = host.querySelector<HTMLButtonElement>('button[aria-label="두 번째 Track 선택"]');
+
+    expect(inspector?.dataset.selectedTrackId).toBe('track-1');
+
+    act(() => selectSecondTrack?.click());
+
+    expect(inspector?.dataset.selectedTrackId).toBe('track-2');
   });
 });
 
