@@ -181,16 +181,18 @@ export class InMemoryProjectRepository implements ILocalFirstProjectRepository {
       .filter(entry => entry.nextAttemptAtEpochMilliseconds <= dueAtEpochMilliseconds)
       .filter(entry => projectId === undefined || entry.projectId === projectId)
       .sort((left, right) => {
+        if (left.projectId === right.projectId) {
+          const revisionDifference = left.localRevision - right.localRevision;
+          if (revisionDifference !== 0) {
+            return revisionDifference;
+          }
+          return left.operationId.localeCompare(right.operationId);
+        }
         const createdAtDifference = left.createdAtEpochMilliseconds - right.createdAtEpochMilliseconds;
         if (createdAtDifference !== 0) {
           return createdAtDifference;
         }
-        const projectIdDifference = left.projectId.localeCompare(right.projectId);
-        if (projectIdDifference !== 0) {
-          return projectIdDifference;
-        }
-        const revisionDifference = left.localRevision - right.localRevision;
-        return revisionDifference === 0 ? left.operationId.localeCompare(right.operationId) : revisionDifference;
+        return left.projectId.localeCompare(right.projectId);
       })
       .slice(0, limit)
       .map(entry => this.cloneOutboxEntry(entry));
