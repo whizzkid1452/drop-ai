@@ -4,9 +4,10 @@ import { AudioSourceRepositoryErrorCode } from './errors';
 import { OpfsAudioSourceRepository } from './opfs-audio-source-repository';
 
 const SOURCE_ID = '11111111-1111-4111-8111-111111111111';
+const SECOND_SOURCE_ID = '22222222-2222-4222-8222-222222222222';
 
 type StoredBlobTransform = (blob: Blob) => Blob;
-type SourceOperationLock = <T>(sourceId: string, execute: () => Promise<T>) => Promise<T>;
+type StorageOperationLock = <T>(storageKey: string, execute: () => Promise<T>) => Promise<T>;
 
 interface MemoryFileHandleOptions {
   readonly closeError?: Error;
@@ -16,6 +17,7 @@ interface MemoryFileHandleOptions {
 }
 
 class MemoryFileHandle {
+  readonly kind = 'file';
   blob = new Blob();
 
   constructor(private readonly options: MemoryFileHandleOptions = {}) {}
@@ -58,6 +60,7 @@ afterEach(() => {
 });
 
 class MemoryDirectoryHandle {
+  readonly kind = 'directory';
   readonly directories = new Map<string, MemoryDirectoryHandle>();
   readonly files = new Map<string, MemoryFileHandle>();
 
@@ -108,6 +111,15 @@ class MemoryDirectoryHandle {
 
     throw new DOMException('Entry not found', 'NotFoundError');
   }
+
+  async *entries(): AsyncIterableIterator<[string, FileSystemHandle]> {
+    for (const [name, directory] of this.directories) {
+      yield [name, directory as unknown as FileSystemDirectoryHandle];
+    }
+    for (const [name, file] of this.files) {
+      yield [name, file as unknown as FileSystemFileHandle];
+    }
+  }
 }
 
 function createMetadata(overrides: Partial<ProjectAudioSource> = {}): ProjectAudioSource {
@@ -121,7 +133,7 @@ function createMetadata(overrides: Partial<ProjectAudioSource> = {}): ProjectAud
   };
 }
 
-function createMemorySourceOperationLock(): SourceOperationLock {
+function createMemoryStorageOperationLock(): StorageOperationLock {
   const operationTails = new Map<string, Promise<void>>();
 
   return async <T>(sourceId: string, execute: () => Promise<T>): Promise<T> => {
@@ -145,27 +157,92 @@ function createMemorySourceOperationLock(): SourceOperationLock {
 
 function createRepository(
   root: MemoryDirectoryHandle,
-  sourceOperationLock: SourceOperationLock = createMemorySourceOperationLock()
+  storageOperationLock: StorageOperationLock = createMemoryStorageOperationLock()
 ): OpfsAudioSourceRepository {
   return new OpfsAudioSourceRepository({
     rootDirectoryProvider: async () => root as unknown as FileSystemDirectoryHandle,
-    sourceOperationLock,
+    storageOperationLock,
   });
 }
 
-function getStoredFile(root: MemoryDirectoryHandle, sourceId = SOURCE_ID): MemoryFileHandle {
-  const file = root.directories
+function getStoredContentBlob(root: MemoryDirectoryHandle): MemoryFileHandle {
+  const contentDirectory = root.directories
     .get('drop-ai')
     ?.directories.get('audio-sources')
-    ?.directories.get('v1')
-    ?.files.get(sourceId);
+    ?.directories.get('v2')
+    ?.directories.get('blobs');
+  const file = contentDirectory?.files.values().next().value;
   if (!file) {
-    throw new Error(`테스트 Source 파일을 찾을 수 없습니다: ${sourceId}`);
+    throw new Error('테스트 content blob을 찾을 수 없습니다.');
   }
   return file;
 }
 
+function getContentDirectories(root: MemoryDirectoryHandle): {
+  blobs: MemoryDirectoryHandle;
+  manifests: MemoryDirectoryHandle;
+} {
+  const versionDirectory = root.directories.get('drop-ai')?.directories.get('audio-sources')?.directories.get('v2');
+  const blobs = versionDirectory?.directories.get('blobs');
+  const manifests = versionDirectory?.directories.get('manifests');
+  if (!blobs || !manifests) {
+    throw new Error('테스트 content-addressed 저장소를 찾을 수 없습니다.');
+  }
+  return { blobs, manifests };
+}
+
 describe('OpfsAudioSourceRepository', () => {
+  it('같은 바이트를 여러 Source가 참조하면 content blob은 한 번만 저장한다', async () => {
+    const root = new MemoryDirectoryHandle();
+    const repository = createRepository(root);
+    const firstMetadata = createMetadata();
+    const secondMetadata = createMetadata({ id: SECOND_SOURCE_ID });
+
+    await repository.create({ metadata: firstMetadata, blob: new Blob(['test']) });
+    await repository.create({ metadata: secondMetadata, blob: new Blob(['test']) });
+
+    const { blobs, manifests } = getContentDirectories(root);
+    expect(blobs.files.size).toBe(1);
+    expect(manifests.files.size).toBe(2);
+    await expect((await repository.load(firstMetadata))?.text()).resolves.toBe('test');
+    await expect((await repository.load(secondMetadata))?.text()).resolves.toBe('test');
+  });
+
+  it('공유 content blob은 마지막 Source가 삭제될 때 제거한다', async () => {
+    const root = new MemoryDirectoryHandle();
+    const repository = createRepository(root);
+    const firstMetadata = createMetadata();
+    const secondMetadata = createMetadata({ id: SECOND_SOURCE_ID });
+    await repository.create({ metadata: firstMetadata, blob: new Blob(['test']) });
+    await repository.create({ metadata: secondMetadata, blob: new Blob(['test']) });
+
+    await repository.delete(firstMetadata.id);
+
+    expect(getContentDirectories(root).blobs.files.size).toBe(1);
+    await expect(repository.load(secondMetadata)).resolves.not.toBeNull();
+
+    await repository.delete(secondMetadata.id);
+
+    expect(getContentDirectories(root).blobs.files.size).toBe(0);
+  });
+
+  it('v1 경로에 저장된 기존 Source를 계속 불러온다', async () => {
+    const root = new MemoryDirectoryHandle();
+    const legacyDirectory = (await (
+      await (
+        await root.getDirectoryHandle('drop-ai', { create: true })
+      ).getDirectoryHandle('audio-sources', {
+        create: true,
+      })
+    ).getDirectoryHandle('v1', { create: true })) as unknown as MemoryDirectoryHandle;
+    const legacyFile = (await legacyDirectory.getFileHandle(SOURCE_ID, {
+      create: true,
+    })) as unknown as MemoryFileHandle;
+    legacyFile.blob = new Blob(['test']);
+
+    await expect((await createRepository(root).load(createMetadata()))?.text()).resolves.toBe('test');
+  });
+
   it('고정 경로에 저장하고 새 Repository 인스턴스에서 같은 바이트를 불러온다', async () => {
     const root = new MemoryDirectoryHandle();
     const metadata = createMetadata();
@@ -177,9 +254,9 @@ describe('OpfsAudioSourceRepository', () => {
     expect([...root.directories.keys()]).toEqual(['drop-ai']);
     expect([...(root.directories.get('drop-ai')?.directories.keys() ?? [])]).toEqual(['audio-sources']);
     expect([...(root.directories.get('drop-ai')?.directories.get('audio-sources')?.directories.keys() ?? [])]).toEqual([
-      'v1',
+      'v2',
     ]);
-    expect(getStoredFile(root)).toBeDefined();
+    expect(getStoredContentBlob(root)).toBeDefined();
     expect(loadedBlob?.type).toBe(metadata.mimeType);
     await expect(loadedBlob?.text()).resolves.toBe('test');
   });
@@ -252,10 +329,10 @@ describe('OpfsAudioSourceRepository', () => {
 
   it('같은 Source의 동시 생성을 순서대로 처리해 기존 바이트를 보호한다', async () => {
     const root = new MemoryDirectoryHandle();
-    const sourceOperationLock = createMemorySourceOperationLock();
+    const storageOperationLock = createMemoryStorageOperationLock();
     const lockRequest = vi.fn(
       (lockName: string, _options: LockOptions, execute: () => Promise<unknown>): Promise<unknown> =>
-        sourceOperationLock(lockName, execute)
+        storageOperationLock(lockName, execute)
     );
     vi.stubGlobal('navigator', {
       locks: { request: lockRequest },
@@ -277,7 +354,7 @@ describe('OpfsAudioSourceRepository', () => {
     });
     await expect((await firstRepository.load(metadata))?.text()).resolves.toBe('test');
     expect(lockRequest).toHaveBeenCalledWith(
-      `drop-ai:audio-source:v1:${SOURCE_ID}`,
+      `drop-ai:audio-source:v2:source:${SOURCE_ID}`,
       { mode: 'exclusive' },
       expect.any(Function)
     );
@@ -334,7 +411,7 @@ describe('OpfsAudioSourceRepository', () => {
     const repository = createRepository(root);
     const metadata = createMetadata();
     await repository.create({ metadata, blob: new Blob(['test']) });
-    getStoredFile(root).blob = new Blob(['corrupt']);
+    getStoredContentBlob(root).blob = new Blob(['corrupt']);
 
     await expect(repository.load(metadata)).rejects.toMatchObject({
       code: AudioSourceRepositoryErrorCode.STORED_SOURCE_BYTE_LENGTH_MISMATCH,
@@ -366,7 +443,7 @@ describe('OpfsAudioSourceRepository', () => {
     );
     const repository = new OpfsAudioSourceRepository({
       rootDirectoryProvider,
-      sourceOperationLock: createMemorySourceOperationLock(),
+      storageOperationLock: createMemoryStorageOperationLock(),
     });
 
     await expect(repository.delete('invalid-source-id')).rejects.toMatchObject({
@@ -384,7 +461,7 @@ describe('OpfsAudioSourceRepository', () => {
       }) as unknown as FileSystemDirectoryHandle;
     const repository = new OpfsAudioSourceRepository({
       rootDirectoryProvider,
-      sourceOperationLock: createMemorySourceOperationLock(),
+      storageOperationLock: createMemoryStorageOperationLock(),
     });
 
     await expect(repository.load(createMetadata())).rejects.toMatchObject({
@@ -397,7 +474,7 @@ describe('OpfsAudioSourceRepository', () => {
     vi.stubGlobal('navigator', {});
 
     await expect(
-      new OpfsAudioSourceRepository({ sourceOperationLock: createMemorySourceOperationLock() }).load(createMetadata())
+      new OpfsAudioSourceRepository({ storageOperationLock: createMemoryStorageOperationLock() }).load(createMetadata())
     ).rejects.toMatchObject({
       code: AudioSourceRepositoryErrorCode.STORAGE_UNAVAILABLE,
     });
@@ -418,7 +495,7 @@ describe('OpfsAudioSourceRepository', () => {
       rootDirectoryProvider: async () => {
         throw new DOMException('Quota exceeded', 'QuotaExceededError');
       },
-      sourceOperationLock: createMemorySourceOperationLock(),
+      storageOperationLock: createMemoryStorageOperationLock(),
     });
 
     await expect(repository.create({ metadata: createMetadata(), blob: new Blob(['test']) })).rejects.toMatchObject({
