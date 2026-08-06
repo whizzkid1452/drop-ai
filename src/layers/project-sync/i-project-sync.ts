@@ -1,4 +1,5 @@
 import type { ProjectOutboxEntry } from '../project-repository/i-project-repository';
+import type { ProjectDocumentSnapshot } from '../shared/types/project-document.schema';
 
 export interface ProjectSyncSuccess {
   readonly operationId: string;
@@ -8,6 +9,10 @@ export interface ProjectSyncSuccess {
 
 export interface IProjectSyncGateway {
   pushProjectChange(change: ProjectOutboxEntry): Promise<ProjectSyncSuccess>;
+}
+
+export interface IProjectMediaSync {
+  ensureProjectMedia(document: ProjectDocumentSnapshot): Promise<void>;
 }
 
 export interface IProjectSyncService {
@@ -26,6 +31,12 @@ export class NoopProjectSyncService implements IProjectSyncService {
   }
 
   resume(): void {
+    return undefined;
+  }
+}
+
+export class NoopProjectMediaSync implements IProjectMediaSync {
+  async ensureProjectMedia(): Promise<void> {
     return undefined;
   }
 }

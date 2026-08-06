@@ -1,5 +1,10 @@
 import type { ILocalFirstProjectRepository } from '../project-repository/i-project-repository';
-import type { IProjectSyncGateway, IProjectSyncService } from './i-project-sync';
+import {
+  NoopProjectMediaSync,
+  type IProjectMediaSync,
+  type IProjectSyncGateway,
+  type IProjectSyncService,
+} from './i-project-sync';
 import { isRetryableProjectSyncError, ProjectSyncError, ProjectSyncErrorCode } from './project-sync-error';
 
 const DEFAULT_RETRY_BASE_DELAY_MILLISECONDS = 1_000;
@@ -11,6 +16,7 @@ type ScheduleTask = (callback: () => void, delayMilliseconds: number) => CancelS
 
 interface ProjectSyncCoordinatorOptions {
   readonly gateway: IProjectSyncGateway;
+  readonly mediaSync?: IProjectMediaSync;
   readonly now?: () => number;
   readonly reportFailure?: (cause: unknown) => void;
   readonly repository: ILocalFirstProjectRepository;
@@ -31,6 +37,7 @@ function scheduleWithTimeout(callback: () => void, delayMilliseconds: number): C
 
 export class ProjectSyncCoordinator implements IProjectSyncService {
   readonly #gateway: IProjectSyncGateway;
+  readonly #mediaSync: IProjectMediaSync;
   readonly #now: () => number;
   readonly #reportFailure: (cause: unknown) => void;
   readonly #repository: ILocalFirstProjectRepository;
@@ -44,6 +51,7 @@ export class ProjectSyncCoordinator implements IProjectSyncService {
 
   constructor({
     gateway,
+    mediaSync = new NoopProjectMediaSync(),
     now = Date.now,
     reportFailure = cause => console.error('[ProjectSyncCoordinator] 프로젝트 동기화 실패', cause),
     repository,
@@ -52,6 +60,7 @@ export class ProjectSyncCoordinator implements IProjectSyncService {
     schedule = scheduleWithTimeout,
   }: ProjectSyncCoordinatorOptions) {
     this.#gateway = gateway;
+    this.#mediaSync = mediaSync;
     this.#now = now;
     this.#reportFailure = reportFailure;
     this.#repository = repository;
@@ -145,6 +154,11 @@ export class ProjectSyncCoordinator implements IProjectSyncService {
       }
 
       try {
+        await this.#mediaSync.ensureProjectMedia(change.document);
+        // 업로드 중 프로젝트가 바뀌면 이전 문서가 새 활성 범위의 응답보다 늦게 적용될 수 있어 전송하지 않는다.
+        if (!this.#isActiveProject(projectId, generation)) {
+          return;
+        }
         const result = await this.#gateway.pushProjectChange(change);
         if (result.operationId !== change.operationId) {
           throw new ProjectSyncError({

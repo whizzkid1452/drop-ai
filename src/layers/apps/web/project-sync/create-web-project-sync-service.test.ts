@@ -1,11 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AuthSnapshot, IAuthClient } from '@/layers/auth/i-auth-client';
+import type { IAudioSourceRepository } from '@/layers/audio-source-repository/i-audio-source-repository';
 import { InMemoryProjectRepository } from '@/layers/project-repository/in-memory-project-repository';
 import type { ProjectDocument } from '@/layers/shared/types/project-document.schema';
 import { createWebProjectSyncService } from './create-web-project-sync-service';
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
 const OPERATION_ID = '22222222-2222-4222-8222-222222222222';
+const audioSourceRepository: IAudioSourceRepository = {
+  create: async () => undefined,
+  delete: async () => undefined,
+  load: async () => null,
+};
 
 function createProjectDocument(): ProjectDocument {
   return {
@@ -53,6 +59,7 @@ describe('createWebProjectSyncService', () => {
     );
     vi.stubGlobal('fetch', fetchImplementation);
     const projectSync = createWebProjectSyncService({
+      audioSourceRepository,
       authClient,
       projectRepository: repository,
       supabasePublishableKey: 'publishable-key',

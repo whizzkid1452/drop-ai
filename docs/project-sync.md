@@ -21,11 +21,13 @@ supabase link --project-ref <project-ref>
 supabase db push
 ```
 
-`202608060001_create_project_sync.sql`은 다음 서버 자원을 만듭니다.
+`202608060001_create_project_sync.sql`과 `202608060002_create_project_media.sql`은 다음 서버 자원을 만듭니다.
 
 - 사용자별 `project_documents`
 - operation ID별 `project_change_receipts`
 - revision 확인과 idempotency 처리를 담당하는 `apply_project_change` RPC
+- 사용자별 private `project-media` Storage bucket 접근 정책
+- Source ID를 SHA-256 Storage 경로에 연결하는 `project_media_refs`와 `register_project_media` RPC
 
 ### 2. 브라우저 환경 변수 설정
 
@@ -40,8 +42,9 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key
 
 1. 프로젝트를 편집합니다.
 2. IndexedDB의 `project-documents`, `project-summaries`, `project-outbox`가 같은 transaction에서 갱신되는지 확인합니다.
-3. 로그인 후 `apply_project_change` 요청이 revision 순서로 전송되는지 확인합니다.
-4. 요청 성공 뒤 해당 operation만 `project-outbox`에서 제거되는지 확인합니다.
+3. 로그인 후 참조 미디어가 `project-media/<user-id>/<sha256>` 경로에 먼저 업로드되는지 확인합니다.
+4. `apply_project_change` 요청이 revision 순서로 전송되는지 확인합니다.
+5. 요청 성공 뒤 해당 operation만 `project-outbox`에서 제거되는지 확인합니다.
 
 ### Verify Final Result
 

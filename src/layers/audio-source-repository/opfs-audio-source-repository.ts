@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ProjectAudioSourceSchema, type ProjectAudioSource } from '../shared/types/project-document.schema';
+import { calculateBlobSha256, Sha256UnavailableError } from '../shared/utils/calculate-blob-sha256';
 import { AudioSourceRepositoryError, AudioSourceRepositoryErrorCode } from './errors';
 import type { CreateAudioSourceRequest, IAudioSourceRepository } from './i-audio-source-repository';
 
@@ -58,7 +59,7 @@ export class OpfsAudioSourceRepository implements IAudioSourceRepository {
   constructor({
     rootDirectoryProvider = getBrowserOpfsRootDirectory,
     storageOperationLock = runWithBrowserStorageLock,
-    contentHashCalculator = calculateSha256ContentHash,
+    contentHashCalculator = calculateAudioSourceContentHash,
   }: OpfsAudioSourceRepositoryOptions = {}) {
     this.rootDirectoryProvider = rootDirectoryProvider;
     this.storageOperationLock = storageOperationLock;
@@ -583,16 +584,19 @@ async function runWithBrowserStorageLock<T>(storageKey: string, execute: () => P
   return lockManager.request(`${STORAGE_OPERATION_LOCK_PREFIX}${storageKey}`, { mode: 'exclusive' }, execute);
 }
 
-async function calculateSha256ContentHash(blob: Blob): Promise<string> {
-  if (!globalThis.crypto?.subtle) {
+async function calculateAudioSourceContentHash(blob: Blob): Promise<string> {
+  try {
+    return await calculateBlobSha256(blob);
+  } catch (cause) {
+    if (!(cause instanceof Sha256UnavailableError)) {
+      throw cause;
+    }
     throw new AudioSourceRepositoryError({
       code: AudioSourceRepositoryErrorCode.STORAGE_UNAVAILABLE,
       message: '이 환경에서는 오디오 Source SHA-256 계산을 사용할 수 없습니다.',
+      cause,
     });
   }
-
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
-  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function isNotFoundError(error: unknown): boolean {
