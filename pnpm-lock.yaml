@@ -8,8 +8,8 @@ importers:
   .:
     dependencies:
       '@daw-engine/core':
-        specifier: github:HURRAEY/daw-engine#78bbb05f63af752fa8166b808adf15b1121b696c
-        version: https://codeload.github.com/HURRAEY/daw-engine/tar.gz/78bbb05f63af752fa8166b808adf15b1121b696c
+        specifier: github:HURRAEY/daw-engine#93bcb0ae065792f1ca4d3a40a3eef4ffe00b5018
+        version: https://codeload.github.com/HURRAEY/daw-engine/tar.gz/93bcb0ae065792f1ca4d3a40a3eef4ffe00b5018
       '@mlc-ai/web-llm':
         specifier: ^0.2.80
         version: 0.2.80
@@ -293,12 +293,12 @@ packages:
       { integrity: sha512-ruv7Ae4J5dUYULmeXw1gmb7rYRz57OWCPM57pHojnLq/3Z1CK2lNSLTCVjxVk1F/TZHwOZZrOWi0ur95BbLxNQ== }
     engines: { node: '>=6.9.0' }
 
-  '@daw-engine/core@https://codeload.github.com/HURRAEY/daw-engine/tar.gz/78bbb05f63af752fa8166b808adf15b1121b696c':
+  '@daw-engine/core@https://codeload.github.com/HURRAEY/daw-engine/tar.gz/93bcb0ae065792f1ca4d3a40a3eef4ffe00b5018':
     resolution:
       {
         gitHosted: true,
-        integrity: sha512-ZR+uGfSJonPaHCbJoXUd/DU3gJUbgCtnsRhmRNSY7O04uUwaYGlF/2YUyIAGO/8yox1J5neXp5YhwPOV/pbk0Q==,
-        tarball: https://codeload.github.com/HURRAEY/daw-engine/tar.gz/78bbb05f63af752fa8166b808adf15b1121b696c,
+        integrity: sha512-W1gsJrgmvshekXm/DT9+jsk+tVwADYQsEoOo4VWuV9F1MF92V8dEhd0b1HMhUVEO904vXHU1iNOOdZI5hLKrHg==,
+        tarball: https://codeload.github.com/HURRAEY/daw-engine/tar.gz/93bcb0ae065792f1ca4d3a40a3eef4ffe00b5018,
       }
     version: 1.0.0-git
     engines: { node: '>=18.18.0' }
@@ -3457,7 +3457,7 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.27.1
 
-  '@daw-engine/core@https://codeload.github.com/HURRAEY/daw-engine/tar.gz/78bbb05f63af752fa8166b808adf15b1121b696c':
+  '@daw-engine/core@https://codeload.github.com/HURRAEY/daw-engine/tar.gz/93bcb0ae065792f1ca4d3a40a3eef4ffe00b5018':
     dependencies:
       zod: 4.4.3
 
