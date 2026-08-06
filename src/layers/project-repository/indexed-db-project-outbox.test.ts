@@ -1,5 +1,7 @@
 import { IDBFactory as FakeIDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { ProjectCrdtDocument } from '../project-crdt/project-crdt-document';
+import { decodeProjectCrdtUpdate } from '../project-crdt/project-crdt-update-codec';
 import type { ProjectDocument } from '../shared/types/project-document.schema';
 import { ProjectRepositoryErrorCode } from './errors';
 import { IndexedDbProjectRepository } from './indexed-db-project-repository';
@@ -57,6 +59,7 @@ describe('IndexedDbProjectRepository Outbox', () => {
       projectId: PROJECT_ID,
       baseRevision: null,
       localRevision: 0,
+      crdtUpdateBase64: expect.any(String),
       attemptCount: 0,
       nextAttemptAtEpochMilliseconds: CREATED_AT,
     });
@@ -67,7 +70,7 @@ describe('IndexedDbProjectRepository Outbox', () => {
 
   it('기존 프로젝트 revision과 전송 대기 변경을 함께 증가시킨다', async () => {
     const repository = createRepository();
-    await repository.commitLocal({
+    const firstCommit = await repository.commitLocal({
       document: createProjectDocument(),
       expectedRevision: 0,
       operationId: FIRST_OPERATION_ID,
@@ -82,6 +85,12 @@ describe('IndexedDbProjectRepository Outbox', () => {
     expect(committed.document.project).toEqual({ id: PROJECT_ID, name: '편집한 프로젝트', revision: 1 });
     expect(committed.outboxEntry).toMatchObject({ baseRevision: 0, localRevision: 1 });
     await expect(repository.load(PROJECT_ID)).resolves.toEqual(committed.document);
+    const remoteDocument = ProjectCrdtDocument.fromUpdate(
+      decodeProjectCrdtUpdate(firstCommit.outboxEntry.crdtUpdateBase64 ?? '')
+    );
+    remoteDocument.applyUpdate(decodeProjectCrdtUpdate(committed.outboxEntry.crdtUpdateBase64 ?? ''));
+    expect(remoteDocument.toProjectDocument()).toEqual(committed.document);
+    remoteDocument.destroy();
   });
 
   it('확인된 변경만 Outbox에서 제거한다', async () => {

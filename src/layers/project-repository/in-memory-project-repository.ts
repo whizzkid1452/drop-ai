@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { createProjectCrdtCommit } from '../project-crdt/project-crdt-commit';
 import type { ProjectDocumentSnapshot } from '../shared/types/project-document.schema';
 import { ProjectRepositoryError, ProjectRepositoryErrorCode } from './errors';
 import type {
@@ -27,6 +28,7 @@ interface InMemoryProjectRepositoryOptions {
 interface StoredProject {
   document: ProjectDocumentSnapshot;
   savedAtEpochMilliseconds: number;
+  crdtStateBase64?: string;
 }
 
 export class InMemoryProjectRepository implements ILocalFirstProjectRepository {
@@ -140,12 +142,18 @@ export class InMemoryProjectRepository implements ILocalFirstProjectRepository {
     }
 
     const createdAtEpochMilliseconds = this.now();
+    const crdtCommit = createProjectCrdtCommit({
+      previousDocument: storedProject?.document ?? null,
+      previousStateBase64: storedProject?.crdtStateBase64,
+      nextDocument: committedDocument,
+    });
     const outboxEntry: ProjectOutboxEntry = {
       operationId: operationIdResult.data,
       projectId: committedDocument.project.id,
       baseRevision,
       localRevision: committedDocument.project.revision,
       document: cloneAndValidateProjectDocument(committedDocument),
+      crdtUpdateBase64: crdtCommit.updateBase64,
       createdAtEpochMilliseconds,
       attemptCount: 0,
       nextAttemptAtEpochMilliseconds: createdAtEpochMilliseconds,
@@ -153,6 +161,7 @@ export class InMemoryProjectRepository implements ILocalFirstProjectRepository {
     this.projects.set(committedDocument.project.id, {
       document: committedDocument,
       savedAtEpochMilliseconds: createdAtEpochMilliseconds,
+      crdtStateBase64: crdtCommit.stateBase64,
     });
     this.pendingChanges.set(outboxEntry.operationId, outboxEntry);
 

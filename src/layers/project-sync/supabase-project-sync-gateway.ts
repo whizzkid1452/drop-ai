@@ -4,10 +4,16 @@ import type { ProjectOutboxEntry } from '../project-repository/i-project-reposit
 import type { IProjectSyncGateway, ProjectSyncSuccess } from './i-project-sync';
 import { ProjectSyncError, ProjectSyncErrorCode } from './project-sync-error';
 
-const ProjectSyncResponseSchema = z.strictObject({
+const SnapshotSyncResponseSchema = z.strictObject({
   operationId: z.uuid(),
   serverRevision: z.number().int().nonnegative(),
   status: z.enum(['already_applied', 'applied', 'revision_conflict']),
+});
+
+const CrdtSyncResponseSchema = z.strictObject({
+  operationId: z.uuid(),
+  sequenceId: z.number().int().positive(),
+  status: z.enum(['already_applied', 'applied']),
 });
 
 type FetchImplementation = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -47,22 +53,32 @@ export class SupabaseProjectSyncGateway implements IProjectSyncGateway {
       });
     }
 
+    const isCrdtUpdate = change.crdtUpdateBase64 !== undefined;
+    const rpcName = isCrdtUpdate ? 'append_project_crdt_update' : 'apply_project_change';
+    const requestBody = isCrdtUpdate
+      ? {
+          p_operation_id: change.operationId,
+          p_project_id: change.projectId,
+          p_update_base64: change.crdtUpdateBase64,
+        }
+      : {
+          p_base_revision: change.baseRevision,
+          p_document: change.document,
+          p_local_revision: change.localRevision,
+          p_operation_id: change.operationId,
+          p_project_id: change.projectId,
+        };
+
     let response: Response;
     try {
-      response = await this.#fetchImplementation(`${this.#supabaseUrl}/rest/v1/rpc/apply_project_change`, {
+      response = await this.#fetchImplementation(`${this.#supabaseUrl}/rest/v1/rpc/${rpcName}`, {
         method: 'POST',
         headers: {
           apikey: this.#supabasePublishableKey,
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          p_base_revision: change.baseRevision,
-          p_document: change.document,
-          p_local_revision: change.localRevision,
-          p_operation_id: change.operationId,
-          p_project_id: change.projectId,
-        }),
+        body: JSON.stringify(requestBody),
       });
     } catch (cause) {
       throw new ProjectSyncError({
@@ -85,14 +101,17 @@ export class SupabaseProjectSyncGateway implements IProjectSyncGateway {
         cause,
       });
     });
-    const result = ProjectSyncResponseSchema.safeParse(responseBody);
+    if (isCrdtUpdate) {
+      const result = CrdtSyncResponseSchema.safeParse(responseBody);
+      if (!result.success) {
+        throw this.#createInvalidResponseError(result.error);
+      }
+      return { kind: 'crdt-update', ...result.data };
+    }
+
+    const result = SnapshotSyncResponseSchema.safeParse(responseBody);
     if (!result.success) {
-      throw new ProjectSyncError({
-        code: ProjectSyncErrorCode.INVALID_RESPONSE,
-        message: '프로젝트 동기화 서버 응답 형식이 유효하지 않습니다.',
-        retryable: false,
-        cause: result.error,
-      });
+      throw this.#createInvalidResponseError(result.error);
     }
     const { operationId, serverRevision, status } = result.data;
     if (status === 'revision_conflict') {
@@ -103,7 +122,16 @@ export class SupabaseProjectSyncGateway implements IProjectSyncGateway {
         details: { operationId, serverRevision },
       });
     }
-    return { operationId, serverRevision, status };
+    return { kind: 'snapshot', operationId, serverRevision, status };
+  }
+
+  #createInvalidResponseError(cause: unknown): ProjectSyncError {
+    return new ProjectSyncError({
+      code: ProjectSyncErrorCode.INVALID_RESPONSE,
+      message: '프로젝트 동기화 서버 응답 형식이 유효하지 않습니다.',
+      retryable: false,
+      cause,
+    });
   }
 
   async #createHttpError(response: Response): Promise<ProjectSyncError> {

@@ -138,4 +138,43 @@ describe('ProjectCrdtDocument', () => {
     expect(firstPeer.toProjectDocument()).toEqual(secondPeer.toProjectDocument());
     expect([130, 140]).toContain(firstPeer.toProjectDocument().timeline.tempoBpm);
   });
+
+  it('keyed collection의 순서 변경을 update로 보존한다', () => {
+    const baseDocument = createProjectDocument();
+    baseDocument.tracks.push(createTrack(SECOND_TRACK_ID, '기타'), createTrack(THIRD_TRACK_ID, '드럼'));
+    const [firstPeer, secondPeer] = createPeers(baseDocument);
+    const nextDocument = cloneDocument(baseDocument);
+    nextDocument.tracks = [nextDocument.tracks[2], nextDocument.tracks[0], nextDocument.tracks[1]];
+    nextDocument.project.revision = 1;
+
+    const update = firstPeer.applyProjectChange({ baseDocument, nextDocument });
+    secondPeer.applyUpdate(update);
+
+    expect(secondPeer.toProjectDocument().tracks.map(track => track.id)).toEqual([
+      THIRD_TRACK_ID,
+      FIRST_TRACK_ID,
+      SECOND_TRACK_ID,
+    ]);
+  });
+
+  it('동시에 바꾼 keyed collection 순서도 모든 peer에서 같은 결과로 수렴한다', () => {
+    const baseDocument = createProjectDocument();
+    baseDocument.tracks.push(createTrack(SECOND_TRACK_ID, '기타'), createTrack(THIRD_TRACK_ID, '드럼'));
+    const [firstPeer, secondPeer] = createPeers(baseDocument);
+    const firstDocument = cloneDocument(baseDocument);
+    firstDocument.tracks.reverse();
+    firstDocument.project.revision = 1;
+    const secondDocument = cloneDocument(baseDocument);
+    secondDocument.tracks = [secondDocument.tracks[1], secondDocument.tracks[2], secondDocument.tracks[0]];
+    secondDocument.project.revision = 1;
+
+    const firstUpdate = firstPeer.applyProjectChange({ baseDocument, nextDocument: firstDocument });
+    const secondUpdate = secondPeer.applyProjectChange({ baseDocument, nextDocument: secondDocument });
+    firstPeer.applyUpdate(secondUpdate);
+    secondPeer.applyUpdate(firstUpdate);
+
+    const firstOrder = firstPeer.toProjectDocument().tracks.map(track => track.id);
+    expect(firstOrder).toEqual(secondPeer.toProjectDocument().tracks.map(track => track.id));
+    expect(firstOrder).toEqual(expect.arrayContaining([FIRST_TRACK_ID, SECOND_TRACK_ID, THIRD_TRACK_ID]));
+  });
 });

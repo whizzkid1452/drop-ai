@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { createProjectCrdtCommit } from '../project-crdt/project-crdt-commit';
+import { isEncodedProjectCrdtUpdate } from '../project-crdt/project-crdt-update-codec';
 import type { ProjectDocumentSnapshot } from '../shared/types/project-document.schema';
 import { ProjectRepositoryError, ProjectRepositoryErrorCode } from './errors';
 import type {
@@ -40,6 +42,7 @@ const StoredProjectDocumentEnvelopeSchema = z.strictObject({
   document: z.unknown().refine(document => document !== undefined, {
     message: '저장 record의 document 필드가 필요합니다.',
   }),
+  crdtStateBase64: z.string().refine(isEncodedProjectCrdtUpdate).optional(),
 });
 
 const StoredProjectSummarySchema = z.strictObject({
@@ -57,6 +60,7 @@ const StoredProjectOutboxEntrySchema = z.strictObject({
   document: z.unknown().refine(document => document !== undefined, {
     message: 'Outbox record의 document 필드가 필요합니다.',
   }),
+  crdtUpdateBase64: z.string().refine(isEncodedProjectCrdtUpdate).optional(),
   createdAtEpochMilliseconds: EpochMillisecondsSchema,
   attemptCount: z.number().int().nonnegative(),
   nextAttemptAtEpochMilliseconds: EpochMillisecondsSchema,
@@ -66,6 +70,12 @@ interface IndexedDbProjectRepositoryOptions {
   readonly indexedDb?: IDBFactory;
   readonly databaseName?: string;
   readonly now?: () => number;
+}
+
+interface StoredProjectDocumentEnvelope {
+  readonly projectId: string;
+  readonly document: ProjectDocumentSnapshot;
+  readonly crdtStateBase64?: string;
 }
 
 interface TransactionExecutionContext<T> {
@@ -202,20 +212,31 @@ export class IndexedDbProjectRepository implements ILocalFirstProjectRepository 
 
         request.onsuccess = () => {
           try {
-            const storedDocument =
-              request.result === undefined ? null : this.parseStoredProjectDocument(request.result, projectId);
+            const storedEnvelope =
+              request.result === undefined ? null : this.parseStoredProjectDocumentEnvelope(request.result, projectId);
+            const storedDocument = storedEnvelope?.document ?? null;
             const nextDocument = this.createNextLocalDocument({
               document: validatedDocument,
               expectedRevision,
               storedDocument,
             });
+            const crdtCommit = createProjectCrdtCommit({
+              previousDocument: storedDocument,
+              previousStateBase64: storedEnvelope?.crdtStateBase64,
+              nextDocument,
+            });
             const outboxEntry = this.createProjectOutboxEntry({
               baseRevision: storedDocument?.project.revision ?? null,
+              crdtUpdateBase64: crdtCommit.updateBase64,
               document: nextDocument,
               operationId: validatedOperationId,
             });
 
-            documentStore.put({ projectId, document: nextDocument });
+            documentStore.put({
+              projectId,
+              document: nextDocument,
+              crdtStateBase64: crdtCommit.stateBase64,
+            });
             summaryStore.put(this.createProjectSummary(nextDocument));
             outboxStore.add(outboxEntry);
             setResult({
@@ -634,10 +655,12 @@ export class IndexedDbProjectRepository implements ILocalFirstProjectRepository 
 
   private createProjectOutboxEntry({
     baseRevision,
+    crdtUpdateBase64,
     document,
     operationId,
   }: {
     readonly baseRevision: number | null;
+    readonly crdtUpdateBase64: string;
     readonly document: ProjectDocumentSnapshot;
     readonly operationId: string;
   }): ProjectOutboxEntry {
@@ -648,6 +671,7 @@ export class IndexedDbProjectRepository implements ILocalFirstProjectRepository 
       baseRevision,
       localRevision: document.project.revision,
       document,
+      crdtUpdateBase64,
       createdAtEpochMilliseconds,
       attemptCount: 0,
       nextAttemptAtEpochMilliseconds: createdAtEpochMilliseconds,
@@ -741,6 +765,10 @@ export class IndexedDbProjectRepository implements ILocalFirstProjectRepository 
   }
 
   private parseStoredProjectDocument(value: unknown, expectedProjectId: string): ProjectDocumentSnapshot {
+    return this.parseStoredProjectDocumentEnvelope(value, expectedProjectId).document;
+  }
+
+  private parseStoredProjectDocumentEnvelope(value: unknown, expectedProjectId: string): StoredProjectDocumentEnvelope {
     const envelopeResult = StoredProjectDocumentEnvelopeSchema.safeParse(value);
     if (!envelopeResult.success || envelopeResult.data.projectId !== expectedProjectId) {
       throw new ProjectRepositoryError({
@@ -763,7 +791,11 @@ export class IndexedDbProjectRepository implements ILocalFirstProjectRepository 
       });
     }
 
-    return document;
+    return {
+      projectId: envelopeResult.data.projectId,
+      document,
+      crdtStateBase64: envelopeResult.data.crdtStateBase64,
+    };
   }
 
   private parseStoredProjectSummary(value: unknown): ProjectSummary {

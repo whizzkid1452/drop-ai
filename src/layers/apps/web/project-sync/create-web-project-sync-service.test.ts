@@ -52,7 +52,7 @@ describe('createWebProjectSyncService', () => {
       operationId: OPERATION_ID,
     });
     const fetchImplementation = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ operationId: OPERATION_ID, serverRevision: 0, status: 'applied' }), {
+      new Response(JSON.stringify({ operationId: OPERATION_ID, sequenceId: 1, status: 'applied' }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })

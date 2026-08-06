@@ -29,6 +29,8 @@ export interface ProjectOutboxEntry {
   readonly baseRevision: number | null;
   readonly localRevision: number;
   readonly document: ProjectDocumentSnapshot;
+  /** 기존 JSON Outbox record에는 없으며 새 commit부터 CRDT update를 저장한다. */
+  readonly crdtUpdateBase64?: string;
   readonly createdAtEpochMilliseconds: number;
   readonly attemptCount: number;
   readonly nextAttemptAtEpochMilliseconds: number;

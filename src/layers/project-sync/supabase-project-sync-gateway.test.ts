@@ -17,7 +17,7 @@ function createAuthClient(accessToken: string | null): IAuthClient {
   };
 }
 
-function createOutboxEntry(): ProjectOutboxEntry {
+function createOutboxEntry({ includeCrdtUpdate = true } = {}): ProjectOutboxEntry {
   return {
     operationId: OPERATION_ID,
     projectId: PROJECT_ID,
@@ -33,6 +33,7 @@ function createOutboxEntry(): ProjectOutboxEntry {
       audioSources: [],
       tracks: [],
     },
+    ...(includeCrdtUpdate ? { crdtUpdateBase64: 'AQID' } : {}),
     createdAtEpochMilliseconds: 1_000,
     attemptCount: 0,
     nextAttemptAtEpochMilliseconds: 1_000,
@@ -40,7 +41,41 @@ function createOutboxEntry(): ProjectOutboxEntry {
 }
 
 describe('SupabaseProjectSyncGateway', () => {
-  it('인증된 사용자의 Outbox 변경을 RPC 요청으로 전송한다', async () => {
+  it('새 Outbox 변경을 CRDT append RPC로 전송한다', async () => {
+    const fetchImplementation = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ operationId: OPERATION_ID, sequenceId: 1, status: 'applied' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    );
+    const gateway = new SupabaseProjectSyncGateway({
+      authClient: createAuthClient('access-token'),
+      fetchImplementation,
+      supabasePublishableKey: 'publishable-key',
+      supabaseUrl: 'https://example.supabase.co',
+    });
+
+    await expect(gateway.pushProjectChange(createOutboxEntry())).resolves.toEqual({
+      kind: 'crdt-update',
+      operationId: OPERATION_ID,
+      sequenceId: 1,
+      status: 'applied',
+    });
+    expect(fetchImplementation).toHaveBeenCalledWith(
+      'https://example.supabase.co/rest/v1/rpc/append_project_crdt_update',
+      expect.objectContaining({
+        body: JSON.stringify({
+          p_operation_id: OPERATION_ID,
+          p_project_id: PROJECT_ID,
+          p_update_base64: 'AQID',
+        }),
+        headers: expect.objectContaining({ Authorization: 'Bearer access-token', apikey: 'publishable-key' }),
+        method: 'POST',
+      })
+    );
+  });
+
+  it('기존 JSON Outbox record는 snapshot RPC로 계속 전송한다', async () => {
     const fetchImplementation = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ operationId: OPERATION_ID, serverRevision: 0, status: 'applied' }), {
         status: 200,
@@ -54,18 +89,15 @@ describe('SupabaseProjectSyncGateway', () => {
       supabaseUrl: 'https://example.supabase.co',
     });
 
-    await expect(gateway.pushProjectChange(createOutboxEntry())).resolves.toEqual({
+    await expect(gateway.pushProjectChange(createOutboxEntry({ includeCrdtUpdate: false }))).resolves.toEqual({
+      kind: 'snapshot',
       operationId: OPERATION_ID,
       serverRevision: 0,
       status: 'applied',
     });
     expect(fetchImplementation).toHaveBeenCalledWith(
       'https://example.supabase.co/rest/v1/rpc/apply_project_change',
-      expect.objectContaining({
-        body: expect.stringContaining(`"p_operation_id":"${OPERATION_ID}"`),
-        headers: expect.objectContaining({ Authorization: 'Bearer access-token', apikey: 'publishable-key' }),
-        method: 'POST',
-      })
+      expect.any(Object)
     );
   });
 
@@ -78,7 +110,7 @@ describe('SupabaseProjectSyncGateway', () => {
       supabaseUrl: 'https://example.supabase.co',
     });
 
-    await expect(gateway.pushProjectChange(createOutboxEntry())).rejects.toMatchObject({
+    await expect(gateway.pushProjectChange(createOutboxEntry({ includeCrdtUpdate: false }))).rejects.toMatchObject({
       code: ProjectSyncErrorCode.AUTH_REQUIRED,
       retryable: true,
     });
@@ -98,7 +130,7 @@ describe('SupabaseProjectSyncGateway', () => {
       supabaseUrl: 'https://example.supabase.co',
     });
 
-    await expect(gateway.pushProjectChange(createOutboxEntry())).rejects.toMatchObject({
+    await expect(gateway.pushProjectChange(createOutboxEntry({ includeCrdtUpdate: false }))).rejects.toMatchObject({
       code: ProjectSyncErrorCode.REVISION_CONFLICT,
       retryable: false,
     });

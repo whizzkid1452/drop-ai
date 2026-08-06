@@ -20,6 +20,7 @@ const audioSourceRegistryRoot = path.join(layersRoot, 'audio-source-registry');
 const controllersRoot = path.join(layersRoot, 'controllers');
 const commandRoot = path.join(layersRoot, 'commands');
 const pluginHostRoot = path.join(layersRoot, 'plugin-host');
+const projectCrdtRoot = path.join(layersRoot, 'project-crdt');
 const projectDocumentMapperRoot = path.join(layersRoot, 'project-document-mapper');
 const queriesRoot = path.join(layersRoot, 'queries');
 const projectRepositoryRoot = path.join(layersRoot, 'project-repository');
@@ -472,7 +473,7 @@ describe('레이어 의존성 규칙', () => {
     expect(formatViolations(violations)).toEqual([]);
   });
 
-  it('ProjectRepository는 Shared 외 다른 계층을 import하지 않는다', () => {
+  it('ProjectRepository는 Shared와 ProjectCrdt 외 다른 계층을 import하지 않는다', () => {
     const violations = sourceImports.filter(sourceImport => {
       return (
         isInside(sourceImport.importerPath, projectRepositoryRoot) &&
@@ -480,6 +481,7 @@ describe('레이어 의존성 규칙', () => {
         sourceImport.resolvedPath !== undefined &&
         isInside(sourceImport.resolvedPath, layersRoot) &&
         !isInside(sourceImport.resolvedPath, projectRepositoryRoot) &&
+        !isInside(sourceImport.resolvedPath, projectCrdtRoot) &&
         !isInside(sourceImport.resolvedPath, sharedRoot)
       );
     });
