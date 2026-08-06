@@ -17,7 +17,7 @@ import {
   createProjectRestoreSnapshotFromDocumentV4,
   type ProjectRestoreSnapshot,
 } from '../project-document-mapper/project-document-mapper';
-import type { IProjectRepository } from '../project-repository/i-project-repository';
+import type { ILocalFirstProjectRepository, IProjectRepository } from '../project-repository/i-project-repository';
 import type { SessionStore } from '../session/session';
 import type {
   ProjectAudioSource,
@@ -37,6 +37,7 @@ interface ProjectControllerDependencies {
   readonly audioSourceRegistry: IAudioSourceRegistry;
   readonly audioSourceRepository: IAudioSourceRepository;
   readonly projectRepository: IProjectRepository;
+  readonly localProjectRepository?: ILocalFirstProjectRepository;
 }
 
 interface PreparedProjectRuntime {
@@ -58,9 +59,18 @@ interface RecordCleanupFailureOptions {
 }
 
 export class ProjectController {
+  private saveTail: Promise<void> = Promise.resolve();
+
   constructor(private readonly dependencies: ProjectControllerDependencies) {}
 
   async saveProject(): Promise<void> {
+    // 녹음 완료 이벤트와 명령 저장이 겹쳐도 앞선 commit의 revision 갱신 뒤 다음 snapshot을 만든다.
+    const save = this.saveTail.then(() => this.saveProjectOnce());
+    this.saveTail = save.catch(() => undefined);
+    return save;
+  }
+
+  private async saveProjectOnce(): Promise<void> {
     const registrations = this.dependencies.audioSourceRegistry.listCommittedRegistrations();
     const sessionState = this.dependencies.sessionStore.getState();
     const document = createProjectDocumentV4FromSession({
@@ -70,7 +80,15 @@ export class ProjectController {
     });
 
     await this.ensureAudioSources(registrations);
-    const savedDocument = await this.saveDocument(document);
+    const savedDocument = this.dependencies.localProjectRepository
+      ? (
+          await this.dependencies.localProjectRepository.commitLocal({
+            document,
+            expectedRevision: document.project.revision,
+            operationId: crypto.randomUUID(),
+          })
+        ).document
+      : await this.saveDocument(document);
     this.dependencies.sessionStore.getState().replaceProjectMetadata(savedDocument.project);
   }
 

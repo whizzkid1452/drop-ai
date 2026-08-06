@@ -23,7 +23,7 @@ import { CommandExecutor } from '../commands/command-executor';
 import { CommandHistory, type ICommandHistoryQuery } from '../commands/command-history';
 import { PlaybackClockQuery, type IPlaybackClockQuery } from '../queries/playback-clock-query';
 import { ProjectCatalogQuery, type IProjectCatalogQuery } from '../queries/project-catalog-query';
-import type { IProjectRepository } from '../project-repository/i-project-repository';
+import type { ILocalFirstProjectRepository } from '../project-repository/i-project-repository';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import { IndexedDbProjectRepository } from '../project-repository/indexed-db-project-repository';
 import type { IPluginHost } from '../plugin-host/i-plugin-host';
@@ -67,7 +67,7 @@ export interface CreateAppOptions {
   audioEngine?: IAudioEngine;
   audioSourceRegistry?: IAudioSourceRegistry;
   audioSourceRepository?: IAudioSourceRepository;
-  projectRepository?: IProjectRepository;
+  projectRepository?: ILocalFirstProjectRepository;
   audioRuntimeEnvironment?: AudioRuntimeEnvironment;
   initialProjectMetadata?: ProjectMetadata;
   initialPluginManifests?: readonly unknown[];

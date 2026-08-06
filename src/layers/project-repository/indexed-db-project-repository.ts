@@ -2,10 +2,15 @@ import { z } from 'zod';
 import type { ProjectDocumentSnapshot } from '../shared/types/project-document.schema';
 import { ProjectRepositoryError, ProjectRepositoryErrorCode } from './errors';
 import type {
+  CommitLocalProjectRequest,
+  CommittedLocalProjectChange,
   DeleteProjectRequest,
-  IProjectRepository,
+  ILocalFirstProjectRepository,
+  ListPendingProjectChangesRequest,
+  ProjectOutboxEntry,
   ProjectSummary,
   SaveProjectRequest,
+  ScheduleProjectChangeRetryRequest,
 } from './i-project-repository';
 import {
   cloneAndValidateProjectDocument,
@@ -16,11 +21,19 @@ import {
   validateSaveExpectedRevision,
 } from './project-repository-validation';
 
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const DEFAULT_DATABASE_NAME = 'drop-ai-projects';
 const PROJECT_DOCUMENT_STORE_NAME = 'project-documents';
 const PROJECT_SUMMARY_STORE_NAME = 'project-summaries';
+const PROJECT_OUTBOX_STORE_NAME = 'project-outbox';
+const PROJECT_OUTBOX_PROJECT_ID_INDEX_NAME = 'projectId';
 const PROJECT_STORE_NAMES = [PROJECT_DOCUMENT_STORE_NAME, PROJECT_SUMMARY_STORE_NAME];
+const LOCAL_COMMIT_STORE_NAMES = [...PROJECT_STORE_NAMES, PROJECT_OUTBOX_STORE_NAME];
+const DEFAULT_OUTBOX_QUERY_LIMIT = 100;
+const MAX_OUTBOX_QUERY_LIMIT = 1_000;
+
+const OperationIdSchema = z.uuid('Invalid operation ID format');
+const EpochMillisecondsSchema = z.number().int().nonnegative();
 
 const StoredProjectDocumentEnvelopeSchema = z.strictObject({
   projectId: z.uuid(),
@@ -34,6 +47,19 @@ const StoredProjectSummarySchema = z.strictObject({
   name: z.string().trim().min(1).max(255),
   revision: z.number().int().nonnegative(),
   savedAtEpochMilliseconds: z.number().int().nonnegative(),
+});
+
+const StoredProjectOutboxEntrySchema = z.strictObject({
+  operationId: z.uuid(),
+  projectId: z.uuid(),
+  baseRevision: z.number().int().nonnegative().nullable(),
+  localRevision: z.number().int().nonnegative(),
+  document: z.unknown().refine(document => document !== undefined, {
+    message: 'Outbox record의 document 필드가 필요합니다.',
+  }),
+  createdAtEpochMilliseconds: EpochMillisecondsSchema,
+  attemptCount: z.number().int().nonnegative(),
+  nextAttemptAtEpochMilliseconds: EpochMillisecondsSchema,
 });
 
 interface IndexedDbProjectRepositoryOptions {
@@ -55,7 +81,7 @@ interface RunTransactionOptions<T> {
   readonly execute: (context: TransactionExecutionContext<T>) => void;
 }
 
-export class IndexedDbProjectRepository implements IProjectRepository {
+export class IndexedDbProjectRepository implements ILocalFirstProjectRepository {
   private readonly indexedDb: IDBFactory | undefined;
   private readonly databaseName: string;
   private readonly now: () => number;
@@ -153,6 +179,159 @@ export class IndexedDbProjectRepository implements IProjectRepository {
     });
   }
 
+  async commitLocal({
+    document,
+    expectedRevision,
+    operationId,
+  }: CommitLocalProjectRequest): Promise<CommittedLocalProjectChange> {
+    validateSaveExpectedRevision(expectedRevision);
+    const validatedOperationId = this.validateOperationId(operationId);
+    const validatedDocument = cloneAndValidateProjectDocument(document);
+    const projectId = validatedDocument.project.id;
+
+    // 문서만 저장되고 Outbox가 누락되는 종료 시점 장애를 막기 위해 세 store를 한 transaction으로 묶는다.
+    return this.runTransaction({
+      mode: 'readwrite',
+      operation: 'commit-local',
+      storeNames: LOCAL_COMMIT_STORE_NAMES,
+      execute: ({ transaction, setResult, abortWith }) => {
+        const documentStore = transaction.objectStore(PROJECT_DOCUMENT_STORE_NAME);
+        const summaryStore = transaction.objectStore(PROJECT_SUMMARY_STORE_NAME);
+        const outboxStore = transaction.objectStore(PROJECT_OUTBOX_STORE_NAME);
+        const request = documentStore.get(projectId);
+
+        request.onsuccess = () => {
+          try {
+            const storedDocument =
+              request.result === undefined ? null : this.parseStoredProjectDocument(request.result, projectId);
+            const nextDocument = this.createNextLocalDocument({
+              document: validatedDocument,
+              expectedRevision,
+              storedDocument,
+            });
+            const outboxEntry = this.createProjectOutboxEntry({
+              baseRevision: storedDocument?.project.revision ?? null,
+              document: nextDocument,
+              operationId: validatedOperationId,
+            });
+
+            documentStore.put({ projectId, document: nextDocument });
+            summaryStore.put(this.createProjectSummary(nextDocument));
+            outboxStore.add(outboxEntry);
+            setResult({
+              document: cloneAndValidateProjectDocument(nextDocument),
+              outboxEntry: this.cloneProjectOutboxEntry(outboxEntry),
+            });
+          } catch (error) {
+            abortWith(error);
+          }
+        };
+      },
+    });
+  }
+
+  async listPendingChanges({
+    projectId,
+    dueAtEpochMilliseconds,
+    limit = DEFAULT_OUTBOX_QUERY_LIMIT,
+  }: ListPendingProjectChangesRequest): Promise<readonly ProjectOutboxEntry[]> {
+    const validatedProjectId = projectId === undefined ? undefined : this.validateProjectId(projectId);
+    const validatedDueAt = this.validateOutboxQueryNumber('dueAtEpochMilliseconds', dueAtEpochMilliseconds);
+    const validatedLimit = this.validateOutboxQueryLimit(limit);
+
+    return this.runTransaction({
+      mode: 'readonly',
+      operation: 'list-pending-changes',
+      storeNames: PROJECT_OUTBOX_STORE_NAME,
+      execute: ({ transaction, setResult, abortWith }) => {
+        const outboxStore = transaction.objectStore(PROJECT_OUTBOX_STORE_NAME);
+        const request = validatedProjectId
+          ? outboxStore.index(PROJECT_OUTBOX_PROJECT_ID_INDEX_NAME).getAll(validatedProjectId)
+          : outboxStore.getAll();
+        request.onsuccess = () => {
+          try {
+            const pendingChanges = request.result
+              .map(value => this.parseStoredProjectOutboxEntry(value))
+              .filter(entry => entry.nextAttemptAtEpochMilliseconds <= validatedDueAt)
+              .sort((left, right) => {
+                const createdAtDifference = left.createdAtEpochMilliseconds - right.createdAtEpochMilliseconds;
+                if (createdAtDifference !== 0) {
+                  return createdAtDifference;
+                }
+                const projectIdDifference = left.projectId.localeCompare(right.projectId);
+                if (projectIdDifference !== 0) {
+                  return projectIdDifference;
+                }
+                const revisionDifference = left.localRevision - right.localRevision;
+                return revisionDifference === 0
+                  ? left.operationId.localeCompare(right.operationId)
+                  : revisionDifference;
+              })
+              .slice(0, validatedLimit);
+            setResult(pendingChanges);
+          } catch (error) {
+            abortWith(error);
+          }
+        };
+      },
+    });
+  }
+
+  async acknowledgePendingChange(operationId: string): Promise<void> {
+    const validatedOperationId = this.validateOperationId(operationId);
+
+    return this.runTransaction({
+      mode: 'readwrite',
+      operation: 'acknowledge-pending-change',
+      storeNames: PROJECT_OUTBOX_STORE_NAME,
+      execute: ({ transaction, setResult }) => {
+        transaction.objectStore(PROJECT_OUTBOX_STORE_NAME).delete(validatedOperationId);
+        setResult(undefined);
+      },
+    });
+  }
+
+  async schedulePendingChangeRetry({
+    operationId,
+    nextAttemptAtEpochMilliseconds,
+  }: ScheduleProjectChangeRetryRequest): Promise<void> {
+    const validatedOperationId = this.validateOperationId(operationId);
+    const validatedNextAttemptAt = this.validateOutboxQueryNumber(
+      'nextAttemptAtEpochMilliseconds',
+      nextAttemptAtEpochMilliseconds
+    );
+
+    return this.runTransaction({
+      mode: 'readwrite',
+      operation: 'schedule-pending-change-retry',
+      storeNames: PROJECT_OUTBOX_STORE_NAME,
+      execute: ({ transaction, setResult, abortWith }) => {
+        const outboxStore = transaction.objectStore(PROJECT_OUTBOX_STORE_NAME);
+        const request = outboxStore.get(validatedOperationId);
+        request.onsuccess = () => {
+          try {
+            if (request.result === undefined) {
+              throw new ProjectRepositoryError({
+                code: ProjectRepositoryErrorCode.OUTBOX_ENTRY_NOT_FOUND,
+                message: `재시도할 프로젝트 변경을 찾을 수 없습니다: ${validatedOperationId}`,
+                details: { operationId: validatedOperationId },
+              });
+            }
+            const storedEntry = this.parseStoredProjectOutboxEntry(request.result);
+            outboxStore.put({
+              ...storedEntry,
+              attemptCount: storedEntry.attemptCount + 1,
+              nextAttemptAtEpochMilliseconds: validatedNextAttemptAt,
+            });
+            setResult(undefined);
+          } catch (error) {
+            abortWith(error);
+          }
+        };
+      },
+    });
+  }
+
   async load(projectId: string): Promise<ProjectDocumentSnapshot | null> {
     return this.runTransaction({
       mode: 'readonly',
@@ -197,7 +376,7 @@ export class IndexedDbProjectRepository implements IProjectRepository {
     return this.runTransaction({
       mode: 'readwrite',
       operation: 'delete',
-      storeNames: PROJECT_STORE_NAMES,
+      storeNames: LOCAL_COMMIT_STORE_NAMES,
       execute: ({ transaction, setResult, abortWith }) => {
         const documentStore = transaction.objectStore(PROJECT_DOCUMENT_STORE_NAME);
         const summaryStore = transaction.objectStore(PROJECT_SUMMARY_STORE_NAME);
@@ -221,6 +400,18 @@ export class IndexedDbProjectRepository implements IProjectRepository {
 
             documentStore.delete(projectId);
             summaryStore.delete(projectId);
+            const outboxIndex = transaction
+              .objectStore(PROJECT_OUTBOX_STORE_NAME)
+              .index(PROJECT_OUTBOX_PROJECT_ID_INDEX_NAME);
+            const outboxCursorRequest = outboxIndex.openCursor(projectId);
+            outboxCursorRequest.onsuccess = () => {
+              const cursor = outboxCursorRequest.result;
+              if (!cursor) {
+                return;
+              }
+              cursor.delete();
+              cursor.continue();
+            };
             setResult(undefined);
           } catch (error) {
             abortWith(error);
@@ -342,6 +533,10 @@ export class IndexedDbProjectRepository implements IProjectRepository {
         if (!database.objectStoreNames.contains(PROJECT_SUMMARY_STORE_NAME)) {
           database.createObjectStore(PROJECT_SUMMARY_STORE_NAME, { keyPath: 'projectId' });
         }
+        if (!database.objectStoreNames.contains(PROJECT_OUTBOX_STORE_NAME)) {
+          const outboxStore = database.createObjectStore(PROJECT_OUTBOX_STORE_NAME, { keyPath: 'operationId' });
+          outboxStore.createIndex(PROJECT_OUTBOX_PROJECT_ID_INDEX_NAME, 'projectId', { unique: false });
+        }
       };
       request.onsuccess = () => {
         const database = request.result;
@@ -395,6 +590,154 @@ export class IndexedDbProjectRepository implements IProjectRepository {
     }
 
     throw this.createStorageOperationError('create-summary', result.error);
+  }
+
+  private createNextLocalDocument({
+    document,
+    expectedRevision,
+    storedDocument,
+  }: {
+    readonly document: ProjectDocumentSnapshot;
+    readonly expectedRevision: number;
+    readonly storedDocument: ProjectDocumentSnapshot | null;
+  }): ProjectDocumentSnapshot {
+    if (!storedDocument) {
+      validateInitialRevision(document);
+      if (expectedRevision !== document.project.revision) {
+        throw new ProjectRepositoryError({
+          code: ProjectRepositoryErrorCode.REVISION_CONFLICT,
+          message: `새 프로젝트 revision과 expectedRevision이 다릅니다: ${document.project.id}`,
+          details: {
+            documentRevision: document.project.revision,
+            expectedRevision,
+            projectId: document.project.id,
+          },
+        });
+      }
+      return cloneAndValidateProjectDocument(document);
+    }
+
+    throwIfRevisionConflict({
+      projectId: document.project.id,
+      expectedRevision,
+      documentRevision: document.project.revision,
+      storedRevision: storedDocument.project.revision,
+    });
+    return cloneAndValidateProjectDocument({
+      ...document,
+      project: {
+        ...document.project,
+        revision: expectedRevision + 1,
+      },
+    });
+  }
+
+  private createProjectOutboxEntry({
+    baseRevision,
+    document,
+    operationId,
+  }: {
+    readonly baseRevision: number | null;
+    readonly document: ProjectDocumentSnapshot;
+    readonly operationId: string;
+  }): ProjectOutboxEntry {
+    const createdAtEpochMilliseconds = this.now();
+    const result = StoredProjectOutboxEntrySchema.safeParse({
+      operationId,
+      projectId: document.project.id,
+      baseRevision,
+      localRevision: document.project.revision,
+      document,
+      createdAtEpochMilliseconds,
+      attemptCount: 0,
+      nextAttemptAtEpochMilliseconds: createdAtEpochMilliseconds,
+    });
+    if (result.success) {
+      return this.parseStoredProjectOutboxEntry(result.data);
+    }
+    throw this.createStorageOperationError('create-outbox-entry', result.error);
+  }
+
+  private parseStoredProjectOutboxEntry(value: unknown): ProjectOutboxEntry {
+    const result = StoredProjectOutboxEntrySchema.safeParse(value);
+    if (!result.success) {
+      throw new ProjectRepositoryError({
+        code: ProjectRepositoryErrorCode.INVALID_STORED_DATA,
+        message: '저장된 프로젝트 Outbox 변경이 유효하지 않습니다.',
+        cause: result.error,
+      });
+    }
+
+    const document = readStoredProjectDocument({
+      document: result.data.document,
+      projectId: result.data.projectId,
+    });
+    if (document.project.id !== result.data.projectId || document.project.revision !== result.data.localRevision) {
+      throw new ProjectRepositoryError({
+        code: ProjectRepositoryErrorCode.INVALID_STORED_DATA,
+        message: `Outbox 변경과 프로젝트 문서가 일치하지 않습니다: ${result.data.operationId}`,
+        details: { operationId: result.data.operationId },
+      });
+    }
+
+    return this.cloneProjectOutboxEntry({ ...result.data, document });
+  }
+
+  private cloneProjectOutboxEntry(entry: ProjectOutboxEntry): ProjectOutboxEntry {
+    return {
+      ...entry,
+      document: cloneAndValidateProjectDocument(entry.document),
+    };
+  }
+
+  private validateOperationId(operationId: string): string {
+    const result = OperationIdSchema.safeParse(operationId);
+    if (result.success) {
+      return result.data;
+    }
+    throw new ProjectRepositoryError({
+      code: ProjectRepositoryErrorCode.INVALID_OPERATION_ID,
+      message: `프로젝트 변경 operation ID가 유효하지 않습니다: ${operationId}`,
+      details: { operationId },
+      cause: result.error,
+    });
+  }
+
+  private validateProjectId(projectId: string): string {
+    const result = z.uuid().safeParse(projectId);
+    if (result.success) {
+      return result.data;
+    }
+    throw new ProjectRepositoryError({
+      code: ProjectRepositoryErrorCode.INVALID_OUTBOX_QUERY,
+      message: `Outbox 조회 Project ID가 유효하지 않습니다: ${projectId}`,
+      details: { projectId },
+      cause: result.error,
+    });
+  }
+
+  private validateOutboxQueryNumber(field: string, value: number): number {
+    const result = EpochMillisecondsSchema.safeParse(value);
+    if (result.success) {
+      return result.data;
+    }
+    throw new ProjectRepositoryError({
+      code: ProjectRepositoryErrorCode.INVALID_OUTBOX_QUERY,
+      message: `Outbox 조회 값이 유효하지 않습니다: ${field}`,
+      details: { field, value },
+      cause: result.error,
+    });
+  }
+
+  private validateOutboxQueryLimit(limit: number): number {
+    if (Number.isSafeInteger(limit) && limit > 0 && limit <= MAX_OUTBOX_QUERY_LIMIT) {
+      return limit;
+    }
+    throw new ProjectRepositoryError({
+      code: ProjectRepositoryErrorCode.INVALID_OUTBOX_QUERY,
+      message: `Outbox 조회 limit이 유효하지 않습니다: ${limit}`,
+      details: { limit, maxLimit: MAX_OUTBOX_QUERY_LIMIT },
+    });
   }
 
   private parseStoredProjectDocument(value: unknown, expectedProjectId: string): ProjectDocumentSnapshot {
