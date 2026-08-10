@@ -32,6 +32,26 @@ describe('createApp', () => {
     vi.restoreAllMocks();
   });
 
+  it('Project Sync Factory에 동일한 Project·Audio Source Repository를 전달한다', () => {
+    const audioSourceRepository = createTestAudioSourceRepository();
+    const projectRepository = new InMemoryProjectRepository();
+    const projectSync: IProjectSyncService = {
+      activateProject: vi.fn(),
+      notifyProjectChanged: vi.fn(),
+      resume: vi.fn(),
+    };
+    const createProjectSync = vi.fn(() => projectSync);
+
+    createApp({
+      audioEngine: new MockAudioEngine(),
+      audioSourceRepository,
+      createProjectSync,
+      projectRepository,
+    });
+
+    expect(createProjectSync).toHaveBeenCalledWith({ audioSourceRepository, projectRepository });
+  });
+
   it('초기 프로젝트를 활성화하고 로컬 commit 뒤 동기화를 요청한다', async () => {
     const projectId = '11111111-1111-4111-8111-111111111111';
     const projectSync: IProjectSyncService = {

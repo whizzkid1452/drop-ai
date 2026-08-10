@@ -62,6 +62,11 @@ export interface AppInstance {
   projectCatalog: IProjectCatalogQuery;
 }
 
+interface ProjectSyncDependencies {
+  readonly audioSourceRepository: IAudioSourceRepository;
+  readonly projectRepository: ILocalFirstProjectRepository;
+}
+
 export interface CreateAppOptions {
   authClient?: IAuthClient;
   billingClient?: IBillingClient;
@@ -70,7 +75,7 @@ export interface CreateAppOptions {
   audioSourceRepository?: IAudioSourceRepository;
   projectRepository?: ILocalFirstProjectRepository;
   projectSync?: IProjectSyncService;
-  createProjectSync?: (projectRepository: ILocalFirstProjectRepository) => IProjectSyncService;
+  createProjectSync?: (dependencies: ProjectSyncDependencies) => IProjectSyncService;
   audioRuntimeEnvironment?: AudioRuntimeEnvironment;
   initialProjectMetadata?: ProjectMetadata;
   initialPluginManifests?: readonly unknown[];
@@ -173,7 +178,9 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   const audioSourceRepository = options.audioSourceRepository ?? new OpfsAudioSourceRepository();
   const projectRepository = options.projectRepository ?? new IndexedDbProjectRepository();
   const projectSync =
-    options.projectSync ?? options.createProjectSync?.(projectRepository) ?? new NoopProjectSyncService();
+    options.projectSync ??
+    options.createProjectSync?.({ audioSourceRepository, projectRepository }) ??
+    new NoopProjectSyncService();
   const pluginHost = new PluginHost();
   registerInitialPluginManifests({
     session,

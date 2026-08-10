@@ -13,8 +13,9 @@ export function createWebApp(): AppInstance {
   return createApp({
     authClient,
     billingClient,
-    createProjectSync: projectRepository =>
+    createProjectSync: ({ audioSourceRepository, projectRepository }) =>
       createWebProjectSyncService({
+        audioSourceRepository,
         authClient,
         onlineEventSource: typeof window === 'undefined' ? undefined : window,
         projectRepository,

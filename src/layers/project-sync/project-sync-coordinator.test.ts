@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import type { ProjectDocument } from '../shared/types/project-document.schema';
-import type { IProjectSyncGateway } from './i-project-sync';
+import type { IProjectMediaSync, IProjectSyncGateway } from './i-project-sync';
 import { ProjectSyncCoordinator } from './project-sync-coordinator';
 import { ProjectSyncError, ProjectSyncErrorCode } from './project-sync-error';
 
@@ -32,6 +32,92 @@ function createDeferred<Result>() {
 }
 
 describe('ProjectSyncCoordinator', () => {
+  it('프로젝트 문서보다 참조 미디어를 먼저 동기화한다', async () => {
+    const repository = new InMemoryProjectRepository({ now: () => 1_000 });
+    await repository.commitLocal({
+      document: createProjectDocument(PROJECT_ID),
+      expectedRevision: 0,
+      operationId: OPERATION_ID,
+    });
+    const callOrder: string[] = [];
+    const mediaSync: IProjectMediaSync = {
+      ensureProjectMedia: vi.fn(async () => {
+        callOrder.push('media');
+      }),
+    };
+    const coordinator = new ProjectSyncCoordinator({
+      gateway: {
+        pushProjectChange: vi.fn(async () => {
+          callOrder.push('document');
+          return { operationId: OPERATION_ID, serverRevision: 0, status: 'applied' as const };
+        }),
+      },
+      mediaSync,
+      repository,
+      now: () => 1_000,
+    });
+
+    coordinator.activateProject(PROJECT_ID);
+
+    await vi.waitFor(() => expect(callOrder).toEqual(['media', 'document']));
+  });
+
+  it('미디어 업로드가 실패하면 프로젝트 문서를 전송하지 않고 재시도를 예약한다', async () => {
+    const repository = new InMemoryProjectRepository({ now: () => 1_000 });
+    await repository.commitLocal({
+      document: createProjectDocument(PROJECT_ID),
+      expectedRevision: 0,
+      operationId: OPERATION_ID,
+    });
+    const pushProjectChange = vi.fn();
+    const schedule = vi.fn(() => () => undefined);
+    const coordinator = new ProjectSyncCoordinator({
+      gateway: { pushProjectChange },
+      mediaSync: {
+        ensureProjectMedia: vi.fn().mockRejectedValue(
+          new ProjectSyncError({
+            code: ProjectSyncErrorCode.NETWORK_ERROR,
+            message: '미디어 업로드 네트워크 오류',
+            retryable: true,
+          })
+        ),
+      },
+      repository,
+      now: () => 1_000,
+      schedule,
+    });
+
+    coordinator.activateProject(PROJECT_ID);
+
+    await vi.waitFor(() => expect(schedule).toHaveBeenCalledWith(expect.any(Function), 1_000));
+    expect(pushProjectChange).not.toHaveBeenCalled();
+  });
+
+  it('미디어 업로드 중 프로젝트가 바뀌면 이전 프로젝트 문서를 전송하지 않는다', async () => {
+    const repository = new InMemoryProjectRepository({ now: () => 1_000 });
+    await repository.commitLocal({
+      document: createProjectDocument(PROJECT_ID),
+      expectedRevision: 0,
+      operationId: OPERATION_ID,
+    });
+    const mediaUpload = createDeferred<void>();
+    const pushProjectChange = vi.fn();
+    const coordinator = new ProjectSyncCoordinator({
+      gateway: { pushProjectChange },
+      mediaSync: { ensureProjectMedia: () => mediaUpload.promise },
+      repository,
+      now: () => 1_000,
+    });
+
+    coordinator.activateProject(PROJECT_ID);
+    await vi.waitFor(() => expect(coordinator.hasInFlightSync(PROJECT_ID)).toBe(true));
+    coordinator.activateProject(SECOND_PROJECT_ID);
+    mediaUpload.resolve();
+
+    await vi.waitFor(() => expect(coordinator.hasInFlightSync(PROJECT_ID)).toBe(false));
+    expect(pushProjectChange).not.toHaveBeenCalled();
+  });
+
   it('활성 프로젝트의 전송 완료 변경을 Outbox에서 확인 처리한다', async () => {
     const repository = new InMemoryProjectRepository({ now: () => 1_000 });
     const committed = await repository.commitLocal({
