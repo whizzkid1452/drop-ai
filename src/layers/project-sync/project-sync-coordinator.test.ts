@@ -49,7 +49,12 @@ describe('ProjectSyncCoordinator', () => {
       gateway: {
         pushProjectChange: vi.fn(async () => {
           callOrder.push('document');
-          return { operationId: OPERATION_ID, serverRevision: 0, status: 'applied' as const };
+          return {
+            kind: 'snapshot' as const,
+            operationId: OPERATION_ID,
+            serverRevision: 0,
+            status: 'applied' as const,
+          };
         }),
       },
       mediaSync,
@@ -127,6 +132,7 @@ describe('ProjectSyncCoordinator', () => {
     });
     const gateway: IProjectSyncGateway = {
       pushProjectChange: vi.fn().mockResolvedValue({
+        kind: 'snapshot',
         operationId: OPERATION_ID,
         serverRevision: 0,
         status: 'applied',
@@ -150,6 +156,7 @@ describe('ProjectSyncCoordinator', () => {
       operationId: OPERATION_ID,
     });
     const deferred = createDeferred<{
+      readonly kind: 'snapshot';
       readonly operationId: string;
       readonly serverRevision: number;
       readonly status: 'applied';
@@ -166,7 +173,7 @@ describe('ProjectSyncCoordinator', () => {
     coordinator.notifyProjectChanged(PROJECT_ID);
 
     await vi.waitFor(() => expect(pushProjectChange).toHaveBeenCalledOnce());
-    deferred.resolve({ operationId: OPERATION_ID, serverRevision: 0, status: 'applied' });
+    deferred.resolve({ kind: 'snapshot', operationId: OPERATION_ID, serverRevision: 0, status: 'applied' });
     await vi.waitFor(async () => {
       await expect(repository.listPendingChanges({ dueAtEpochMilliseconds: 1_000 })).resolves.toEqual([]);
     });
@@ -181,6 +188,7 @@ describe('ProjectSyncCoordinator', () => {
       operationId: OPERATION_ID,
     });
     const deferred = createDeferred<{
+      readonly kind: 'snapshot';
       readonly operationId: string;
       readonly serverRevision: number;
       readonly status: 'applied';
@@ -194,7 +202,7 @@ describe('ProjectSyncCoordinator', () => {
     coordinator.activateProject(PROJECT_ID);
     await vi.waitFor(() => expect(coordinator.hasInFlightSync(PROJECT_ID)).toBe(true));
     coordinator.activateProject(SECOND_PROJECT_ID);
-    deferred.resolve({ operationId: OPERATION_ID, serverRevision: 0, status: 'applied' });
+    deferred.resolve({ kind: 'snapshot', operationId: OPERATION_ID, serverRevision: 0, status: 'applied' });
 
     await vi.waitFor(() => expect(coordinator.hasInFlightSync(PROJECT_ID)).toBe(false));
     await expect(repository.listPendingChanges({ dueAtEpochMilliseconds: 1_000 })).resolves.toHaveLength(1);
@@ -217,7 +225,12 @@ describe('ProjectSyncCoordinator', () => {
           retryable: true,
         })
       )
-      .mockResolvedValueOnce({ operationId: OPERATION_ID, serverRevision: 0, status: 'applied' });
+      .mockResolvedValueOnce({
+        kind: 'snapshot',
+        operationId: OPERATION_ID,
+        serverRevision: 0,
+        status: 'applied',
+      });
     let scheduledRetry: (() => void) | undefined;
     const coordinator = new ProjectSyncCoordinator({
       gateway: { pushProjectChange },
@@ -294,7 +307,12 @@ describe('ProjectSyncCoordinator', () => {
       gateway: {
         pushProjectChange: async change => {
           pushedRevisions.push(change.localRevision);
-          return { operationId: change.operationId, serverRevision: change.localRevision, status: 'applied' };
+          return {
+            kind: 'snapshot',
+            operationId: change.operationId,
+            serverRevision: change.localRevision,
+            status: 'applied',
+          };
         },
       },
       repository,

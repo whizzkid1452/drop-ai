@@ -1,11 +1,19 @@
 import type { ProjectOutboxEntry } from '../project-repository/i-project-repository';
 import type { ProjectDocumentSnapshot } from '../shared/types/project-document.schema';
 
-export interface ProjectSyncSuccess {
-  readonly operationId: string;
-  readonly serverRevision: number;
-  readonly status: 'already_applied' | 'applied';
-}
+export type ProjectSyncSuccess =
+  | {
+      readonly kind: 'crdt-update';
+      readonly operationId: string;
+      readonly sequenceId: number;
+      readonly status: 'already_applied' | 'applied';
+    }
+  | {
+      readonly kind: 'snapshot';
+      readonly operationId: string;
+      readonly serverRevision: number;
+      readonly status: 'already_applied' | 'applied';
+    };
 
 export interface IProjectSyncGateway {
   pushProjectChange(change: ProjectOutboxEntry): Promise<ProjectSyncSuccess>;

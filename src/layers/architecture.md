@@ -149,13 +149,21 @@ Undo에서는 바꾸지 않으며, Project Controller가 Repository의 성공 �
 검증한다. 객체 입력은 자기 소유 열거 가능 데이터 속성만 문서 필드로 인정한다. 현재 지원 버전은 실제 형식이 정의된
 v1뿐이며, 정의되지 않은 버전을 임의 변환하지 않는다.
 
-`IProjectRepository`는 ProjectDocument snapshot 저장 계약이다. Repository 계층은 Shared만 참조하며, 구체 구현은
+`IProjectRepository`는 ProjectDocument snapshot 저장 계약이다. Repository 계층은 Shared와 CRDT update 인코딩을 담당하는
+ProjectCrdt만 참조하며, 구체 구현은
 Composition Root에서만 조립한다. 저장과 삭제는 expected revision 비교로 오래된 탭의 덮어쓰기와 삭제를 거부한다.
 `InMemoryProjectRepository`는 계약 검증용 구현이다. `IndexedDbProjectRepository`는 문서와 목록 요약을 별도 Store에 두되,
 두 값을 하나의 transaction으로 갱신한다. IndexedDB에서 읽은 문서 본문은 `readProjectDocument`로 판독하고, 손상된
 데이터와 현재 앱보다 새로운 문서 버전을 서로 다른 Repository 오류로 분류한다. `createApp`은 브라우저용
 `IndexedDbProjectRepository`를 조립하고 Project Controller에만 주입한다.
 IndexedDB가 없는 환경에서도 앱 조립은 완료하며 실제 저장소 작업에서 `STORAGE_UNAVAILABLE`을 반환한다.
+
+`ILocalFirstProjectRepository.commitLocal`은 ProjectDocument, 요약, Outbox 항목을 하나의 IndexedDB transaction으로
+저장한다. 각 프로젝트 record에는 누적 Yjs state를 함께 보관하고, 새 Outbox 항목에는 직전 state 이후의 CRDT update를
+Base64로 저장한다. 기존 JSON record의 첫 전환은 seed를 포함한 전체 state를 전송하며, 기존 Outbox 항목은 누락 방지를
+위해 snapshot RPC를 계속 사용한다. `ProjectSyncCoordinator`는 활성 프로젝트 범위와 프로젝트별 single-flight를 유지하면서
+미디어를 먼저 올린 뒤 새 변경을 `append_project_crdt_update` RPC에 순서대로 전송한다. 현재 서버 update log는 사용자별로
+격리되어 있으며, 원격 update 조회·로컬 반영과 프로젝트 공동 작업자 권한은 아직 구현하지 않았다.
 
 Session의 `replaceProjectMetadata`는 저장 성공 metadata만 반영하고, `replaceProjectState`는 불러오기 성공 결과 전체를
 반영하는 내부 상태 교체 동작이다. Apps는 두 동작을 직접 호출하지 않는다. 프로젝트를 불러올 때 metadata만 먼저 바꾸지

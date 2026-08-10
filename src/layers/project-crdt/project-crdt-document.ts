@@ -174,14 +174,12 @@ function applyKeyedArrayDiff(
 ): void {
   const beforeItems = createItemsById(before, path);
   const afterItems = createItemsById(after, path);
-  assertExistingItemOrderIsUnchanged(beforeItems, afterItems);
   const items = getCollectionItems(collection);
   const order = getCollectionOrder(collection);
 
   beforeItems.forEach((_item, id) => {
     if (!afterItems.has(id)) {
       items.delete(id);
-      removeArrayValues(order, new Set([id]));
     }
   });
 
@@ -189,7 +187,6 @@ function applyKeyedArrayDiff(
     const beforeItem = beforeItems.get(id);
     if (!beforeItem) {
       items.set(id, createSharedValue(afterItem, [...path, id]));
-      order.push([id]);
       return;
     }
     if (areJsonValuesEqual(beforeItem, afterItem)) {
@@ -203,6 +200,14 @@ function applyKeyedArrayDiff(
     }
     items.set(id, createSharedValue(afterItem, [...path, id]));
   });
+
+  const beforeOrder = [...beforeItems.keys()];
+  const afterOrder = [...afterItems.keys()];
+  if (!areStringArraysEqual(beforeOrder, afterOrder)) {
+    // 순서를 실제로 편집한 경우에만 Y.Array를 바꿔, 속성만 수정한 peer가 원격 순서 변경을 덮어쓰지 않게 한다.
+    order.delete(0, order.length);
+    order.push(afterOrder);
+  }
 }
 
 function applyScalarArrayDiff(
@@ -270,17 +275,6 @@ function createItemsById(values: readonly JsonValue[], path: readonly string[]):
     items.set(value.id, value);
   });
   return items;
-}
-
-function assertExistingItemOrderIsUnchanged(
-  beforeItems: ReadonlyMap<string, JsonObject>,
-  afterItems: ReadonlyMap<string, JsonObject>
-): void {
-  const beforeSurvivors = [...beforeItems.keys()].filter(id => afterItems.has(id));
-  const afterExisting = [...afterItems.keys()].filter(id => beforeItems.has(id));
-  if (beforeSurvivors.some((id, index) => id !== afterExisting[index])) {
-    throw new Error('기존 keyed collection 항목의 순서 변경은 아직 지원하지 않습니다.');
-  }
 }
 
 function getCollectionItems(collection: Y.Map<unknown>): Y.Map<unknown> {
@@ -368,6 +362,10 @@ function isJsonPrimitive(value: unknown): value is JsonPrimitive {
 
 function areJsonValuesEqual(first: JsonValue, second: JsonValue): boolean {
   return JSON.stringify(first) === JSON.stringify(second);
+}
+
+function areStringArraysEqual(first: readonly string[], second: readonly string[]): boolean {
+  return first.length === second.length && first.every((value, index) => value === second[index]);
 }
 
 function createScalarKey(value: unknown): string {
