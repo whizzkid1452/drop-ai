@@ -9,6 +9,7 @@ export default defineConfig({
   plugins: [react(), vanillaExtractPlugin()],
   resolve: {
     alias: {
+      '@daw-engine-source/browser-adapter': path.resolve(__dirname, './daw-engine/core/src/browser-adapter.ts'),
       '@/utils': path.resolve(__dirname, './src/layers/shared/utils'),
       '@/types': path.resolve(__dirname, './src/layers/shared/types'),
       '@/styles': path.resolve(__dirname, './src/layers/apps/web/styles'),

@@ -7,7 +7,7 @@ import {
   type AudioProvider,
   type FrameCount,
   type RegionId,
-} from '@daw-engine/core/browser-adapter';
+} from '@daw-engine-source/browser-adapter';
 import type {
   ArmLoopRequest,
   ExportRequest,

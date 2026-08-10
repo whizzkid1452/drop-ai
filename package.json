@@ -28,7 +28,12 @@
     "docker:compose:down": "docker-compose down",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:daw-engine": "pnpm --dir daw-engine test",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
+    "typecheck:daw-engine": "pnpm --dir daw-engine typecheck",
+    "lint:daw-engine": "pnpm --dir daw-engine lint",
+    "build:daw-engine": "pnpm --dir daw-engine build",
+    "pack:daw-engine": "pnpm --dir daw-engine pack:core",
     "worktree:add": "bash scripts/worktree-add.sh",
     "worktree:add:internal": "bash scripts/worktree-add.sh --internal",
     "worktree:remove": "bash scripts/worktree-remove.sh",
@@ -36,7 +41,6 @@
     "worktree:list": "git worktree list"
   },
   "dependencies": {
-    "@daw-engine/core": "github:HURRAEY/daw-engine#93bcb0ae065792f1ca4d3a40a3eef4ffe00b5018",
     "@mlc-ai/web-llm": "^0.2.80",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",

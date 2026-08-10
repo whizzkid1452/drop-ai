@@ -7,9 +7,6 @@ settings:
 importers:
   .:
     dependencies:
-      '@daw-engine/core':
-        specifier: github:HURRAEY/daw-engine#93bcb0ae065792f1ca4d3a40a3eef4ffe00b5018
-        version: https://codeload.github.com/HURRAEY/daw-engine/tar.gz/93bcb0ae065792f1ca4d3a40a3eef4ffe00b5018
       '@mlc-ai/web-llm':
         specifier: ^0.2.80
         version: 0.2.80
@@ -292,24 +289,6 @@ packages:
     resolution:
       { integrity: sha512-ruv7Ae4J5dUYULmeXw1gmb7rYRz57OWCPM57pHojnLq/3Z1CK2lNSLTCVjxVk1F/TZHwOZZrOWi0ur95BbLxNQ== }
     engines: { node: '>=6.9.0' }
-
-  '@daw-engine/core@https://codeload.github.com/HURRAEY/daw-engine/tar.gz/93bcb0ae065792f1ca4d3a40a3eef4ffe00b5018':
-    resolution:
-      {
-        gitHosted: true,
-        integrity: sha512-W1gsJrgmvshekXm/DT9+jsk+tVwADYQsEoOo4VWuV9F1MF92V8dEhd0b1HMhUVEO904vXHU1iNOOdZI5hLKrHg==,
-        tarball: https://codeload.github.com/HURRAEY/daw-engine/tar.gz/93bcb0ae065792f1ca4d3a40a3eef4ffe00b5018,
-      }
-    version: 1.0.0-git
-    engines: { node: '>=18.18.0' }
-    peerDependencies:
-      lamejs: ^1.2.1
-      soundtouchjs: ^0.3.0
-    peerDependenciesMeta:
-      lamejs:
-        optional: true
-      soundtouchjs:
-        optional: true
 
   '@emotion/hash@0.9.2':
     resolution:
@@ -3307,10 +3286,6 @@ packages:
     resolution:
       { integrity: sha512-0wZ1IRqGGhMP76gLqz8EyfBXKk0J2qo2+H3fi4mcUP/KtTocoX08nmIAHl1Z2kJIZbZee8KOpBCSNPRgauucjw== }
 
-  zod@4.4.3:
-    resolution:
-      { integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ== }
-
   zustand@5.0.9:
     resolution:
       { integrity: sha512-ALBtUj0AfjJt3uNRQoL1tL2tMvj6Gp/6e39dnfT6uzpelGru8v1tPOGBzayOWbPJvujM8JojDk3E1LxeFisBNg== }
@@ -3456,10 +3431,6 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.27.1
-
-  '@daw-engine/core@https://codeload.github.com/HURRAEY/daw-engine/tar.gz/93bcb0ae065792f1ca4d3a40a3eef4ffe00b5018':
-    dependencies:
-      zod: 4.4.3
 
   '@emotion/hash@0.9.2': {}
 
@@ -6118,8 +6089,6 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   zod@4.2.1: {}
-
-  zod@4.4.3: {}
 
   zustand@5.0.9(@types/react@19.2.7)(react@19.2.1):
     optionalDependencies:

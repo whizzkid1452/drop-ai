@@ -4,6 +4,7 @@ import path from 'path';
 export default defineConfig({
   resolve: {
     alias: {
+      '@daw-engine-source/browser-adapter': path.resolve(__dirname, './daw-engine/core/src/browser-adapter.ts'),
       '@/styles': path.resolve(__dirname, './src/layers/apps/web/styles'),
       '@/types': path.resolve(__dirname, './src/layers/shared/types'),
       '@/utils': path.resolve(__dirname, './src/layers/shared/utils'),
