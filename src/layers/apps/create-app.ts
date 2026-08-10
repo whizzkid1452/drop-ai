@@ -1,5 +1,6 @@
 import type { IAudioEngine } from '../audio-engine/i-audio-engine';
 import { AudioEngine } from '../audio-engine/audio-engine';
+import { DawEngineAdapter } from '../audio-engine/daw-engine-adapter';
 import { AudioWorkletPcmCapture } from '../audio-engine/live-input/audio-worklet-pcm-capture';
 import { BrowserLiveAudioInput } from '../audio-engine/live-input/browser-live-audio-input';
 import { QuantizedLoopRuntime } from '../audio-engine/loop-runtime/quantized-loop-runtime';
@@ -142,7 +143,7 @@ function createValidManifestResult(manifest: PluginManifest): PluginValidationRe
 function createDefaultAudioEngine(): IAudioEngine {
   const [gainParameter] = gainPluginManifest.parameters;
   const [saturationDriveParameter] = saturationPluginManifest.parameters;
-  return new AudioEngine({
+  const toneAudioRuntime = new AudioEngine({
     loopRuntime: new QuantizedLoopRuntime({
       liveAudioInput: new BrowserLiveAudioInput(),
       pcmCapture: new AudioWorkletPcmCapture(),
@@ -165,6 +166,7 @@ function createDefaultAudioEngine(): IAudioEngine {
       }),
     ],
   });
+  return new DawEngineAdapter({ runtime: toneAudioRuntime });
 }
 
 /**
