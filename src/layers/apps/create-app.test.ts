@@ -6,6 +6,7 @@ import { CommandExecutor } from '../commands/command-executor';
 import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { PlaybackClockQuery } from '../queries/playback-clock-query';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
+import type { IProjectSyncService } from '../project-sync/i-project-sync';
 import { AudioCommandType } from '../shared/types/audioCommand.schema';
 import type { ProjectDocument } from '../shared/types/project-document.schema';
 import { createApp, createCliTestApp, type CreateAppOptions } from './create-app';
@@ -29,6 +30,28 @@ function createTestApp(options: CreateAppOptions = {}) {
 describe('createApp', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('초기 프로젝트를 활성화하고 로컬 commit 뒤 동기화를 요청한다', async () => {
+    const projectId = '11111111-1111-4111-8111-111111111111';
+    const projectSync: IProjectSyncService = {
+      activateProject: vi.fn(),
+      notifyProjectChanged: vi.fn(),
+      resume: vi.fn(),
+    };
+    const app = createTestApp({
+      audioEngine: new MockAudioEngine(),
+      initialProjectMetadata: { id: projectId, name: '동기화 테스트', revision: 0 },
+      projectSync,
+    });
+
+    await app.commandExecutor.execute({
+      type: AudioCommandType.ADD_TRACK,
+      trackId: '22222222-2222-4222-8222-222222222222',
+    });
+
+    expect(projectSync.activateProject).toHaveBeenCalledWith(projectId);
+    expect(projectSync.notifyProjectChanged).toHaveBeenCalledWith(projectId);
   });
 
   it('주입한 Source Registry를 등록·조회 전용 계약으로만 노출한다', () => {
@@ -210,11 +233,17 @@ describe('createApp', () => {
     };
     await projectRepository.create(projectDocument);
     vi.mocked(audioSourceRepository.load).mockResolvedValue(new Blob(['test'], { type: 'audio/wav' }));
+    const projectSync: IProjectSyncService = {
+      activateProject: vi.fn(),
+      notifyProjectChanged: vi.fn(),
+      resume: vi.fn(),
+    };
     const app = createTestApp({
       audioEngine,
       audioSourceRegistry,
       audioSourceRepository,
       projectRepository,
+      projectSync,
     });
 
     await app.commandExecutor.execute({ type: AudioCommandType.LOAD_PROJECT, projectId });
@@ -240,6 +269,7 @@ describe('createApp', () => {
     ]);
     expect('projectRepository' in app).toBe(false);
     expect('audioSourceRepository' in app).toBe(false);
+    expect(projectSync.activateProject).toHaveBeenLastCalledWith(projectId);
   });
 
   it.each([

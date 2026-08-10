@@ -26,6 +26,7 @@ import { ProjectCatalogQuery, type IProjectCatalogQuery } from '../queries/proje
 import type { ILocalFirstProjectRepository } from '../project-repository/i-project-repository';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import { IndexedDbProjectRepository } from '../project-repository/indexed-db-project-repository';
+import { NoopProjectSyncService, type IProjectSyncService } from '../project-sync/i-project-sync';
 import type { IPluginHost } from '../plugin-host/i-plugin-host';
 import { PluginHost } from '../plugin-host/plugin-host';
 import { createPluginCatalogEntry, type PluginManifest } from '../plugin-sdk/plugin-manifest.schema';
@@ -68,6 +69,8 @@ export interface CreateAppOptions {
   audioSourceRegistry?: IAudioSourceRegistry;
   audioSourceRepository?: IAudioSourceRepository;
   projectRepository?: ILocalFirstProjectRepository;
+  projectSync?: IProjectSyncService;
+  createProjectSync?: (projectRepository: ILocalFirstProjectRepository) => IProjectSyncService;
   audioRuntimeEnvironment?: AudioRuntimeEnvironment;
   initialProjectMetadata?: ProjectMetadata;
   initialPluginManifests?: readonly unknown[];
@@ -169,6 +172,8 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   const audioSourceRegistry = options.audioSourceRegistry ?? new AudioSourceRegistry(new BrowserObjectUrlAdapter());
   const audioSourceRepository = options.audioSourceRepository ?? new OpfsAudioSourceRepository();
   const projectRepository = options.projectRepository ?? new IndexedDbProjectRepository();
+  const projectSync =
+    options.projectSync ?? options.createProjectSync?.(projectRepository) ?? new NoopProjectSyncService();
   const pluginHost = new PluginHost();
   registerInitialPluginManifests({
     session,
@@ -182,6 +187,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     audioSourceRegistry,
     audioSourceRepository,
     projectRepository,
+    projectSync,
     pluginHost,
   });
   const commandHistory = new CommandHistory();
@@ -194,6 +200,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   const midiInput = options.midiInput ?? new BrowserMidiInput();
   const authClient = options.authClient ?? new UnavailableAuthClient();
   const billingClient = options.billingClient ?? new UnavailableBillingClient();
+  projectSync.activateProject(initialProjectMetadata.id);
 
   return {
     authClient,

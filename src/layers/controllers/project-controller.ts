@@ -18,6 +18,7 @@ import {
   type ProjectRestoreSnapshot,
 } from '../project-document-mapper/project-document-mapper';
 import type { ILocalFirstProjectRepository, IProjectRepository } from '../project-repository/i-project-repository';
+import type { IProjectSyncService } from '../project-sync/i-project-sync';
 import type { SessionStore } from '../session/session';
 import type {
   ProjectAudioSource,
@@ -38,6 +39,7 @@ interface ProjectControllerDependencies {
   readonly audioSourceRepository: IAudioSourceRepository;
   readonly projectRepository: IProjectRepository;
   readonly localProjectRepository?: ILocalFirstProjectRepository;
+  readonly projectSync?: IProjectSyncService;
 }
 
 interface PreparedProjectRuntime {
@@ -90,6 +92,7 @@ export class ProjectController {
         ).document
       : await this.saveDocument(document);
     this.dependencies.sessionStore.getState().replaceProjectMetadata(savedDocument.project);
+    this.dependencies.projectSync?.notifyProjectChanged(savedDocument.project.id);
   }
 
   async loadProject(projectId: string): Promise<void> {
@@ -114,6 +117,7 @@ export class ProjectController {
     }
 
     this.activateProjectRuntime(preparedRuntime);
+    this.dependencies.projectSync?.activateProject(preparedRuntime.snapshot.session.project.id);
   }
 
   private async prepareProjectRuntime({

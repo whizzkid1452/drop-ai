@@ -2,6 +2,7 @@ import type { IAudioEngine } from '../audio-engine/i-audio-engine';
 import type { IAudioSourceRegistry } from '../audio-source-registry/i-audio-source-registry';
 import type { IAudioSourceRepository } from '../audio-source-repository/i-audio-source-repository';
 import type { ILocalFirstProjectRepository } from '../project-repository/i-project-repository';
+import type { IProjectSyncService } from '../project-sync/i-project-sync';
 import type { IPluginHost } from '../plugin-host/i-plugin-host';
 import { type SessionStore } from '../session/session';
 import { PlaybackController } from './playback-controller';
@@ -19,6 +20,7 @@ interface AppControllerDependencies {
   audioSourceRegistry: IAudioSourceRegistry;
   audioSourceRepository: IAudioSourceRepository;
   projectRepository: ILocalFirstProjectRepository;
+  projectSync?: IProjectSyncService;
   pluginHost: IPluginHost;
 }
 
@@ -41,6 +43,7 @@ export class AppController {
     audioSourceRegistry,
     audioSourceRepository,
     projectRepository,
+    projectSync,
     pluginHost,
   }: AppControllerDependencies) {
     this.playback = new PlaybackController(sessionStore, audioEngine);
@@ -54,6 +57,7 @@ export class AppController {
       audioSourceRepository,
       projectRepository,
       localProjectRepository: projectRepository,
+      projectSync,
     });
     this.plugin = new PluginController({ pluginHost, sessionStore, audioEngine });
     this.mixer = new MixerController({ sessionStore, audioEngine });
