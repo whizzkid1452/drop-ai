@@ -1,0 +1,58 @@
+import { describe, expect, it } from 'vitest';
+import { createApp } from '../apps/create-app';
+import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
+import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
+import { AudioCommandType } from '../shared/types/audioCommand.schema';
+
+const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
+const TRACK_ID = '22222222-2222-4222-8222-222222222222';
+
+function createTestApp() {
+  const projectRepository = new InMemoryProjectRepository({ now: () => 1_000 });
+  const app = createApp({
+    audioEngine: new MockAudioEngine(),
+    initialProjectMetadata: { id: PROJECT_ID, name: '새 프로젝트', revision: 0 },
+    projectRepository,
+  });
+  return { app, projectRepository };
+}
+
+describe('CommandExecutor 로컬 자동 저장', () => {
+  it('프로젝트 변경 명령이 끝나면 문서와 Outbox 변경을 저장한다', async () => {
+    const { app, projectRepository } = createTestApp();
+
+    await app.commandExecutor.execute({ type: AudioCommandType.ADD_TRACK, trackId: TRACK_ID });
+
+    await expect(projectRepository.load(PROJECT_ID)).resolves.toMatchObject({
+      project: { id: PROJECT_ID, revision: 0 },
+      tracks: [{ id: TRACK_ID }],
+    });
+    await expect(projectRepository.listPendingChanges({ dueAtEpochMilliseconds: 1_000 })).resolves.toEqual([
+      expect.objectContaining({ projectId: PROJECT_ID, localRevision: 0 }),
+    ]);
+  });
+
+  it('재생처럼 프로젝트 문서를 바꾸지 않는 명령은 Outbox에 추가하지 않는다', async () => {
+    const { app, projectRepository } = createTestApp();
+
+    await app.commandExecutor.execute({ type: AudioCommandType.PLAY });
+
+    await expect(projectRepository.listPendingChanges({ dueAtEpochMilliseconds: 1_000 })).resolves.toEqual([]);
+  });
+
+  it('연속 프로젝트 변경은 revision 순서대로 각각 저장한다', async () => {
+    const { app, projectRepository } = createTestApp();
+    await app.commandExecutor.execute({ type: AudioCommandType.ADD_TRACK, trackId: TRACK_ID });
+
+    await app.commandExecutor.execute({ type: AudioCommandType.SET_TRACK_NAME, trackId: TRACK_ID, name: '보컬' });
+
+    await expect(projectRepository.load(PROJECT_ID)).resolves.toMatchObject({
+      project: { revision: 1 },
+      tracks: [{ id: TRACK_ID, name: '보컬' }],
+    });
+    await expect(projectRepository.listPendingChanges({ dueAtEpochMilliseconds: 1_000 })).resolves.toEqual([
+      expect.objectContaining({ localRevision: 0 }),
+      expect.objectContaining({ localRevision: 1 }),
+    ]);
+  });
+});

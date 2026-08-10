@@ -54,7 +54,7 @@ export class CommandExecutor {
 
   async execute(command: AudioCommand): Promise<CommandExecutionResult> {
     const validatedCommand = AudioCommandSchema.parse(command);
-    return this.enqueue(() => this.executeWithHistory(validatedCommand));
+    return this.enqueue(() => this.executeAndPersist(validatedCommand));
   }
 
   async executeMany(commands: readonly AudioCommand[]): Promise<CommandBatchExecutionResult> {
@@ -69,13 +69,22 @@ export class CommandExecutor {
 
     for (const [failedIndex, failedCommand] of validatedCommands.entries()) {
       try {
-        completedResults.push(await this.executeWithHistory(failedCommand));
+        completedResults.push(await this.executeAndPersist(failedCommand));
       } catch (cause) {
         throw new CommandBatchExecutionError({ failedIndex, failedCommand, completedResults, cause });
       }
     }
 
     return completedResults;
+  }
+
+  private async executeAndPersist(validatedCommand: AudioCommand): Promise<CommandExecutionResult> {
+    const result = await this.executeWithHistory(validatedCommand);
+    if (shouldPersistProjectAfterCommand(validatedCommand)) {
+      // 명령 완료를 로컬 commit 뒤로 미뤄 앱 종료 직전의 편집도 Outbox와 함께 남긴다.
+      await this.controller.project.saveProject();
+    }
+    return result;
   }
 
   private async executeWithHistory(validatedCommand: AudioCommand): Promise<CommandExecutionResult> {
@@ -380,5 +389,51 @@ export class CommandExecutor {
       throw new Error(`Track not found: ${trackId}`);
     }
     return track;
+  }
+}
+
+function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
+  switch (command.type) {
+    case AudioCommandType.UNDO:
+    case AudioCommandType.REDO:
+    case AudioCommandType.ADD_TRACK:
+    case AudioCommandType.REMOVE_TRACK:
+    case AudioCommandType.ARM_LOOP_SLOT:
+    case AudioCommandType.ARM_LOOP_OVERDUB:
+    case AudioCommandType.CLEAR_LOOP_SLOT:
+    case AudioCommandType.SET_TEMPO:
+    case AudioCommandType.SET_MASTER_VOLUME:
+    case AudioCommandType.SET_TRACK_NAME:
+    case AudioCommandType.SET_TRACK_VOLUME:
+    case AudioCommandType.SET_TRACK_PAN:
+    case AudioCommandType.SET_TRACK_MUTE:
+    case AudioCommandType.SET_TRACK_SOLO:
+    case AudioCommandType.INSTALL_PLUGIN:
+    case AudioCommandType.REMOVE_PLUGIN:
+    case AudioCommandType.MOVE_PLUGIN:
+    case AudioCommandType.SET_PLUGIN_ENABLED:
+    case AudioCommandType.SET_PLUGIN_PARAMETER:
+    case AudioCommandType.LOAD_REGION:
+    case AudioCommandType.UNLOAD_REGION:
+    case AudioCommandType.SPLIT_REGION:
+    case AudioCommandType.MOVE_REGION:
+    case AudioCommandType.SET_EXPORT_RANGE:
+    case AudioCommandType.CLEAR_EXPORT_RANGE:
+      return true;
+
+    case AudioCommandType.PLAY:
+    case AudioCommandType.PAUSE:
+    case AudioCommandType.STOP:
+    case AudioCommandType.SET_AUDIO_INPUT_DEVICE:
+    case AudioCommandType.SET_INPUT_MONITORING:
+    case AudioCommandType.CANCEL_LOOP_SLOT:
+    case AudioCommandType.TRIGGER_LOOP_SLOT:
+    case AudioCommandType.STOP_LOOP_SLOT:
+    case AudioCommandType.STOP_ALL_LOOPS:
+    case AudioCommandType.SET_CURRENT_TIME:
+    case AudioCommandType.EXPORT_AUDIO:
+    case AudioCommandType.SAVE_PROJECT:
+    case AudioCommandType.LOAD_PROJECT:
+      return false;
   }
 }

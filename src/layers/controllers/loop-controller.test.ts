@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { AudioSourceRegistry } from '../audio-source-registry/audio-source-registry';
 import type { IObjectUrlAdapter } from '../audio-source-registry/i-object-url-adapter';
 import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
@@ -35,6 +35,8 @@ describe('LoopController', () => {
   let audioEngine: MockAudioEngine;
   let audioSourceRegistry: AudioSourceRegistry;
   let controller: LoopController;
+  let persistProjectChange: Mock<() => Promise<void>>;
+  let reportPersistenceFailure: Mock<(cause: unknown) => void>;
   let session: SessionStore;
 
   beforeEach(async () => {
@@ -68,10 +70,14 @@ describe('LoopController', () => {
     audioEngine = new MockAudioEngine();
     await audioEngine.addTrack(TRACK_ID);
     audioSourceRegistry = new AudioSourceRegistry(new ObjectUrlAdapterStub());
+    persistProjectChange = vi.fn().mockResolvedValue(undefined);
+    reportPersistenceFailure = vi.fn();
     controller = new LoopController({
       audioEngine,
       audioSourceRegistry,
       createSourceId: () => sourceIds.shift() ?? OVERDUB_SOURCE_ID,
+      persistProjectChange,
+      reportPersistenceFailure,
       sessionStore: session,
     });
   });
@@ -101,6 +107,37 @@ describe('LoopController', () => {
       isCommitted: true,
       loopSlotIds: [SLOT_ID],
     });
+  });
+
+  it('녹음 완료로 Source가 연결되면 프로젝트 변경을 저장한다', async () => {
+    audioEngine.emitLoopEvent({
+      blob: new Blob(['loop'], { type: 'audio/wav' }),
+      captureMode: 'initial',
+      durationSeconds: 2,
+      recordedTempoBpm: 120,
+      slotId: SLOT_ID,
+      trackId: TRACK_ID,
+      type: 'RECORDING_COMPLETED',
+    });
+
+    await vi.waitFor(() => expect(persistProjectChange).toHaveBeenCalledOnce());
+  });
+
+  it('녹음 완료 저장 실패를 보고한다', async () => {
+    const persistenceFailure = new Error('저장 실패');
+    persistProjectChange.mockRejectedValueOnce(persistenceFailure);
+
+    audioEngine.emitLoopEvent({
+      blob: new Blob(['loop'], { type: 'audio/wav' }),
+      captureMode: 'initial',
+      durationSeconds: 2,
+      recordedTempoBpm: 120,
+      slotId: SLOT_ID,
+      trackId: TRACK_ID,
+      type: 'RECORDING_COMPLETED',
+    });
+
+    await vi.waitFor(() => expect(reportPersistenceFailure).toHaveBeenCalledWith(persistenceFailure));
   });
 
   it('재생 중인 루프의 오버더빙을 별도 Source로 연결한다', async () => {

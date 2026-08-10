@@ -7,6 +7,7 @@ import { AppController } from '../controllers/app-controller';
 import { createSessionStore } from '../session/session';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import { PluginHost } from '../plugin-host/plugin-host';
+import { createPluginCatalogEntry } from '../plugin-sdk/plugin-manifest.schema';
 import { gainPluginManifest } from '../plugins/builtin/gain/gain-plugin-manifest';
 import { AudioCommandType, type AudioCommand } from '../shared/types/audioCommand.schema';
 import { CommandHistory } from './command-history';
@@ -40,7 +41,11 @@ function createTestContext() {
   const commandHistory = new CommandHistory();
   const audioEngine = new MockAudioEngine();
   const pluginHost = new PluginHost();
-  pluginHost.registerManifest(gainPluginManifest);
+  const registeredManifest = pluginHost.registerManifest(gainPluginManifest);
+  session.getState().replacePluginCatalogState({
+    manifests: [createPluginCatalogEntry(registeredManifest)],
+    validationResults: [{ manifestId: registeredManifest.id, status: 'valid', issues: [] }],
+  });
   const controller = new AppController({
     sessionStore: session,
     audioEngine,

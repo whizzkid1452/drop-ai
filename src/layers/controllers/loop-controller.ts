@@ -14,6 +14,8 @@ interface LoopControllerDependencies {
   readonly audioEngine: IAudioEngine;
   readonly audioSourceRegistry: IAudioSourceRegistry;
   readonly createSourceId?: () => string;
+  readonly persistProjectChange?: () => Promise<void>;
+  readonly reportPersistenceFailure?: (cause: unknown) => void;
   readonly sessionStore: SessionStore;
 }
 
@@ -23,17 +25,24 @@ export class LoopController {
   readonly #audioEngine: IAudioEngine;
   readonly #audioSourceRegistry: IAudioSourceRegistry;
   readonly #createSourceId: () => string;
+  readonly #persistProjectChange: () => Promise<void>;
+  readonly #reportPersistenceFailure: (cause: unknown) => void;
   readonly #sessionStore: SessionStore;
+  #persistenceTail: Promise<void> = Promise.resolve();
 
   constructor({
     audioEngine,
     audioSourceRegistry,
     createSourceId = () => globalThis.crypto.randomUUID(),
+    persistProjectChange = async () => undefined,
+    reportPersistenceFailure = cause => console.error('[LoopController] 녹음 완료 프로젝트 저장 실패', cause),
     sessionStore,
   }: LoopControllerDependencies) {
     this.#audioEngine = audioEngine;
     this.#audioSourceRegistry = audioSourceRegistry;
     this.#createSourceId = createSourceId;
+    this.#persistProjectChange = persistProjectChange;
+    this.#reportPersistenceFailure = reportPersistenceFailure;
     this.#sessionStore = sessionStore;
     this.#audioEngine.subscribeLoopEvents(event => this.#handleRuntimeEvent(event));
   }
@@ -177,6 +186,7 @@ export class LoopController {
   #handleRuntimeEvent(event: LoopRuntimeEvent): void {
     if (event.type === 'RECORDING_COMPLETED') {
       this.#attachRecordedSource(event);
+      this.#enqueueProjectPersistence();
       return;
     }
     if (event.type === 'RUNTIME_ERROR') {
@@ -195,6 +205,12 @@ export class LoopController {
         state: event.state,
       },
     });
+  }
+
+  #enqueueProjectPersistence(): void {
+    // 녹음 완료는 명령 반환 뒤 발생하므로 이벤트별 저장을 순서대로 이어 Outbox revision 순서를 보존한다.
+    const persistence = this.#persistenceTail.then(() => this.#persistProjectChange());
+    this.#persistenceTail = persistence.catch(cause => this.#reportPersistenceFailure(cause));
   }
 
   #attachRecordedSource(event: Extract<LoopRuntimeEvent, { type: 'RECORDING_COMPLETED' }>): void {
