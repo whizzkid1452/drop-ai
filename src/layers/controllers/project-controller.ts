@@ -19,7 +19,7 @@ import {
 } from '../project-document-mapper/project-document-mapper';
 import type { ILocalFirstProjectRepository, IProjectRepository } from '../project-repository/i-project-repository';
 import type { IProjectSyncService } from '../project-sync/i-project-sync';
-import type { SessionStore } from '../session/session';
+import type { SessionState, SessionStore } from '../session/session';
 import type {
   ProjectAudioSource,
   ProjectDocumentSnapshot,
@@ -58,6 +58,16 @@ interface RecordCleanupFailureOptions {
   readonly step: string;
   readonly cleanup: () => ResourceCleanupResult;
   readonly failures: ProjectMutationCompensationFailure[];
+}
+
+interface ProjectSessionVersion {
+  readonly exportEndTime: SessionState['exportEndTime'];
+  readonly exportStartTime: SessionState['exportStartTime'];
+  readonly masterVolume: number;
+  readonly pluginCatalog: SessionState['pluginCatalog'];
+  readonly project: SessionState['project'];
+  readonly tempo: number;
+  readonly tracks: SessionState['tracks'];
 }
 
 export class ProjectController {
@@ -120,6 +130,49 @@ export class ProjectController {
     this.dependencies.projectSync?.activateProject(preparedRuntime.snapshot.session.project.id);
   }
 
+  async applyRemoteProjectDocument(document: ProjectDocumentSnapshot): Promise<boolean> {
+    const expectedSessionVersion = this.captureProjectSessionVersion();
+    await this.saveTail;
+    if (!this.isProjectSessionVersionCurrent(expectedSessionVersion)) {
+      return false;
+    }
+    if (expectedSessionVersion.project.id !== document.project.id) {
+      return false;
+    }
+
+    const preparedAudioSourceRegistry = this.dependencies.audioSourceRegistry.beginReplacement();
+    let preparedAudioGraph: IPreparedAudioProjectGraph | undefined;
+    let preparedRuntime: PreparedProjectRuntime;
+
+    try {
+      preparedRuntime = await this.prepareProjectRuntimeFromDocument({
+        document,
+        expectedProjectId: document.project.id,
+        audioSourceRegistry: preparedAudioSourceRegistry,
+      });
+      preparedAudioGraph = preparedRuntime.audioGraph;
+      preparedRuntime.audioSourceRegistry.assertActivatable();
+      preparedRuntime.audioGraph.assertActivatable();
+    } catch (cause) {
+      this.rethrowAfterDiscard({
+        cause,
+        audioGraph: preparedAudioGraph,
+        audioSourceRegistry: preparedAudioSourceRegistry,
+      });
+    }
+
+    if (!this.isProjectSessionVersionCurrent(expectedSessionVersion)) {
+      this.discardPreparedRuntime({
+        audioGraph: preparedRuntime.audioGraph,
+        audioSourceRegistry: preparedRuntime.audioSourceRegistry,
+      });
+      return false;
+    }
+
+    this.activateProjectRuntime(preparedRuntime);
+    return true;
+  }
+
   private async prepareProjectRuntime({
     projectId,
     audioSourceRegistry,
@@ -128,6 +181,29 @@ export class ProjectController {
     readonly audioSourceRegistry: IPreparedAudioSourceRegistryReplacement;
   }): Promise<PreparedProjectRuntime> {
     const snapshot = await this.loadProjectSnapshot(projectId);
+    return this.prepareProjectRuntimeFromSnapshot({ snapshot, audioSourceRegistry });
+  }
+
+  private async prepareProjectRuntimeFromDocument({
+    document,
+    expectedProjectId,
+    audioSourceRegistry,
+  }: {
+    readonly document: ProjectDocumentSnapshot;
+    readonly expectedProjectId: string;
+    readonly audioSourceRegistry: IPreparedAudioSourceRegistryReplacement;
+  }): Promise<PreparedProjectRuntime> {
+    const snapshot = this.createProjectRestoreSnapshot({ document, expectedProjectId });
+    return this.prepareProjectRuntimeFromSnapshot({ snapshot, audioSourceRegistry });
+  }
+
+  private async prepareProjectRuntimeFromSnapshot({
+    snapshot,
+    audioSourceRegistry,
+  }: {
+    readonly snapshot: ProjectRestoreSnapshot;
+    readonly audioSourceRegistry: IPreparedAudioSourceRegistryReplacement;
+  }): Promise<PreparedProjectRuntime> {
     await this.restoreAudioSources(snapshot.audioSources, audioSourceRegistry);
     this.attachRegions(snapshot, audioSourceRegistry);
     const audioGraph = await this.dependencies.audioEngine.prepareProjectGraph({
@@ -148,18 +224,29 @@ export class ProjectController {
       });
     }
 
+    await this.dependencies.projectSync?.ensureLocalProjectMedia(document);
+    return this.createProjectRestoreSnapshot({ document, expectedProjectId: projectId });
+  }
+
+  private createProjectRestoreSnapshot({
+    document,
+    expectedProjectId,
+  }: {
+    readonly document: ProjectDocumentSnapshot;
+    readonly expectedProjectId: string;
+  }): ProjectRestoreSnapshot {
     const sessionState = this.dependencies.sessionStore.getState();
     const snapshot = createProjectRestoreSnapshotFromDocumentV4({
       document,
       pluginCatalog: [...sessionState.pluginCatalog.values()],
     });
-    if (snapshot.session.project.id !== projectId) {
+    if (snapshot.session.project.id !== expectedProjectId) {
       throw new ProjectLoadError({
         code: ProjectLoadErrorCode.PROJECT_ID_MISMATCH,
         message: '요청한 Project ID와 저장된 문서의 Project ID가 다릅니다.',
         details: {
           actualProjectId: snapshot.session.project.id,
-          requestedProjectId: projectId,
+          requestedProjectId: expectedProjectId,
         },
       });
     }
@@ -323,6 +410,60 @@ export class ProjectController {
       });
     }
     throw options.cause;
+  }
+
+  private discardPreparedRuntime({
+    audioGraph,
+    audioSourceRegistry,
+  }: {
+    readonly audioGraph: IPreparedAudioProjectGraph;
+    readonly audioSourceRegistry: IPreparedAudioSourceRegistryReplacement;
+  }): void {
+    const compensationFailures: ProjectMutationCompensationFailure[] = [];
+    this.recordCleanupFailure({
+      step: 'AUDIO_GRAPH_DISCARD',
+      cleanup: () => audioGraph.discard(),
+      failures: compensationFailures,
+    });
+    this.recordCleanupFailure({
+      step: 'AUDIO_SOURCE_REGISTRY_DISCARD',
+      cleanup: () => audioSourceRegistry.discard(),
+      failures: compensationFailures,
+    });
+    if (compensationFailures.length > 0) {
+      throw new ProjectMutationCompensationError({
+        operation: 'APPLY_REMOTE_PROJECT',
+        failedPhase: 'PREPARED_RUNTIME_DISCARD',
+        cause: new Error('원격 프로젝트 적용 전에 Session이 변경됐습니다.'),
+        compensationFailures,
+      });
+    }
+  }
+
+  private captureProjectSessionVersion(): ProjectSessionVersion {
+    const session = this.dependencies.sessionStore.getState();
+    return {
+      exportEndTime: session.exportEndTime,
+      exportStartTime: session.exportStartTime,
+      masterVolume: session.masterVolume,
+      pluginCatalog: session.pluginCatalog,
+      project: session.project,
+      tempo: session.tempo,
+      tracks: session.tracks,
+    };
+  }
+
+  private isProjectSessionVersionCurrent(expected: ProjectSessionVersion): boolean {
+    const current = this.dependencies.sessionStore.getState();
+    return (
+      current.exportEndTime === expected.exportEndTime &&
+      current.exportStartTime === expected.exportStartTime &&
+      current.masterVolume === expected.masterVolume &&
+      current.pluginCatalog === expected.pluginCatalog &&
+      current.project === expected.project &&
+      current.tempo === expected.tempo &&
+      current.tracks === expected.tracks
+    );
   }
 
   private recordCleanupFailure({ step, cleanup, failures }: RecordCleanupFailureOptions): void {

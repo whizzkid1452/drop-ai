@@ -13,12 +13,13 @@ export function createWebApp(): AppInstance {
   return createApp({
     authClient,
     billingClient,
-    createProjectSync: ({ audioSourceRepository, projectRepository }) =>
+    createProjectSync: ({ audioSourceRepository, projectRepository, remoteProjectDocumentApplicator }) =>
       createWebProjectSyncService({
         audioSourceRepository,
         authClient,
         onlineEventSource: typeof window === 'undefined' ? undefined : window,
         projectRepository,
+        remoteProjectDocumentApplicator,
         supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
         supabasePublishableKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
       }),

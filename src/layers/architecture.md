@@ -163,9 +163,11 @@ IndexedDB가 없는 환경에서도 앱 조립은 완료하며 실제 저장소 
 Base64로 저장한다. 기존 JSON record의 첫 전환은 seed를 포함한 전체 state를 전송하며, 기존 Outbox 항목은 누락 방지를
 위해 snapshot RPC를 계속 사용한다. `ProjectSyncCoordinator`는 활성 프로젝트 범위와 프로젝트별 single-flight를 유지하면서
 미디어를 먼저 올린 뒤 새 변경을 `append_project_crdt_update` RPC에 순서대로 전송한다. 이후 로컬 cursor보다 큰 원격 update를
-100개씩 조회하고, 병합된 문서·누적 Yjs state·마지막 sequence를 하나의 IndexedDB transaction으로 저장한다. 현재 서버 update
-log는 사용자별로 격리되어 있다. 활성 Session·AudioEngine 자동 교체, 원격 미디어 다운로드, 프로젝트 공동 작업자 권한은 아직
-구현하지 않았다.
+100개씩 조회하고, 병합된 문서·누적 Yjs state·마지막 sequence를 하나의 IndexedDB transaction으로 저장한다. 누락된 Source는
+`project_media_refs`와 private Storage에서 내려받아 크기와 SHA-256을 검증한 뒤 OPFS에 저장한다. 그 뒤 준비된 AudioEngine
+그래프·Source Registry·Session 순서로 활성 Runtime을 교체한다. 준비 중 현재 Session이 바뀌면 준비 자원을 폐기하고 저장된
+cursor의 문서를 재시도한다. 현재 서버 update log는 사용자별로 격리되어 있다. 프로젝트 공동 작업자 권한과 실시간 변경 구독은
+아직 구현하지 않았다.
 
 Session의 `replaceProjectMetadata`는 저장 성공 metadata만 반영하고, `replaceProjectState`는 불러오기 성공 결과 전체를
 반영하는 내부 상태 교체 동작이다. Apps는 두 동작을 직접 호출하지 않는다. 프로젝트를 불러올 때 metadata만 먼저 바꾸지

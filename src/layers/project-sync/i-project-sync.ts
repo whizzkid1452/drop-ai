@@ -27,17 +27,27 @@ export interface IProjectSyncGateway {
 }
 
 export interface IProjectMediaSync {
+  ensureLocalProjectMedia(document: ProjectDocumentSnapshot): Promise<void>;
   ensureProjectMedia(document: ProjectDocumentSnapshot): Promise<void>;
+}
+
+export interface IRemoteProjectDocumentApplicator {
+  applyRemoteProjectDocument(document: ProjectDocumentSnapshot): Promise<boolean>;
 }
 
 export interface IProjectSyncService {
   activateProject(projectId: string): void;
+  ensureLocalProjectMedia(document: ProjectDocumentSnapshot): Promise<void>;
   notifyProjectChanged(projectId: string): void;
   resume(): void;
 }
 
 export class NoopProjectSyncService implements IProjectSyncService {
   activateProject(): void {
+    return undefined;
+  }
+
+  async ensureLocalProjectMedia(): Promise<void> {
     return undefined;
   }
 
@@ -51,7 +61,17 @@ export class NoopProjectSyncService implements IProjectSyncService {
 }
 
 export class NoopProjectMediaSync implements IProjectMediaSync {
+  async ensureLocalProjectMedia(): Promise<void> {
+    return undefined;
+  }
+
   async ensureProjectMedia(): Promise<void> {
     return undefined;
+  }
+}
+
+export class NoopRemoteProjectDocumentApplicator implements IRemoteProjectDocumentApplicator {
+  async applyRemoteProjectDocument(): Promise<boolean> {
+    return true;
   }
 }

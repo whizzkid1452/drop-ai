@@ -27,7 +27,11 @@ import { ProjectCatalogQuery, type IProjectCatalogQuery } from '../queries/proje
 import type { ILocalFirstProjectRepository } from '../project-repository/i-project-repository';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import { IndexedDbProjectRepository } from '../project-repository/indexed-db-project-repository';
-import { NoopProjectSyncService, type IProjectSyncService } from '../project-sync/i-project-sync';
+import {
+  NoopProjectSyncService,
+  type IProjectSyncService,
+  type IRemoteProjectDocumentApplicator,
+} from '../project-sync/i-project-sync';
 import type { IPluginHost } from '../plugin-host/i-plugin-host';
 import { PluginHost } from '../plugin-host/plugin-host';
 import { createPluginCatalogEntry, type PluginManifest } from '../plugin-sdk/plugin-manifest.schema';
@@ -38,7 +42,7 @@ import {
   type AudioRuntimeCapabilities,
   type AudioRuntimeEnvironment,
 } from '../shared/utils/audio-runtime-capabilities';
-import type { ProjectMetadata } from '../shared/types/project-document.schema';
+import type { ProjectDocumentSnapshot, ProjectMetadata } from '../shared/types/project-document.schema';
 import type { PluginValidationResult } from '../shared/types/plugin-state';
 import { BrowserMidiInput } from '../midi-input/browser-midi-input';
 import type { IMidiInput } from '../midi-input/i-midi-input';
@@ -66,6 +70,7 @@ export interface AppInstance {
 interface ProjectSyncDependencies {
   readonly audioSourceRepository: IAudioSourceRepository;
   readonly projectRepository: ILocalFirstProjectRepository;
+  readonly remoteProjectDocumentApplicator: IRemoteProjectDocumentApplicator;
 }
 
 export interface CreateAppOptions {
@@ -140,6 +145,30 @@ function createValidManifestResult(manifest: PluginManifest): PluginValidationRe
   };
 }
 
+class ProjectSyncServiceDelegate implements IProjectSyncService {
+  private delegate: IProjectSyncService = new NoopProjectSyncService();
+
+  setDelegate(delegate: IProjectSyncService): void {
+    this.delegate = delegate;
+  }
+
+  activateProject(projectId: string): void {
+    this.delegate.activateProject(projectId);
+  }
+
+  ensureLocalProjectMedia(document: ProjectDocumentSnapshot): Promise<void> {
+    return this.delegate.ensureLocalProjectMedia(document);
+  }
+
+  notifyProjectChanged(projectId: string): void {
+    this.delegate.notifyProjectChanged(projectId);
+  }
+
+  resume(): void {
+    this.delegate.resume();
+  }
+}
+
 function createDefaultAudioEngine(): IAudioEngine {
   const [gainParameter] = gainPluginManifest.parameters;
   const [saturationDriveParameter] = saturationPluginManifest.parameters;
@@ -179,10 +208,8 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   const audioSourceRegistry = options.audioSourceRegistry ?? new AudioSourceRegistry(new BrowserObjectUrlAdapter());
   const audioSourceRepository = options.audioSourceRepository ?? new OpfsAudioSourceRepository();
   const projectRepository = options.projectRepository ?? new IndexedDbProjectRepository();
-  const projectSync =
-    options.projectSync ??
-    options.createProjectSync?.({ audioSourceRepository, projectRepository }) ??
-    new NoopProjectSyncService();
+  const projectSyncDelegate = new ProjectSyncServiceDelegate();
+  const controllerProjectSync = options.projectSync ?? projectSyncDelegate;
   const pluginHost = new PluginHost();
   registerInitialPluginManifests({
     session,
@@ -196,9 +223,18 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     audioSourceRegistry,
     audioSourceRepository,
     projectRepository,
-    projectSync,
+    projectSync: controllerProjectSync,
     pluginHost,
   });
+  const projectSync =
+    options.projectSync ??
+    options.createProjectSync?.({
+      audioSourceRepository,
+      projectRepository,
+      remoteProjectDocumentApplicator: controller.project,
+    }) ??
+    new NoopProjectSyncService();
+  projectSyncDelegate.setDelegate(projectSync);
   const commandHistory = new CommandHistory();
   const commandExecutor = new CommandExecutor(session, controller, commandHistory);
   const commandHistoryQuery = createCommandHistoryQuery(commandHistory);
