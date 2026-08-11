@@ -215,7 +215,11 @@ export class ProjectController {
   }
 
   private async loadProjectSnapshot(projectId: string): Promise<ProjectRestoreSnapshot> {
-    const document = await this.dependencies.projectRepository.load(projectId);
+    let document = await this.dependencies.projectRepository.load(projectId);
+    if (!document) {
+      await this.dependencies.projectSync?.ensureLocalProject?.(projectId);
+      document = await this.dependencies.projectRepository.load(projectId);
+    }
     if (!document) {
       throw new ProjectLoadError({
         code: ProjectLoadErrorCode.PROJECT_NOT_FOUND,

@@ -47,6 +47,49 @@ function createInitialRemoteUpdate(projectId: string) {
 }
 
 describe('ProjectSyncCoordinator', () => {
+  it('원격 프로젝트 목록을 조회한다', async () => {
+    const remoteProjects = [
+      {
+        projectId: PROJECT_ID,
+        latestSequenceId: 1,
+        updatedAtEpochMilliseconds: 1_000,
+      },
+    ];
+    const gateway: IProjectSyncGateway = {
+      listRemoteProjects: vi.fn().mockResolvedValue(remoteProjects),
+      pullProjectUpdates: vi.fn().mockResolvedValue([]),
+      pushProjectChange: vi.fn(),
+    };
+    const coordinator = new ProjectSyncCoordinator({
+      gateway,
+      repository: new InMemoryProjectRepository({ now: () => 1_000 }),
+    });
+
+    await expect(coordinator.listRemoteProjects()).resolves.toEqual(remoteProjects);
+  });
+
+  it('로컬에 없는 원격 프로젝트를 CRDT update로 복원한다', async () => {
+    const repository = new InMemoryProjectRepository({ now: () => 1_000 });
+    const remoteUpdate = createInitialRemoteUpdate(PROJECT_ID);
+    const pullProjectUpdates = vi.fn().mockResolvedValueOnce([remoteUpdate]).mockResolvedValueOnce([]);
+    const coordinator = new ProjectSyncCoordinator({
+      gateway: {
+        listRemoteProjects: vi.fn().mockResolvedValue([]),
+        pullProjectUpdates,
+        pushProjectChange: vi.fn(),
+      },
+      repository,
+    });
+
+    await expect(coordinator.ensureLocalProject(PROJECT_ID)).resolves.toBe(true);
+    await expect(repository.load(PROJECT_ID)).resolves.toEqual(createProjectDocument(PROJECT_ID));
+    expect(pullProjectUpdates).toHaveBeenCalledWith({
+      afterSequenceId: 0,
+      limit: 100,
+      projectId: PROJECT_ID,
+    });
+  });
+
   it('프로젝트 문서보다 참조 미디어를 먼저 동기화한다', async () => {
     const repository = new InMemoryProjectRepository({ now: () => 1_000 });
     await repository.commitLocal({

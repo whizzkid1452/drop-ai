@@ -508,9 +508,11 @@ describe('ProjectController', () => {
     const events: string[] = [];
     const projectSync: IProjectSyncService = {
       activateProject: vi.fn(),
+      ensureLocalProject: vi.fn(),
       ensureLocalProjectMedia: vi.fn(async () => {
         events.push('media-download');
       }),
+      listRemoteProjects: vi.fn(),
       notifyProjectChanged: vi.fn(),
       resume: vi.fn(),
     };
@@ -527,6 +529,29 @@ describe('ProjectController', () => {
 
     expect(events).toEqual(['media-download', 'source-load']);
     expect(projectSync.ensureLocalProjectMedia).toHaveBeenCalledWith(document);
+  });
+
+  it('로컬 문서가 없으면 원격 프로젝트를 복원한 뒤 불러온다', async () => {
+    const document = createLoadedDocument();
+    const registration = createSourceRegistration();
+    const ensureLocalProject = vi.fn().mockResolvedValue(true);
+    const projectSync: IProjectSyncService = {
+      activateProject: vi.fn(),
+      ensureLocalProject,
+      ensureLocalProjectMedia: vi.fn(),
+      listRemoteProjects: vi.fn(),
+      notifyProjectChanged: vi.fn(),
+      resume: vi.fn(),
+    };
+    const context = createTestContext(projectSync);
+    context.projectRepository.load.mockResolvedValueOnce(null).mockResolvedValue(document);
+    context.audioSourceRepository.load.mockResolvedValue(registration.blob);
+
+    await context.controller.loadProject(LOADED_PROJECT_ID);
+
+    expect(ensureLocalProject).toHaveBeenCalledWith(LOADED_PROJECT_ID);
+    expect(context.projectRepository.load).toHaveBeenCalledTimes(2);
+    expect(context.sessionStore.getState().project).toEqual(document.project);
   });
 
   it('원격 문서를 현재 Session과 AudioEngine에 준비 후 교체한다', async () => {

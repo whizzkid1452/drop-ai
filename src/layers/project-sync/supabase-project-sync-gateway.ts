@@ -2,7 +2,12 @@ import { z } from 'zod';
 import type { IAuthClient } from '../auth/i-auth-client';
 import { isEncodedProjectCrdtUpdate } from '../project-crdt/project-crdt-update-codec';
 import type { ProjectOutboxEntry } from '../project-repository/i-project-repository';
-import type { IProjectSyncGateway, ProjectSyncSuccess, PullProjectUpdatesRequest } from './i-project-sync';
+import type {
+  IProjectSyncGateway,
+  ProjectSyncSuccess,
+  PullProjectUpdatesRequest,
+  RemoteProjectReference,
+} from './i-project-sync';
 import { ProjectSyncError, ProjectSyncErrorCode } from './project-sync-error';
 
 const SnapshotSyncResponseSchema = z.strictObject({
@@ -27,6 +32,12 @@ const RemoteProjectCrdtUpdateSchema = z.strictObject({
   operation_id: z.uuid(),
   sequence_id: z.number().int().positive().safe(),
   update_base64: z.string().refine(isEncodedProjectCrdtUpdate),
+});
+
+const RemoteProjectReferenceSchema = z.strictObject({
+  latest_sequence_id: z.number().int().positive().safe(),
+  project_id: z.uuid(),
+  updated_at: z.string().datetime({ offset: true }),
 });
 
 type FetchImplementation = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -54,6 +65,43 @@ export class SupabaseProjectSyncGateway implements IProjectSyncGateway {
     this.#fetchImplementation = fetchImplementation;
     this.#supabasePublishableKey = supabasePublishableKey;
     this.#supabaseUrl = supabaseUrl.replace(/\/+$/, '');
+  }
+
+  async listRemoteProjects(): Promise<readonly RemoteProjectReference[]> {
+    const accessToken = this.#requireAccessToken();
+    let response: Response;
+    try {
+      response = await this.#fetchImplementation(`${this.#supabaseUrl}/rest/v1/rpc/list_project_crdt_projects`, {
+        method: 'POST',
+        headers: {
+          apikey: this.#supabasePublishableKey,
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: '{}',
+      });
+    } catch (cause) {
+      throw new ProjectSyncError({
+        code: ProjectSyncErrorCode.NETWORK_ERROR,
+        message: '원격 프로젝트 목록을 조회하지 못했습니다.',
+        retryable: true,
+        cause,
+      });
+    }
+    if (!response.ok) {
+      throw await this.#createHttpError(response);
+    }
+
+    const responseBody = await this.#readJsonResponse(response);
+    const result = z.array(RemoteProjectReferenceSchema).safeParse(responseBody);
+    if (!result.success) {
+      throw this.#createInvalidResponseError(result.error);
+    }
+    return result.data.map(project => ({
+      latestSequenceId: project.latest_sequence_id,
+      projectId: project.project_id,
+      updatedAtEpochMilliseconds: Date.parse(project.updated_at),
+    }));
   }
 
   async pullProjectUpdates(request: PullProjectUpdatesRequest) {

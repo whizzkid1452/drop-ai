@@ -41,6 +41,43 @@ function createOutboxEntry({ includeCrdtUpdate = true } = {}): ProjectOutboxEntr
 }
 
 describe('SupabaseProjectSyncGateway', () => {
+  it('사용자의 원격 프로젝트 목록을 최근 변경 순서로 조회한다', async () => {
+    const fetchImplementation = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            project_id: PROJECT_ID,
+            latest_sequence_id: 8,
+            updated_at: '2026-08-11T01:02:03.000Z',
+          },
+        ]),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    );
+    const gateway = new SupabaseProjectSyncGateway({
+      authClient: createAuthClient('access-token'),
+      fetchImplementation,
+      supabasePublishableKey: 'publishable-key',
+      supabaseUrl: 'https://example.supabase.co',
+    });
+
+    await expect(gateway.listRemoteProjects()).resolves.toEqual([
+      {
+        projectId: PROJECT_ID,
+        latestSequenceId: 8,
+        updatedAtEpochMilliseconds: Date.parse('2026-08-11T01:02:03.000Z'),
+      },
+    ]);
+    expect(fetchImplementation).toHaveBeenCalledWith(
+      'https://example.supabase.co/rest/v1/rpc/list_project_crdt_projects',
+      expect.objectContaining({
+        body: '{}',
+        headers: expect.objectContaining({ Authorization: 'Bearer access-token', apikey: 'publishable-key' }),
+        method: 'POST',
+      })
+    );
+  });
+
   it('마지막 sequence 이후의 원격 update를 오름차순으로 조회한다', async () => {
     const fetchImplementation = vi.fn().mockResolvedValue(
       new Response(

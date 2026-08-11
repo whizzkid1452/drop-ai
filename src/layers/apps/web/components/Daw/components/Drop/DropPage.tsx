@@ -5,6 +5,7 @@ import { AudioFileDrop } from '@/layers/apps/web/components/common/FileDrop/Audi
 import * as styles from './DropPage.css.ts';
 import { useSession } from '@/layers/apps/web/context/layer-hooks';
 import { AccountControl } from '@/layers/apps/web/components/Auth/AccountControl';
+import { LoadProjectControl } from '../LoadProjectControl/LoadProjectControl';
 
 export function DropPage() {
   const navigate = useNavigate();
@@ -20,6 +21,9 @@ export function DropPage() {
     },
     [navigate, resetAgentWorkflow]
   );
+  const onProjectLoaded = useCallback(() => {
+    navigate('/daw', { replace: true });
+  }, [navigate]);
 
   return (
     <div className={styles.container}>
@@ -28,6 +32,7 @@ export function DropPage() {
       </div>
       <div className={styles.cardGroup}>
         <AudioFileDrop onAudioFileDrop={onAudioFileDrop} />
+        <LoadProjectControl onProjectLoaded={onProjectLoaded} />
       </div>
     </div>
   );

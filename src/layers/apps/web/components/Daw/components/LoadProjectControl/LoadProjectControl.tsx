@@ -5,7 +5,7 @@ import {
   KEYBOARD_SHORTCUT_LABELS,
   useKeyboardShortcutAction,
 } from '@/layers/apps/web/keyboard-shortcuts/keyboard-shortcuts';
-import type { ProjectSummary } from '@/layers/project-repository/i-project-repository';
+import type { ProjectCatalogItem } from '@/layers/queries/project-catalog-query';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import * as styles from './LoadProjectControl.css';
 
@@ -13,13 +13,17 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function LoadProjectControl() {
+interface LoadProjectControlProps {
+  readonly onProjectLoaded?: () => void;
+}
+
+export function LoadProjectControl({ onProjectLoaded }: LoadProjectControlProps) {
   const commandExecutor = useCommandExecutor();
   const { listProjects } = useProjectCatalog();
   const isMountedRef = useRef(false);
   const latestListRequestRef = useRef(0);
   const isOpeningRef = useRef(false);
-  const [projects, setProjects] = useState<readonly ProjectSummary[]>([]);
+  const [projects, setProjects] = useState<readonly ProjectCatalogItem[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [isListing, setIsListing] = useState(true);
   const [isOpening, setIsOpening] = useState(false);
@@ -73,6 +77,7 @@ export function LoadProjectControl() {
     try {
       await commandExecutor.execute({ type: AudioCommandType.LOAD_PROJECT, projectId: selectedProjectId });
       setIsOpened(true);
+      onProjectLoaded?.();
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {
@@ -102,16 +107,16 @@ export function LoadProjectControl() {
   return (
     <div className={styles.container}>
       <select
-        aria-label="저장된 프로젝트"
+        aria-label="프로젝트"
         className={styles.select}
         value={selectedProjectId}
         onChange={event => setSelectedProjectId(event.target.value)}
         disabled={isListing || isOpening || !hasProjects}
       >
-        {!hasProjects ? <option value="">{isListing ? '프로젝트 찾는 중...' : '저장된 프로젝트 없음'}</option> : null}
+        {!hasProjects ? <option value="">{isListing ? '프로젝트 찾는 중...' : '프로젝트 없음'}</option> : null}
         {projects.map(project => (
           <option key={project.projectId} value={project.projectId}>
-            {project.name} (r{project.revision})
+            {project.name} {project.localRevision === null ? '(원격)' : `(r${project.localRevision})`}
           </option>
         ))}
       </select>

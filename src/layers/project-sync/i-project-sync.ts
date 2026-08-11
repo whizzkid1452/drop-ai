@@ -21,7 +21,14 @@ export interface PullProjectUpdatesRequest {
   readonly projectId: string;
 }
 
+export interface RemoteProjectReference {
+  readonly latestSequenceId: number;
+  readonly projectId: string;
+  readonly updatedAtEpochMilliseconds: number;
+}
+
 export interface IProjectSyncGateway {
+  listRemoteProjects?(): Promise<readonly RemoteProjectReference[]>;
   pullProjectUpdates(request: PullProjectUpdatesRequest): Promise<readonly RemoteProjectCrdtUpdate[]>;
   pushProjectChange(change: ProjectOutboxEntry): Promise<ProjectSyncSuccess>;
 }
@@ -37,7 +44,9 @@ export interface IRemoteProjectDocumentApplicator {
 
 export interface IProjectSyncService {
   activateProject(projectId: string): void;
+  ensureLocalProject?(projectId: string): Promise<boolean>;
   ensureLocalProjectMedia(document: ProjectDocumentSnapshot): Promise<void>;
+  listRemoteProjects?(): Promise<readonly RemoteProjectReference[]>;
   notifyProjectChanged(projectId: string): void;
   resume(): void;
 }
@@ -47,8 +56,16 @@ export class NoopProjectSyncService implements IProjectSyncService {
     return undefined;
   }
 
+  async ensureLocalProject(): Promise<boolean> {
+    return false;
+  }
+
   async ensureLocalProjectMedia(): Promise<void> {
     return undefined;
+  }
+
+  async listRemoteProjects(): Promise<readonly RemoteProjectReference[]> {
+    return [];
   }
 
   notifyProjectChanged(): void {

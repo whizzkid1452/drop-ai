@@ -294,7 +294,12 @@ describe('createApp', () => {
       regionIds: [regionId],
     });
     await expect(app.projectCatalog.listProjects()).resolves.toEqual([
-      expect.objectContaining({ projectId, name: '불러오기 통합 테스트', revision: 0 }),
+      expect.objectContaining({
+        availability: 'local',
+        localRevision: 0,
+        projectId,
+        name: '불러오기 통합 테스트',
+      }),
     ]);
     expect('projectRepository' in app).toBe(false);
     expect('audioSourceRepository' in app).toBe(false);
