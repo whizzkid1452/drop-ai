@@ -21,7 +21,7 @@ supabase link --project-ref <project-ref>
 supabase db push
 ```
 
-`202608060001_create_project_sync.sql`, `202608060002_create_project_media.sql`, `202608060003_create_project_crdt_updates.sql`은 다음 서버 자원을 만듭니다.
+`202608060001_create_project_sync.sql`, `202608060002_create_project_media.sql`, `202608060003_create_project_crdt_updates.sql`, `202608110001_list_project_crdt_projects.sql`은 다음 서버 자원을 만듭니다.
 
 - 사용자별 `project_documents`
 - operation ID별 `project_change_receipts`
@@ -29,6 +29,7 @@ supabase db push
 - 사용자별 private `project-media` Storage bucket 접근 정책
 - Source ID를 SHA-256 Storage 경로에 연결하는 `project_media_refs`와 `register_project_media` RPC
 - 사용자·프로젝트별 append-only `project_crdt_updates`와 idempotent `append_project_crdt_update` RPC
+- 인증 사용자의 원격 프로젝트 ID와 마지막 sequence를 조회하는 `list_project_crdt_projects` RPC
 
 ### 2. 브라우저 환경 변수 설정
 
@@ -50,6 +51,8 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key
 7. 병합된 문서, 누적 Yjs state, 마지막 `sequence_id`가 하나의 IndexedDB transaction에서 저장되는지 확인합니다.
 8. 문서가 참조하는 Source가 OPFS에 없으면 `project_media_refs`와 private Storage에서 내려받는지 확인합니다.
 9. Source 크기와 SHA-256 검증 뒤 AudioEngine·Source Registry·Session 순서로 현재 Runtime이 교체되는지 확인합니다.
+10. 로컬 IndexedDB가 비어 있는 브라우저에서 프로젝트 목록을 새로고침하고 `(원격)` 항목을 불러옵니다.
+11. CRDT update와 private Storage 미디어를 내려받은 뒤 프로젝트 Runtime이 복원되는지 확인합니다.
 
 업그레이드 전에 생성된 JSON Outbox 항목에는 CRDT update가 없습니다. 이 항목은 기존 `apply_project_change` RPC로 전송해 미전송 변경을 보존합니다.
 

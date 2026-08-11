@@ -6,6 +6,7 @@ import {
   type IProjectSyncGateway,
   type IProjectSyncService,
   type IRemoteProjectDocumentApplicator,
+  type RemoteProjectReference,
 } from './i-project-sync';
 import { isRetryableProjectSyncError, ProjectSyncError, ProjectSyncErrorCode } from './project-sync-error';
 
@@ -85,6 +86,50 @@ export class ProjectSyncCoordinator implements IProjectSyncService {
       this.#cancelScheduledRetry();
     }
     this.#requestProjectSync(projectId, false);
+  }
+
+  async ensureLocalProject(projectId: string): Promise<boolean> {
+    const localDocument = await this.#repository.load(projectId);
+    if (localDocument) {
+      return true;
+    }
+
+    // 원격 문서만 로컬에 구성하고 Runtime 교체는 ProjectController의 load 절차에 맡긴다.
+    let afterSequenceId = await this.#repository.getLastAppliedRemoteSequenceId(projectId);
+    while (true) {
+      const updates = await this.#gateway.pullProjectUpdates({
+        afterSequenceId,
+        limit: REMOTE_UPDATE_PAGE_SIZE,
+        projectId,
+      });
+      if (updates.length === 0) {
+        return (await this.#repository.load(projectId)) !== null;
+      }
+
+      const result = await this.#applyRemoteProjectUpdates({ afterSequenceId, projectId, updates });
+      afterSequenceId = result.lastSequenceId;
+      if (updates.length < REMOTE_UPDATE_PAGE_SIZE) {
+        return (await this.#repository.load(projectId)) !== null;
+      }
+    }
+  }
+
+  async listRemoteProjects(): Promise<readonly RemoteProjectReference[]> {
+    if (!this.#gateway.listRemoteProjects) {
+      return [];
+    }
+    try {
+      return await this.#gateway.listRemoteProjects();
+    } catch (cause) {
+      if (cause instanceof ProjectSyncError && cause.code === ProjectSyncErrorCode.AUTH_REQUIRED) {
+        return [];
+      }
+      if (isRetryableProjectSyncError(cause)) {
+        this.#reportFailure(cause);
+        return [];
+      }
+      throw cause;
+    }
   }
 
   notifyProjectChanged(projectId: string): void {
@@ -250,21 +295,34 @@ export class ProjectSyncCoordinator implements IProjectSyncService {
         return;
       }
 
-      const result = await this.#repository.applyRemoteProjectUpdates({ projectId, updates });
-      if (result.lastSequenceId <= afterSequenceId) {
-        throw new ProjectSyncError({
-          code: ProjectSyncErrorCode.INVALID_RESPONSE,
-          message: '원격 프로젝트 update sequence가 조회 cursor보다 크지 않습니다.',
-          retryable: false,
-          details: { afterSequenceId, lastSequenceId: result.lastSequenceId, projectId },
-        });
-      }
+      const result = await this.#applyRemoteProjectUpdates({ afterSequenceId, projectId, updates });
       afterSequenceId = result.lastSequenceId;
       await this.#reconcileRemoteProjectRuntime({ generation, projectId });
       if (updates.length < REMOTE_UPDATE_PAGE_SIZE) {
         return;
       }
     }
+  }
+
+  async #applyRemoteProjectUpdates({
+    afterSequenceId,
+    projectId,
+    updates,
+  }: {
+    readonly afterSequenceId: number;
+    readonly projectId: string;
+    readonly updates: readonly RemoteProjectCrdtUpdate[];
+  }) {
+    const result = await this.#repository.applyRemoteProjectUpdates({ projectId, updates });
+    if (result.lastSequenceId <= afterSequenceId) {
+      throw new ProjectSyncError({
+        code: ProjectSyncErrorCode.INVALID_RESPONSE,
+        message: '원격 프로젝트 update sequence가 조회 cursor보다 크지 않습니다.',
+        retryable: false,
+        details: { afterSequenceId, lastSequenceId: result.lastSequenceId, projectId },
+      });
+    }
+    return result;
   }
 
   async #reconcileRemoteProjectRuntime({

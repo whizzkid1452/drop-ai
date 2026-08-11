@@ -160,6 +160,14 @@ class ProjectSyncServiceDelegate implements IProjectSyncService {
     return this.delegate.ensureLocalProjectMedia(document);
   }
 
+  ensureLocalProject(projectId: string): Promise<boolean> {
+    return this.delegate.ensureLocalProject?.(projectId) ?? Promise.resolve(false);
+  }
+
+  listRemoteProjects() {
+    return this.delegate.listRemoteProjects?.() ?? Promise.resolve([]);
+  }
+
   notifyProjectChanged(projectId: string): void {
     this.delegate.notifyProjectChanged(projectId);
   }
@@ -239,7 +247,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   const commandExecutor = new CommandExecutor(session, controller, commandHistory);
   const commandHistoryQuery = createCommandHistoryQuery(commandHistory);
   const playbackClock = new PlaybackClockQuery(controller.playback);
-  const projectCatalog = new ProjectCatalogQuery(projectRepository);
+  const projectCatalog = new ProjectCatalogQuery(projectRepository, projectSync);
   const audioRuntimeEnvironment = options.audioRuntimeEnvironment ?? readAudioRuntimeEnvironment();
   const audioRuntimeCapabilities = resolveAudioRuntimeCapabilities(audioRuntimeEnvironment);
   const midiInput = options.midiInput ?? new BrowserMidiInput();
