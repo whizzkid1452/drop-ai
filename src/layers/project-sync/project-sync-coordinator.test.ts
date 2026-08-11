@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ProjectCrdtDocument } from '../project-crdt/project-crdt-document';
+import { encodeProjectCrdtUpdate } from '../project-crdt/project-crdt-update-codec';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import type { ProjectDocument } from '../shared/types/project-document.schema';
 import type { IProjectMediaSync, IProjectSyncGateway } from './i-project-sync';
@@ -31,6 +33,19 @@ function createDeferred<Result>() {
   return { promise, resolve };
 }
 
+function createInitialRemoteUpdate(projectId: string) {
+  const crdtDocument = ProjectCrdtDocument.create(createProjectDocument(projectId));
+  try {
+    return {
+      operationId: OPERATION_ID,
+      sequenceId: 1,
+      updateBase64: encodeProjectCrdtUpdate(crdtDocument.encodeStateAsUpdate()),
+    };
+  } finally {
+    crdtDocument.destroy();
+  }
+}
+
 describe('ProjectSyncCoordinator', () => {
   it('프로젝트 문서보다 참조 미디어를 먼저 동기화한다', async () => {
     const repository = new InMemoryProjectRepository({ now: () => 1_000 });
@@ -47,6 +62,7 @@ describe('ProjectSyncCoordinator', () => {
     };
     const coordinator = new ProjectSyncCoordinator({
       gateway: {
+        pullProjectUpdates: vi.fn().mockResolvedValue([]),
         pushProjectChange: vi.fn(async () => {
           callOrder.push('document');
           return {
@@ -77,7 +93,7 @@ describe('ProjectSyncCoordinator', () => {
     const pushProjectChange = vi.fn();
     const schedule = vi.fn(() => () => undefined);
     const coordinator = new ProjectSyncCoordinator({
-      gateway: { pushProjectChange },
+      gateway: { pullProjectUpdates: vi.fn().mockResolvedValue([]), pushProjectChange },
       mediaSync: {
         ensureProjectMedia: vi.fn().mockRejectedValue(
           new ProjectSyncError({
@@ -108,7 +124,7 @@ describe('ProjectSyncCoordinator', () => {
     const mediaUpload = createDeferred<void>();
     const pushProjectChange = vi.fn();
     const coordinator = new ProjectSyncCoordinator({
-      gateway: { pushProjectChange },
+      gateway: { pullProjectUpdates: vi.fn().mockResolvedValue([]), pushProjectChange },
       mediaSync: { ensureProjectMedia: () => mediaUpload.promise },
       repository,
       now: () => 1_000,
@@ -131,6 +147,7 @@ describe('ProjectSyncCoordinator', () => {
       operationId: OPERATION_ID,
     });
     const gateway: IProjectSyncGateway = {
+      pullProjectUpdates: vi.fn().mockResolvedValue([]),
       pushProjectChange: vi.fn().mockResolvedValue({
         kind: 'snapshot',
         operationId: OPERATION_ID,
@@ -163,7 +180,7 @@ describe('ProjectSyncCoordinator', () => {
     }>();
     const pushProjectChange = vi.fn().mockReturnValue(deferred.promise);
     const coordinator = new ProjectSyncCoordinator({
-      gateway: { pushProjectChange },
+      gateway: { pullProjectUpdates: vi.fn().mockResolvedValue([]), pushProjectChange },
       repository,
       now: () => 1_000,
     });
@@ -194,7 +211,10 @@ describe('ProjectSyncCoordinator', () => {
       readonly status: 'applied';
     }>();
     const coordinator = new ProjectSyncCoordinator({
-      gateway: { pushProjectChange: () => deferred.promise },
+      gateway: {
+        pullProjectUpdates: vi.fn().mockResolvedValue([]),
+        pushProjectChange: () => deferred.promise,
+      },
       repository,
       now: () => 1_000,
     });
@@ -233,7 +253,7 @@ describe('ProjectSyncCoordinator', () => {
       });
     let scheduledRetry: (() => void) | undefined;
     const coordinator = new ProjectSyncCoordinator({
-      gateway: { pushProjectChange },
+      gateway: { pullProjectUpdates: vi.fn().mockResolvedValue([]), pushProjectChange },
       repository,
       now: () => currentTime,
       schedule: callback => {
@@ -276,7 +296,7 @@ describe('ProjectSyncCoordinator', () => {
     const pushProjectChange = vi.fn();
     const schedule = vi.fn(() => () => undefined);
     const coordinator = new ProjectSyncCoordinator({
-      gateway: { pushProjectChange },
+      gateway: { pullProjectUpdates: vi.fn().mockResolvedValue([]), pushProjectChange },
       repository,
       now: () => 1_000,
       schedule,
@@ -305,6 +325,7 @@ describe('ProjectSyncCoordinator', () => {
     const pushedRevisions: number[] = [];
     const coordinator = new ProjectSyncCoordinator({
       gateway: {
+        pullProjectUpdates: vi.fn().mockResolvedValue([]),
         pushProjectChange: async change => {
           pushedRevisions.push(change.localRevision);
           return {
@@ -322,5 +343,117 @@ describe('ProjectSyncCoordinator', () => {
     coordinator.activateProject(PROJECT_ID);
 
     await vi.waitFor(() => expect(pushedRevisions).toEqual([0, 1]));
+  });
+
+  it('활성 프로젝트의 마지막 sequence 이후 update를 로컬 저장소에 반영한다', async () => {
+    const repository = new InMemoryProjectRepository({ now: () => 1_000 });
+    const remoteUpdate = createInitialRemoteUpdate(PROJECT_ID);
+    const pullProjectUpdates = vi.fn().mockResolvedValueOnce([remoteUpdate]).mockResolvedValueOnce([]);
+    const coordinator = new ProjectSyncCoordinator({
+      gateway: {
+        pullProjectUpdates,
+        pushProjectChange: vi.fn(),
+      },
+      repository,
+      now: () => 1_000,
+    });
+
+    coordinator.activateProject(PROJECT_ID);
+
+    await vi.waitFor(async () => {
+      await expect(repository.load(PROJECT_ID)).resolves.toEqual(createProjectDocument(PROJECT_ID));
+    });
+    expect(pullProjectUpdates).toHaveBeenNthCalledWith(1, {
+      afterSequenceId: 0,
+      limit: 100,
+      projectId: PROJECT_ID,
+    });
+    await expect(repository.getLastAppliedRemoteSequenceId(PROJECT_ID)).resolves.toBe(1);
+  });
+
+  it('프로젝트 전환 전에 조회한 원격 update를 이전 프로젝트에 반영하지 않는다', async () => {
+    const repository = new InMemoryProjectRepository({ now: () => 1_000 });
+    const firstProjectUpdates = createDeferred<ReturnType<typeof createInitialRemoteUpdate>[]>();
+    const pullProjectUpdates = vi.fn(request => {
+      if (request.projectId === PROJECT_ID) {
+        return firstProjectUpdates.promise;
+      }
+      return Promise.resolve([]);
+    });
+    const coordinator = new ProjectSyncCoordinator({
+      gateway: { pullProjectUpdates, pushProjectChange: vi.fn() },
+      repository,
+      now: () => 1_000,
+    });
+
+    coordinator.activateProject(PROJECT_ID);
+    await vi.waitFor(() =>
+      expect(pullProjectUpdates).toHaveBeenCalledWith(expect.objectContaining({ projectId: PROJECT_ID }))
+    );
+    coordinator.activateProject(SECOND_PROJECT_ID);
+    firstProjectUpdates.resolve([createInitialRemoteUpdate(PROJECT_ID)]);
+
+    await vi.waitFor(() => expect(coordinator.hasInFlightSync(PROJECT_ID)).toBe(false));
+    await expect(repository.load(PROJECT_ID)).resolves.toBeNull();
+    await expect(repository.getLastAppliedRemoteSequenceId(PROJECT_ID)).resolves.toBe(0);
+  });
+
+  it('원격 update가 조회 한도만큼 있으면 저장한 cursor로 다음 페이지를 조회한다', async () => {
+    const repository = new InMemoryProjectRepository({ now: () => 1_000 });
+    const initialUpdate = createInitialRemoteUpdate(PROJECT_ID);
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({
+      ...initialUpdate,
+      operationId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      sequenceId: index + 1,
+    }));
+    const pullProjectUpdates = vi.fn(({ afterSequenceId }: { readonly afterSequenceId: number }) =>
+      Promise.resolve(afterSequenceId === 0 ? firstPage : [])
+    );
+    const coordinator = new ProjectSyncCoordinator({
+      gateway: { pullProjectUpdates, pushProjectChange: vi.fn() },
+      repository,
+      now: () => 1_000,
+    });
+
+    coordinator.activateProject(PROJECT_ID);
+
+    await vi.waitFor(() =>
+      expect(pullProjectUpdates).toHaveBeenCalledWith({
+        afterSequenceId: 100,
+        limit: 100,
+        projectId: PROJECT_ID,
+      })
+    );
+    await expect(repository.getLastAppliedRemoteSequenceId(PROJECT_ID)).resolves.toBe(100);
+  });
+
+  it('원격 update 조회의 일시적 실패를 지수 지연으로 재시도한다', async () => {
+    let currentTime = 1_000;
+    const repository = new InMemoryProjectRepository({ now: () => currentTime });
+    const pullProjectUpdates = vi.fn().mockRejectedValue(
+      new ProjectSyncError({
+        code: ProjectSyncErrorCode.NETWORK_ERROR,
+        message: '원격 update 조회 실패',
+        retryable: true,
+      })
+    );
+    const scheduledCallbacks: Array<() => void> = [];
+    const schedule = vi.fn((callback: () => void) => {
+      scheduledCallbacks.push(callback);
+      return () => undefined;
+    });
+    const coordinator = new ProjectSyncCoordinator({
+      gateway: { pullProjectUpdates, pushProjectChange: vi.fn() },
+      repository,
+      now: () => currentTime,
+      schedule,
+    });
+
+    coordinator.activateProject(PROJECT_ID);
+    await vi.waitFor(() => expect(schedule).toHaveBeenNthCalledWith(1, expect.any(Function), 1_000));
+    currentTime = 2_000;
+    scheduledCallbacks[0]?.();
+
+    await vi.waitFor(() => expect(schedule).toHaveBeenNthCalledWith(2, expect.any(Function), 2_000));
   });
 });

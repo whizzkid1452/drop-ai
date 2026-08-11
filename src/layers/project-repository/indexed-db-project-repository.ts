@@ -1,9 +1,12 @@
 import { z } from 'zod';
 import { createProjectCrdtCommit } from '../project-crdt/project-crdt-commit';
 import { isEncodedProjectCrdtUpdate } from '../project-crdt/project-crdt-update-codec';
+import { mergeProjectCrdtUpdates } from '../project-crdt/merge-project-crdt-updates';
 import type { ProjectDocumentSnapshot } from '../shared/types/project-document.schema';
 import { ProjectRepositoryError, ProjectRepositoryErrorCode } from './errors';
 import type {
+  AppliedRemoteProjectUpdates,
+  ApplyRemoteProjectUpdatesRequest,
   CommitLocalProjectRequest,
   CommittedLocalProjectChange,
   DeleteProjectRequest,
@@ -14,6 +17,7 @@ import type {
   SaveProjectRequest,
   ScheduleProjectChangeRetryRequest,
 } from './i-project-repository';
+import { validateAndSortRemoteProjectUpdates, validateRemoteProjectId } from './project-remote-update-validation';
 import {
   cloneAndValidateProjectDocument,
   readStoredProjectDocument,
@@ -43,6 +47,7 @@ const StoredProjectDocumentEnvelopeSchema = z.strictObject({
     message: '저장 record의 document 필드가 필요합니다.',
   }),
   crdtStateBase64: z.string().refine(isEncodedProjectCrdtUpdate).optional(),
+  lastAppliedRemoteSequenceId: z.number().int().nonnegative().safe().optional(),
 });
 
 const StoredProjectSummarySchema = z.strictObject({
@@ -76,6 +81,7 @@ interface StoredProjectDocumentEnvelope {
   readonly projectId: string;
   readonly document: ProjectDocumentSnapshot;
   readonly crdtStateBase64?: string;
+  readonly lastAppliedRemoteSequenceId?: number;
 }
 
 interface TransactionExecutionContext<T> {
@@ -236,6 +242,7 @@ export class IndexedDbProjectRepository implements ILocalFirstProjectRepository 
               projectId,
               document: nextDocument,
               crdtStateBase64: crdtCommit.stateBase64,
+              lastAppliedRemoteSequenceId: storedEnvelope?.lastAppliedRemoteSequenceId,
             });
             summaryStore.put(this.createProjectSummary(nextDocument));
             outboxStore.add(outboxEntry);
@@ -243,6 +250,88 @@ export class IndexedDbProjectRepository implements ILocalFirstProjectRepository 
               document: cloneAndValidateProjectDocument(nextDocument),
               outboxEntry: this.cloneProjectOutboxEntry(outboxEntry),
             });
+          } catch (error) {
+            abortWith(error);
+          }
+        };
+      },
+    });
+  }
+
+  async applyRemoteProjectUpdates({
+    projectId,
+    updates,
+  }: ApplyRemoteProjectUpdatesRequest): Promise<AppliedRemoteProjectUpdates> {
+    const validatedProjectId = validateRemoteProjectId(projectId);
+    const sortedUpdates = validateAndSortRemoteProjectUpdates(updates);
+
+    return this.runTransaction({
+      mode: 'readwrite',
+      operation: 'apply-remote-project-updates',
+      storeNames: PROJECT_STORE_NAMES,
+      execute: ({ transaction, setResult, abortWith }) => {
+        const documentStore = transaction.objectStore(PROJECT_DOCUMENT_STORE_NAME);
+        const summaryStore = transaction.objectStore(PROJECT_SUMMARY_STORE_NAME);
+        const request = documentStore.get(validatedProjectId);
+        request.onsuccess = () => {
+          try {
+            const storedEnvelope =
+              request.result === undefined
+                ? null
+                : this.parseStoredProjectDocumentEnvelope(request.result, validatedProjectId);
+            const lastSequenceId = storedEnvelope?.lastAppliedRemoteSequenceId ?? 0;
+            const pendingUpdates = sortedUpdates.filter(update => update.sequenceId > lastSequenceId);
+            if (pendingUpdates.length === 0) {
+              setResult({
+                appliedUpdateCount: 0,
+                document: storedEnvelope ? cloneAndValidateProjectDocument(storedEnvelope.document) : null,
+                lastSequenceId,
+              });
+              return;
+            }
+
+            const merged = mergeProjectCrdtUpdates({
+              currentStateBase64: storedEnvelope?.crdtStateBase64,
+              updateBase64Values: pendingUpdates.map(update => update.updateBase64),
+            });
+            this.assertRemoteProjectId(validatedProjectId, merged.document.project.id);
+            const nextLastSequenceId = pendingUpdates.at(-1)?.sequenceId ?? lastSequenceId;
+            // cursor만 먼저 저장하면 재시작 후 누락된 update를 건너뛸 수 있어 문서·CRDT 상태·cursor를 함께 기록한다.
+            documentStore.put({
+              projectId: validatedProjectId,
+              document: merged.document,
+              crdtStateBase64: merged.stateBase64,
+              lastAppliedRemoteSequenceId: nextLastSequenceId,
+            });
+            summaryStore.put(this.createProjectSummary(merged.document));
+            setResult({
+              appliedUpdateCount: pendingUpdates.length,
+              document: cloneAndValidateProjectDocument(merged.document),
+              lastSequenceId: nextLastSequenceId,
+            });
+          } catch (error) {
+            abortWith(error);
+          }
+        };
+      },
+    });
+  }
+
+  async getLastAppliedRemoteSequenceId(projectId: string): Promise<number> {
+    const validatedProjectId = validateRemoteProjectId(projectId);
+    return this.runTransaction({
+      mode: 'readonly',
+      operation: 'get-last-applied-remote-sequence-id',
+      storeNames: PROJECT_DOCUMENT_STORE_NAME,
+      execute: ({ transaction, setResult, abortWith }) => {
+        const request = transaction.objectStore(PROJECT_DOCUMENT_STORE_NAME).get(validatedProjectId);
+        request.onsuccess = () => {
+          try {
+            const storedEnvelope =
+              request.result === undefined
+                ? null
+                : this.parseStoredProjectDocumentEnvelope(request.result, validatedProjectId);
+            setResult(storedEnvelope?.lastAppliedRemoteSequenceId ?? 0);
           } catch (error) {
             abortWith(error);
           }
@@ -795,7 +884,19 @@ export class IndexedDbProjectRepository implements ILocalFirstProjectRepository 
       projectId: envelopeResult.data.projectId,
       document,
       crdtStateBase64: envelopeResult.data.crdtStateBase64,
+      lastAppliedRemoteSequenceId: envelopeResult.data.lastAppliedRemoteSequenceId,
     };
+  }
+
+  private assertRemoteProjectId(expectedProjectId: string, actualProjectId: string): void {
+    if (actualProjectId === expectedProjectId) {
+      return;
+    }
+    throw new ProjectRepositoryError({
+      code: ProjectRepositoryErrorCode.INVALID_REMOTE_UPDATE,
+      message: '원격 CRDT update의 Project ID가 요청한 Project ID와 다릅니다.',
+      details: { actualProjectId, expectedProjectId },
+    });
   }
 
   private parseStoredProjectSummary(value: unknown): ProjectSummary {

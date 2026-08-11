@@ -41,6 +41,71 @@ function createOutboxEntry({ includeCrdtUpdate = true } = {}): ProjectOutboxEntr
 }
 
 describe('SupabaseProjectSyncGateway', () => {
+  it('마지막 sequence 이후의 원격 update를 오름차순으로 조회한다', async () => {
+    const fetchImplementation = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            operation_id: OPERATION_ID,
+            sequence_id: 8,
+            update_base64: 'AQID',
+          },
+        ]),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    );
+    const gateway = new SupabaseProjectSyncGateway({
+      authClient: createAuthClient('access-token'),
+      fetchImplementation,
+      supabasePublishableKey: 'publishable-key',
+      supabaseUrl: 'https://example.supabase.co',
+    });
+
+    await expect(
+      gateway.pullProjectUpdates({ afterSequenceId: 7, limit: 100, projectId: PROJECT_ID })
+    ).resolves.toEqual([
+      {
+        operationId: OPERATION_ID,
+        sequenceId: 8,
+        updateBase64: 'AQID',
+      },
+    ]);
+    const [requestUrl, request] = fetchImplementation.mock.calls[0] ?? [];
+    const url = new URL(String(requestUrl));
+    expect(url.pathname).toBe('/rest/v1/project_crdt_updates');
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      limit: '100',
+      order: 'sequence_id.asc',
+      project_id: `eq.${PROJECT_ID}`,
+      select: 'sequence_id,operation_id,update_base64',
+      sequence_id: 'gt.7',
+    });
+    expect(request).toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer access-token', apikey: 'publishable-key' }),
+        method: 'GET',
+      })
+    );
+  });
+
+  it('원격 update 응답 형식이 유효하지 않으면 적용 가능한 값으로 반환하지 않는다', async () => {
+    const gateway = new SupabaseProjectSyncGateway({
+      authClient: createAuthClient('access-token'),
+      fetchImplementation: vi.fn().mockResolvedValue(
+        new Response(JSON.stringify([{ operation_id: OPERATION_ID, sequence_id: 0, update_base64: 'AQID' }]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      ),
+      supabasePublishableKey: 'publishable-key',
+      supabaseUrl: 'https://example.supabase.co',
+    });
+
+    await expect(
+      gateway.pullProjectUpdates({ afterSequenceId: 0, limit: 100, projectId: PROJECT_ID })
+    ).rejects.toMatchObject({ code: ProjectSyncErrorCode.INVALID_RESPONSE, retryable: false });
+  });
+
   it('새 Outbox 변경을 CRDT append RPC로 전송한다', async () => {
     const fetchImplementation = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ operationId: OPERATION_ID, sequenceId: 1, status: 'applied' }), {

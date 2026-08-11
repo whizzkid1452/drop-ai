@@ -44,6 +44,18 @@ const mergedDocument = projectCrdt.toProjectDocument();
 
 Yjs update는 적용 순서와 중복 여부에 관계없이 수렴합니다. 서버의 `project_crdt_updates`는 update를 해석하지 않고 append-only로 보관합니다.
 
+### 4. 원격 update를 로컬 저장소에 반영하기
+
+`ProjectSyncCoordinator`는 프로젝트별 마지막 `sequence_id` 이후 update를 100개씩 조회합니다. 조회한 update는 현재 Yjs state에
+병합하고, 다음 값을 IndexedDB의 같은 transaction에서 저장합니다.
+
+- 병합된 ProjectDocument
+- 누적 Yjs state
+- 마지막으로 반영한 `sequence_id`
+
+이미 저장한 sequence는 다시 적용하지 않습니다. 로컬 Yjs state가 없는 이전 JSON record는 서버의 첫 update를 기준 이력으로
+사용합니다. 같은 JSON을 로컬에서 다시 초기화하면 서버와 같은 CRDT 이력이 되지 않기 때문입니다.
+
 ### Verify Final Result
 
 ```bash
@@ -56,4 +68,6 @@ pnpm typecheck
 - 같은 scalar 속성을 동시에 바꾸면 Yjs의 일관된 단일 값으로 수렴하며 두 값을 함께 보존하지는 않습니다.
 - keyed collection 순서를 동시에 바꾸면 모든 peer가 같은 순서로 수렴하지만, 두 사용자의 순서 의도를 모두 보존하는 것은 아닙니다.
 - 기존 JSON Outbox record는 누락 없이 전송하기 위해 기존 snapshot RPC를 계속 사용합니다. 새 commit부터 CRDT append RPC를 사용합니다.
-- 원격 update 조회·로컬 문서 반영, project collaborator 권한, 실시간 presence, update log 압축은 아직 구현하지 않았습니다.
+- 원격 update는 로컬 ProjectDocument와 Yjs state에 반영하지만, 활성 Session과 AudioEngine을 자동 교체하지는 않습니다.
+- 다른 기기의 원격 미디어 다운로드와 원격 프로젝트 목록 조회는 아직 구현하지 않았습니다.
+- project collaborator 권한, 실시간 presence, update log 압축은 아직 구현하지 않았습니다.

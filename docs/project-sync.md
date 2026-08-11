@@ -46,6 +46,8 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key
 3. 로그인 후 참조 미디어가 `project-media/<user-id>/<sha256>` 경로에 먼저 업로드되는지 확인합니다.
 4. 새 Outbox 항목이 `append_project_crdt_update` 요청으로 로컬 revision 순서대로 전송되는지 확인합니다.
 5. 요청 성공 뒤 해당 operation만 `project-outbox`에서 제거되는지 확인합니다.
+6. `project_crdt_updates`에서 로컬 cursor보다 큰 `sequence_id`를 오름차순으로 조회하는지 확인합니다.
+7. 병합된 문서, 누적 Yjs state, 마지막 `sequence_id`가 하나의 IndexedDB transaction에서 저장되는지 확인합니다.
 
 업그레이드 전에 생성된 JSON Outbox 항목에는 CRDT update가 없습니다. 이 항목은 기존 `apply_project_change` RPC로 전송해 미전송 변경을 보존합니다.
 
@@ -59,6 +61,13 @@ pnpm build
 
 네트워크를 끊고 편집한 뒤 다시 연결해 Outbox가 자동으로 비워지는지도 확인합니다. 같은 operation을 다시 보내면 서버는 `already_applied`를 반환해야 합니다.
 
+저장소 병합 검증은 다음 명령으로 실행합니다.
+
+```bash
+pnpm test -- src/layers/project-repository/project-crdt-remote-sync.test.ts
+pnpm test -- src/layers/project-sync/project-sync-coordinator.test.ts
+```
+
 ## FAQ
 
 ### 여러 프로젝트를 동시에 전송하나요?
@@ -68,3 +77,8 @@ pnpm build
 ### revision 충돌도 자동 재시도하나요?
 
 CRDT update append는 snapshot revision을 비교하지 않습니다. 기존 JSON Outbox의 snapshot RPC에서 revision 충돌이 발생하면 자동 재시도하지 않고 Outbox에 유지합니다.
+
+### 원격 변경이 현재 화면에도 즉시 반영되나요?
+
+아니요. 현재 구현은 IndexedDB의 ProjectDocument와 Yjs state까지만 갱신합니다. 활성 Session·AudioEngine 교체와 원격 미디어
+다운로드는 별도 작업입니다.

@@ -51,12 +51,17 @@ describe('createWebProjectSyncService', () => {
       expectedRevision: 0,
       operationId: OPERATION_ID,
     });
-    const fetchImplementation = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ operationId: OPERATION_ID, sequenceId: 1, status: 'applied' }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      })
-    );
+    const fetchImplementation = vi.fn((input: RequestInfo | URL) => {
+      const responseBody = String(input).includes('/rpc/append_project_crdt_update')
+        ? { operationId: OPERATION_ID, sequenceId: 1, status: 'applied' }
+        : [];
+      return Promise.resolve(
+        new Response(JSON.stringify(responseBody), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      );
+    });
     vi.stubGlobal('fetch', fetchImplementation);
     const projectSync = createWebProjectSyncService({
       audioSourceRepository,
@@ -72,9 +77,17 @@ describe('createWebProjectSyncService', () => {
     authSnapshot = { status: 'authenticated', user: { id: 'user-1', email: null } };
     authStateListener?.();
 
-    await vi.waitFor(() => expect(fetchImplementation).toHaveBeenCalledOnce());
     await vi.waitFor(async () => {
       await expect(repository.listPendingChanges({ dueAtEpochMilliseconds: 1_000 })).resolves.toEqual([]);
+    });
+    await vi.waitFor(() => {
+      const requestedUrls = fetchImplementation.mock.calls.map(([input]) => String(input));
+      expect(requestedUrls).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('/rpc/append_project_crdt_update'),
+          expect.stringContaining('/project_crdt_updates?'),
+        ])
+      );
     });
   });
 });

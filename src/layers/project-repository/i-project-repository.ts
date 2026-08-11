@@ -47,6 +47,23 @@ export interface ScheduleProjectChangeRetryRequest {
   readonly nextAttemptAtEpochMilliseconds: number;
 }
 
+export interface RemoteProjectCrdtUpdate {
+  readonly operationId: string;
+  readonly sequenceId: number;
+  readonly updateBase64: string;
+}
+
+export interface ApplyRemoteProjectUpdatesRequest {
+  readonly projectId: string;
+  readonly updates: readonly RemoteProjectCrdtUpdate[];
+}
+
+export interface AppliedRemoteProjectUpdates {
+  readonly appliedUpdateCount: number;
+  readonly document: ProjectDocumentSnapshot | null;
+  readonly lastSequenceId: number;
+}
+
 export interface CommittedLocalProjectChange {
   readonly document: ProjectDocumentSnapshot;
   readonly outboxEntry: ProjectOutboxEntry;
@@ -62,6 +79,8 @@ export interface IProjectRepository {
 
 export interface ILocalFirstProjectRepository extends IProjectRepository {
   commitLocal(request: CommitLocalProjectRequest): Promise<CommittedLocalProjectChange>;
+  applyRemoteProjectUpdates(request: ApplyRemoteProjectUpdatesRequest): Promise<AppliedRemoteProjectUpdates>;
+  getLastAppliedRemoteSequenceId(projectId: string): Promise<number>;
   listPendingChanges(request: ListPendingProjectChangesRequest): Promise<readonly ProjectOutboxEntry[]>;
   acknowledgePendingChange(operationId: string): Promise<void>;
   schedulePendingChangeRetry(request: ScheduleProjectChangeRetryRequest): Promise<void>;
