@@ -1,8 +1,11 @@
 import { z } from 'zod';
 import { createProjectCrdtCommit } from '../project-crdt/project-crdt-commit';
+import { mergeProjectCrdtUpdates } from '../project-crdt/merge-project-crdt-updates';
 import type { ProjectDocumentSnapshot } from '../shared/types/project-document.schema';
 import { ProjectRepositoryError, ProjectRepositoryErrorCode } from './errors';
 import type {
+  AppliedRemoteProjectUpdates,
+  ApplyRemoteProjectUpdatesRequest,
   CommitLocalProjectRequest,
   CommittedLocalProjectChange,
   DeleteProjectRequest,
@@ -13,6 +16,7 @@ import type {
   SaveProjectRequest,
   ScheduleProjectChangeRetryRequest,
 } from './i-project-repository';
+import { validateAndSortRemoteProjectUpdates, validateRemoteProjectId } from './project-remote-update-validation';
 import {
   cloneAndValidateProjectDocument,
   throwIfRevisionConflict,
@@ -29,6 +33,7 @@ interface StoredProject {
   document: ProjectDocumentSnapshot;
   savedAtEpochMilliseconds: number;
   crdtStateBase64?: string;
+  lastAppliedRemoteSequenceId?: number;
 }
 
 export class InMemoryProjectRepository implements ILocalFirstProjectRepository {
@@ -162,6 +167,7 @@ export class InMemoryProjectRepository implements ILocalFirstProjectRepository {
       document: committedDocument,
       savedAtEpochMilliseconds: createdAtEpochMilliseconds,
       crdtStateBase64: crdtCommit.stateBase64,
+      lastAppliedRemoteSequenceId: storedProject?.lastAppliedRemoteSequenceId,
     });
     this.pendingChanges.set(outboxEntry.operationId, outboxEntry);
 
@@ -169,6 +175,47 @@ export class InMemoryProjectRepository implements ILocalFirstProjectRepository {
       document: cloneAndValidateProjectDocument(committedDocument),
       outboxEntry: this.cloneOutboxEntry(outboxEntry),
     };
+  }
+
+  async applyRemoteProjectUpdates({
+    projectId,
+    updates,
+  }: ApplyRemoteProjectUpdatesRequest): Promise<AppliedRemoteProjectUpdates> {
+    const validatedProjectId = validateRemoteProjectId(projectId);
+    const sortedUpdates = validateAndSortRemoteProjectUpdates(updates);
+    const storedProject = this.projects.get(validatedProjectId);
+    const lastSequenceId = storedProject?.lastAppliedRemoteSequenceId ?? 0;
+    const pendingUpdates = sortedUpdates.filter(update => update.sequenceId > lastSequenceId);
+    if (pendingUpdates.length === 0) {
+      return {
+        appliedUpdateCount: 0,
+        document: storedProject ? cloneAndValidateProjectDocument(storedProject.document) : null,
+        lastSequenceId,
+      };
+    }
+
+    const merged = mergeProjectCrdtUpdates({
+      currentStateBase64: storedProject?.crdtStateBase64,
+      updateBase64Values: pendingUpdates.map(update => update.updateBase64),
+    });
+    this.assertRemoteProjectId(validatedProjectId, merged.document.project.id);
+    const nextLastSequenceId = pendingUpdates.at(-1)?.sequenceId ?? lastSequenceId;
+    this.projects.set(validatedProjectId, {
+      document: merged.document,
+      savedAtEpochMilliseconds: this.now(),
+      crdtStateBase64: merged.stateBase64,
+      lastAppliedRemoteSequenceId: nextLastSequenceId,
+    });
+    return {
+      appliedUpdateCount: pendingUpdates.length,
+      document: cloneAndValidateProjectDocument(merged.document),
+      lastSequenceId: nextLastSequenceId,
+    };
+  }
+
+  async getLastAppliedRemoteSequenceId(projectId: string): Promise<number> {
+    const validatedProjectId = validateRemoteProjectId(projectId);
+    return this.projects.get(validatedProjectId)?.lastAppliedRemoteSequenceId ?? 0;
   }
 
   async listPendingChanges({
@@ -291,6 +338,17 @@ export class InMemoryProjectRepository implements ILocalFirstProjectRepository {
       code: ProjectRepositoryErrorCode.INVALID_OUTBOX_QUERY,
       message: `Outbox 조회 값이 유효하지 않습니다: ${field}`,
       details: { field, value },
+    });
+  }
+
+  private assertRemoteProjectId(expectedProjectId: string, actualProjectId: string): void {
+    if (actualProjectId === expectedProjectId) {
+      return;
+    }
+    throw new ProjectRepositoryError({
+      code: ProjectRepositoryErrorCode.INVALID_REMOTE_UPDATE,
+      message: '원격 CRDT update의 Project ID가 요청한 Project ID와 다릅니다.',
+      details: { actualProjectId, expectedProjectId },
     });
   }
 

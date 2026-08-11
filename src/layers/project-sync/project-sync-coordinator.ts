@@ -1,4 +1,4 @@
-import type { ILocalFirstProjectRepository } from '../project-repository/i-project-repository';
+import type { ILocalFirstProjectRepository, RemoteProjectCrdtUpdate } from '../project-repository/i-project-repository';
 import {
   NoopProjectMediaSync,
   type IProjectMediaSync,
@@ -10,6 +10,7 @@ import { isRetryableProjectSyncError, ProjectSyncError, ProjectSyncErrorCode } f
 const DEFAULT_RETRY_BASE_DELAY_MILLISECONDS = 1_000;
 const DEFAULT_RETRY_MAX_DELAY_MILLISECONDS = 60_000;
 const MAXIMUM_DUE_AT_EPOCH_MILLISECONDS = Number.MAX_SAFE_INTEGER;
+const REMOTE_UPDATE_PAGE_SIZE = 100;
 
 type CancelScheduledTask = () => void;
 type ScheduleTask = (callback: () => void, delayMilliseconds: number) => CancelScheduledTask;
@@ -45,6 +46,7 @@ export class ProjectSyncCoordinator implements IProjectSyncService {
   readonly #retryMaxDelayMilliseconds: number;
   readonly #schedule: ScheduleTask;
   readonly #projectFlights = new Map<string, ProjectSyncFlight>();
+  readonly #remotePullAttemptCounts = new Map<string, number>();
   #activeProjectId: string | null = null;
   #generation = 0;
   #cancelPendingRetry: CancelScheduledTask | null = null;
@@ -113,7 +115,7 @@ export class ProjectSyncCoordinator implements IProjectSyncService {
       rerunRequested: false,
     };
     this.#projectFlights.set(projectId, flight);
-    void this.#drainProjectOutbox({ force, generation, projectId })
+    void this.#synchronizeProject({ force, generation, projectId })
       .catch(cause => this.#reportFailure(cause))
       .finally(() => {
         if (this.#projectFlights.get(projectId) !== flight) {
@@ -124,6 +126,22 @@ export class ProjectSyncCoordinator implements IProjectSyncService {
           this.#requestProjectSync(projectId, flight.force);
         }
       });
+  }
+
+  async #synchronizeProject({
+    force,
+    generation,
+    projectId,
+  }: {
+    readonly force: boolean;
+    readonly generation: number;
+    readonly projectId: string;
+  }): Promise<void> {
+    await this.#drainProjectOutbox({ force, generation, projectId });
+    if (!this.#isActiveProject(projectId, generation)) {
+      return;
+    }
+    await this.#pullRemoteProjectUpdates({ generation, projectId });
   }
 
   async #drainProjectOutbox({
@@ -195,6 +213,76 @@ export class ProjectSyncCoordinator implements IProjectSyncService {
       }
       await this.#repository.acknowledgePendingChange(change.operationId);
     }
+  }
+
+  async #pullRemoteProjectUpdates({
+    generation,
+    projectId,
+  }: {
+    readonly generation: number;
+    readonly projectId: string;
+  }): Promise<void> {
+    let afterSequenceId = await this.#repository.getLastAppliedRemoteSequenceId(projectId);
+    while (this.#isActiveProject(projectId, generation)) {
+      let updates: readonly RemoteProjectCrdtUpdate[];
+      try {
+        updates = await this.#gateway.pullProjectUpdates({
+          afterSequenceId,
+          limit: REMOTE_UPDATE_PAGE_SIZE,
+          projectId,
+        });
+        this.#remotePullAttemptCounts.delete(projectId);
+      } catch (cause) {
+        this.#handleRemotePullFailure({ cause, generation, projectId });
+        return;
+      }
+      if (!this.#isActiveProject(projectId, generation) || updates.length === 0) {
+        return;
+      }
+
+      const result = await this.#repository.applyRemoteProjectUpdates({ projectId, updates });
+      if (result.lastSequenceId <= afterSequenceId) {
+        throw new ProjectSyncError({
+          code: ProjectSyncErrorCode.INVALID_RESPONSE,
+          message: '원격 프로젝트 update sequence가 조회 cursor보다 크지 않습니다.',
+          retryable: false,
+          details: { afterSequenceId, lastSequenceId: result.lastSequenceId, projectId },
+        });
+      }
+      afterSequenceId = result.lastSequenceId;
+      if (updates.length < REMOTE_UPDATE_PAGE_SIZE) {
+        return;
+      }
+    }
+  }
+
+  #handleRemotePullFailure({
+    cause,
+    generation,
+    projectId,
+  }: {
+    readonly cause: unknown;
+    readonly generation: number;
+    readonly projectId: string;
+  }): void {
+    if (!this.#isActiveProject(projectId, generation)) {
+      return;
+    }
+    if (cause instanceof ProjectSyncError && cause.code === ProjectSyncErrorCode.AUTH_REQUIRED) {
+      this.#remotePullAttemptCounts.delete(projectId);
+      return;
+    }
+    if (!isRetryableProjectSyncError(cause)) {
+      this.#remotePullAttemptCounts.delete(projectId);
+      throw cause;
+    }
+    const attemptCount = this.#remotePullAttemptCounts.get(projectId) ?? 0;
+    this.#remotePullAttemptCounts.set(projectId, attemptCount + 1);
+    this.#scheduleRetry({
+      generation,
+      nextAttemptAtEpochMilliseconds: this.#now() + this.#calculateRetryDelay(attemptCount),
+      projectId,
+    });
   }
 
   #scheduleRetry({

@@ -1,4 +1,4 @@
-import type { ProjectOutboxEntry } from '../project-repository/i-project-repository';
+import type { ProjectOutboxEntry, RemoteProjectCrdtUpdate } from '../project-repository/i-project-repository';
 import type { ProjectDocumentSnapshot } from '../shared/types/project-document.schema';
 
 export type ProjectSyncSuccess =
@@ -15,7 +15,14 @@ export type ProjectSyncSuccess =
       readonly status: 'already_applied' | 'applied';
     };
 
+export interface PullProjectUpdatesRequest {
+  readonly afterSequenceId: number;
+  readonly limit: number;
+  readonly projectId: string;
+}
+
 export interface IProjectSyncGateway {
+  pullProjectUpdates(request: PullProjectUpdatesRequest): Promise<readonly RemoteProjectCrdtUpdate[]>;
   pushProjectChange(change: ProjectOutboxEntry): Promise<ProjectSyncSuccess>;
 }
 
