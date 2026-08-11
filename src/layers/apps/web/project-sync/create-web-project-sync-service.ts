@@ -1,7 +1,11 @@
 import type { IAuthClient } from '@/layers/auth/i-auth-client';
 import type { IAudioSourceRepository } from '@/layers/audio-source-repository/i-audio-source-repository';
 import type { ILocalFirstProjectRepository } from '@/layers/project-repository/i-project-repository';
-import { NoopProjectSyncService, type IProjectSyncService } from '@/layers/project-sync/i-project-sync';
+import {
+  NoopProjectSyncService,
+  type IProjectSyncService,
+  type IRemoteProjectDocumentApplicator,
+} from '@/layers/project-sync/i-project-sync';
 import { ProjectSyncCoordinator } from '@/layers/project-sync/project-sync-coordinator';
 import { SupabaseProjectMediaSync } from '@/layers/project-sync/supabase-project-media-sync';
 import { SupabaseProjectSyncGateway } from '@/layers/project-sync/supabase-project-sync-gateway';
@@ -15,6 +19,7 @@ interface CreateWebProjectSyncServiceOptions {
   readonly authClient: IAuthClient;
   readonly onlineEventSource?: OnlineEventSource;
   readonly projectRepository: ILocalFirstProjectRepository;
+  readonly remoteProjectDocumentApplicator: IRemoteProjectDocumentApplicator;
   readonly supabasePublishableKey?: string;
   readonly supabaseUrl?: string;
 }
@@ -45,6 +50,7 @@ export function createWebProjectSyncService(options: CreateWebProjectSyncService
       supabasePublishableKey: options.supabasePublishableKey,
       supabaseUrl: options.supabaseUrl,
     }),
+    remoteProjectDocumentApplicator: options.remoteProjectDocumentApplicator,
     repository: options.projectRepository,
   });
   options.authClient.subscribe(() => {

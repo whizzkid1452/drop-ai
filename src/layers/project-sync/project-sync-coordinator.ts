@@ -1,9 +1,11 @@
 import type { ILocalFirstProjectRepository, RemoteProjectCrdtUpdate } from '../project-repository/i-project-repository';
 import {
   NoopProjectMediaSync,
+  NoopRemoteProjectDocumentApplicator,
   type IProjectMediaSync,
   type IProjectSyncGateway,
   type IProjectSyncService,
+  type IRemoteProjectDocumentApplicator,
 } from './i-project-sync';
 import { isRetryableProjectSyncError, ProjectSyncError, ProjectSyncErrorCode } from './project-sync-error';
 
@@ -20,6 +22,7 @@ interface ProjectSyncCoordinatorOptions {
   readonly mediaSync?: IProjectMediaSync;
   readonly now?: () => number;
   readonly reportFailure?: (cause: unknown) => void;
+  readonly remoteProjectDocumentApplicator?: IRemoteProjectDocumentApplicator;
   readonly repository: ILocalFirstProjectRepository;
   readonly retryBaseDelayMilliseconds?: number;
   readonly retryMaxDelayMilliseconds?: number;
@@ -41,12 +44,14 @@ export class ProjectSyncCoordinator implements IProjectSyncService {
   readonly #mediaSync: IProjectMediaSync;
   readonly #now: () => number;
   readonly #reportFailure: (cause: unknown) => void;
+  readonly #remoteProjectDocumentApplicator: IRemoteProjectDocumentApplicator;
   readonly #repository: ILocalFirstProjectRepository;
   readonly #retryBaseDelayMilliseconds: number;
   readonly #retryMaxDelayMilliseconds: number;
   readonly #schedule: ScheduleTask;
   readonly #projectFlights = new Map<string, ProjectSyncFlight>();
   readonly #remotePullAttemptCounts = new Map<string, number>();
+  readonly #runtimeAppliedSequenceIds = new Map<string, number>();
   #activeProjectId: string | null = null;
   #generation = 0;
   #cancelPendingRetry: CancelScheduledTask | null = null;
@@ -56,6 +61,7 @@ export class ProjectSyncCoordinator implements IProjectSyncService {
     mediaSync = new NoopProjectMediaSync(),
     now = Date.now,
     reportFailure = cause => console.error('[ProjectSyncCoordinator] 프로젝트 동기화 실패', cause),
+    remoteProjectDocumentApplicator = new NoopRemoteProjectDocumentApplicator(),
     repository,
     retryBaseDelayMilliseconds = DEFAULT_RETRY_BASE_DELAY_MILLISECONDS,
     retryMaxDelayMilliseconds = DEFAULT_RETRY_MAX_DELAY_MILLISECONDS,
@@ -65,6 +71,7 @@ export class ProjectSyncCoordinator implements IProjectSyncService {
     this.#mediaSync = mediaSync;
     this.#now = now;
     this.#reportFailure = reportFailure;
+    this.#remoteProjectDocumentApplicator = remoteProjectDocumentApplicator;
     this.#repository = repository;
     this.#retryBaseDelayMilliseconds = retryBaseDelayMilliseconds;
     this.#retryMaxDelayMilliseconds = retryMaxDelayMilliseconds;
@@ -84,6 +91,10 @@ export class ProjectSyncCoordinator implements IProjectSyncService {
     if (projectId === this.#activeProjectId) {
       this.#requestProjectSync(projectId, false);
     }
+  }
+
+  ensureLocalProjectMedia(document: Parameters<IProjectMediaSync['ensureLocalProjectMedia']>[0]): Promise<void> {
+    return this.#mediaSync.ensureLocalProjectMedia(document);
   }
 
   resume(): void {
@@ -141,7 +152,13 @@ export class ProjectSyncCoordinator implements IProjectSyncService {
     if (!this.#isActiveProject(projectId, generation)) {
       return;
     }
-    await this.#pullRemoteProjectUpdates({ generation, projectId });
+    try {
+      await this.#reconcileRemoteProjectRuntime({ generation, projectId });
+      await this.#pullRemoteProjectUpdates({ generation, projectId });
+      this.#remotePullAttemptCounts.delete(projectId);
+    } catch (cause) {
+      this.#handleRemoteSyncFailure({ cause, generation, projectId });
+    }
   }
 
   async #drainProjectOutbox({
@@ -224,18 +241,11 @@ export class ProjectSyncCoordinator implements IProjectSyncService {
   }): Promise<void> {
     let afterSequenceId = await this.#repository.getLastAppliedRemoteSequenceId(projectId);
     while (this.#isActiveProject(projectId, generation)) {
-      let updates: readonly RemoteProjectCrdtUpdate[];
-      try {
-        updates = await this.#gateway.pullProjectUpdates({
-          afterSequenceId,
-          limit: REMOTE_UPDATE_PAGE_SIZE,
-          projectId,
-        });
-        this.#remotePullAttemptCounts.delete(projectId);
-      } catch (cause) {
-        this.#handleRemotePullFailure({ cause, generation, projectId });
-        return;
-      }
+      const updates: readonly RemoteProjectCrdtUpdate[] = await this.#gateway.pullProjectUpdates({
+        afterSequenceId,
+        limit: REMOTE_UPDATE_PAGE_SIZE,
+        projectId,
+      });
       if (!this.#isActiveProject(projectId, generation) || updates.length === 0) {
         return;
       }
@@ -250,13 +260,58 @@ export class ProjectSyncCoordinator implements IProjectSyncService {
         });
       }
       afterSequenceId = result.lastSequenceId;
+      await this.#reconcileRemoteProjectRuntime({ generation, projectId });
       if (updates.length < REMOTE_UPDATE_PAGE_SIZE) {
         return;
       }
     }
   }
 
-  #handleRemotePullFailure({
+  async #reconcileRemoteProjectRuntime({
+    generation,
+    projectId,
+  }: {
+    readonly generation: number;
+    readonly projectId: string;
+  }): Promise<void> {
+    // 저장 cursor는 Runtime 반영보다 먼저 커밋되므로 둘을 분리해 실패한 Runtime 반영을 다시 시도한다.
+    const repositorySequenceId = await this.#repository.getLastAppliedRemoteSequenceId(projectId);
+    const runtimeSequenceId = this.#runtimeAppliedSequenceIds.get(projectId) ?? 0;
+    if (repositorySequenceId <= runtimeSequenceId || !this.#isActiveProject(projectId, generation)) {
+      return;
+    }
+
+    const document = await this.#repository.load(projectId);
+    if (!document) {
+      throw new ProjectSyncError({
+        code: ProjectSyncErrorCode.INVALID_RESPONSE,
+        message: '원격 update cursor에 대응하는 프로젝트 문서가 없습니다.',
+        retryable: false,
+        details: { projectId, repositorySequenceId },
+      });
+    }
+
+    await this.#mediaSync.ensureLocalProjectMedia(document);
+    if (!this.#isActiveProject(projectId, generation)) {
+      return;
+    }
+
+    const applied = await this.#remoteProjectDocumentApplicator.applyRemoteProjectDocument(document);
+    if (!this.#isActiveProject(projectId, generation)) {
+      return;
+    }
+    if (!applied) {
+      throw new ProjectSyncError({
+        code: ProjectSyncErrorCode.RUNTIME_NOT_CURRENT,
+        message: '원격 문서를 준비하는 동안 활성 프로젝트 상태가 변경됐습니다.',
+        retryable: true,
+        details: { projectId, repositorySequenceId },
+      });
+    }
+    this.#runtimeAppliedSequenceIds.set(projectId, repositorySequenceId);
+  }
+
+  #handleRemoteSyncFailure({
     cause,
     generation,
     projectId,

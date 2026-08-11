@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import type { IAuthClient } from '../auth/i-auth-client';
+import { AudioSourceRepositoryError, AudioSourceRepositoryErrorCode } from '../audio-source-repository/errors';
 import type { IAudioSourceRepository } from '../audio-source-repository/i-audio-source-repository';
 import type { ProjectAudioSource, ProjectDocumentSnapshot } from '../shared/types/project-document.schema';
 import { calculateBlobSha256, Sha256UnavailableError } from '../shared/utils/calculate-blob-sha256';
@@ -6,7 +8,17 @@ import type { IProjectMediaSync } from './i-project-sync';
 import { ProjectSyncError, ProjectSyncErrorCode } from './project-sync-error';
 
 const PROJECT_MEDIA_BUCKET = 'project-media';
+const PROJECT_MEDIA_REFERENCE_BATCH_SIZE = 100;
 const DEFAULT_CONTENT_TYPE = 'application/octet-stream';
+const ContentHashSchema = z.string().regex(/^[a-f0-9]{64}$/u);
+const ProjectMediaReferenceSchema = z.strictObject({
+  source_id: z.uuid(),
+  content_hash: ContentHashSchema,
+  byte_length: z.number().int().nonnegative().safe(),
+  mime_type: z.string(),
+  storage_path: z.string().min(1),
+});
+const ProjectMediaReferencesSchema = z.array(ProjectMediaReferenceSchema);
 
 type FetchImplementation = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 type ContentHashCalculator = (blob: Blob) => Promise<string>;
@@ -24,6 +36,8 @@ interface AuthenticatedRequestContext {
   readonly accessToken: string;
   readonly userId: string;
 }
+
+type ProjectMediaReference = z.infer<typeof ProjectMediaReferenceSchema>;
 
 export class SupabaseProjectMediaSync implements IProjectMediaSync {
   readonly #audioSourceRepository: IAudioSourceRepository;
@@ -77,6 +91,162 @@ export class SupabaseProjectMediaSync implements IProjectMediaSync {
         source,
       });
     }
+  }
+
+  async ensureLocalProjectMedia(document: ProjectDocumentSnapshot): Promise<void> {
+    const missingSources: ProjectAudioSource[] = [];
+    for (const source of document.audioSources) {
+      if (!(await this.#audioSourceRepository.load(source))) {
+        missingSources.push(source);
+      }
+    }
+    if (missingSources.length === 0) {
+      return;
+    }
+
+    const requestContext = this.#getAuthenticatedRequestContext();
+    const references = await this.#fetchProjectMediaReferences({
+      projectId: document.project.id,
+      requestContext,
+      sources: missingSources,
+    });
+    const downloadedContent = new Map<string, Blob>();
+    for (const source of missingSources) {
+      const reference = this.#requireMatchingReference({ references, requestContext, source });
+      let blob = downloadedContent.get(reference.content_hash);
+      if (!blob) {
+        blob = await this.#downloadProjectMedia({ reference, requestContext, source });
+        downloadedContent.set(reference.content_hash, blob);
+      }
+      await this.#createLocalSource({ blob, source });
+    }
+  }
+
+  async #fetchProjectMediaReferences({
+    projectId,
+    requestContext,
+    sources,
+  }: {
+    readonly projectId: string;
+    readonly requestContext: AuthenticatedRequestContext;
+    readonly sources: readonly ProjectAudioSource[];
+  }): Promise<readonly ProjectMediaReference[]> {
+    const references: ProjectMediaReference[] = [];
+    for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += PROJECT_MEDIA_REFERENCE_BATCH_SIZE) {
+      const sourceBatch = sources.slice(sourceIndex, sourceIndex + PROJECT_MEDIA_REFERENCE_BATCH_SIZE);
+      const url = new URL(`${this.#supabaseUrl}/rest/v1/project_media_refs`);
+      url.searchParams.set('select', 'source_id,content_hash,byte_length,mime_type,storage_path');
+      url.searchParams.set('project_id', `eq.${projectId}`);
+      url.searchParams.set('source_id', `in.(${sourceBatch.map(source => source.id).join(',')})`);
+      const response = await this.#fetch(url, {
+        method: 'GET',
+        headers: this.#createHeaders(requestContext.accessToken, {}),
+      });
+      if (!response.ok) {
+        throw await this.#createHttpError(response, '미디어 참조 조회');
+      }
+
+      const responseBody = await response.json().catch(cause => {
+        throw this.#createInvalidResponseError('미디어 참조 응답을 JSON으로 읽지 못했습니다.', cause);
+      });
+      const result = ProjectMediaReferencesSchema.safeParse(responseBody);
+      if (!result.success) {
+        throw this.#createInvalidResponseError('미디어 참조 응답 형식이 올바르지 않습니다.', result.error);
+      }
+      references.push(...result.data);
+    }
+    return references;
+  }
+
+  #requireMatchingReference({
+    references,
+    requestContext,
+    source,
+  }: {
+    readonly references: readonly ProjectMediaReference[];
+    readonly requestContext: AuthenticatedRequestContext;
+    readonly source: ProjectAudioSource;
+  }): ProjectMediaReference {
+    const sourceReferences = references.filter(reference => reference.source_id === source.id);
+    const [reference] = sourceReferences;
+    const isValid =
+      sourceReferences.length === 1 &&
+      reference !== undefined &&
+      reference.byte_length === source.byteLength &&
+      reference.mime_type === source.mimeType &&
+      reference.storage_path === `${requestContext.userId}/${reference.content_hash}`;
+    if (!isValid || !reference) {
+      throw this.#createInvalidResponseError('서버 미디어 참조가 프로젝트 Source metadata와 일치하지 않습니다.', {
+        sourceId: source.id,
+      });
+    }
+    return reference;
+  }
+
+  async #downloadProjectMedia({
+    reference,
+    requestContext,
+    source,
+  }: {
+    readonly reference: ProjectMediaReference;
+    readonly requestContext: AuthenticatedRequestContext;
+    readonly source: ProjectAudioSource;
+  }): Promise<Blob> {
+    const response = await this.#fetch(
+      `${this.#supabaseUrl}/storage/v1/object/${PROJECT_MEDIA_BUCKET}/${reference.storage_path}`,
+      {
+        method: 'GET',
+        headers: this.#createHeaders(requestContext.accessToken, {}),
+      }
+    );
+    if (!response.ok) {
+      throw await this.#createHttpError(response, '미디어 다운로드');
+    }
+
+    const downloadedBlob = await response.blob();
+    const contentHash = await this.#contentHashCalculator(downloadedBlob);
+    // private Storage 응답도 손상되거나 잘못 연결될 수 있으므로 문서 metadata와 참조 hash를 모두 확인한다.
+    if (downloadedBlob.size !== source.byteLength || contentHash !== reference.content_hash) {
+      throw this.#createInvalidResponseError('다운로드한 미디어의 크기 또는 SHA-256이 참조와 일치하지 않습니다.', {
+        actualByteLength: downloadedBlob.size,
+        actualContentHash: contentHash,
+        expectedByteLength: source.byteLength,
+        expectedContentHash: reference.content_hash,
+        sourceId: source.id,
+      });
+    }
+    return new Blob([downloadedBlob], { type: source.mimeType });
+  }
+
+  async #createLocalSource({
+    blob,
+    source,
+  }: {
+    readonly blob: Blob;
+    readonly source: ProjectAudioSource;
+  }): Promise<void> {
+    try {
+      await this.#audioSourceRepository.create({ blob, metadata: source });
+    } catch (cause) {
+      if (
+        !(cause instanceof AudioSourceRepositoryError) ||
+        cause.code !== AudioSourceRepositoryErrorCode.SOURCE_ALREADY_EXISTS
+      ) {
+        throw cause;
+      }
+      if (!(await this.#audioSourceRepository.load(source))) {
+        throw cause;
+      }
+    }
+  }
+
+  #createInvalidResponseError(message: string, cause: unknown): ProjectSyncError {
+    return new ProjectSyncError({
+      code: ProjectSyncErrorCode.INVALID_RESPONSE,
+      message,
+      retryable: false,
+      cause,
+    });
   }
 
   async #uploadContent({

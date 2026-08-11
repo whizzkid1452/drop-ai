@@ -68,6 +68,7 @@ pnpm typecheck
 - 같은 scalar 속성을 동시에 바꾸면 Yjs의 일관된 단일 값으로 수렴하며 두 값을 함께 보존하지는 않습니다.
 - keyed collection 순서를 동시에 바꾸면 모든 peer가 같은 순서로 수렴하지만, 두 사용자의 순서 의도를 모두 보존하는 것은 아닙니다.
 - 기존 JSON Outbox record는 누락 없이 전송하기 위해 기존 snapshot RPC를 계속 사용합니다. 새 commit부터 CRDT append RPC를 사용합니다.
-- 원격 update는 로컬 ProjectDocument와 Yjs state에 반영하지만, 활성 Session과 AudioEngine을 자동 교체하지는 않습니다.
-- 다른 기기의 원격 미디어 다운로드와 원격 프로젝트 목록 조회는 아직 구현하지 않았습니다.
+- 원격 update를 저장한 뒤 누락된 미디어를 검증·다운로드하고 활성 Session과 AudioEngine을 교체합니다.
+- Runtime 준비 중 로컬 Session이 바뀌면 원격 적용을 보류하고 저장된 cursor의 문서를 지수 백오프로 다시 적용합니다.
+- 원격 프로젝트 목록 조회는 아직 구현하지 않았습니다.
 - project collaborator 권한, 실시간 presence, update log 압축은 아직 구현하지 않았습니다.

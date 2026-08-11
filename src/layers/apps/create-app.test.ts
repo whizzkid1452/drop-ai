@@ -37,6 +37,7 @@ describe('createApp', () => {
     const projectRepository = new InMemoryProjectRepository();
     const projectSync: IProjectSyncService = {
       activateProject: vi.fn(),
+      ensureLocalProjectMedia: vi.fn(),
       notifyProjectChanged: vi.fn(),
       resume: vi.fn(),
     };
@@ -49,13 +50,20 @@ describe('createApp', () => {
       projectRepository,
     });
 
-    expect(createProjectSync).toHaveBeenCalledWith({ audioSourceRepository, projectRepository });
+    expect(createProjectSync).toHaveBeenCalledWith({
+      audioSourceRepository,
+      projectRepository,
+      remoteProjectDocumentApplicator: expect.objectContaining({
+        applyRemoteProjectDocument: expect.any(Function),
+      }),
+    });
   });
 
   it('초기 프로젝트를 활성화하고 로컬 commit 뒤 동기화를 요청한다', async () => {
     const projectId = '11111111-1111-4111-8111-111111111111';
     const projectSync: IProjectSyncService = {
       activateProject: vi.fn(),
+      ensureLocalProjectMedia: vi.fn(),
       notifyProjectChanged: vi.fn(),
       resume: vi.fn(),
     };
@@ -255,6 +263,7 @@ describe('createApp', () => {
     vi.mocked(audioSourceRepository.load).mockResolvedValue(new Blob(['test'], { type: 'audio/wav' }));
     const projectSync: IProjectSyncService = {
       activateProject: vi.fn(),
+      ensureLocalProjectMedia: vi.fn(),
       notifyProjectChanged: vi.fn(),
       resume: vi.fn(),
     };

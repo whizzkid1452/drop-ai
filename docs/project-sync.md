@@ -48,6 +48,8 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key
 5. 요청 성공 뒤 해당 operation만 `project-outbox`에서 제거되는지 확인합니다.
 6. `project_crdt_updates`에서 로컬 cursor보다 큰 `sequence_id`를 오름차순으로 조회하는지 확인합니다.
 7. 병합된 문서, 누적 Yjs state, 마지막 `sequence_id`가 하나의 IndexedDB transaction에서 저장되는지 확인합니다.
+8. 문서가 참조하는 Source가 OPFS에 없으면 `project_media_refs`와 private Storage에서 내려받는지 확인합니다.
+9. Source 크기와 SHA-256 검증 뒤 AudioEngine·Source Registry·Session 순서로 현재 Runtime이 교체되는지 확인합니다.
 
 업그레이드 전에 생성된 JSON Outbox 항목에는 CRDT update가 없습니다. 이 항목은 기존 `apply_project_change` RPC로 전송해 미전송 변경을 보존합니다.
 
@@ -80,5 +82,7 @@ CRDT update append는 snapshot revision을 비교하지 않습니다. 기존 JSO
 
 ### 원격 변경이 현재 화면에도 즉시 반영되나요?
 
-아니요. 현재 구현은 IndexedDB의 ProjectDocument와 Yjs state까지만 갱신합니다. 활성 Session·AudioEngine 교체와 원격 미디어
-다운로드는 별도 작업입니다.
+동기화가 실행되면 활성 프로젝트의 원격 변경을 Session과 AudioEngine에 반영합니다. 로컬에 없는 미디어는 private Storage에서
+받아 크기와 SHA-256을 검증한 뒤 OPFS에 저장합니다. Runtime 준비 중 현재 Session이 바뀌면 준비한 자원을 폐기하고
+지수 백오프로 다시 시도합니다. 서버 변경을 실시간으로 구독하는 기능은 아직 없으므로, 원격 변경 발생 자체가 즉시 동기화를
+시작하지는 않습니다.

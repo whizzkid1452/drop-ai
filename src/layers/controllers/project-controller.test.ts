@@ -8,6 +8,7 @@ import type { IProjectRepository } from '../project-repository/i-project-reposit
 import { ProjectRepositoryError } from '../project-repository/errors';
 import { createProjectDocumentV3FromSession } from '../project-document-mapper/project-document-mapper';
 import { gainPluginManifest } from '../plugins/builtin/gain/gain-plugin-manifest';
+import type { IProjectSyncService } from '../project-sync/i-project-sync';
 import { createSessionStore, type SessionState } from '../session/session';
 import type {
   ProjectAudioSource,
@@ -46,7 +47,7 @@ function createSourceRegistration(sourceId = SOURCE_ID) {
   return { metadata, blob };
 }
 
-function createTestContext() {
+function createTestContext(projectSync?: IProjectSyncService) {
   const sessionStore = createSessionStore({ initialProjectMetadata: INITIAL_PROJECT_METADATA });
   sessionStore.getState().replacePluginCatalogState({ manifests: [gainPluginManifest], validationResults: [] });
   const audioEngine = new MockAudioEngine();
@@ -77,6 +78,7 @@ function createTestContext() {
     audioSourceRegistry,
     audioSourceRepository,
     projectRepository,
+    projectSync,
   });
 
   return {
@@ -500,6 +502,63 @@ describe('ProjectController', () => {
       regionIds: [REGION_ID],
     });
     expect(context.revokeObjectUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it('프로젝트를 불러오기 전에 누락된 원격 미디어를 로컬 저장소에 준비한다', async () => {
+    const events: string[] = [];
+    const projectSync: IProjectSyncService = {
+      activateProject: vi.fn(),
+      ensureLocalProjectMedia: vi.fn(async () => {
+        events.push('media-download');
+      }),
+      notifyProjectChanged: vi.fn(),
+      resume: vi.fn(),
+    };
+    const context = createTestContext(projectSync);
+    const document = createLoadedDocument();
+    const registration = createSourceRegistration();
+    context.projectRepository.load.mockResolvedValue(document);
+    context.audioSourceRepository.load.mockImplementation(async () => {
+      events.push('source-load');
+      return registration.blob;
+    });
+
+    await context.controller.loadProject(LOADED_PROJECT_ID);
+
+    expect(events).toEqual(['media-download', 'source-load']);
+    expect(projectSync.ensureLocalProjectMedia).toHaveBeenCalledWith(document);
+  });
+
+  it('원격 문서를 현재 Session과 AudioEngine에 준비 후 교체한다', async () => {
+    const context = createTestContext();
+    const document = createLoadedDocument({ projectId: PROJECT_ID });
+    const registration = createSourceRegistration();
+    context.audioSourceRepository.load.mockResolvedValue(registration.blob);
+
+    const applied = await context.controller.applyRemoteProjectDocument(document);
+
+    expect(applied).toBe(true);
+    expect(context.projectRepository.load).not.toHaveBeenCalled();
+    expect(context.sessionStore.getState().tracks.get(TRACK_ID)?.name).toBe('보컬');
+    expect(context.audioEngine.getTrackParams(TRACK_ID)).toEqual({ volume: 0.8, pan: -0.25 });
+  });
+
+  it('원격 Runtime 준비 중 현재 Session이 바뀌면 준비 대상을 폐기하고 교체하지 않는다', async () => {
+    const context = createTestContext();
+    const document = createLoadedDocument({ projectId: PROJECT_ID });
+    const sourceLoad = createDeferred<Blob | null>();
+    context.audioSourceRepository.load.mockReturnValue(sourceLoad.promise);
+
+    const applyRemoteDocument = context.controller.applyRemoteProjectDocument(document);
+    await vi.waitFor(() => expect(context.audioSourceRepository.load).toHaveBeenCalledOnce());
+    context.sessionStore.getState().setTempo(130);
+    sourceLoad.resolve(createSourceRegistration().blob);
+
+    await expect(applyRemoteDocument).resolves.toBe(false);
+    expect(context.sessionStore.getState().tempo).toBe(130);
+    expect(context.sessionStore.getState().tracks.size).toBe(0);
+    expect(context.audioEngine.getTrackParams(TRACK_ID)).toBeNull();
+    expect(context.revokeObjectUrl).toHaveBeenCalledWith('blob:project-source-1');
   });
 
   it('v2 Plugin 체인을 Session과 AudioEngine 준비 요청에 복원한다', async () => {

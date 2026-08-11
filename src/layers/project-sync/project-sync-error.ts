@@ -6,6 +6,7 @@ export const ProjectSyncErrorCode = {
   NETWORK_ERROR: 'NETWORK_ERROR',
   REMOTE_ERROR: 'REMOTE_ERROR',
   REVISION_CONFLICT: 'REVISION_CONFLICT',
+  RUNTIME_NOT_CURRENT: 'RUNTIME_NOT_CURRENT',
 } as const;
 
 export type ProjectSyncErrorCode = (typeof ProjectSyncErrorCode)[keyof typeof ProjectSyncErrorCode];

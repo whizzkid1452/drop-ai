@@ -67,6 +67,7 @@ describe('createWebProjectSyncService', () => {
       audioSourceRepository,
       authClient,
       projectRepository: repository,
+      remoteProjectDocumentApplicator: { applyRemoteProjectDocument: vi.fn().mockResolvedValue(true) },
       supabasePublishableKey: 'publishable-key',
       supabaseUrl: 'https://example.supabase.co',
     });

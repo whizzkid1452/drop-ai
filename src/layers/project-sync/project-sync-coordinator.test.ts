@@ -3,7 +3,7 @@ import { ProjectCrdtDocument } from '../project-crdt/project-crdt-document';
 import { encodeProjectCrdtUpdate } from '../project-crdt/project-crdt-update-codec';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import type { ProjectDocument } from '../shared/types/project-document.schema';
-import type { IProjectMediaSync, IProjectSyncGateway } from './i-project-sync';
+import type { IProjectMediaSync, IProjectSyncGateway, IRemoteProjectDocumentApplicator } from './i-project-sync';
 import { ProjectSyncCoordinator } from './project-sync-coordinator';
 import { ProjectSyncError, ProjectSyncErrorCode } from './project-sync-error';
 
@@ -56,6 +56,7 @@ describe('ProjectSyncCoordinator', () => {
     });
     const callOrder: string[] = [];
     const mediaSync: IProjectMediaSync = {
+      ensureLocalProjectMedia: vi.fn(),
       ensureProjectMedia: vi.fn(async () => {
         callOrder.push('media');
       }),
@@ -95,6 +96,7 @@ describe('ProjectSyncCoordinator', () => {
     const coordinator = new ProjectSyncCoordinator({
       gateway: { pullProjectUpdates: vi.fn().mockResolvedValue([]), pushProjectChange },
       mediaSync: {
+        ensureLocalProjectMedia: vi.fn(),
         ensureProjectMedia: vi.fn().mockRejectedValue(
           new ProjectSyncError({
             code: ProjectSyncErrorCode.NETWORK_ERROR,
@@ -125,7 +127,7 @@ describe('ProjectSyncCoordinator', () => {
     const pushProjectChange = vi.fn();
     const coordinator = new ProjectSyncCoordinator({
       gateway: { pullProjectUpdates: vi.fn().mockResolvedValue([]), pushProjectChange },
-      mediaSync: { ensureProjectMedia: () => mediaUpload.promise },
+      mediaSync: { ensureLocalProjectMedia: vi.fn(), ensureProjectMedia: () => mediaUpload.promise },
       repository,
       now: () => 1_000,
     });
@@ -369,6 +371,105 @@ describe('ProjectSyncCoordinator', () => {
       projectId: PROJECT_ID,
     });
     await expect(repository.getLastAppliedRemoteSequenceId(PROJECT_ID)).resolves.toBe(1);
+  });
+
+  it('원격 update를 저장한 뒤 미디어와 활성 Runtime을 순서대로 갱신한다', async () => {
+    const repository = new InMemoryProjectRepository({ now: () => 1_000 });
+    const remoteUpdate = createInitialRemoteUpdate(PROJECT_ID);
+    const callOrder: string[] = [];
+    const mediaSync: IProjectMediaSync = {
+      ensureProjectMedia: vi.fn(),
+      ensureLocalProjectMedia: vi.fn(async () => {
+        callOrder.push('media');
+      }),
+    };
+    const remoteProjectDocumentApplicator: IRemoteProjectDocumentApplicator = {
+      applyRemoteProjectDocument: vi.fn(async () => {
+        callOrder.push('runtime');
+        return true;
+      }),
+    };
+    const coordinator = new ProjectSyncCoordinator({
+      gateway: {
+        pullProjectUpdates: vi.fn().mockResolvedValueOnce([remoteUpdate]).mockResolvedValueOnce([]),
+        pushProjectChange: vi.fn(),
+      },
+      mediaSync,
+      remoteProjectDocumentApplicator,
+      repository,
+      now: () => 1_000,
+    });
+
+    coordinator.activateProject(PROJECT_ID);
+
+    await vi.waitFor(() => expect(remoteProjectDocumentApplicator.applyRemoteProjectDocument).toHaveBeenCalledOnce());
+    expect(callOrder).toEqual(['media', 'runtime']);
+    expect(mediaSync.ensureLocalProjectMedia).toHaveBeenCalledWith(createProjectDocument(PROJECT_ID));
+    expect(remoteProjectDocumentApplicator.applyRemoteProjectDocument).toHaveBeenCalledWith(
+      createProjectDocument(PROJECT_ID)
+    );
+  });
+
+  it('Runtime 적용이 보류되면 저장된 cursor의 문서를 지수 지연으로 다시 적용한다', async () => {
+    let currentTime = 1_000;
+    const repository = new InMemoryProjectRepository({ now: () => currentTime });
+    const remoteUpdate = createInitialRemoteUpdate(PROJECT_ID);
+    const applyRemoteProjectDocument = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const scheduledCallbacks: Array<() => void> = [];
+    const coordinator = new ProjectSyncCoordinator({
+      gateway: {
+        pullProjectUpdates: vi.fn().mockResolvedValueOnce([remoteUpdate]).mockResolvedValue([]),
+        pushProjectChange: vi.fn(),
+      },
+      remoteProjectDocumentApplicator: { applyRemoteProjectDocument },
+      repository,
+      now: () => currentTime,
+      schedule: callback => {
+        scheduledCallbacks.push(callback);
+        return () => undefined;
+      },
+    });
+
+    coordinator.activateProject(PROJECT_ID);
+    await vi.waitFor(() => expect(scheduledCallbacks).toHaveLength(1));
+    expect(applyRemoteProjectDocument).toHaveBeenCalledOnce();
+    await expect(repository.getLastAppliedRemoteSequenceId(PROJECT_ID)).resolves.toBe(1);
+
+    currentTime = 2_000;
+    scheduledCallbacks[0]?.();
+
+    await vi.waitFor(() => expect(applyRemoteProjectDocument).toHaveBeenCalledTimes(2));
+  });
+
+  it('미디어 다운로드 중 프로젝트가 바뀌면 이전 프로젝트 Runtime을 갱신하지 않는다', async () => {
+    const repository = new InMemoryProjectRepository({ now: () => 1_000 });
+    const mediaDownload = createDeferred<void>();
+    const applyRemoteProjectDocument = vi.fn();
+    const coordinator = new ProjectSyncCoordinator({
+      gateway: {
+        pullProjectUpdates: vi.fn(request =>
+          Promise.resolve(request.projectId === PROJECT_ID ? [createInitialRemoteUpdate(PROJECT_ID)] : [])
+        ),
+        pushProjectChange: vi.fn(),
+      },
+      mediaSync: {
+        ensureProjectMedia: vi.fn(),
+        ensureLocalProjectMedia: () => mediaDownload.promise,
+      },
+      remoteProjectDocumentApplicator: { applyRemoteProjectDocument },
+      repository,
+      now: () => 1_000,
+    });
+
+    coordinator.activateProject(PROJECT_ID);
+    await vi.waitFor(async () => {
+      await expect(repository.getLastAppliedRemoteSequenceId(PROJECT_ID)).resolves.toBe(1);
+    });
+    coordinator.activateProject(SECOND_PROJECT_ID);
+    mediaDownload.resolve();
+
+    await vi.waitFor(() => expect(coordinator.hasInFlightSync(PROJECT_ID)).toBe(false));
+    expect(applyRemoteProjectDocument).not.toHaveBeenCalled();
   });
 
   it('프로젝트 전환 전에 조회한 원격 update를 이전 프로젝트에 반영하지 않는다', async () => {

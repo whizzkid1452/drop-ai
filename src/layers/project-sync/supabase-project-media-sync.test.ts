@@ -137,4 +137,133 @@ describe('SupabaseProjectMediaSync', () => {
     });
     expect(load).not.toHaveBeenCalled();
   });
+
+  it('로컬에 없는 Source 참조를 조회하고 검증된 Storage Blob을 저장한다', async () => {
+    const source = createSource();
+    const create = vi.fn<IAudioSourceRepository['create']>().mockResolvedValue(undefined);
+    const fetchImplementation = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            {
+              source_id: SOURCE_ID,
+              content_hash: TEST_CONTENT_HASH,
+              byte_length: source.byteLength,
+              mime_type: source.mimeType,
+              storage_path: `${USER_ID}/${TEST_CONTENT_HASH}`,
+            },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(new Response('test', { status: 200, headers: { 'content-type': 'audio/wav' } }));
+    const mediaSync = new SupabaseProjectMediaSync({
+      audioSourceRepository: { create, delete: vi.fn(), load: vi.fn().mockResolvedValue(null) },
+      authClient: createAuthClient(),
+      contentHashCalculator: vi.fn().mockResolvedValue(TEST_CONTENT_HASH),
+      fetchImplementation,
+      supabasePublishableKey: 'publishable-key',
+      supabaseUrl: 'https://example.supabase.co',
+    });
+
+    await mediaSync.ensureLocalProjectMedia(createDocument([source]));
+
+    const referenceUrl = new URL(String(fetchImplementation.mock.calls[0]?.[0]));
+    expect(referenceUrl.pathname).toBe('/rest/v1/project_media_refs');
+    expect(referenceUrl.searchParams.get('project_id')).toBe(`eq.${PROJECT_ID}`);
+    expect(referenceUrl.searchParams.get('source_id')).toBe(`in.(${SOURCE_ID})`);
+    expect(fetchImplementation).toHaveBeenNthCalledWith(
+      2,
+      `https://example.supabase.co/storage/v1/object/project-media/${USER_ID}/${TEST_CONTENT_HASH}`,
+      expect.objectContaining({ method: 'GET' })
+    );
+    expect(create).toHaveBeenCalledWith({ metadata: source, blob: expect.any(Blob) });
+  });
+
+  it('모든 Source가 로컬에 있으면 인증과 서버 요청 없이 완료한다', async () => {
+    const fetchImplementation = vi.fn();
+    const mediaSync = new SupabaseProjectMediaSync({
+      audioSourceRepository: createAudioSourceRepository(
+        async source => new Blob([new Uint8Array(source.byteLength)], { type: source.mimeType })
+      ),
+      authClient: createAuthClient(false),
+      fetchImplementation,
+      supabasePublishableKey: 'publishable-key',
+      supabaseUrl: 'https://example.supabase.co',
+    });
+
+    await mediaSync.ensureLocalProjectMedia(createDocument([createSource()]));
+
+    expect(fetchImplementation).not.toHaveBeenCalled();
+  });
+
+  it('서버 미디어 참조가 문서 metadata와 다르면 Blob을 다운로드하지 않는다', async () => {
+    const create = vi.fn<IAudioSourceRepository['create']>();
+    const fetchImplementation = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            source_id: SOURCE_ID,
+            content_hash: TEST_CONTENT_HASH,
+            byte_length: 5,
+            mime_type: 'audio/wav',
+            storage_path: `${USER_ID}/${TEST_CONTENT_HASH}`,
+          },
+        ]),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    );
+    const mediaSync = new SupabaseProjectMediaSync({
+      audioSourceRepository: { create, delete: vi.fn(), load: vi.fn().mockResolvedValue(null) },
+      authClient: createAuthClient(),
+      fetchImplementation,
+      supabasePublishableKey: 'publishable-key',
+      supabaseUrl: 'https://example.supabase.co',
+    });
+
+    await expect(mediaSync.ensureLocalProjectMedia(createDocument([createSource()]))).rejects.toMatchObject({
+      code: ProjectSyncErrorCode.INVALID_RESPONSE,
+      retryable: false,
+    });
+    expect(fetchImplementation).toHaveBeenCalledOnce();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('다운로드한 Blob의 SHA-256이 서버 참조와 다르면 로컬에 저장하지 않는다', async () => {
+    const source = createSource();
+    const create = vi.fn<IAudioSourceRepository['create']>();
+    const fetchImplementation = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            {
+              source_id: SOURCE_ID,
+              content_hash: TEST_CONTENT_HASH,
+              byte_length: source.byteLength,
+              mime_type: source.mimeType,
+              storage_path: `${USER_ID}/${TEST_CONTENT_HASH}`,
+            },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(new Response('test', { status: 200 }));
+    const mediaSync = new SupabaseProjectMediaSync({
+      audioSourceRepository: { create, delete: vi.fn(), load: vi.fn().mockResolvedValue(null) },
+      authClient: createAuthClient(),
+      contentHashCalculator: vi.fn().mockResolvedValue('0'.repeat(64)),
+      fetchImplementation,
+      supabasePublishableKey: 'publishable-key',
+      supabaseUrl: 'https://example.supabase.co',
+    });
+
+    await expect(mediaSync.ensureLocalProjectMedia(createDocument([source]))).rejects.toMatchObject({
+      code: ProjectSyncErrorCode.INVALID_RESPONSE,
+      retryable: false,
+    });
+    expect(fetchImplementation).toHaveBeenCalledTimes(2);
+    expect(create).not.toHaveBeenCalled();
+  });
 });
