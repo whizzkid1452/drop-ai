@@ -4,6 +4,13 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DawHeader } from './DawHeader';
+import { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
+
+const coordinateMapper = new TimelineCoordinateMapper({
+  tempoBpm: 120,
+  beatsPerBar: 4,
+  beatUnit: 4,
+});
 
 const componentMocks = vi.hoisted(() => ({
   audioRuntimeStatus: vi.fn(() => null),
@@ -57,6 +64,10 @@ vi.mock('./MidiLoopControl', () => ({
   MidiLoopControl: componentMocks.midiLoopControl,
 }));
 
+vi.mock('./MusicalPositionClock', () => ({
+  MusicalPositionClock: () => null,
+}));
+
 vi.mock('@/layers/apps/web/components/Auth/AccountControl', () => ({
   AccountControl: componentMocks.accountControl,
 }));
@@ -108,7 +119,7 @@ describe('DawHeader', () => {
     const root = createRoot(host);
     mountedRoots.push(root);
 
-    act(() => root.render(createElement(DawHeader, { trackCount: 2 })));
+    act(() => root.render(createElement(DawHeader, { coordinateMapper, trackCount: 2 })));
 
     expect(componentMocks.audioRuntimeStatus).toHaveBeenCalledTimes(1);
     expect(componentMocks.masterVolumeControl).toHaveBeenCalledTimes(1);

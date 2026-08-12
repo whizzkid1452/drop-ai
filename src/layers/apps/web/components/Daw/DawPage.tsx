@@ -13,12 +13,13 @@ import {
   useKeyboardShortcutAction,
 } from '@/layers/apps/web/keyboard-shortcuts/keyboard-shortcuts';
 import {
-  clampTimelinePixelsPerSecond,
-  DEFAULT_TIMELINE_PIXELS_PER_SECOND,
+  clampTimelinePixelsPerQuarterNote,
+  DEFAULT_TIMELINE_PIXELS_PER_QUARTER_NOTE,
   TIMELINE_ZOOM_FACTOR,
 } from './timeline-zoom';
 import { getMaxDuration } from './get-max-duration';
 import { getTimelineContentWidth } from './timeline-content-width';
+import { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 
 const CHAT_PANEL_MIN_WIDTH = 280;
 const CHAT_PANEL_MAX_WIDTH = 600;
@@ -49,23 +50,34 @@ function getShiftWheelHorizontalDelta(event: WheelEvent, pageWidth: number): num
 
 export function DawPage() {
   const tracks = useSession(state => state.tracks);
+  const tempo = useSession(state => state.tempo);
   const trackCount = tracks.size;
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
   const [chatPanelWidth, setChatPanelWidth] = useState(CHAT_PANEL_DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
-  const [pixelsPerSecond, setPixelsPerSecond] = useState(DEFAULT_TIMELINE_PIXELS_PER_SECOND);
+  const [pixelsPerQuarterNote, setPixelsPerQuarterNote] = useState(DEFAULT_TIMELINE_PIXELS_PER_QUARTER_NOTE);
   const [requestedTrackId, setRequestedTrackId] = useState<string | null>(null);
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(CHAT_PANEL_DEFAULT_WIDTH);
   const mainContentRef = useRef<HTMLDivElement>(null);
+  const coordinateMapper = useMemo(
+    () =>
+      new TimelineCoordinateMapper({
+        tempoBpm: tempo,
+        beatsPerBar: 4,
+        beatUnit: 4,
+        pixelsPerQuarterNote,
+      }),
+    [pixelsPerQuarterNote, tempo]
+  );
   const timelineContentWidth = useMemo(
     () =>
       getTimelineContentWidth({
         durationSeconds: getMaxDuration(Array.from(tracks.values())),
-        pixelsPerSecond,
+        coordinateMapper,
       }),
-    [pixelsPerSecond, tracks]
+    [coordinateMapper, tracks]
   );
   const timelineWidthStyle: TimelineWidthStyle = {
     // Region은 절대 위치 요소이므로 명시적 폭이 없으면 상위 scrollWidth를 늘리지 못한다.
@@ -83,13 +95,13 @@ export function DawPage() {
     setIsTerminalOpen(current => !current);
   });
   useKeyboardShortcutAction(KeyboardShortcutAction.ZOOM_IN, () => {
-    setPixelsPerSecond(current => clampTimelinePixelsPerSecond(current * TIMELINE_ZOOM_FACTOR));
+    setPixelsPerQuarterNote(current => clampTimelinePixelsPerQuarterNote(current * TIMELINE_ZOOM_FACTOR));
   });
   useKeyboardShortcutAction(KeyboardShortcutAction.ZOOM_OUT, () => {
-    setPixelsPerSecond(current => clampTimelinePixelsPerSecond(current / TIMELINE_ZOOM_FACTOR));
+    setPixelsPerQuarterNote(current => clampTimelinePixelsPerQuarterNote(current / TIMELINE_ZOOM_FACTOR));
   });
   useKeyboardShortcutAction(KeyboardShortcutAction.RESET_ZOOM, () => {
-    setPixelsPerSecond(DEFAULT_TIMELINE_PIXELS_PER_SECOND);
+    setPixelsPerQuarterNote(DEFAULT_TIMELINE_PIXELS_PER_QUARTER_NOTE);
   });
 
   const handleResizeStart = useCallback(
@@ -182,7 +194,7 @@ export function DawPage() {
       </div>
 
       <div ref={mainContentRef} className={styles.mainContent} style={timelineWidthStyle}>
-        <DawHeader trackCount={trackCount} />
+        <DawHeader coordinateMapper={coordinateMapper} trackCount={trackCount} />
         <div className={styles.timelineHeader}>
           <div className={styles.trackHeaderRuler}>
             <span>TRACK CONTROLS</span>
@@ -190,16 +202,16 @@ export function DawPage() {
           </div>
           <div className={styles.timelineRuler}>
             <div className={styles.timelineMeta}>
-              <span>TIMELINE</span>
-              <span>{Math.round(pixelsPerSecond)} PX/S</span>
+              <span>BBT TIMELINE</span>
+              <span>{Math.round(pixelsPerQuarterNote)} PX/♩</span>
             </div>
-            <TimeRuler pixelsPerSecond={pixelsPerSecond} />
+            <TimeRuler coordinateMapper={coordinateMapper} />
           </div>
         </div>
         <TrackList
-          pixelsPerSecond={pixelsPerSecond}
+          coordinateMapper={coordinateMapper}
           selectedTrackId={selectedTrackId}
-          setPixelsPerSecond={setPixelsPerSecond}
+          setPixelsPerQuarterNote={setPixelsPerQuarterNote}
           timelineViewportRef={mainContentRef}
           onTrackSelect={setRequestedTrackId}
         />

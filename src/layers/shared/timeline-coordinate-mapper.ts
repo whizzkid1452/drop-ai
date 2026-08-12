@@ -48,6 +48,26 @@ export class TimelineCoordinateMapper {
     return this.#pixelsPerQuarterNote;
   }
 
+  get tempoBpm(): number {
+    return this.#tempoBpm;
+  }
+
+  get beatsPerBar(): number {
+    return this.#beatsPerBar;
+  }
+
+  get beatUnit(): number {
+    return this.#beatUnit;
+  }
+
+  get meterBeatQuarterNotes(): number {
+    return 4 / this.#beatUnit;
+  }
+
+  get pixelsPerSecond(): number {
+    return this.secondsToPixels(1);
+  }
+
   secondsToQuarterNotes(seconds: number): number {
     assertNonNegativeFinite('초 위치', seconds);
     return seconds * (this.#tempoBpm / 60);
@@ -60,8 +80,7 @@ export class TimelineCoordinateMapper {
 
   secondsToBBT(seconds: number): BBTPosition {
     // 박자표 분모가 8이면 한 박자는 8분음표이므로 0.5 quarter note로 환산합니다.
-    const meterBeatQuarterNotes = 4 / this.#beatUnit;
-    const absoluteMeterBeats = this.secondsToQuarterNotes(seconds) / meterBeatQuarterNotes;
+    const absoluteMeterBeats = this.secondsToQuarterNotes(seconds) / this.meterBeatQuarterNotes;
     const absoluteWholeBeats = Math.floor(absoluteMeterBeats);
     const fractionalBeat = absoluteMeterBeats - absoluteWholeBeats;
     const roundedTick = Math.round(fractionalBeat * TICKS_PER_BEAT);
@@ -80,9 +99,7 @@ export class TimelineCoordinateMapper {
     this.#assertBBTPosition(position);
     const absoluteMeterBeats =
       (position.bar - 1) * this.#beatsPerBar + (position.beat - 1) + position.tick / TICKS_PER_BEAT;
-    const meterBeatQuarterNotes = 4 / this.#beatUnit;
-
-    return this.quarterNotesToSeconds(absoluteMeterBeats * meterBeatQuarterNotes);
+    return this.quarterNotesToSeconds(absoluteMeterBeats * this.meterBeatQuarterNotes);
   }
 
   secondsToPixels(seconds: number): number {

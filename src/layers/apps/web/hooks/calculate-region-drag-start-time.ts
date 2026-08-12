@@ -1,20 +1,19 @@
+import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
+
 interface CalculateRegionDragStartTimeOptions {
   initialStartTime: number;
   initialPointerX: number;
   currentPointerX: number;
-  pixelsPerSecond: number;
+  coordinateMapper: TimelineCoordinateMapper;
 }
 
 export function calculateRegionDragStartTime({
   initialStartTime,
   initialPointerX,
   currentPointerX,
-  pixelsPerSecond,
+  coordinateMapper,
 }: CalculateRegionDragStartTimeOptions): number {
-  if (!Number.isFinite(pixelsPerSecond) || pixelsPerSecond <= 0) {
-    return Math.max(0, initialStartTime);
-  }
-
   const pointerDelta = currentPointerX - initialPointerX;
-  return Math.max(0, initialStartTime + pointerDelta / pixelsPerSecond);
+  const initialPixel = coordinateMapper.secondsToPixels(initialStartTime);
+  return coordinateMapper.pixelsToSeconds(Math.max(0, initialPixel + pointerDelta));
 }

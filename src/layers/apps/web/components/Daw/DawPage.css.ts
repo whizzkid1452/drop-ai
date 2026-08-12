@@ -229,7 +229,22 @@ export const transportSection = style({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
+  gap: '8px',
   flexShrink: 0,
+});
+
+export const musicalPositionClock = style({
+  minWidth: '104px',
+  padding: '5px 7px',
+  border: '1px solid #111416',
+  backgroundColor: '#171a1c',
+  boxShadow: 'inset 0 1px 3px rgba(0, 0, 0, 0.55)',
+  color: '#ff8fe8',
+  fontFamily: '"Consolas", "SFMono-Regular", monospace',
+  fontSize: '13px',
+  fontVariantNumeric: 'tabular-nums',
+  letterSpacing: '0.04em',
+  textAlign: 'center',
 });
 
 export const statusSection = style({

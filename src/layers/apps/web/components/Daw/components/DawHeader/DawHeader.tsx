@@ -10,12 +10,15 @@ import { TempoMetadataControl } from './TempoMetadataControl';
 import { AddTrackControl } from '../AddTrackControl/AddTrackControl';
 import { MidiLoopControl } from './MidiLoopControl';
 import { AccountControl } from '@/layers/apps/web/components/Auth/AccountControl';
+import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
+import { MusicalPositionClock } from './MusicalPositionClock';
 
 interface DawHeaderProps {
   trackCount: number;
+  coordinateMapper: TimelineCoordinateMapper;
 }
 
-export function DawHeader({ trackCount }: DawHeaderProps) {
+export function DawHeader({ coordinateMapper, trackCount }: DawHeaderProps) {
   return (
     <header className={styles.header}>
       <div className={styles.projectBar}>
@@ -38,6 +41,7 @@ export function DawHeader({ trackCount }: DawHeaderProps) {
           <AudioRuntimeStatus />
         </div>
         <div className={styles.transportSection} aria-label="Transport">
+          <MusicalPositionClock coordinateMapper={coordinateMapper} />
           <PlaybackControls layout="inline" />
         </div>
         <div className={styles.statusSection}>
