@@ -13,6 +13,7 @@ import { insertArrayEntry, moveArrayEntry } from '../shared/array-order';
 import type { LoopLengthBars } from '../shared/loop-time';
 import type { LoopSlotRuntimeState } from '../shared/types/loop-state';
 import type { TimelineMeterChange, TimelineTempoChange } from '../shared/timeline-coordinate-mapper';
+import type { TimelineMarker } from '../shared/timeline-marker';
 
 export const DEFAULT_LOOP_SLOT_COUNT = 4;
 
@@ -86,6 +87,7 @@ export interface ProjectSessionState {
   readonly tempo: number;
   readonly tempoChanges?: readonly TimelineTempoChange[];
   readonly meterChanges?: readonly TimelineMeterChange[];
+  readonly timelineMarkers?: readonly TimelineMarker[];
   readonly masterVolume: number;
   readonly exportStartTime: number | null;
   readonly exportEndTime: number | null;
@@ -142,6 +144,7 @@ export interface SessionState {
   tempo: number;
   tempoChanges: TimelineTempoChange[];
   meterChanges: TimelineMeterChange[];
+  timelineMarkers: TimelineMarker[];
   masterVolume: number;
   exportStartTime: number | null;
   exportEndTime: number | null;
@@ -172,6 +175,7 @@ export interface SessionState {
     tempoChanges: readonly TimelineTempoChange[];
     meterChanges: readonly TimelineMeterChange[];
   }) => void;
+  setTimelineMarkers: (markers: readonly TimelineMarker[]) => void;
   setMasterVolume: (volume: number) => void;
   setExportRange: (startTime: number | null, endTime: number | null) => void;
   replaceProjectMetadata: (project: ProjectMetadata) => void;
@@ -214,6 +218,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     tempo: 120,
     tempoChanges: [{ quarterNotePosition: 0, bpm: 120 }],
     meterChanges: [{ quarterNotePosition: 0, beatsPerBar: 4, beatUnit: 4 }],
+    timelineMarkers: [],
     masterVolume: 1.0,
     exportStartTime: null,
     exportEndTime: null,
@@ -249,6 +254,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
         tempoChanges: tempoChanges.map(change => ({ ...change })),
         meterChanges: meterChanges.map(change => ({ ...change })),
       }),
+    setTimelineMarkers: timelineMarkers => set({ timelineMarkers: timelineMarkers.map(marker => ({ ...marker })) }),
     setMasterVolume: volume => set({ masterVolume: volume }),
     setExportRange: (startTime, endTime) => set({ exportStartTime: startTime, exportEndTime: endTime }),
     replaceProjectMetadata: project => set({ project: { ...project } }),
@@ -262,6 +268,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
         meterChanges: projectState.meterChanges
           ? projectState.meterChanges.map(change => ({ ...change }))
           : [{ quarterNotePosition: 0, beatsPerBar: 4, beatUnit: 4 }],
+        timelineMarkers: projectState.timelineMarkers?.map(marker => ({ ...marker })) ?? [],
         masterVolume: projectState.masterVolume,
         exportStartTime: projectState.exportStartTime,
         exportEndTime: projectState.exportEndTime,
