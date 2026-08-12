@@ -20,9 +20,19 @@ export const tick = style({
   backgroundColor: '#51575a',
 });
 
-export const majorTick = style({
+export const barTick = style({
   height: '12px',
   backgroundColor: '#8d9598',
+});
+
+export const beatTick = style({
+  height: '8px',
+  backgroundColor: '#686f72',
+});
+
+export const subdivisionTick = style({
+  height: '4px',
+  backgroundColor: '#454a4c',
 });
 
 export const label = style({

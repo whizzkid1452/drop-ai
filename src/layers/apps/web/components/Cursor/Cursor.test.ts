@@ -4,6 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Cursor } from './Cursor';
+import { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 
 const layerMocks = vi.hoisted(() => ({
   isPlaying: true,
@@ -20,6 +21,12 @@ vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
 vi.mock('./Cursor.css.ts', () => ({ cursor: 'cursor' }));
 
 const mountedRoots: Root[] = [];
+const coordinateMapper = new TimelineCoordinateMapper({
+  tempoBpm: 120,
+  beatsPerBar: 4,
+  beatUnit: 4,
+  pixelsPerQuarterNote: 5,
+});
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -29,7 +36,7 @@ function renderCursor(timelineViewport: HTMLDivElement | null = null) {
   const root = createRoot(host);
   mountedRoots.push(root);
   act(() =>
-    root.render(createElement(Cursor, { pixelsPerSecond: 10, timelineViewportRef: { current: timelineViewport } }))
+    root.render(createElement(Cursor, { coordinateMapper, timelineViewportRef: { current: timelineViewport } }))
   );
 
   const cursor = host.querySelector<HTMLDivElement>('.cursor');

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DawPage } from './DawPage';
 
 const layerMocks = {
+  tempo: 120,
   tracks: new Map<string, { regions: Array<{ duration: number; startTime: number }> }>(),
 };
 
@@ -95,7 +96,7 @@ describe('DawPage 타임라인 스크롤', () => {
 
     const mainContent = host.querySelector<HTMLElement>('.mainContent');
 
-    expect(mainContent?.style.getPropertyValue('--timeline-content-width')).toBe('1140px');
+    expect(mainContent?.style.getPropertyValue('--timeline-content-width')).toBe('4864px');
   });
 
   it('Shift와 세로 휠 입력을 가로 스크롤로 변환한다', () => {

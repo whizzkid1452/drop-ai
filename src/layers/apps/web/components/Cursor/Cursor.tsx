@@ -1,13 +1,14 @@
 import { useRef, useEffect, type RefObject } from 'react';
 import { usePlaybackClock, useSession } from '@/layers/apps/web/context/layer-hooks';
 import * as styles from './Cursor.css.ts';
+import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 
 interface CursorProps {
-  pixelsPerSecond: number;
+  coordinateMapper: TimelineCoordinateMapper;
   timelineViewportRef: RefObject<HTMLElement | null>;
 }
 
-export const Cursor = ({ pixelsPerSecond, timelineViewportRef }: CursorProps) => {
+export const Cursor = ({ coordinateMapper, timelineViewportRef }: CursorProps) => {
   const cursorRef = useRef<HTMLDivElement>(null);
   const rAF = useRef<number>(0);
   const isPlaying = useSession(state => state.isPlaying);
@@ -17,7 +18,7 @@ export const Cursor = ({ pixelsPerSecond, timelineViewportRef }: CursorProps) =>
   useEffect(() => {
     const updatePosition = (time: number) => {
       if (cursorRef.current) {
-        const x = time * pixelsPerSecond;
+        const x = coordinateMapper.secondsToPixels(time);
         cursorRef.current.style.transform = `translateX(${x}px)`;
         // 고정 Track 헤더 열로 이동한 플레이헤드는 스크롤 콘텐츠 위에 겹치지 않도록 숨긴다.
         cursorRef.current.style.visibility = x < (timelineViewportRef.current?.scrollLeft ?? 0) ? 'hidden' : 'visible';
@@ -50,7 +51,7 @@ export const Cursor = ({ pixelsPerSecond, timelineViewportRef }: CursorProps) =>
       cancelAnimationFrame(rAF.current);
       timelineViewport?.removeEventListener('scroll', handleViewportScroll);
     };
-  }, [isPlaying, currentTime, pixelsPerSecond, playbackClock, timelineViewportRef]);
+  }, [coordinateMapper, isPlaying, currentTime, playbackClock, timelineViewportRef]);
 
   return <div ref={cursorRef} className={styles.cursor} />;
 };

@@ -9,17 +9,17 @@ import {
 } from '@/layers/apps/web/keyboard-shortcuts/keyboard-shortcuts';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import { getMaxDuration } from '../../get-max-duration';
+import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
+import { createBBTRulerTicks } from './bbt-ruler-ticks';
+import { TIMELINE_MIN_CONTENT_WIDTH_PX } from '../../timeline-content-width';
 
 // ...
 
-const LARGE_SEEK_STEP_SECONDS = 5;
-const SEEK_STEP_SECONDS = 1;
-
 interface TimeRulerProps {
-  pixelsPerSecond: number;
+  coordinateMapper: TimelineCoordinateMapper;
 }
 
-export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerProps) {
+export const TimeRuler = memo(function TimeRuler({ coordinateMapper }: TimeRulerProps) {
   const tracks = useSession(state => state.tracks);
   const exportStartTime = useSession(state => state.exportStartTime);
   const exportEndTime = useSession(state => state.exportEndTime);
@@ -50,7 +50,7 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
 
       const rect = containerRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
-      const time = Math.max(0, x / pixelsPerSecond);
+      const time = coordinateMapper.pixelsToSeconds(Math.max(0, x));
 
       const start = Math.min(dragStartPosRef.current, time);
       const end = Math.max(dragStartPosRef.current, time);
@@ -58,8 +58,11 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
       currentDragRangeRef.current = { start, end };
 
       // Direct DOM manipulation for performance
-      overlayRef.current.style.left = `${start * pixelsPerSecond}px`;
-      overlayRef.current.style.width = `${(end - start) * pixelsPerSecond}px`;
+      overlayRef.current.style.left = `${coordinateMapper.secondsToPixels(start)}px`;
+      overlayRef.current.style.width = `${coordinateMapper.durationToPixels({
+        startSeconds: start,
+        durationSeconds: end - start,
+      })}px`;
     };
 
     const handleWindowMouseUp = async () => {
@@ -87,29 +90,26 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
       window.removeEventListener('mousemove', handleWindowMouseMove);
       window.removeEventListener('mouseup', handleWindowMouseUp);
     };
-  }, [isDraggingRange, pixelsPerSecond, commandExecutor, showBoundary]);
+  }, [commandExecutor, coordinateMapper, isDraggingRange, showBoundary]);
 
   const ticks = useMemo(() => {
-    const tickElements = [];
-    const step = 1; // 1 second steps
-    // Ensure we render enough ticks for the max duration or at least visible area
-    const renderDuration = Math.max(maxDuration, 300);
+    const minimumVisibleDuration = coordinateMapper.pixelsToSeconds(TIMELINE_MIN_CONTENT_WIDTH_PX);
+    const renderDuration = Math.max(maxDuration, minimumVisibleDuration);
 
-    for (let i = 0; i <= renderDuration; i += step) {
-      const isMajor = i % Math.max(1, Math.floor(60 / pixelsPerSecond)) === 0;
-
-      tickElements.push(
+    return createBBTRulerTicks({ coordinateMapper, endSeconds: renderDuration }).map(tick => {
+      const tickLevelClass =
+        tick.level === 'bar' ? styles.barTick : tick.level === 'beat' ? styles.beatTick : styles.subdivisionTick;
+      return (
         <div
-          key={i}
-          className={`${styles.tick} ${isMajor ? styles.majorTick : ''}`}
-          style={{ left: `${i * pixelsPerSecond}px` }}
+          key={`${tick.bar}:${tick.beat}:${tick.tick}`}
+          className={`${styles.tick} ${tickLevelClass}`}
+          style={{ left: `${tick.pixel}px` }}
         >
-          {isMajor && <span className={styles.label}>{formatTime(i)}</span>}
+          {tick.label !== null ? <span className={styles.label}>{tick.label}</span> : null}
         </div>
       );
-    }
-    return tickElements;
-  }, [maxDuration, pixelsPerSecond]);
+    });
+  }, [coordinateMapper, maxDuration]);
 
   // Zone specific handlers
   const handleTopMouseDown = async (e: React.MouseEvent) => {
@@ -117,7 +117,7 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const time = Math.max(0, x / pixelsPerSecond);
+    const time = coordinateMapper.pixelsToSeconds(Math.max(0, x));
 
     dragStartPosRef.current = time;
     currentDragRangeRef.current = { start: time, end: time };
@@ -142,7 +142,7 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const time = Math.max(0, x / pixelsPerSecond);
+    const time = coordinateMapper.pixelsToSeconds(Math.max(0, x));
 
     try {
       await commandExecutor.execute({
@@ -164,11 +164,12 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
     }
   };
 
-  const handleSeek = async (offsetSeconds: number) => {
+  const handleSeek = async (offsetQuarterNotes: number) => {
+    const currentQuarterNotes = coordinateMapper.secondsToQuarterNotes(playbackClock.getCurrentTime());
     try {
       await commandExecutor.execute({
         type: AudioCommandType.SET_CURRENT_TIME,
-        time: Math.max(0, playbackClock.getCurrentTime() + offsetSeconds),
+        time: coordinateMapper.quarterNotesToSeconds(Math.max(0, currentQuarterNotes + offsetQuarterNotes)),
       });
     } catch (error) {
       showBoundary(error);
@@ -190,16 +191,16 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
     void handleSeekToStart();
   });
   useKeyboardShortcutAction(KeyboardShortcutAction.SEEK_BACKWARD, () => {
-    void handleSeek(-SEEK_STEP_SECONDS);
+    void handleSeek(-coordinateMapper.meterBeatQuarterNotes);
   });
   useKeyboardShortcutAction(KeyboardShortcutAction.SEEK_FORWARD, () => {
-    void handleSeek(SEEK_STEP_SECONDS);
+    void handleSeek(coordinateMapper.meterBeatQuarterNotes);
   });
   useKeyboardShortcutAction(KeyboardShortcutAction.SEEK_BACKWARD_LARGE, () => {
-    void handleSeek(-LARGE_SEEK_STEP_SECONDS);
+    void handleSeek(-coordinateMapper.meterBeatQuarterNotes * coordinateMapper.beatsPerBar);
   });
   useKeyboardShortcutAction(KeyboardShortcutAction.SEEK_FORWARD_LARGE, () => {
-    void handleSeek(LARGE_SEEK_STEP_SECONDS);
+    void handleSeek(coordinateMapper.meterBeatQuarterNotes * coordinateMapper.beatsPerBar);
   });
   useKeyboardShortcutAction(KeyboardShortcutAction.CLEAR_EXPORT_RANGE, () => {
     void handleDoubleClick();
@@ -215,8 +216,11 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
         className={styles.exportRangeOverlay}
         style={{
           display: showExportRange || isDraggingRange ? 'block' : 'none',
-          left: `${(exportStartTime ?? 0) * pixelsPerSecond}px`,
-          width: `${((exportEndTime ?? 0) - (exportStartTime ?? 0)) * pixelsPerSecond}px`,
+          left: `${coordinateMapper.secondsToPixels(exportStartTime ?? 0)}px`,
+          width: `${coordinateMapper.durationToPixels({
+            startSeconds: exportStartTime ?? 0,
+            durationSeconds: (exportEndTime ?? 0) - (exportStartTime ?? 0),
+          })}px`,
         }}
       >
         <span className={styles.exportRangeLabel}>Export Range</span>
@@ -236,9 +240,3 @@ export const TimeRuler = memo(function TimeRuler({ pixelsPerSecond }: TimeRulerP
     </div>
   );
 });
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}

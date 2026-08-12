@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeAudioSource } from '@/layers/audio-source-registry/i-audio-source-registry';
 import type { RegionState } from '@/layers/session/session';
 import { RegionComponent } from './RegionComponent';
+import { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 
 const { renderWaveSurferPlayer, resolveAudioSource } = vi.hoisted(() => ({
   renderWaveSurferPlayer: vi.fn(),
@@ -61,6 +62,12 @@ interface PointerOptions {
 }
 
 const mountedRoots: Root[] = [];
+const coordinateMapper = new TimelineCoordinateMapper({
+  tempoBpm: 120,
+  beatsPerBar: 4,
+  beatUnit: 4,
+  pixelsPerQuarterNote: 50,
+});
 const sourceId = '41e673bf-5467-4d36-a716-2d80a76ac82f';
 const sourceBackedRegion: RegionState = {
   id: 'region-1',
@@ -95,7 +102,7 @@ function renderRegion({ onMove, onRemove, region = sourceBackedRegion, waveformR
     root.render(
       createElement(RegionComponent, {
         region,
-        pixelsPerSecond: 100,
+        coordinateMapper,
         onMove,
         onRemove,
         waveformRenderData,
@@ -259,7 +266,7 @@ describe('RegionComponent 오디오 소스', () => {
       root.render(
         createElement(RegionComponent, {
           region: sourceBackedRegion,
-          pixelsPerSecond: 100,
+          coordinateMapper,
           onMove,
           waveformRenderData: {
             duration: 3,
@@ -320,7 +327,7 @@ describe('RegionComponent 오디오 소스', () => {
       root.render(
         createElement(RegionComponent, {
           region: sourceBackedRegion,
-          pixelsPerSecond: 100,
+          coordinateMapper,
           onMove,
         })
       );

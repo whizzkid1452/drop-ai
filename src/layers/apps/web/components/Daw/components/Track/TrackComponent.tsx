@@ -7,6 +7,7 @@ import { TrackNameControl } from './components/TrackNameControl';
 import { RegionComponent } from './RegionComponent';
 import * as styles from './Track.css.ts';
 import type { WaveformRenderData } from '@/layers/apps/web/components/Daw/components/TrackList/waveform-render-cache';
+import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 
 export interface RegionWaveSurferReadyEvent {
   trackId: string;
@@ -18,7 +19,7 @@ export interface RegionWaveSurferReadyEvent {
 export const TrackComponent = memo(function TrackComponent({
   isSelected,
   track,
-  pixelsPerSecond,
+  coordinateMapper,
   onReady,
   onMuteChange,
   onSelect,
@@ -27,7 +28,7 @@ export const TrackComponent = memo(function TrackComponent({
 }: {
   isSelected: boolean;
   track: TrackState;
-  pixelsPerSecond: number;
+  coordinateMapper: TimelineCoordinateMapper;
   onReady: (event: RegionWaveSurferReadyEvent) => void;
   onMuteChange: (muted: boolean) => Promise<TrackToggleResult>;
   onSelect: () => void;
@@ -113,7 +114,7 @@ export const TrackComponent = memo(function TrackComponent({
           <RegionComponent
             key={region.id}
             region={region}
-            pixelsPerSecond={pixelsPerSecond}
+            coordinateMapper={coordinateMapper}
             onReady={waveSurfer =>
               onReady({
                 trackId: track.id,

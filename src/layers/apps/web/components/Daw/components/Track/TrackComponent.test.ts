@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TrackState } from '@/layers/session/session';
 import type { TrackToggleResult } from '@/layers/apps/web/hooks/track-mute-solo-commands';
 import { TrackComponent } from './TrackComponent';
+import { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 
 vi.mock('@/layers/apps/web/hooks/useTrackActions', () => ({
   useTrackActions: () => ({
@@ -56,6 +57,12 @@ interface Deferred<T> {
 }
 
 const mountedRoots: Root[] = [];
+const coordinateMapper = new TimelineCoordinateMapper({
+  tempoBpm: 120,
+  beatsPerBar: 4,
+  beatUnit: 4,
+  pixelsPerQuarterNote: 50,
+});
 const track: TrackState = {
   id: '11111111-1111-4111-8111-111111111111',
   name: '빈 Track',
@@ -98,7 +105,7 @@ function renderTrack(
       createElement(TrackComponent, {
         track: options.track ?? track,
         isSelected: options.isSelected ?? false,
-        pixelsPerSecond: 100,
+        coordinateMapper,
         waveformRenderCache,
         onReady: vi.fn(),
         onMuteChange: options.onMuteChange ?? vi.fn().mockResolvedValue('updated'),

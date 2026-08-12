@@ -12,21 +12,22 @@ import { Cursor } from '@/layers/apps/web/components/Cursor/Cursor';
 import { useAudioSourceResolver, useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
 import { executeTrackMuteChange, executeTrackSoloChange } from '@/layers/apps/web/hooks/track-mute-solo-commands';
 import { pruneWaveformRenderCache, storeWaveformRenderData, type WaveformRenderCache } from './waveform-render-cache';
-import { clampTimelinePixelsPerSecond, TIMELINE_ZOOM_FACTOR } from '../../timeline-zoom';
+import { clampTimelinePixelsPerQuarterNote, TIMELINE_ZOOM_FACTOR } from '../../timeline-zoom';
+import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 
 interface TrackListProps {
   onTrackSelect: (trackId: string) => void;
-  pixelsPerSecond: number;
+  coordinateMapper: TimelineCoordinateMapper;
   selectedTrackId: string | null;
-  setPixelsPerSecond: (value: number) => void;
+  setPixelsPerQuarterNote: (value: number) => void;
   timelineViewportRef: RefObject<HTMLDivElement | null>;
 }
 
 export function TrackList({
   onTrackSelect,
-  pixelsPerSecond,
+  coordinateMapper,
   selectedTrackId,
-  setPixelsPerSecond,
+  setPixelsPerQuarterNote,
   timelineViewportRef,
 }: TrackListProps) {
   const tracks = useSession(state => state.tracks);
@@ -65,14 +66,17 @@ export function TrackList({
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
 
-        const newPixelsPerSecond =
-          e.deltaY > 0 ? pixelsPerSecond / TIMELINE_ZOOM_FACTOR : pixelsPerSecond * TIMELINE_ZOOM_FACTOR;
-        const clamped = clampTimelinePixelsPerSecond(newPixelsPerSecond);
+        const newPixelsPerQuarterNote =
+          e.deltaY > 0
+            ? coordinateMapper.pixelsPerQuarterNote / TIMELINE_ZOOM_FACTOR
+            : coordinateMapper.pixelsPerQuarterNote * TIMELINE_ZOOM_FACTOR;
+        const clamped = clampTimelinePixelsPerQuarterNote(newPixelsPerQuarterNote);
+        const scaleRatio = clamped / coordinateMapper.pixelsPerQuarterNote;
 
-        setPixelsPerSecond(clamped);
+        setPixelsPerQuarterNote(clamped);
 
         wavesurferInstances.forEach(ws => {
-          ws.zoom(clamped);
+          ws.zoom(coordinateMapper.pixelsPerSecond * scaleRatio);
         });
       }
     };
@@ -81,7 +85,7 @@ export function TrackList({
     return () => {
       container.removeEventListener('wheel', handleWheel);
     };
-  }, [pixelsPerSecond, wavesurferInstances, setPixelsPerSecond]);
+  }, [coordinateMapper, wavesurferInstances, setPixelsPerQuarterNote]);
 
   const handleReady = useCallback(
     ({ trackId, regionId, sourceId, waveSurfer }: RegionWaveSurferReadyEvent) => {
@@ -136,13 +140,13 @@ export function TrackList({
   return (
     <div className={styles.trackList}>
       <div ref={containerRef} className={styles.tracksContainer}>
-        <Cursor pixelsPerSecond={pixelsPerSecond} timelineViewportRef={timelineViewportRef} />
+        <Cursor coordinateMapper={coordinateMapper} timelineViewportRef={timelineViewportRef} />
         {trackArray.map(track => (
           <TrackComponent
             key={track.id}
             track={track}
             isSelected={track.id === selectedTrackId}
-            pixelsPerSecond={pixelsPerSecond}
+            coordinateMapper={coordinateMapper}
             onReady={handleReady}
             onMuteChange={muted => handleMuteChange(track.id, muted)}
             onSelect={() => onTrackSelect(track.id)}

@@ -7,6 +7,7 @@ import { useAudioSourceResolver } from '@/layers/apps/web/context/layer-hooks';
 import type { RegionState } from '@/layers/session/session';
 import { calculateRegionDragStartTime } from '@/layers/apps/web/hooks/calculate-region-drag-start-time';
 import type { WaveformRenderData } from '../TrackList/waveform-render-cache';
+import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 
 const MISSING_AUDIO_SOURCE_MESSAGE = '오디오 소스를 찾을 수 없습니다.';
 // Region의 상·하 1px 테두리를 제외해야 WaveSurfer 캔버스가 76px Track 안에서 잘리지 않는다.
@@ -25,7 +26,7 @@ interface WaveformRenderSelection {
 
 interface RegionComponentProps {
   region: RegionState;
-  pixelsPerSecond: number;
+  coordinateMapper: TimelineCoordinateMapper;
   onReady?: (ws: WaveSurfer) => void;
   onMove?: (newStartTime: number) => Promise<void>;
   onRemove?: () => void;
@@ -43,7 +44,7 @@ function resolveRegionAudioSourceUrl(region: RegionState, audioSourceResolver: I
 
 export const RegionComponent = ({
   region,
-  pixelsPerSecond,
+  coordinateMapper,
   onReady: onReadyProp,
   onMove,
   onRemove,
@@ -54,8 +55,11 @@ export const RegionComponent = ({
   const [isDragging, setIsDragging] = useState(false);
   const [previewStartTime, setPreviewStartTime] = useState<number | null>(null);
   const displayedStartTime = previewStartTime ?? region.startTime;
-  const left = displayedStartTime * pixelsPerSecond;
-  const width = region.duration * pixelsPerSecond;
+  const left = coordinateMapper.secondsToPixels(displayedStartTime);
+  const width = coordinateMapper.durationToPixels({
+    startSeconds: displayedStartTime,
+    durationSeconds: region.duration,
+  });
   const audioSourceUrl = resolveRegionAudioSourceUrl(region, audioSourceResolver);
   const waveformRenderSelection = useRef<WaveformRenderSelection>({
     objectUrl: audioSourceUrl,
@@ -73,7 +77,7 @@ export const RegionComponent = ({
       initialStartTime: session.initialStartTime,
       initialPointerX: session.initialPointerX,
       currentPointerX: pointerX,
-      pixelsPerSecond,
+      coordinateMapper,
     });
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -145,7 +149,7 @@ export const RegionComponent = ({
 
   const onReady = (ws: WaveSurfer) => {
     ws.setVolume(0);
-    ws.zoom(pixelsPerSecond);
+    ws.zoom(coordinateMapper.pixelsPerSecond);
 
     const rootNode = ws.getWrapper().getRootNode();
     if (rootNode instanceof ShadowRoot) {
@@ -207,7 +211,7 @@ export const RegionComponent = ({
       ) : (
         <div
           style={{
-            marginLeft: `-${region.sourceStartTime * pixelsPerSecond}px`,
+            marginLeft: `-${coordinateMapper.secondsToPixels(region.sourceStartTime)}px`,
             height: '100%',
           }}
         >
