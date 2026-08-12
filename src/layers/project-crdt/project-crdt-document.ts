@@ -8,6 +8,7 @@ const COLLECTION_ITEMS_KEY = '__dropAiCrdtItems';
 const COLLECTION_ORDER_KEY = '__dropAiCrdtOrder';
 const KEYED_COLLECTION_KIND = 'keyed';
 const SCALAR_COLLECTION_PATHS = new Set(['overdubSourceIds']);
+const TIMELINE_MARKER_COLLECTION_PATHS = new Set(['tempoChanges', 'meterChanges']);
 
 type JsonPrimitive = boolean | number | string | null;
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
@@ -266,15 +267,31 @@ function createScalarArray(values: readonly JsonValue[]): Y.Array<unknown> {
 function createItemsById(values: readonly JsonValue[], path: readonly string[]): Map<string, JsonObject> {
   const items = new Map<string, JsonObject>();
   values.forEach(value => {
-    if (!isJsonObject(value) || typeof value.id !== 'string') {
+    const itemKey = createCollectionItemKey(value, path);
+    if (!isJsonObject(value) || itemKey === null) {
       throw new Error(`CRDT keyed collection 항목에 ID가 없습니다: ${path.join('.')}`);
     }
-    if (items.has(value.id)) {
-      throw new Error(`CRDT keyed collection ID가 중복됐습니다: ${value.id}`);
+    if (items.has(itemKey)) {
+      throw new Error(`CRDT keyed collection ID가 중복됐습니다: ${itemKey}`);
     }
-    items.set(value.id, value);
+    items.set(itemKey, value);
   });
   return items;
+}
+
+function createCollectionItemKey(value: JsonValue, path: readonly string[]): string | null {
+  if (!isJsonObject(value)) {
+    return null;
+  }
+  if (typeof value.id === 'string') {
+    return value.id;
+  }
+  const collectionName = path.at(-1);
+  if (collectionName && TIMELINE_MARKER_COLLECTION_PATHS.has(collectionName)) {
+    // Timeline marker는 저장 ID 대신 음악 위치를 CRDT key로 사용해 BPM 수정 시 순서를 유지합니다.
+    return typeof value.quarterNotePosition === 'number' ? `quarter-note:${value.quarterNotePosition}` : null;
+  }
+  return null;
 }
 
 function getCollectionItems(collection: Y.Map<unknown>): Y.Map<unknown> {

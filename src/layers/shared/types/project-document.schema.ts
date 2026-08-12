@@ -7,11 +7,13 @@ export const PROJECT_DOCUMENT_SCHEMA_VERSION = 1 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V2 = 2 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V3 = 3 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V4 = 4 as const;
+export const PROJECT_DOCUMENT_SCHEMA_VERSION_V5 = 5 as const;
 
 const MAX_NAME_LENGTH = 255;
 const MAX_MIME_TYPE_LENGTH = 255;
 const MAX_PLUGIN_ENTRIES = 128;
 const MAX_LOOP_SLOTS = 16;
+const MAX_TIMELINE_MAP_ENTRIES = 256;
 const nonBlankNameSchema = z.string().trim().min(1).max(MAX_NAME_LENGTH);
 const pluginTextSchema = z
   .string()
@@ -233,6 +235,39 @@ const ProjectDocumentV4BaseSchema = z.strictObject({
   tracks: z.array(ProjectTrackV4Schema),
 });
 
+export const ProjectTempoChangeSchema = z.strictObject({
+  quarterNotePosition: z.number().nonnegative(),
+  bpm: z.number().positive(),
+});
+
+export const ProjectMeterChangeSchema = z.strictObject({
+  quarterNotePosition: z.number().nonnegative(),
+  beatsPerBar: z.number().int().positive(),
+  beatUnit: z.union([z.literal(1), z.literal(2), z.literal(4), z.literal(8), z.literal(16), z.literal(32)]),
+});
+
+const ProjectDocumentV5BaseSchema = z.strictObject({
+  documentType: z.literal('drop-ai-project'),
+  schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V5),
+  project: z.strictObject({
+    id: z.uuid('Invalid Project ID format'),
+    name: nonBlankNameSchema,
+    revision: z.number().int().nonnegative(),
+  }),
+  timeline: z.strictObject({
+    timeUnit: z.literal('seconds'),
+    tempoBpm: z.number().positive(),
+    tempoChanges: z.array(ProjectTempoChangeSchema).min(1).max(MAX_TIMELINE_MAP_ENTRIES),
+    meterChanges: z.array(ProjectMeterChangeSchema).min(1).max(MAX_TIMELINE_MAP_ENTRIES),
+  }),
+  mixer: z.strictObject({
+    masterVolume: normalizedAudioValueSchema,
+  }),
+  exportRange: ProjectExportRangeSchema.nullable(),
+  audioSources: z.array(ProjectAudioSourceSchema),
+  tracks: z.array(ProjectTrackV4Schema),
+});
+
 interface IdentifiedDocumentPath {
   id: string;
   path: Array<string | number>;
@@ -248,7 +283,8 @@ type RefinableProjectDocument =
   | z.infer<typeof ProjectDocumentV1BaseSchema>
   | z.infer<typeof ProjectDocumentV2BaseSchema>
   | z.infer<typeof ProjectDocumentV3BaseSchema>
-  | z.infer<typeof ProjectDocumentV4BaseSchema>;
+  | z.infer<typeof ProjectDocumentV4BaseSchema>
+  | z.infer<typeof ProjectDocumentV5BaseSchema>;
 type RefinableProjectTrack =
   | z.infer<typeof ProjectTrackSchema>
   | z.infer<typeof ProjectTrackV2Schema>
@@ -375,7 +411,8 @@ function validatePluginState(
   document:
     | z.infer<typeof ProjectDocumentV2BaseSchema>
     | z.infer<typeof ProjectDocumentV3BaseSchema>
-    | z.infer<typeof ProjectDocumentV4BaseSchema>,
+    | z.infer<typeof ProjectDocumentV4BaseSchema>
+    | z.infer<typeof ProjectDocumentV5BaseSchema>,
   context: z.RefinementCtx
 ): void {
   const instanceEntries = document.tracks.flatMap((track, trackIndex) =>
@@ -410,6 +447,58 @@ export const ProjectDocumentV4Schema = ProjectDocumentV4BaseSchema.superRefine((
   validateProjectRelations(document, context);
   validatePluginState(document, context);
 });
+export const ProjectDocumentV5Schema = ProjectDocumentV5BaseSchema.superRefine((document, context) => {
+  validateProjectRelations(document, context);
+  validatePluginState(document, context);
+  validateTimelineMap(document, context);
+});
+
+function validateTimelineMap(document: z.infer<typeof ProjectDocumentV5BaseSchema>, context: z.RefinementCtx): void {
+  validateTimelineMarkerPositions(document.timeline.tempoChanges, 'tempoChanges', context);
+  validateTimelineMarkerPositions(document.timeline.meterChanges, 'meterChanges', context);
+  if (document.timeline.tempoChanges[0]?.bpm !== document.timeline.tempoBpm) {
+    context.addIssue({
+      code: 'custom',
+      message: 'tempoBpm must equal the first Tempo change',
+      path: ['timeline', 'tempoBpm'],
+    });
+  }
+
+  document.timeline.meterChanges.slice(1).forEach((change, index) => {
+    const previous = document.timeline.meterChanges[index];
+    const previousBarQuarterNotes = previous.beatsPerBar * (4 / previous.beatUnit);
+    if ((change.quarterNotePosition - previous.quarterNotePosition) % previousBarQuarterNotes !== 0) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Meter change must be on the previous meter bar boundary',
+        path: ['timeline', 'meterChanges', index + 1, 'quarterNotePosition'],
+      });
+    }
+  });
+}
+
+function validateTimelineMarkerPositions(
+  changes: readonly { readonly quarterNotePosition: number }[],
+  fieldName: 'tempoChanges' | 'meterChanges',
+  context: z.RefinementCtx
+): void {
+  changes.forEach((change, index) => {
+    if (index === 0 && change.quarterNotePosition !== 0) {
+      context.addIssue({
+        code: 'custom',
+        message: 'The first timeline marker must start at quarter note 0',
+        path: ['timeline', fieldName, index, 'quarterNotePosition'],
+      });
+    }
+    if (index > 0 && change.quarterNotePosition <= changes[index - 1].quarterNotePosition) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Timeline marker positions must be strictly increasing',
+        path: ['timeline', fieldName, index, 'quarterNotePosition'],
+      });
+    }
+  });
+}
 
 export type ProjectAudioSource = z.infer<typeof ProjectAudioSourceSchema>;
 export type ProjectRegion = z.infer<typeof ProjectRegionSchema>;
@@ -426,4 +515,10 @@ export type ProjectDocumentV3 = z.infer<typeof ProjectDocumentV3Schema>;
 export type ProjectLoopSlotV4 = z.infer<typeof ProjectLoopSlotV4Schema>;
 export type ProjectTrackV4 = z.infer<typeof ProjectTrackV4Schema>;
 export type ProjectDocumentV4 = z.infer<typeof ProjectDocumentV4Schema>;
-export type ProjectDocumentSnapshot = ProjectDocument | ProjectDocumentV2 | ProjectDocumentV3 | ProjectDocumentV4;
+export type ProjectDocumentV5 = z.infer<typeof ProjectDocumentV5Schema>;
+export type ProjectDocumentSnapshot =
+  | ProjectDocument
+  | ProjectDocumentV2
+  | ProjectDocumentV3
+  | ProjectDocumentV4
+  | ProjectDocumentV5;
