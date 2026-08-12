@@ -73,6 +73,16 @@ describe('SET_TRACK_NAME 계약', () => {
   });
 });
 
+describe('SET_TIMELINE_MARKERS 계약', () => {
+  it('중복 Marker ID를 거부한다', () => {
+    const marker = { id: SOURCE_ID, name: 'Verse', quarterNotePosition: 8 };
+    const command = { type: AudioCommandType.SET_TIMELINE_MARKERS, markers: [marker, marker] };
+
+    expect(AudioCommandSchema.safeParse(command).success).toBe(false);
+    expect(StrictAudioCommandSchema.safeParse(command).success).toBe(false);
+  });
+});
+
 describe('LOAD_REGION 오디오 식별자 계약', () => {
   it('sourceId를 보존한다', () => {
     const command = {

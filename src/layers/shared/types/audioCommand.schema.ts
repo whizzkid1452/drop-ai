@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { calculateFiniteRegionSourceEndTime } from '../audio-source-range';
 import { calculateFiniteRegionEndTime } from '../region-timeline';
-import { ProjectTempoChangeSchema } from './project-document.schema';
+import { ProjectTempoChangeSchema, ProjectTimelineMarkerSchema } from './project-document.schema';
 
 export const AudioCommandType = {
   UNDO: 'UNDO',
@@ -22,6 +22,7 @@ export const AudioCommandType = {
   STOP_ALL_LOOPS: 'STOP_ALL_LOOPS',
   SET_TEMPO: 'SET_TEMPO',
   SET_TIMELINE_MAP: 'SET_TIMELINE_MAP',
+  SET_TIMELINE_MARKERS: 'SET_TIMELINE_MARKERS',
   SET_MASTER_VOLUME: 'SET_MASTER_VOLUME',
   SET_TRACK_NAME: 'SET_TRACK_NAME',
   SET_TRACK_VOLUME: 'SET_TRACK_VOLUME',
@@ -72,6 +73,20 @@ const timelineMeterChangeCommandSchema = z.strictObject({
     .int()
     .refine(beatUnit => [1, 2, 4, 8, 16, 32].includes(beatUnit), 'Unsupported beat unit'),
 });
+const setTimelineMarkersCommandSchema = z
+  .strictObject({
+    type: z.literal(AudioCommandType.SET_TIMELINE_MARKERS),
+    markers: z.array(ProjectTimelineMarkerSchema).max(256),
+  })
+  .superRefine((command, context) => {
+    const markerIds = new Set<string>();
+    command.markers.forEach((marker, index) => {
+      if (markerIds.has(marker.id)) {
+        context.addIssue({ code: 'custom', message: 'Duplicate Timeline marker ID', path: ['markers', index, 'id'] });
+      }
+      markerIds.add(marker.id);
+    });
+  });
 const loopSlotAddressSchema = {
   slotId: z.uuid('Invalid Loop Slot ID format'),
   trackId: z.uuid('Invalid Track ID format'),
@@ -191,6 +206,7 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
     tempoChanges: z.array(ProjectTempoChangeSchema).min(1).max(256),
     meterChanges: z.array(timelineMeterChangeCommandSchema).min(1).max(256),
   }),
+  setTimelineMarkersCommandSchema,
   z.strictObject({
     type: z.literal(AudioCommandType.SET_MASTER_VOLUME),
     volume: z.number().min(0).max(1),

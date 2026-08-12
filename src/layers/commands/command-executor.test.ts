@@ -174,6 +174,26 @@ describe('CommandExecutor', () => {
     expect(session.getState().meterChanges).toEqual(command.meterChanges);
   });
 
+  it('SET_TIMELINE_MARKERS를 적용하고 Undo와 Redo로 전체 목록을 복원한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    const markers = [
+      {
+        id: '88888888-8888-4888-8888-888888888888',
+        name: 'Verse',
+        quarterNotePosition: 8,
+      },
+    ];
+
+    await commandExecutor.execute({ type: AudioCommandType.SET_TIMELINE_MARKERS, markers });
+    expect(session.getState().timelineMarkers).toEqual(markers);
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().timelineMarkers).toEqual([]);
+
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(session.getState().timelineMarkers).toEqual(markers);
+  });
+
   it('SET_MASTER_VOLUME을 실행하고 Undo와 Redo로 복원한다', async () => {
     const { audioEngine, commandExecutor, session } = createTestContext();
     const setMasterVolume = vi.spyOn(audioEngine, 'setMasterVolume');
