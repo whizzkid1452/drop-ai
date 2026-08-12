@@ -8,6 +8,7 @@ export const PROJECT_DOCUMENT_SCHEMA_VERSION_V2 = 2 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V3 = 3 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V4 = 4 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V5 = 5 as const;
+export const PROJECT_DOCUMENT_SCHEMA_VERSION_V6 = 6 as const;
 
 const MAX_NAME_LENGTH = 255;
 const MAX_MIME_TYPE_LENGTH = 255;
@@ -246,6 +247,12 @@ export const ProjectMeterChangeSchema = z.strictObject({
   beatUnit: z.union([z.literal(1), z.literal(2), z.literal(4), z.literal(8), z.literal(16), z.literal(32)]),
 });
 
+export const ProjectTimelineMarkerSchema = z.strictObject({
+  id: z.uuid('Invalid Timeline marker ID format'),
+  name: nonBlankNameSchema,
+  quarterNotePosition: z.number().nonnegative(),
+});
+
 const ProjectDocumentV5BaseSchema = z.strictObject({
   documentType: z.literal('drop-ai-project'),
   schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V5),
@@ -259,6 +266,29 @@ const ProjectDocumentV5BaseSchema = z.strictObject({
     tempoBpm: z.number().positive(),
     tempoChanges: z.array(ProjectTempoChangeSchema).min(1).max(MAX_TIMELINE_MAP_ENTRIES),
     meterChanges: z.array(ProjectMeterChangeSchema).min(1).max(MAX_TIMELINE_MAP_ENTRIES),
+  }),
+  mixer: z.strictObject({
+    masterVolume: normalizedAudioValueSchema,
+  }),
+  exportRange: ProjectExportRangeSchema.nullable(),
+  audioSources: z.array(ProjectAudioSourceSchema),
+  tracks: z.array(ProjectTrackV4Schema),
+});
+
+const ProjectDocumentV6BaseSchema = z.strictObject({
+  documentType: z.literal('drop-ai-project'),
+  schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V6),
+  project: z.strictObject({
+    id: z.uuid('Invalid Project ID format'),
+    name: nonBlankNameSchema,
+    revision: z.number().int().nonnegative(),
+  }),
+  timeline: z.strictObject({
+    timeUnit: z.literal('seconds'),
+    tempoBpm: z.number().positive(),
+    tempoChanges: z.array(ProjectTempoChangeSchema).min(1).max(MAX_TIMELINE_MAP_ENTRIES),
+    meterChanges: z.array(ProjectMeterChangeSchema).min(1).max(MAX_TIMELINE_MAP_ENTRIES),
+    markers: z.array(ProjectTimelineMarkerSchema).max(MAX_TIMELINE_MAP_ENTRIES),
   }),
   mixer: z.strictObject({
     masterVolume: normalizedAudioValueSchema,
@@ -284,7 +314,8 @@ type RefinableProjectDocument =
   | z.infer<typeof ProjectDocumentV2BaseSchema>
   | z.infer<typeof ProjectDocumentV3BaseSchema>
   | z.infer<typeof ProjectDocumentV4BaseSchema>
-  | z.infer<typeof ProjectDocumentV5BaseSchema>;
+  | z.infer<typeof ProjectDocumentV5BaseSchema>
+  | z.infer<typeof ProjectDocumentV6BaseSchema>;
 type RefinableProjectTrack =
   | z.infer<typeof ProjectTrackSchema>
   | z.infer<typeof ProjectTrackV2Schema>
@@ -412,7 +443,8 @@ function validatePluginState(
     | z.infer<typeof ProjectDocumentV2BaseSchema>
     | z.infer<typeof ProjectDocumentV3BaseSchema>
     | z.infer<typeof ProjectDocumentV4BaseSchema>
-    | z.infer<typeof ProjectDocumentV5BaseSchema>,
+    | z.infer<typeof ProjectDocumentV5BaseSchema>
+    | z.infer<typeof ProjectDocumentV6BaseSchema>,
   context: z.RefinementCtx
 ): void {
   const instanceEntries = document.tracks.flatMap((track, trackIndex) =>
@@ -452,8 +484,24 @@ export const ProjectDocumentV5Schema = ProjectDocumentV5BaseSchema.superRefine((
   validatePluginState(document, context);
   validateTimelineMap(document, context);
 });
+export const ProjectDocumentV6Schema = ProjectDocumentV6BaseSchema.superRefine((document, context) => {
+  validateProjectRelations(document, context);
+  validatePluginState(document, context);
+  validateTimelineMap(document, context);
+  addDuplicateIdIssues({
+    entries: document.timeline.markers.map((marker, index) => ({
+      id: marker.id,
+      path: ['timeline', 'markers', index, 'id'],
+    })),
+    label: 'Timeline marker',
+    context,
+  });
+});
 
-function validateTimelineMap(document: z.infer<typeof ProjectDocumentV5BaseSchema>, context: z.RefinementCtx): void {
+function validateTimelineMap(
+  document: z.infer<typeof ProjectDocumentV5BaseSchema> | z.infer<typeof ProjectDocumentV6BaseSchema>,
+  context: z.RefinementCtx
+): void {
   validateTimelineMarkerPositions(document.timeline.tempoChanges, 'tempoChanges', context);
   validateTimelineMarkerPositions(document.timeline.meterChanges, 'meterChanges', context);
   if (document.timeline.tempoChanges[0]?.bpm !== document.timeline.tempoBpm) {
@@ -516,9 +564,12 @@ export type ProjectLoopSlotV4 = z.infer<typeof ProjectLoopSlotV4Schema>;
 export type ProjectTrackV4 = z.infer<typeof ProjectTrackV4Schema>;
 export type ProjectDocumentV4 = z.infer<typeof ProjectDocumentV4Schema>;
 export type ProjectDocumentV5 = z.infer<typeof ProjectDocumentV5Schema>;
+export type ProjectTimelineMarker = z.infer<typeof ProjectTimelineMarkerSchema>;
+export type ProjectDocumentV6 = z.infer<typeof ProjectDocumentV6Schema>;
 export type ProjectDocumentSnapshot =
   | ProjectDocument
   | ProjectDocumentV2
   | ProjectDocumentV3
   | ProjectDocumentV4
-  | ProjectDocumentV5;
+  | ProjectDocumentV5
+  | ProjectDocumentV6;
