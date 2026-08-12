@@ -23,6 +23,7 @@ interface TrackListProps {
   gridSettings: TimelineGridSettings;
   isGridVisible: boolean;
   selectedTrackId: string | null;
+  timelineContentWidth: number;
   timelineViewportRef: RefObject<HTMLDivElement | null>;
 }
 
@@ -33,6 +34,7 @@ export function TrackList({
   gridSettings,
   isGridVisible,
   selectedTrackId,
+  timelineContentWidth,
   timelineViewportRef,
 }: TrackListProps) {
   const tracks = useSession(state => state.tracks);
@@ -116,7 +118,12 @@ export function TrackList({
   return (
     <div className={styles.trackList}>
       <div ref={containerRef} className={styles.tracksContainer}>
-        <TimelineGrid coordinateMapper={coordinateMapper} division={gridSettings.division} isVisible={isGridVisible} />
+        <TimelineGrid
+          coordinateMapper={coordinateMapper}
+          division={gridSettings.division}
+          isVisible={isGridVisible}
+          timelineContentWidth={timelineContentWidth}
+        />
         <Cursor
           coordinateMapper={coordinateMapper}
           followPlayhead={followPlayhead}

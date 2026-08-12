@@ -33,32 +33,28 @@ export function createBBTRulerTicks({
     return [];
   }
 
-  const meterBeatQuarterNotes = coordinateMapper.meterBeatQuarterNotes;
-  const meterBeatPixels = meterBeatQuarterNotes * coordinateMapper.pixelsPerQuarterNote;
-  const barPixels = meterBeatPixels * coordinateMapper.beatsPerBar;
-  const barLabelInterval = getBarLabelInterval(barPixels);
   // 같은 BBT 데이터라도 확대 배율에 따라 subdivision 밀도를 줄여 label 겹침을 막습니다.
-  const stepQuarterNotes = getTickStepQuarterNotes({
-    beatsPerBar: coordinateMapper.beatsPerBar,
-    meterBeatPixels,
-    meterBeatQuarterNotes,
-  });
   const startQuarterNotes = coordinateMapper.secondsToQuarterNotes(Math.max(0, startSeconds));
   const endQuarterNotes = coordinateMapper.secondsToQuarterNotes(endSeconds);
-  const firstQuarterNotes = Math.floor(startQuarterNotes / stepQuarterNotes) * stepQuarterNotes;
+  const startMeter = coordinateMapper.getMeterAtQuarterNotes(startQuarterNotes);
+  const firstStepQuarterNotes = getTickStepForMeter(coordinateMapper, startMeter);
+  const firstQuarterNotes =
+    startMeter.quarterNotePosition +
+    Math.floor((startQuarterNotes - startMeter.quarterNotePosition) / firstStepQuarterNotes) * firstStepQuarterNotes;
   const ticks: BBTRulerTick[] = [];
 
-  for (
-    let quarterNotes = firstQuarterNotes;
-    quarterNotes <= endQuarterNotes + FLOATING_POINT_EPSILON;
-    quarterNotes += stepQuarterNotes
-  ) {
+  for (let quarterNotes = firstQuarterNotes; quarterNotes <= endQuarterNotes + FLOATING_POINT_EPSILON; ) {
+    const meter = coordinateMapper.getMeterAtQuarterNotes(quarterNotes);
+    const stepQuarterNotes = getTickStepForMeter(coordinateMapper, meter);
     const seconds = coordinateMapper.quarterNotesToSeconds(Math.max(0, quarterNotes));
     if (seconds + FLOATING_POINT_EPSILON < startSeconds) {
+      quarterNotes += stepQuarterNotes;
       continue;
     }
 
     const position = coordinateMapper.secondsToBBT(seconds);
+    const barPixels = (4 / meter.beatUnit) * meter.beatsPerBar * coordinateMapper.pixelsPerQuarterNote;
+    const barLabelInterval = getBarLabelInterval(barPixels);
     const level = getTickLevel(position.beat, position.tick);
     const isLabelBar = level === 'bar' && (position.bar - 1) % barLabelInterval === 0;
     ticks.push({
@@ -68,9 +64,22 @@ export function createBBTRulerTicks({
       seconds,
       pixel: coordinateMapper.secondsToPixels(seconds),
     });
+    quarterNotes += stepQuarterNotes;
   }
 
   return ticks;
+}
+
+function getTickStepForMeter(
+  coordinateMapper: TimelineCoordinateMapper,
+  meter: ReturnType<TimelineCoordinateMapper['getMeterAtQuarterNotes']>
+): number {
+  const meterBeatQuarterNotes = 4 / meter.beatUnit;
+  return getTickStepQuarterNotes({
+    beatsPerBar: meter.beatsPerBar,
+    meterBeatPixels: meterBeatQuarterNotes * coordinateMapper.pixelsPerQuarterNote,
+    meterBeatQuarterNotes,
+  });
 }
 
 function getTickStepQuarterNotes({

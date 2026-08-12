@@ -44,6 +44,10 @@ vi.mock('./components/TimeRuler/TimeRuler', () => ({
   TimeRuler: () => null,
 }));
 
+vi.mock('./components/TempoMeterRuler/TempoMeterRuler', () => ({
+  TempoMeterRuler: () => null,
+}));
+
 vi.mock('./components/TimelineGridControls/TimelineGridControls', () => ({
   TimelineGridControls: () => null,
 }));
