@@ -5,7 +5,7 @@ import { Terminal } from './components/Terminals/Terminal';
 import { TrackInfoSidebar } from './components/TrackInfoSidebar/TrackInfoSidebar';
 import { TimeRuler } from './components/TimeRuler/TimeRuler';
 import * as styles from './DawPage.css.ts';
-import { useSession } from '@/layers/apps/web/context/layer-hooks';
+import { usePlaybackClock, useSession } from '@/layers/apps/web/context/layer-hooks';
 import {
   KeyboardShortcutAction,
   KEYBOARD_SHORTCUT_LABELS,
@@ -22,6 +22,8 @@ import { getTimelineContentWidth } from './timeline-content-width';
 import { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 import { TimelineGridControls } from './components/TimelineGridControls/TimelineGridControls';
 import type { TimelineGridDivision, TimelineSnapMode } from './timeline-grid';
+import { TimelineNavigationControls } from './components/TimelineNavigationControls/TimelineNavigationControls';
+import { calculateTimelineZoomScrollLeft, TRACK_HEADER_WIDTH_PX, type TimelineZoomFocus } from './timeline-navigation';
 
 const CHAT_PANEL_MIN_WIDTH = 280;
 const CHAT_PANEL_MAX_WIDTH = 600;
@@ -62,10 +64,14 @@ export function DawPage() {
   const [gridDivision, setGridDivision] = useState<TimelineGridDivision>('beat');
   const [snapMode, setSnapMode] = useState<TimelineSnapMode>('grid');
   const [isGridVisible, setIsGridVisible] = useState(true);
+  const [zoomFocus, setZoomFocus] = useState<TimelineZoomFocus>('mouse');
+  const [followPlayhead, setFollowPlayhead] = useState(true);
   const [requestedTrackId, setRequestedTrackId] = useState<string | null>(null);
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(CHAT_PANEL_DEFAULT_WIDTH);
   const mainContentRef = useRef<HTMLDivElement>(null);
+  const lastMouseViewportPixelRef = useRef<number | null>(null);
+  const playbackClock = usePlaybackClock();
   const coordinateMapper = useMemo(
     () =>
       new TimelineCoordinateMapper({
@@ -93,6 +99,59 @@ export function DawPage() {
   // 선택했던 Track이 삭제되면 Inspector가 빈 ID를 유지하지 않고 첫 Track으로 즉시 전환한다.
   const selectedTrackId = requestedTrackId !== null && tracks.has(requestedTrackId) ? requestedTrackId : firstTrackId;
 
+  const applyTimelineZoom = useCallback(
+    (nextPixelsPerQuarterNote: number, mouseViewportPixel?: number) => {
+      const mainContent = mainContentRef.current;
+      const nextScale = clampTimelinePixelsPerQuarterNote(nextPixelsPerQuarterNote);
+      if (!mainContent || nextScale === coordinateMapper.pixelsPerQuarterNote) {
+        setPixelsPerQuarterNote(nextScale);
+        return;
+      }
+
+      const centerViewportPixel = (TRACK_HEADER_WIDTH_PX + mainContent.clientWidth) / 2;
+      const playheadQuarterNotes = coordinateMapper.secondsToQuarterNotes(playbackClock.getCurrentTime());
+      const playheadViewportPixel =
+        TRACK_HEADER_WIDTH_PX + playheadQuarterNotes * coordinateMapper.pixelsPerQuarterNote - mainContent.scrollLeft;
+      const selectedMouseViewportPixel = mouseViewportPixel ?? lastMouseViewportPixelRef.current ?? centerViewportPixel;
+      const anchorViewportPixel =
+        zoomFocus === 'playhead'
+          ? Math.min(mainContent.clientWidth, Math.max(TRACK_HEADER_WIDTH_PX, playheadViewportPixel))
+          : zoomFocus === 'center'
+            ? centerViewportPixel
+            : selectedMouseViewportPixel;
+      const anchorTimelinePixel = Math.max(0, mainContent.scrollLeft + anchorViewportPixel - TRACK_HEADER_WIDTH_PX);
+      const anchorQuarterNotes =
+        zoomFocus === 'playhead' ? playheadQuarterNotes : anchorTimelinePixel / coordinateMapper.pixelsPerQuarterNote;
+      const requestedScrollLeft = calculateTimelineZoomScrollLeft({
+        anchorQuarterNotes,
+        anchorViewportPixel,
+        nextPixelsPerQuarterNote: nextScale,
+      });
+
+      setPixelsPerQuarterNote(nextScale);
+      requestAnimationFrame(() => {
+        mainContent.scrollLeft = requestedScrollLeft;
+      });
+    },
+    [coordinateMapper, playbackClock, zoomFocus]
+  );
+
+  const handleFitSession = useCallback(() => {
+    const mainContent = mainContentRef.current;
+    const maxDuration = getMaxDuration(Array.from(tracks.values()));
+    const sessionQuarterNotes = coordinateMapper.secondsToQuarterNotes(maxDuration);
+    if (!mainContent || sessionQuarterNotes === 0) {
+      applyTimelineZoom(DEFAULT_TIMELINE_PIXELS_PER_QUARTER_NOTE);
+      return;
+    }
+
+    const availableWidth = Math.max(1, mainContent.clientWidth - TRACK_HEADER_WIDTH_PX - 24);
+    setPixelsPerQuarterNote(clampTimelinePixelsPerQuarterNote(availableWidth / sessionQuarterNotes));
+    requestAnimationFrame(() => {
+      mainContent.scrollLeft = 0;
+    });
+  }, [applyTimelineZoom, coordinateMapper, tracks]);
+
   useGlobalKeyboardShortcuts();
   useKeyboardShortcutAction(KeyboardShortcutAction.TOGGLE_INSPECTOR, () => {
     setIsTrackInfoOpen(current => !current);
@@ -101,13 +160,13 @@ export function DawPage() {
     setIsTerminalOpen(current => !current);
   });
   useKeyboardShortcutAction(KeyboardShortcutAction.ZOOM_IN, () => {
-    setPixelsPerQuarterNote(current => clampTimelinePixelsPerQuarterNote(current * TIMELINE_ZOOM_FACTOR));
+    applyTimelineZoom(coordinateMapper.pixelsPerQuarterNote * TIMELINE_ZOOM_FACTOR);
   });
   useKeyboardShortcutAction(KeyboardShortcutAction.ZOOM_OUT, () => {
-    setPixelsPerQuarterNote(current => clampTimelinePixelsPerQuarterNote(current / TIMELINE_ZOOM_FACTOR));
+    applyTimelineZoom(coordinateMapper.pixelsPerQuarterNote / TIMELINE_ZOOM_FACTOR);
   });
   useKeyboardShortcutAction(KeyboardShortcutAction.RESET_ZOOM, () => {
-    setPixelsPerQuarterNote(DEFAULT_TIMELINE_PIXELS_PER_QUARTER_NOTE);
+    applyTimelineZoom(DEFAULT_TIMELINE_PIXELS_PER_QUARTER_NOTE);
   });
 
   const handleResizeStart = useCallback(
@@ -154,6 +213,16 @@ export function DawPage() {
     }
 
     const handleTimelineWheel = (event: WheelEvent) => {
+      const bounds = mainContent.getBoundingClientRect();
+      const mouseViewportPixel = event.clientX - bounds.left;
+      lastMouseViewportPixelRef.current = mouseViewportPixel;
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+        const zoomFactor = event.deltaY > 0 ? 1 / TIMELINE_ZOOM_FACTOR : TIMELINE_ZOOM_FACTOR;
+        applyTimelineZoom(coordinateMapper.pixelsPerQuarterNote * zoomFactor, mouseViewportPixel);
+        return;
+      }
+
       const horizontalDelta = getShiftWheelHorizontalDelta(event, mainContent.clientWidth);
       const hasHorizontalOverflow = mainContent.scrollWidth > mainContent.clientWidth;
       if (horizontalDelta === null || !hasHorizontalOverflow) {
@@ -165,10 +234,15 @@ export function DawPage() {
     };
 
     mainContent.addEventListener('wheel', handleTimelineWheel, { passive: false });
+    const handleMouseMove = (event: MouseEvent) => {
+      lastMouseViewportPixelRef.current = event.clientX - mainContent.getBoundingClientRect().left;
+    };
+    mainContent.addEventListener('mousemove', handleMouseMove);
     return () => {
       mainContent.removeEventListener('wheel', handleTimelineWheel);
+      mainContent.removeEventListener('mousemove', handleMouseMove);
     };
-  }, []);
+  }, [applyTimelineZoom, coordinateMapper]);
 
   return (
     <div className={styles.container}>
@@ -217,6 +291,16 @@ export function DawPage() {
                 onSnapModeChange={setSnapMode}
                 snapMode={snapMode}
               />
+              <TimelineNavigationControls
+                followPlayhead={followPlayhead}
+                onFitSession={handleFitSession}
+                onFollowPlayheadChange={setFollowPlayhead}
+                onResetZoom={() => applyTimelineZoom(DEFAULT_TIMELINE_PIXELS_PER_QUARTER_NOTE)}
+                onZoomFocusChange={setZoomFocus}
+                onZoomIn={() => applyTimelineZoom(coordinateMapper.pixelsPerQuarterNote * TIMELINE_ZOOM_FACTOR)}
+                onZoomOut={() => applyTimelineZoom(coordinateMapper.pixelsPerQuarterNote / TIMELINE_ZOOM_FACTOR)}
+                zoomFocus={zoomFocus}
+              />
               <span>{Math.round(pixelsPerQuarterNote)} PX/♩</span>
             </div>
             <TimeRuler coordinateMapper={coordinateMapper} gridSettings={gridSettings} />
@@ -224,10 +308,10 @@ export function DawPage() {
         </div>
         <TrackList
           coordinateMapper={coordinateMapper}
+          followPlayhead={followPlayhead}
           gridSettings={gridSettings}
           isGridVisible={isGridVisible}
           selectedTrackId={selectedTrackId}
-          setPixelsPerQuarterNote={setPixelsPerQuarterNote}
           timelineViewportRef={mainContentRef}
           onTrackSelect={setRequestedTrackId}
         />

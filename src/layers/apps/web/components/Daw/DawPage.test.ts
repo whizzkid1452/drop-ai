@@ -11,6 +11,7 @@ const layerMocks = {
 };
 
 vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
+  usePlaybackClock: () => ({ getCurrentTime: () => 0 }),
   useSession: (selector: (state: typeof layerMocks) => unknown) => selector(layerMocks),
 }));
 
@@ -45,6 +46,10 @@ vi.mock('./components/TimeRuler/TimeRuler', () => ({
 
 vi.mock('./components/TimelineGridControls/TimelineGridControls', () => ({
   TimelineGridControls: () => null,
+}));
+
+vi.mock('./components/TimelineNavigationControls/TimelineNavigationControls', () => ({
+  TimelineNavigationControls: () => null,
 }));
 
 vi.mock('./DawPage.css.ts', () => ({

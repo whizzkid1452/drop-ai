@@ -1,5 +1,5 @@
 import WavesurferPlayer from '@wavesurfer/react';
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
 import * as styles from './RegionComponent.css.ts';
 import type { IAudioSourceResolver } from '@/layers/audio-source-registry/i-audio-source-registry';
@@ -55,6 +55,7 @@ export const RegionComponent = ({
 }: RegionComponentProps) => {
   const audioSourceResolver = useAudioSourceResolver();
   const dragSession = useRef<RegionDragSession | null>(null);
+  const waveSurferRef = useRef<WaveSurfer | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [previewStartTime, setPreviewStartTime] = useState<number | null>(null);
   const displayedStartTime = previewStartTime ?? region.startTime;
@@ -74,6 +75,10 @@ export const RegionComponent = ({
       renderData: waveformRenderData?.objectUrl === audioSourceUrl ? waveformRenderData : null,
     };
   }
+
+  useEffect(() => {
+    waveSurferRef.current?.zoom(coordinateMapper.pixelsPerSecond);
+  }, [coordinateMapper]);
 
   const calculateStartTime = (pointerX: number, session: RegionDragSession) => {
     const rawStartTime = calculateRegionDragStartTime({
@@ -158,6 +163,7 @@ export const RegionComponent = ({
   };
 
   const onReady = (ws: WaveSurfer) => {
+    waveSurferRef.current = ws;
     ws.setVolume(0);
     ws.zoom(coordinateMapper.pixelsPerSecond);
 
