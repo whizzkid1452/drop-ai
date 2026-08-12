@@ -206,6 +206,10 @@ export class CommandExecutor {
         this.controller.playback.handleSetTimelineMap(validatedCommand);
         return;
 
+      case AudioCommandType.SET_TIMELINE_MARKERS:
+        this.controller.timeline.setMarkers(validatedCommand.markers);
+        return;
+
       case AudioCommandType.SET_MASTER_VOLUME:
         this.controller.mixer.setMasterVolume(validatedCommand.volume);
         return;
@@ -407,6 +411,7 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.CLEAR_LOOP_SLOT:
     case AudioCommandType.SET_TEMPO:
     case AudioCommandType.SET_TIMELINE_MAP:
+    case AudioCommandType.SET_TIMELINE_MARKERS:
     case AudioCommandType.SET_MASTER_VOLUME:
     case AudioCommandType.SET_TRACK_NAME:
     case AudioCommandType.SET_TRACK_VOLUME:

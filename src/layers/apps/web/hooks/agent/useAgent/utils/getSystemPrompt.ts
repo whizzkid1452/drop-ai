@@ -83,6 +83,8 @@ const COMMAND_REFERENCE = {
   [AudioCommandType.SET_MASTER_VOLUME]: '{"type":"SET_MASTER_VOLUME","volume":<0..1>} - 전체 출력 볼륨 변경',
   [AudioCommandType.SET_TIMELINE_MAP]:
     '{"type":"SET_TIMELINE_MAP","tempoChanges":[{"quarterNotePosition":0,"bpm":120}],"meterChanges":[{"quarterNotePosition":0,"beatsPerBar":4,"beatUnit":4}]} - Tempo·Meter Map 전체 변경',
+  [AudioCommandType.SET_TIMELINE_MARKERS]:
+    '{"type":"SET_TIMELINE_MARKERS","markers":[{"id":"<UUID>","name":"Verse","quarterNotePosition":8}]} - Timeline Marker 전체 변경',
   [AudioCommandType.SET_TRACK_NAME]:
     '{"type":"SET_TRACK_NAME","trackId":"<existing Track UUID>","name":"<1..255 non-blank characters>"} - Track 이름 변경',
   [AudioCommandType.SET_TRACK_VOLUME]:

@@ -55,4 +55,20 @@ describe('CommandExecutor 로컬 자동 저장', () => {
       expect.objectContaining({ localRevision: 1 }),
     ]);
   });
+
+  it('Timeline Marker 변경을 v6 문서에 자동 저장한다', async () => {
+    const { app, projectRepository } = createTestApp();
+    const marker = {
+      id: '33333333-3333-4333-8333-333333333333',
+      name: 'Verse',
+      quarterNotePosition: 8,
+    };
+
+    await app.commandExecutor.execute({ type: AudioCommandType.SET_TIMELINE_MARKERS, markers: [marker] });
+
+    await expect(projectRepository.load(PROJECT_ID)).resolves.toMatchObject({
+      schemaVersion: 6,
+      timeline: { markers: [marker] },
+    });
+  });
 });

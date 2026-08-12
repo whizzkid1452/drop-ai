@@ -44,47 +44,15 @@ export const label = style({
   fontSize: '9px',
 });
 
-export const topZone = style({
+export const interactionZone = style({
   position: 'absolute',
   top: 0,
-  left: 0,
-  right: 0,
-  zIndex: 10,
-  height: '14px',
-  cursor: 'crosshair',
-  ':hover': {
-    backgroundColor: 'rgba(255, 79, 216, 0.07)',
-  },
-});
-
-export const bottomZone = style({
-  position: 'absolute',
   bottom: 0,
   left: 0,
   right: 0,
   zIndex: 10,
-  height: '14px',
   cursor: 'pointer',
-});
-
-export const exportRangeOverlay = style({
-  position: 'absolute',
-  top: 0,
-  zIndex: 5,
-  height: '100%',
-  borderLeft: '1px solid #5b9ab8',
-  borderRight: '1px solid #5b9ab8',
-  backgroundColor: 'rgba(66, 132, 164, 0.22)',
-  pointerEvents: 'none',
-});
-
-export const exportRangeLabel = style({
-  position: 'absolute',
-  top: 0,
-  left: '50%',
-  transform: 'translateX(-50%)',
-  color: '#a4d2e8',
-  fontSize: '9px',
-  whiteSpace: 'nowrap',
-  pointerEvents: 'none',
+  ':hover': {
+    backgroundColor: 'rgba(255, 255, 255, 0.025)',
+  },
 });

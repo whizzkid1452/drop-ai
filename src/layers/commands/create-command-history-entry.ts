@@ -1,6 +1,7 @@
 import type { RegionState, SessionState, TrackState } from '../session/session';
 import type { PluginInstanceState } from '../shared/types/plugin-state';
 import type { TimelineMeterChange, TimelineTempoChange } from '../shared/timeline-coordinate-mapper';
+import type { TimelineMarker } from '../shared/timeline-marker';
 import { AudioCommandType, type AudioCommand } from '../shared/types/audioCommand.schema';
 import type { CommandHistoryEntry } from './command-history';
 
@@ -67,6 +68,20 @@ function areTimelineMapsEqual(left: TimelineMapSnapshot, right: TimelineMapSnaps
         candidate?.quarterNotePosition === change.quarterNotePosition &&
         candidate.beatsPerBar === change.beatsPerBar &&
         candidate.beatUnit === change.beatUnit
+      );
+    })
+  );
+}
+
+function areTimelineMarkersEqual(left: readonly TimelineMarker[], right: readonly TimelineMarker[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((marker, index) => {
+      const candidate = right[index];
+      return (
+        candidate?.id === marker.id &&
+        candidate.name === marker.name &&
+        candidate.quarterNotePosition === marker.quarterNotePosition
       );
     })
   );
@@ -195,6 +210,23 @@ export function createCommandHistoryEntry({
           type: AudioCommandType.SET_TIMELINE_MAP,
           tempoChanges: beforeSession.tempoChanges.map(change => ({ ...change })),
           meterChanges: beforeSession.meterChanges.map(change => ({ ...change })),
+        },
+        redoCommand: command,
+      });
+
+    case AudioCommandType.SET_TIMELINE_MARKERS:
+      if (
+        areTimelineMarkersEqual(beforeSession.timelineMarkers, afterSession.timelineMarkers) ||
+        !areTimelineMarkersEqual(afterSession.timelineMarkers, command.markers)
+      ) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        undoCommand: {
+          type: AudioCommandType.SET_TIMELINE_MARKERS,
+          markers: beforeSession.timelineMarkers.map(marker => ({ ...marker })),
         },
         redoCommand: command,
       });
