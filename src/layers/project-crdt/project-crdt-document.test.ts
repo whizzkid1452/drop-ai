@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { ProjectDocument, ProjectTrack } from '../shared/types/project-document.schema';
+import { readProjectDocumentV5 } from '../shared/types/project-document-reader';
+import type {
+  ProjectDocument,
+  ProjectDocumentSnapshot,
+  ProjectDocumentV5,
+  ProjectTrack,
+} from '../shared/types/project-document.schema';
 import { ProjectCrdtDocument } from './project-crdt-document';
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
@@ -32,6 +38,21 @@ function createProjectDocument(): ProjectDocument {
   };
 }
 
+function createProjectDocumentV5(): ProjectDocumentV5 {
+  const document = readProjectDocumentV5(createProjectDocument());
+  return {
+    ...document,
+    timeline: {
+      ...document.timeline,
+      tempoChanges: [
+        { quarterNotePosition: 0, bpm: 120 },
+        { quarterNotePosition: 4, bpm: 90 },
+      ],
+      meterChanges: [{ quarterNotePosition: 0, beatsPerBar: 4, beatUnit: 4 }],
+    },
+  };
+}
+
 function cloneDocument(document: ProjectDocument): ProjectDocument {
   return structuredClone(document);
 }
@@ -41,7 +62,30 @@ function createPeers(baseDocument: ProjectDocument): [ProjectCrdtDocument, Proje
   return [ProjectCrdtDocument.fromUpdate(seed), ProjectCrdtDocument.fromUpdate(seed)];
 }
 
+function createSnapshotPeers(baseDocument: ProjectDocumentSnapshot): [ProjectCrdtDocument, ProjectCrdtDocument] {
+  const seed = ProjectCrdtDocument.create(baseDocument).encodeStateAsUpdate();
+  return [ProjectCrdtDocument.fromUpdate(seed), ProjectCrdtDocument.fromUpdate(seed)];
+}
+
 describe('ProjectCrdtDocument', () => {
+  it('Tempo marker의 BPM을 수정해도 음악 위치 순서를 유지한다', () => {
+    const baseDocument = createProjectDocumentV5();
+    const [firstPeer, secondPeer] = createSnapshotPeers(baseDocument);
+    const nextDocument = structuredClone(baseDocument);
+    nextDocument.timeline.tempoChanges[1].bpm = 100;
+    nextDocument.project.revision = 1;
+
+    const update = firstPeer.applyProjectChange({ baseDocument, nextDocument });
+    secondPeer.applyUpdate(update);
+
+    expect(secondPeer.toProjectDocument().timeline).toMatchObject({
+      tempoChanges: [
+        { quarterNotePosition: 0, bpm: 120 },
+        { quarterNotePosition: 4, bpm: 100 },
+      ],
+    });
+  });
+
   it('서로 다른 필드의 동시 변경을 적용 순서와 무관하게 모두 보존한다', () => {
     const baseDocument = createProjectDocument();
     const [firstPeer, secondPeer] = createPeers(baseDocument);

@@ -12,6 +12,7 @@ import type {
 import { insertArrayEntry, moveArrayEntry } from '../shared/array-order';
 import type { LoopLengthBars } from '../shared/loop-time';
 import type { LoopSlotRuntimeState } from '../shared/types/loop-state';
+import type { TimelineMeterChange, TimelineTempoChange } from '../shared/timeline-coordinate-mapper';
 
 export const DEFAULT_LOOP_SLOT_COUNT = 4;
 
@@ -83,6 +84,8 @@ export interface TrackState {
 export interface ProjectSessionState {
   readonly project: ProjectMetadata;
   readonly tempo: number;
+  readonly tempoChanges?: readonly TimelineTempoChange[];
+  readonly meterChanges?: readonly TimelineMeterChange[];
   readonly masterVolume: number;
   readonly exportStartTime: number | null;
   readonly exportEndTime: number | null;
@@ -137,6 +140,8 @@ export interface SessionState {
   isPlaying: boolean;
   currentTime: number;
   tempo: number;
+  tempoChanges: TimelineTempoChange[];
+  meterChanges: TimelineMeterChange[];
   masterVolume: number;
   exportStartTime: number | null;
   exportEndTime: number | null;
@@ -161,6 +166,8 @@ export interface SessionState {
   pausePlayback: (currentTime: number) => void;
   stopPlayback: () => void;
   setTempo: (tempo: number) => void;
+  setTempoChanges: (changes: readonly TimelineTempoChange[]) => void;
+  setMeterChanges: (changes: readonly TimelineMeterChange[]) => void;
   setMasterVolume: (volume: number) => void;
   setExportRange: (startTime: number | null, endTime: number | null) => void;
   replaceProjectMetadata: (project: ProjectMetadata) => void;
@@ -201,6 +208,8 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     isPlaying: false,
     currentTime: 0,
     tempo: 120,
+    tempoChanges: [{ quarterNotePosition: 0, bpm: 120 }],
+    meterChanges: [{ quarterNotePosition: 0, beatsPerBar: 4, beatUnit: 4 }],
     masterVolume: 1.0,
     exportStartTime: null,
     exportEndTime: null,
@@ -223,7 +232,13 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     setCurrentTime: time => set({ currentTime: time }),
     pausePlayback: currentTime => set({ isPlaying: false, currentTime }),
     stopPlayback: () => set({ isPlaying: false, currentTime: 0 }),
-    setTempo: tempo => set({ tempo: tempo }),
+    setTempo: tempo =>
+      set(state => ({
+        tempo,
+        tempoChanges: state.tempoChanges.map((change, index) => (index === 0 ? { ...change, bpm: tempo } : change)),
+      })),
+    setTempoChanges: tempoChanges => set({ tempo: tempoChanges[0]?.bpm ?? 120, tempoChanges: [...tempoChanges] }),
+    setMeterChanges: meterChanges => set({ meterChanges: [...meterChanges] }),
     setMasterVolume: volume => set({ masterVolume: volume }),
     setExportRange: (startTime, endTime) => set({ exportStartTime: startTime, exportEndTime: endTime }),
     replaceProjectMetadata: project => set({ project: { ...project } }),
@@ -231,6 +246,12 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
       set({
         project: { ...projectState.project },
         tempo: projectState.tempo,
+        tempoChanges: projectState.tempoChanges
+          ? projectState.tempoChanges.map(change => ({ ...change }))
+          : [{ quarterNotePosition: 0, bpm: projectState.tempo }],
+        meterChanges: projectState.meterChanges
+          ? projectState.meterChanges.map(change => ({ ...change }))
+          : [{ quarterNotePosition: 0, beatsPerBar: 4, beatUnit: 4 }],
         masterVolume: projectState.masterVolume,
         exportStartTime: projectState.exportStartTime,
         exportEndTime: projectState.exportEndTime,

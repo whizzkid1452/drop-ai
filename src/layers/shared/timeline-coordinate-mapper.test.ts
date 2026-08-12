@@ -63,4 +63,50 @@ describe('TimelineCoordinateMapper', () => {
     expect(() => mapper.bbtToSeconds({ bar: 1, beat: 5, tick: 0 })).toThrow();
     expect(() => mapper.bbtToSeconds({ bar: 1, beat: 1, tick: TICKS_PER_BEAT })).toThrow();
   });
+
+  it('Tempo 변경 구간을 적분해 quarter note와 초를 상호 변환한다', () => {
+    const mapper = new TimelineCoordinateMapper({
+      tempoBpm: 120,
+      beatsPerBar: 4,
+      beatUnit: 4,
+      tempoChanges: [
+        { quarterNotePosition: 0, bpm: 120 },
+        { quarterNotePosition: 4, bpm: 60 },
+      ],
+    });
+
+    expect(mapper.quarterNotesToSeconds(6)).toBe(4);
+    expect(mapper.secondsToQuarterNotes(4)).toBe(6);
+  });
+
+  it('박자표 변경 뒤에도 BBT 마디 번호를 연속해서 계산한다', () => {
+    const mapper = new TimelineCoordinateMapper({
+      tempoBpm: 120,
+      beatsPerBar: 4,
+      beatUnit: 4,
+      meterChanges: [
+        { quarterNotePosition: 0, beatsPerBar: 4, beatUnit: 4 },
+        { quarterNotePosition: 8, beatsPerBar: 3, beatUnit: 4 },
+      ],
+    });
+
+    expect(mapper.secondsToBBT(4)).toEqual({ bar: 3, beat: 1, tick: 0 });
+    expect(mapper.secondsToBBT(5)).toEqual({ bar: 3, beat: 3, tick: 0 });
+    expect(mapper.bbtToSeconds({ bar: 4, beat: 1, tick: 0 })).toBe(5.5);
+  });
+
+  it('이전 박자표의 마디 경계가 아닌 Meter 변경을 거부한다', () => {
+    expect(
+      () =>
+        new TimelineCoordinateMapper({
+          tempoBpm: 120,
+          beatsPerBar: 4,
+          beatUnit: 4,
+          meterChanges: [
+            { quarterNotePosition: 0, beatsPerBar: 4, beatUnit: 4 },
+            { quarterNotePosition: 6, beatsPerBar: 3, beatUnit: 4 },
+          ],
+        })
+    ).toThrow('마디 경계');
+  });
 });

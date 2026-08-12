@@ -13,21 +13,25 @@ import {
   readProjectDocumentV2,
   readProjectDocumentV3,
   readProjectDocumentV4,
+  readProjectDocumentV5,
 } from '../shared/types/project-document-reader';
 import {
   PROJECT_DOCUMENT_SCHEMA_VERSION,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V3,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V4,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V5,
   ProjectDocumentSchema,
   ProjectDocumentV2Schema,
   ProjectDocumentV3Schema,
   ProjectDocumentV4Schema,
+  ProjectDocumentV5Schema,
   type ProjectAudioSource,
   type ProjectDocument,
   type ProjectDocumentV2,
   type ProjectDocumentV3,
   type ProjectDocumentV4,
+  type ProjectDocumentV5,
   type ProjectDocumentSnapshot,
   type ProjectLoopSlot,
   type ProjectLoopSlotV4,
@@ -53,6 +57,7 @@ export interface CreateProjectDocumentV2FromSessionOptions extends CreateProject
 
 export type CreateProjectDocumentV3FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 export type CreateProjectDocumentV4FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
+export type CreateProjectDocumentV5FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 
 export interface ProjectRestoreSnapshot {
   readonly session: SessionProjectSnapshot;
@@ -70,6 +75,7 @@ export interface CreateProjectRestoreSnapshotFromDocumentV3Options {
 }
 
 export type CreateProjectRestoreSnapshotFromDocumentV4Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
+export type CreateProjectRestoreSnapshotFromDocumentV5Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 
 interface SessionTrackEntry {
   readonly mapKey: string;
@@ -191,6 +197,33 @@ export function createProjectDocumentV4FromSession({
   return parseSessionDocumentCandidateV4(documentCandidate);
 }
 
+export function createProjectDocumentV5FromSession({
+  session,
+  audioSources,
+  pluginCatalog,
+}: CreateProjectDocumentV5FromSessionOptions): ProjectDocumentV5 {
+  const tempoChanges = session.tempoChanges ?? [{ quarterNotePosition: 0, bpm: session.tempo }];
+  const meterChanges = session.meterChanges ?? [{ quarterNotePosition: 0, beatsPerBar: 4, beatUnit: 4 }];
+  const documentCandidate = {
+    documentType: 'drop-ai-project',
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V5,
+    project: { ...session.project },
+    timeline: {
+      timeUnit: 'seconds',
+      tempoBpm: tempoChanges[0]?.bpm ?? session.tempo,
+      tempoChanges: tempoChanges.map(change => ({ ...change })),
+      meterChanges: meterChanges.map(change => ({ ...change })),
+    },
+    mixer: { masterVolume: session.masterVolume },
+    exportRange: createExportRange(session),
+    audioSources: audioSources.map(source => ({ ...source })),
+    tracks: [...session.tracks.entries()].map(([mapKey, track]) =>
+      createProjectTrackV4({ mapKey, track, pluginCatalog })
+    ),
+  };
+  return parseSessionDocumentCandidateV5(documentCandidate);
+}
+
 export function createProjectRestoreSnapshotFromDocument(document: ProjectDocument): ProjectRestoreSnapshot {
   const validatedDocument = readDocumentForMapping(document);
   const tracks = new Map<string, TrackState>();
@@ -275,6 +308,31 @@ export function createProjectRestoreSnapshotFromDocumentV4({
     session: {
       project: { ...validatedDocument.project },
       tempo: validatedDocument.timeline.tempoBpm,
+      masterVolume: validatedDocument.mixer.masterVolume,
+      exportStartTime: validatedDocument.exportRange?.startTimeSeconds ?? null,
+      exportEndTime: validatedDocument.exportRange?.endTimeSeconds ?? null,
+      tracks,
+    },
+    audioSources: validatedDocument.audioSources.map(source => ({ ...source })),
+  };
+}
+
+export function createProjectRestoreSnapshotFromDocumentV5({
+  document,
+  pluginCatalog,
+}: CreateProjectRestoreSnapshotFromDocumentV5Options): ProjectRestoreSnapshot {
+  const validatedDocument = readDocumentV5ForMapping(document);
+  const tracks = new Map<string, TrackState>();
+  validatedDocument.tracks.forEach(track => {
+    tracks.set(track.id, createSessionTrackV4({ track, pluginCatalog }));
+  });
+
+  return {
+    session: {
+      project: { ...validatedDocument.project },
+      tempo: validatedDocument.timeline.tempoBpm,
+      tempoChanges: validatedDocument.timeline.tempoChanges.map(change => ({ ...change })),
+      meterChanges: validatedDocument.timeline.meterChanges.map(change => ({ ...change })),
       masterVolume: validatedDocument.mixer.masterVolume,
       exportStartTime: validatedDocument.exportRange?.startTimeSeconds ?? null,
       exportEndTime: validatedDocument.exportRange?.endTimeSeconds ?? null,
@@ -603,6 +661,31 @@ function parseSessionDocumentCandidateV4(documentCandidate: unknown): ProjectDoc
   }
 }
 
+function parseSessionDocumentCandidateV5(documentCandidate: unknown): ProjectDocumentV5 {
+  try {
+    const result = ProjectDocumentV5Schema.safeParse(documentCandidate);
+    if (result.success) {
+      return result.data;
+    }
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
+      message: 'Session 프로젝트 상태를 유효한 ProjectDocument v5로 변환할 수 없습니다.',
+      details: { issues: result.error.issues, reason: 'PROJECT_DOCUMENT_SCHEMA_VIOLATION' },
+      cause: result.error,
+    });
+  } catch (cause) {
+    if (cause instanceof ProjectDocumentMappingError) {
+      throw cause;
+    }
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
+      message: 'Session 프로젝트 상태를 읽을 수 없습니다.',
+      details: { reason: 'PROJECT_DOCUMENT_SCHEMA_VIOLATION' },
+      cause,
+    });
+  }
+}
+
 function readDocumentForMapping(document: ProjectDocument): ProjectDocument {
   try {
     return readProjectDocument(document);
@@ -649,6 +732,19 @@ function readDocumentV4ForMapping(document: ProjectDocumentSnapshot): ProjectDoc
     throw new ProjectDocumentMappingError({
       code: ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT,
       message: '복원할 ProjectDocument v4가 유효하지 않습니다.',
+      details: { reason: 'PROJECT_DOCUMENT_READ_FAILED' },
+      cause,
+    });
+  }
+}
+
+function readDocumentV5ForMapping(document: ProjectDocumentSnapshot): ProjectDocumentV5 {
+  try {
+    return readProjectDocumentV5(document);
+  } catch (cause) {
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT,
+      message: '복원할 ProjectDocument v5가 유효하지 않습니다.',
       details: { reason: 'PROJECT_DOCUMENT_READ_FAILED' },
       cause,
     });

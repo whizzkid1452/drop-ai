@@ -55,6 +55,8 @@ function getShiftWheelHorizontalDelta(event: WheelEvent, pageWidth: number): num
 export function DawPage() {
   const tracks = useSession(state => state.tracks);
   const tempo = useSession(state => state.tempo);
+  const tempoChanges = useSession(state => state.tempoChanges);
+  const meterChanges = useSession(state => state.meterChanges);
   const trackCount = tracks.size;
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
@@ -79,8 +81,10 @@ export function DawPage() {
         beatsPerBar: 4,
         beatUnit: 4,
         pixelsPerQuarterNote,
+        tempoChanges,
+        meterChanges,
       }),
-    [pixelsPerQuarterNote, tempo]
+    [meterChanges, pixelsPerQuarterNote, tempo, tempoChanges]
   );
   const gridSettings = useMemo(() => ({ division: gridDivision, snapMode }), [gridDivision, snapMode]);
   const timelineContentWidth = useMemo(

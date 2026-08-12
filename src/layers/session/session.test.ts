@@ -749,6 +749,33 @@ describe('Session Store - Phase 1 검증', () => {
     });
   });
 
+  describe('Tempo·Meter Map', () => {
+    it('첫 Tempo marker를 Session tempo와 함께 변경한다', () => {
+      store.getState().setTempo(96);
+
+      expect(store.getState().tempo).toBe(96);
+      expect(store.getState().tempoChanges[0]).toEqual({ quarterNotePosition: 0, bpm: 96 });
+    });
+
+    it('Tempo·Meter marker 배열을 외부 참조와 분리해 저장한다', () => {
+      const tempoChanges = [
+        { quarterNotePosition: 0, bpm: 120 },
+        { quarterNotePosition: 4, bpm: 90 },
+      ];
+      const meterChanges = [
+        { quarterNotePosition: 0, beatsPerBar: 4, beatUnit: 4 },
+        { quarterNotePosition: 8, beatsPerBar: 3, beatUnit: 4 },
+      ];
+
+      store.getState().setTempoChanges(tempoChanges);
+      store.getState().setMeterChanges(meterChanges);
+
+      expect(store.getState().tempoChanges).not.toBe(tempoChanges);
+      expect(store.getState().meterChanges).not.toBe(meterChanges);
+      expect(store.getState().tempo).toBe(120);
+    });
+  });
+
   describe('상태 불변성 검증', () => {
     it('tracks Map은 업데이트 시마다 새로운 참조여야 함', () => {
       const track1 = {

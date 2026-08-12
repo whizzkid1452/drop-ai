@@ -471,11 +471,11 @@ describe('ProjectDocument snapshot reader', () => {
   });
 
   it('v1·v2·v3·v4 밖의 문서 버전을 지원하지 않는 snapshot으로 거부한다', () => {
-    expect(() => readProjectDocumentSnapshot({ ...createProjectDocument(), schemaVersion: 5 })).toThrowError(
+    expect(() => readProjectDocumentSnapshot({ ...createProjectDocument(), schemaVersion: 6 })).toThrowError(
       expect.objectContaining({
         code: ProjectDocumentReadErrorCode.UNSUPPORTED_SCHEMA_VERSION,
         details: {
-          schemaVersion: 5,
+          schemaVersion: 6,
           supportedSchemaVersions: PROJECT_DOCUMENT_SNAPSHOT_SCHEMA_VERSIONS,
         },
       })
