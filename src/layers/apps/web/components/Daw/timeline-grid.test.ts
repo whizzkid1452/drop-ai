@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
-import { getTimelineGridStepQuarterNotes, snapTimelineSeconds } from './timeline-grid';
+import { createTimelineGridLines, getTimelineGridStepQuarterNotes, snapTimelineSeconds } from './timeline-grid';
 
 const coordinateMapper = new TimelineCoordinateMapper({
   tempoBpm: 120,
@@ -62,5 +62,51 @@ describe('Timeline grid', () => {
         seconds: -1,
       })
     ).toBe(0);
+  });
+
+  it('Meter 변경 뒤에는 해당 구간의 beat 간격과 시작점을 사용한다', () => {
+    const variableMeterMapper = new TimelineCoordinateMapper({
+      tempoBpm: 120,
+      beatsPerBar: 4,
+      beatUnit: 4,
+      pixelsPerQuarterNote: 100,
+      meterChanges: [
+        { quarterNotePosition: 0, beatsPerBar: 4, beatUnit: 4 },
+        { quarterNotePosition: 8, beatsPerBar: 6, beatUnit: 8 },
+      ],
+    });
+    const inputSeconds = variableMeterMapper.quarterNotesToSeconds(9.3);
+
+    expect(
+      getTimelineGridStepQuarterNotes({
+        coordinateMapper: variableMeterMapper,
+        division: 'beat',
+        quarterNotePosition: 9.3,
+      })
+    ).toBe(0.5);
+    expect(
+      variableMeterMapper.secondsToQuarterNotes(
+        snapTimelineSeconds({
+          coordinateMapper: variableMeterMapper,
+          division: 'beat',
+          mode: 'grid',
+          seconds: inputSeconds,
+        })
+      )
+    ).toBe(9.5);
+
+    expect(
+      createTimelineGridLines({
+        coordinateMapper: variableMeterMapper,
+        division: 'beat',
+        endQuarterNotes: 11,
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        { level: 'bar', pixel: 800, quarterNotePosition: 8 },
+        { level: 'division', pixel: 850, quarterNotePosition: 8.5 },
+        { level: 'bar', pixel: 1100, quarterNotePosition: 11 },
+      ])
+    );
   });
 });

@@ -23,6 +23,7 @@ import { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-ma
 import { TimelineGridControls } from './components/TimelineGridControls/TimelineGridControls';
 import type { TimelineGridDivision, TimelineSnapMode } from './timeline-grid';
 import { TimelineNavigationControls } from './components/TimelineNavigationControls/TimelineNavigationControls';
+import { TempoMeterRuler } from './components/TempoMeterRuler/TempoMeterRuler';
 import { calculateTimelineZoomScrollLeft, TRACK_HEADER_WIDTH_PX, type TimelineZoomFocus } from './timeline-navigation';
 
 const CHAT_PANEL_MIN_WIDTH = 280;
@@ -307,6 +308,11 @@ export function DawPage() {
               />
               <span>{Math.round(pixelsPerQuarterNote)} PX/♩</span>
             </div>
+            <TempoMeterRuler
+              coordinateMapper={coordinateMapper}
+              gridSettings={gridSettings}
+              timelineContentWidth={timelineContentWidth}
+            />
             <TimeRuler coordinateMapper={coordinateMapper} gridSettings={gridSettings} />
           </div>
         </div>
@@ -316,6 +322,7 @@ export function DawPage() {
           gridSettings={gridSettings}
           isGridVisible={isGridVisible}
           selectedTrackId={selectedTrackId}
+          timelineContentWidth={timelineContentWidth}
           timelineViewportRef={mainContentRef}
           onTrackSelect={setRequestedTrackId}
         />

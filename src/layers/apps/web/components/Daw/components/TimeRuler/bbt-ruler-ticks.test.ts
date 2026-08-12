@@ -47,4 +47,29 @@ describe('BBT ruler tick 계산', () => {
 
     expect(Math.max(...ticks.map(tick => tick.seconds))).toBeLessThanOrEqual(1);
   });
+
+  it('Meter 변경 지점부터 새 박자표의 beat tick을 표시한다', () => {
+    const coordinateMapper = new TimelineCoordinateMapper({
+      tempoBpm: 120,
+      beatsPerBar: 4,
+      beatUnit: 4,
+      pixelsPerQuarterNote: 48,
+      meterChanges: [
+        { quarterNotePosition: 0, beatsPerBar: 4, beatUnit: 4 },
+        { quarterNotePosition: 8, beatsPerBar: 6, beatUnit: 8 },
+      ],
+    });
+    const ticks = createBBTRulerTicks({
+      coordinateMapper,
+      endSeconds: coordinateMapper.quarterNotesToSeconds(11),
+    });
+
+    expect(ticks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ bar: 3, beat: 1, level: 'bar', pixel: 8 * 48 }),
+        expect.objectContaining({ bar: 3, beat: 2, level: 'beat', pixel: 8.5 * 48 }),
+        expect.objectContaining({ bar: 4, beat: 1, level: 'bar', pixel: 11 * 48 }),
+      ])
+    );
+  });
 });

@@ -168,6 +168,10 @@ export interface SessionState {
   setTempo: (tempo: number) => void;
   setTempoChanges: (changes: readonly TimelineTempoChange[]) => void;
   setMeterChanges: (changes: readonly TimelineMeterChange[]) => void;
+  setTimelineMap: (changes: {
+    tempoChanges: readonly TimelineTempoChange[];
+    meterChanges: readonly TimelineMeterChange[];
+  }) => void;
   setMasterVolume: (volume: number) => void;
   setExportRange: (startTime: number | null, endTime: number | null) => void;
   replaceProjectMetadata: (project: ProjectMetadata) => void;
@@ -239,6 +243,12 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
       })),
     setTempoChanges: tempoChanges => set({ tempo: tempoChanges[0]?.bpm ?? 120, tempoChanges: [...tempoChanges] }),
     setMeterChanges: meterChanges => set({ meterChanges: [...meterChanges] }),
+    setTimelineMap: ({ tempoChanges, meterChanges }) =>
+      set({
+        tempo: tempoChanges[0]?.bpm ?? 120,
+        tempoChanges: tempoChanges.map(change => ({ ...change })),
+        meterChanges: meterChanges.map(change => ({ ...change })),
+      }),
     setMasterVolume: volume => set({ masterVolume: volume }),
     setExportRange: (startTime, endTime) => set({ exportStartTime: startTime, exportEndTime: endTime }),
     replaceProjectMetadata: project => set({ project: { ...project } }),

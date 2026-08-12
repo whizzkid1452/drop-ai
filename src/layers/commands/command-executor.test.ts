@@ -144,6 +144,36 @@ describe('CommandExecutor', () => {
     expect(session.getState().tempo).toBe(140);
   });
 
+  it('SET_TIMELINE_MAP을 적용하고 Undo와 Redo로 전체 Map을 복원한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    const command: AudioCommand = {
+      type: AudioCommandType.SET_TIMELINE_MAP,
+      tempoChanges: [
+        { quarterNotePosition: 0, bpm: 120 },
+        { quarterNotePosition: 4, bpm: 90 },
+      ],
+      meterChanges: [
+        { quarterNotePosition: 0, beatsPerBar: 4, beatUnit: 4 },
+        { quarterNotePosition: 8, beatsPerBar: 6, beatUnit: 8 },
+      ],
+    };
+
+    await commandExecutor.execute(command);
+    expect(session.getState().tempoChanges).toEqual([
+      { quarterNotePosition: 0, bpm: 120 },
+      { quarterNotePosition: 4, bpm: 90 },
+    ]);
+    expect(session.getState().meterChanges[1]).toEqual({ quarterNotePosition: 8, beatsPerBar: 6, beatUnit: 8 });
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tempoChanges).toEqual([{ quarterNotePosition: 0, bpm: 120 }]);
+    expect(session.getState().meterChanges).toEqual([{ quarterNotePosition: 0, beatsPerBar: 4, beatUnit: 4 }]);
+
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(session.getState().tempoChanges).toEqual(command.tempoChanges);
+    expect(session.getState().meterChanges).toEqual(command.meterChanges);
+  });
+
   it('SET_MASTER_VOLUME을 실행하고 Undo와 Redo로 복원한다', async () => {
     const { audioEngine, commandExecutor, session } = createTestContext();
     const setMasterVolume = vi.spyOn(audioEngine, 'setMasterVolume');

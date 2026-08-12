@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { calculateFiniteRegionSourceEndTime } from '../audio-source-range';
 import { calculateFiniteRegionEndTime } from '../region-timeline';
+import { ProjectTempoChangeSchema } from './project-document.schema';
 
 export const AudioCommandType = {
   UNDO: 'UNDO',
@@ -20,6 +21,7 @@ export const AudioCommandType = {
   CLEAR_LOOP_SLOT: 'CLEAR_LOOP_SLOT',
   STOP_ALL_LOOPS: 'STOP_ALL_LOOPS',
   SET_TEMPO: 'SET_TEMPO',
+  SET_TIMELINE_MAP: 'SET_TIMELINE_MAP',
   SET_MASTER_VOLUME: 'SET_MASTER_VOLUME',
   SET_TRACK_NAME: 'SET_TRACK_NAME',
   SET_TRACK_VOLUME: 'SET_TRACK_VOLUME',
@@ -62,6 +64,14 @@ const SetExportRangeCommandSchema = z
 const pluginMemberIdSchema = z.string().min(1).max(255);
 const pluginParameterValueSchema = z.union([z.boolean(), z.number().finite(), z.string()]);
 const loopLengthBarsSchema = z.union([z.literal(1), z.literal(2), z.literal(4), z.literal(8)]);
+const timelineMeterChangeCommandSchema = z.strictObject({
+  quarterNotePosition: z.number().nonnegative(),
+  beatsPerBar: z.number().int().positive(),
+  beatUnit: z
+    .number()
+    .int()
+    .refine(beatUnit => [1, 2, 4, 8, 16, 32].includes(beatUnit), 'Unsupported beat unit'),
+});
 const loopSlotAddressSchema = {
   slotId: z.uuid('Invalid Loop Slot ID format'),
   trackId: z.uuid('Invalid Track ID format'),
@@ -175,6 +185,11 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal(AudioCommandType.SET_TEMPO),
     tempo: z.number().positive('Tempo must be > 0'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_TIMELINE_MAP),
+    tempoChanges: z.array(ProjectTempoChangeSchema).min(1).max(256),
+    meterChanges: z.array(timelineMeterChangeCommandSchema).min(1).max(256),
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.SET_MASTER_VOLUME),

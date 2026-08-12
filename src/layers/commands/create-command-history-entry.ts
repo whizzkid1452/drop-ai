@@ -1,5 +1,6 @@
 import type { RegionState, SessionState, TrackState } from '../session/session';
 import type { PluginInstanceState } from '../shared/types/plugin-state';
+import type { TimelineMeterChange, TimelineTempoChange } from '../shared/timeline-coordinate-mapper';
 import { AudioCommandType, type AudioCommand } from '../shared/types/audioCommand.schema';
 import type { CommandHistoryEntry } from './command-history';
 
@@ -39,12 +40,36 @@ interface CreateInstallPluginCommandRequest {
   readonly targetIndex: number;
 }
 
+interface TimelineMapSnapshot {
+  readonly tempoChanges: readonly TimelineTempoChange[];
+  readonly meterChanges: readonly TimelineMeterChange[];
+}
+
 function createEntry({ executeCommand, label, redoCommand, undoCommand }: CreateEntryOptions): CommandHistoryEntry {
   return {
     label,
     undo: () => executeCommand(undoCommand),
     redo: () => executeCommand(redoCommand),
   };
+}
+
+function areTimelineMapsEqual(left: TimelineMapSnapshot, right: TimelineMapSnapshot): boolean {
+  return (
+    left.tempoChanges.length === right.tempoChanges.length &&
+    left.meterChanges.length === right.meterChanges.length &&
+    left.tempoChanges.every((change, index) => {
+      const candidate = right.tempoChanges[index];
+      return candidate?.quarterNotePosition === change.quarterNotePosition && candidate.bpm === change.bpm;
+    }) &&
+    left.meterChanges.every((change, index) => {
+      const candidate = right.meterChanges[index];
+      return (
+        candidate?.quarterNotePosition === change.quarterNotePosition &&
+        candidate.beatsPerBar === change.beatsPerBar &&
+        candidate.beatUnit === change.beatUnit
+      );
+    })
+  );
 }
 
 function findRegion(session: SessionState, regionId: string, trackId?: string): LocatedRegion | null {
@@ -156,6 +181,21 @@ export function createCommandHistoryEntry({
         executeCommand,
         label: command.type,
         undoCommand: { type: AudioCommandType.SET_TEMPO, tempo: beforeSession.tempo },
+        redoCommand: command,
+      });
+
+    case AudioCommandType.SET_TIMELINE_MAP:
+      if (areTimelineMapsEqual(beforeSession, afterSession) || !areTimelineMapsEqual(afterSession, command)) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        undoCommand: {
+          type: AudioCommandType.SET_TIMELINE_MAP,
+          tempoChanges: beforeSession.tempoChanges.map(change => ({ ...change })),
+          meterChanges: beforeSession.meterChanges.map(change => ({ ...change })),
+        },
         redoCommand: command,
       });
 
