@@ -63,6 +63,7 @@ const coordinateMapper = new TimelineCoordinateMapper({
   beatUnit: 4,
   pixelsPerQuarterNote: 50,
 });
+const gridSettings = { division: 'beat', snapMode: 'off' } as const;
 const track: TrackState = {
   id: '11111111-1111-4111-8111-111111111111',
   name: '빈 Track',
@@ -106,6 +107,7 @@ function renderTrack(
         track: options.track ?? track,
         isSelected: options.isSelected ?? false,
         coordinateMapper,
+        gridSettings,
         waveformRenderCache,
         onReady: vi.fn(),
         onMuteChange: options.onMuteChange ?? vi.fn().mockResolvedValue('updated'),

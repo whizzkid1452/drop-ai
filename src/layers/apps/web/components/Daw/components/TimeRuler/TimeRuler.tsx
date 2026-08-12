@@ -12,14 +12,16 @@ import { getMaxDuration } from '../../get-max-duration';
 import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 import { createBBTRulerTicks } from './bbt-ruler-ticks';
 import { TIMELINE_MIN_CONTENT_WIDTH_PX } from '../../timeline-content-width';
+import { snapTimelineSeconds, type TimelineGridSettings } from '../../timeline-grid';
 
 // ...
 
 interface TimeRulerProps {
   coordinateMapper: TimelineCoordinateMapper;
+  gridSettings: TimelineGridSettings;
 }
 
-export const TimeRuler = memo(function TimeRuler({ coordinateMapper }: TimeRulerProps) {
+export const TimeRuler = memo(function TimeRuler({ coordinateMapper, gridSettings }: TimeRulerProps) {
   const tracks = useSession(state => state.tracks);
   const exportStartTime = useSession(state => state.exportStartTime);
   const exportEndTime = useSession(state => state.exportEndTime);
@@ -50,7 +52,7 @@ export const TimeRuler = memo(function TimeRuler({ coordinateMapper }: TimeRuler
 
       const rect = containerRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
-      const time = coordinateMapper.pixelsToSeconds(Math.max(0, x));
+      const time = resolveEditTime(x, coordinateMapper, gridSettings);
 
       const start = Math.min(dragStartPosRef.current, time);
       const end = Math.max(dragStartPosRef.current, time);
@@ -90,7 +92,7 @@ export const TimeRuler = memo(function TimeRuler({ coordinateMapper }: TimeRuler
       window.removeEventListener('mousemove', handleWindowMouseMove);
       window.removeEventListener('mouseup', handleWindowMouseUp);
     };
-  }, [commandExecutor, coordinateMapper, isDraggingRange, showBoundary]);
+  }, [commandExecutor, coordinateMapper, gridSettings, isDraggingRange, showBoundary]);
 
   const ticks = useMemo(() => {
     const minimumVisibleDuration = coordinateMapper.pixelsToSeconds(TIMELINE_MIN_CONTENT_WIDTH_PX);
@@ -117,7 +119,7 @@ export const TimeRuler = memo(function TimeRuler({ coordinateMapper }: TimeRuler
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const time = coordinateMapper.pixelsToSeconds(Math.max(0, x));
+    const time = resolveEditTime(x, coordinateMapper, gridSettings);
 
     dragStartPosRef.current = time;
     currentDragRangeRef.current = { start: time, end: time };
@@ -142,7 +144,7 @@ export const TimeRuler = memo(function TimeRuler({ coordinateMapper }: TimeRuler
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const time = coordinateMapper.pixelsToSeconds(Math.max(0, x));
+    const time = resolveEditTime(x, coordinateMapper, gridSettings);
 
     try {
       await commandExecutor.execute({
@@ -240,3 +242,16 @@ export const TimeRuler = memo(function TimeRuler({ coordinateMapper }: TimeRuler
     </div>
   );
 });
+
+function resolveEditTime(
+  pixel: number,
+  coordinateMapper: TimelineCoordinateMapper,
+  gridSettings: TimelineGridSettings
+): number {
+  return snapTimelineSeconds({
+    coordinateMapper,
+    division: gridSettings.division,
+    mode: gridSettings.snapMode,
+    seconds: coordinateMapper.pixelsToSeconds(Math.max(0, pixel)),
+  });
+}

@@ -14,10 +14,14 @@ import { executeTrackMuteChange, executeTrackSoloChange } from '@/layers/apps/we
 import { pruneWaveformRenderCache, storeWaveformRenderData, type WaveformRenderCache } from './waveform-render-cache';
 import { clampTimelinePixelsPerQuarterNote, TIMELINE_ZOOM_FACTOR } from '../../timeline-zoom';
 import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
+import type { TimelineGridSettings } from '../../timeline-grid';
+import { TimelineGrid } from '../TimelineGrid/TimelineGrid';
 
 interface TrackListProps {
   onTrackSelect: (trackId: string) => void;
   coordinateMapper: TimelineCoordinateMapper;
+  gridSettings: TimelineGridSettings;
+  isGridVisible: boolean;
   selectedTrackId: string | null;
   setPixelsPerQuarterNote: (value: number) => void;
   timelineViewportRef: RefObject<HTMLDivElement | null>;
@@ -26,6 +30,8 @@ interface TrackListProps {
 export function TrackList({
   onTrackSelect,
   coordinateMapper,
+  gridSettings,
+  isGridVisible,
   selectedTrackId,
   setPixelsPerQuarterNote,
   timelineViewportRef,
@@ -140,6 +146,7 @@ export function TrackList({
   return (
     <div className={styles.trackList}>
       <div ref={containerRef} className={styles.tracksContainer}>
+        <TimelineGrid coordinateMapper={coordinateMapper} division={gridSettings.division} isVisible={isGridVisible} />
         <Cursor coordinateMapper={coordinateMapper} timelineViewportRef={timelineViewportRef} />
         {trackArray.map(track => (
           <TrackComponent
@@ -147,6 +154,7 @@ export function TrackList({
             track={track}
             isSelected={track.id === selectedTrackId}
             coordinateMapper={coordinateMapper}
+            gridSettings={gridSettings}
             onReady={handleReady}
             onMuteChange={muted => handleMuteChange(track.id, muted)}
             onSelect={() => onTrackSelect(track.id)}
