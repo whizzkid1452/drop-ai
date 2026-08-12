@@ -8,6 +8,7 @@ import type { RegionState } from '@/layers/session/session';
 import { calculateRegionDragStartTime } from '@/layers/apps/web/hooks/calculate-region-drag-start-time';
 import type { WaveformRenderData } from '../TrackList/waveform-render-cache';
 import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
+import { snapTimelineSeconds, type TimelineGridSettings } from '../../timeline-grid';
 
 const MISSING_AUDIO_SOURCE_MESSAGE = '오디오 소스를 찾을 수 없습니다.';
 // Region의 상·하 1px 테두리를 제외해야 WaveSurfer 캔버스가 76px Track 안에서 잘리지 않는다.
@@ -27,6 +28,7 @@ interface WaveformRenderSelection {
 interface RegionComponentProps {
   region: RegionState;
   coordinateMapper: TimelineCoordinateMapper;
+  gridSettings: TimelineGridSettings;
   onReady?: (ws: WaveSurfer) => void;
   onMove?: (newStartTime: number) => Promise<void>;
   onRemove?: () => void;
@@ -45,6 +47,7 @@ function resolveRegionAudioSourceUrl(region: RegionState, audioSourceResolver: I
 export const RegionComponent = ({
   region,
   coordinateMapper,
+  gridSettings,
   onReady: onReadyProp,
   onMove,
   onRemove,
@@ -72,13 +75,20 @@ export const RegionComponent = ({
     };
   }
 
-  const calculateStartTime = (pointerX: number, session: RegionDragSession) =>
-    calculateRegionDragStartTime({
+  const calculateStartTime = (pointerX: number, session: RegionDragSession) => {
+    const rawStartTime = calculateRegionDragStartTime({
       initialStartTime: session.initialStartTime,
       initialPointerX: session.initialPointerX,
       currentPointerX: pointerX,
       coordinateMapper,
     });
+    return snapTimelineSeconds({
+      coordinateMapper,
+      division: gridSettings.division,
+      mode: gridSettings.snapMode,
+      seconds: rawStartTime,
+    });
+  };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!event.isPrimary || event.button !== 0 || !onMove || dragSession.current || previewStartTime !== null) {

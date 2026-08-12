@@ -43,6 +43,10 @@ vi.mock('./components/TimeRuler/TimeRuler', () => ({
   TimeRuler: () => null,
 }));
 
+vi.mock('./components/TimelineGridControls/TimelineGridControls', () => ({
+  TimelineGridControls: () => null,
+}));
+
 vi.mock('./DawPage.css.ts', () => ({
   cliPanel: 'cliPanel',
   cliPanelCollapsed: 'cliPanelCollapsed',

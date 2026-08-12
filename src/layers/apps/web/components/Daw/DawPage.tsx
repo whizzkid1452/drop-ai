@@ -20,6 +20,8 @@ import {
 import { getMaxDuration } from './get-max-duration';
 import { getTimelineContentWidth } from './timeline-content-width';
 import { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
+import { TimelineGridControls } from './components/TimelineGridControls/TimelineGridControls';
+import type { TimelineGridDivision, TimelineSnapMode } from './timeline-grid';
 
 const CHAT_PANEL_MIN_WIDTH = 280;
 const CHAT_PANEL_MAX_WIDTH = 600;
@@ -57,6 +59,9 @@ export function DawPage() {
   const [chatPanelWidth, setChatPanelWidth] = useState(CHAT_PANEL_DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
   const [pixelsPerQuarterNote, setPixelsPerQuarterNote] = useState(DEFAULT_TIMELINE_PIXELS_PER_QUARTER_NOTE);
+  const [gridDivision, setGridDivision] = useState<TimelineGridDivision>('beat');
+  const [snapMode, setSnapMode] = useState<TimelineSnapMode>('grid');
+  const [isGridVisible, setIsGridVisible] = useState(true);
   const [requestedTrackId, setRequestedTrackId] = useState<string | null>(null);
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(CHAT_PANEL_DEFAULT_WIDTH);
@@ -71,6 +76,7 @@ export function DawPage() {
       }),
     [pixelsPerQuarterNote, tempo]
   );
+  const gridSettings = useMemo(() => ({ division: gridDivision, snapMode }), [gridDivision, snapMode]);
   const timelineContentWidth = useMemo(
     () =>
       getTimelineContentWidth({
@@ -203,13 +209,23 @@ export function DawPage() {
           <div className={styles.timelineRuler}>
             <div className={styles.timelineMeta}>
               <span>BBT TIMELINE</span>
+              <TimelineGridControls
+                division={gridDivision}
+                isGridVisible={isGridVisible}
+                onDivisionChange={setGridDivision}
+                onGridVisibleChange={setIsGridVisible}
+                onSnapModeChange={setSnapMode}
+                snapMode={snapMode}
+              />
               <span>{Math.round(pixelsPerQuarterNote)} PX/♩</span>
             </div>
-            <TimeRuler coordinateMapper={coordinateMapper} />
+            <TimeRuler coordinateMapper={coordinateMapper} gridSettings={gridSettings} />
           </div>
         </div>
         <TrackList
           coordinateMapper={coordinateMapper}
+          gridSettings={gridSettings}
+          isGridVisible={isGridVisible}
           selectedTrackId={selectedTrackId}
           setPixelsPerQuarterNote={setPixelsPerQuarterNote}
           timelineViewportRef={mainContentRef}

@@ -7,6 +7,7 @@ import type { RuntimeAudioSource } from '@/layers/audio-source-registry/i-audio-
 import type { RegionState } from '@/layers/session/session';
 import { RegionComponent } from './RegionComponent';
 import { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
+import type { TimelineGridSettings } from '../../timeline-grid';
 
 const { renderWaveSurferPlayer, resolveAudioSource } = vi.hoisted(() => ({
   renderWaveSurferPlayer: vi.fn(),
@@ -44,6 +45,7 @@ interface Deferred<T> {
 }
 
 interface RenderRegionOptions {
+  gridSettings?: TimelineGridSettings;
   onMove: (newStartTime: number) => Promise<void>;
   onRemove?: () => void;
   region?: RegionState;
@@ -68,6 +70,7 @@ const coordinateMapper = new TimelineCoordinateMapper({
   beatUnit: 4,
   pixelsPerQuarterNote: 50,
 });
+const gridSettings = { division: 'beat', snapMode: 'off' } as const;
 const sourceId = '41e673bf-5467-4d36-a716-2d80a76ac82f';
 const sourceBackedRegion: RegionState = {
   id: 'region-1',
@@ -92,7 +95,13 @@ function createDeferred<T>(): Deferred<T> {
   return { promise, resolve, reject };
 }
 
-function renderRegion({ onMove, onRemove, region = sourceBackedRegion, waveformRenderData }: RenderRegionOptions) {
+function renderRegion({
+  gridSettings: selectedGridSettings = gridSettings,
+  onMove,
+  onRemove,
+  region = sourceBackedRegion,
+  waveformRenderData,
+}: RenderRegionOptions) {
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
@@ -103,6 +112,7 @@ function renderRegion({ onMove, onRemove, region = sourceBackedRegion, waveformR
       createElement(RegionComponent, {
         region,
         coordinateMapper,
+        gridSettings: selectedGridSettings,
         onMove,
         onRemove,
         waveformRenderData,
@@ -267,6 +277,7 @@ describe('RegionComponent 오디오 소스', () => {
         createElement(RegionComponent, {
           region: sourceBackedRegion,
           coordinateMapper,
+          gridSettings,
           onMove,
           waveformRenderData: {
             duration: 3,
@@ -328,6 +339,7 @@ describe('RegionComponent 오디오 소스', () => {
         createElement(RegionComponent, {
           region: sourceBackedRegion,
           coordinateMapper,
+          gridSettings,
           onMove,
         })
       );
@@ -405,6 +417,20 @@ describe('RegionComponent 드래그 이동', () => {
 
     expect(regionElement.style.transform).toBe('translateX(200px)');
     expect(regionElement.style.cursor).toBe('grab');
+  });
+
+  it('Grid Snap이 켜져 있으면 이동 위치를 가장 가까운 박자에 맞춘다', async () => {
+    const onMove = vi.fn<(newStartTime: number) => Promise<void>>().mockResolvedValue(undefined);
+    const { regionElement } = renderRegion({
+      gridSettings: { division: 'beat', snapMode: 'grid' },
+      onMove,
+    });
+
+    dispatchPointer(regionElement, 'pointerdown', { clientX: 100 });
+    dispatchPointer(regionElement, 'pointerup', { clientX: 130 });
+    await act(async () => Promise.resolve());
+
+    expect(onMove).toHaveBeenCalledWith(2.5);
   });
 
   it('삭제 버튼을 조작해도 이동을 실행하지 않는다', () => {
