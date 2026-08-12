@@ -36,7 +36,13 @@ function renderCursor(timelineViewport: HTMLDivElement | null = null) {
   const root = createRoot(host);
   mountedRoots.push(root);
   act(() =>
-    root.render(createElement(Cursor, { coordinateMapper, timelineViewportRef: { current: timelineViewport } }))
+    root.render(
+      createElement(Cursor, {
+        coordinateMapper,
+        followPlayhead: false,
+        timelineViewportRef: { current: timelineViewport },
+      })
+    )
   );
 
   const cursor = host.querySelector<HTMLDivElement>('.cursor');

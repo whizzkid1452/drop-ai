@@ -12,7 +12,6 @@ import { Cursor } from '@/layers/apps/web/components/Cursor/Cursor';
 import { useAudioSourceResolver, useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
 import { executeTrackMuteChange, executeTrackSoloChange } from '@/layers/apps/web/hooks/track-mute-solo-commands';
 import { pruneWaveformRenderCache, storeWaveformRenderData, type WaveformRenderCache } from './waveform-render-cache';
-import { clampTimelinePixelsPerQuarterNote, TIMELINE_ZOOM_FACTOR } from '../../timeline-zoom';
 import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 import type { TimelineGridSettings } from '../../timeline-grid';
 import { TimelineGrid } from '../TimelineGrid/TimelineGrid';
@@ -20,20 +19,20 @@ import { TimelineGrid } from '../TimelineGrid/TimelineGrid';
 interface TrackListProps {
   onTrackSelect: (trackId: string) => void;
   coordinateMapper: TimelineCoordinateMapper;
+  followPlayhead: boolean;
   gridSettings: TimelineGridSettings;
   isGridVisible: boolean;
   selectedTrackId: string | null;
-  setPixelsPerQuarterNote: (value: number) => void;
   timelineViewportRef: RefObject<HTMLDivElement | null>;
 }
 
 export function TrackList({
   onTrackSelect,
   coordinateMapper,
+  followPlayhead,
   gridSettings,
   isGridVisible,
   selectedTrackId,
-  setPixelsPerQuarterNote,
   timelineViewportRef,
 }: TrackListProps) {
   const tracks = useSession(state => state.tracks);
@@ -41,7 +40,7 @@ export function TrackList({
   const commandExecutor = useCommandExecutor();
   const audioSourceResolver = useAudioSourceResolver();
 
-  const [wavesurferInstances, setWavesurferInstances] = useState<Map<string, WaveSurfer>>(new Map());
+  const [, setWavesurferInstances] = useState<Map<string, WaveSurfer>>(new Map());
   const waveformRenderCacheRef = useRef<WaveformRenderCache>(new Map());
 
   useEffect(() => {
@@ -63,35 +62,6 @@ export function TrackList({
   }, [tracks]);
 
   const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-
-        const newPixelsPerQuarterNote =
-          e.deltaY > 0
-            ? coordinateMapper.pixelsPerQuarterNote / TIMELINE_ZOOM_FACTOR
-            : coordinateMapper.pixelsPerQuarterNote * TIMELINE_ZOOM_FACTOR;
-        const clamped = clampTimelinePixelsPerQuarterNote(newPixelsPerQuarterNote);
-        const scaleRatio = clamped / coordinateMapper.pixelsPerQuarterNote;
-
-        setPixelsPerQuarterNote(clamped);
-
-        wavesurferInstances.forEach(ws => {
-          ws.zoom(coordinateMapper.pixelsPerSecond * scaleRatio);
-        });
-      }
-    };
-
-    container.addEventListener('wheel', handleWheel, { passive: false });
-    return () => {
-      container.removeEventListener('wheel', handleWheel);
-    };
-  }, [coordinateMapper, wavesurferInstances, setPixelsPerQuarterNote]);
 
   const handleReady = useCallback(
     ({ trackId, regionId, sourceId, waveSurfer }: RegionWaveSurferReadyEvent) => {
@@ -147,7 +117,11 @@ export function TrackList({
     <div className={styles.trackList}>
       <div ref={containerRef} className={styles.tracksContainer}>
         <TimelineGrid coordinateMapper={coordinateMapper} division={gridSettings.division} isVisible={isGridVisible} />
-        <Cursor coordinateMapper={coordinateMapper} timelineViewportRef={timelineViewportRef} />
+        <Cursor
+          coordinateMapper={coordinateMapper}
+          followPlayhead={followPlayhead}
+          timelineViewportRef={timelineViewportRef}
+        />
         {trackArray.map(track => (
           <TrackComponent
             key={track.id}
