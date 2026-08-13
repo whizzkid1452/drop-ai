@@ -9,6 +9,7 @@ import { PluginHost } from '../plugin-host/plugin-host';
 import { AppController } from './app-controller';
 import { ProjectMutationCompensationError } from './project-mutation-compensation-error';
 import { createSessionStore, type SessionStore } from '../session/session';
+import { createDefaultRegionProcessingState } from '../shared/types/region-processing';
 import { ProjectStateError, type ProjectStateErrorCode } from './project-state-error';
 
 const INITIAL_PROJECT_METADATA = {
@@ -376,6 +377,7 @@ describe('Controllers - Phase 3 검증', () => {
         duration: 3,
       });
       expect(session.getState().tracks.get('track-1')?.regions[0]).toEqual({
+        ...createDefaultRegionProcessingState(),
         id: SOURCE_REGION_ID,
         sourceId: SOURCE_ID,
         startTime: 1,
@@ -416,6 +418,7 @@ describe('Controllers - Phase 3 검증', () => {
       session.getState().updateTrack('track-1', {
         regions: [
           {
+            ...createDefaultRegionProcessingState(),
             id: SOURCE_REGION_ID,
             sourceId: SOURCE_ID,
             startTime: 0,
@@ -898,6 +901,7 @@ describe('Controllers - Phase 3 검증', () => {
       session.getState().updateTrack('track-1', {
         regions: [
           {
+            ...createDefaultRegionProcessingState(),
             id: SECOND_SOURCE_REGION_ID,
             sourceId: SOURCE_ID,
             startTime: 20,
@@ -1200,6 +1204,7 @@ describe('Controllers - Phase 3 검증', () => {
       session.getState().updateTrack('track-1', {
         regions: [
           {
+            ...createDefaultRegionProcessingState(),
             id: SOURCE_REGION_ID,
             sourceId: SOURCE_ID,
             startTime: 0,
@@ -1229,6 +1234,7 @@ describe('Controllers - Phase 3 검증', () => {
       session.getState().updateTrack('track-1', {
         regions: [
           {
+            ...createDefaultRegionProcessingState(),
             id: SOURCE_REGION_ID,
             sourceId: SOURCE_ID,
             startTime: 0,
@@ -1264,6 +1270,7 @@ describe('Controllers - Phase 3 검증', () => {
       session.getState().updateTrack('track-1', {
         regions: [
           {
+            ...createDefaultRegionProcessingState(),
             id: SOURCE_REGION_ID,
             sourceId: SOURCE_ID,
             startTime: 0,
@@ -1295,6 +1302,7 @@ describe('Controllers - Phase 3 검증', () => {
       session.getState().updateTrack('track-1', {
         regions: [
           {
+            ...createDefaultRegionProcessingState(),
             id: SOURCE_REGION_ID,
             sourceId: SOURCE_ID,
             startTime: 0,
@@ -1346,6 +1354,7 @@ describe('Controllers - Phase 3 검증', () => {
       session.getState().updateTrack('track-1', {
         regions: [
           {
+            ...createDefaultRegionProcessingState(),
             id: 'region-1',
             sourceId: SOURCE_ID,
             startTime: 0,
@@ -1389,6 +1398,7 @@ describe('Controllers - Phase 3 검증', () => {
         regions: [
           ...currentRegions,
           {
+            ...createDefaultRegionProcessingState(),
             id: SECOND_SOURCE_REGION_ID,
             sourceId: SOURCE_ID,
             startTime: 20,
@@ -1500,6 +1510,7 @@ describe('Controllers - Phase 3 검증', () => {
       session.getState().updateTrack('track-1', {
         regions: [
           {
+            ...createDefaultRegionProcessingState(),
             id: SOURCE_REGION_ID,
             sourceId: SOURCE_ID,
             startTime: 0,
@@ -1679,6 +1690,7 @@ describe('Controllers - Phase 3 검증', () => {
       session.getState().updateTrack('track-1', {
         regions: [
           {
+            ...createDefaultRegionProcessingState(),
             id: SOURCE_REGION_ID,
             sourceId: SOURCE_ID,
             startTime: 0,
@@ -1720,6 +1732,7 @@ describe('Controllers - Phase 3 검증', () => {
       session.getState().updateTrack('track-1', {
         regions: [
           {
+            ...createDefaultRegionProcessingState(),
             id: SOURCE_REGION_ID,
             sourceId: SOURCE_ID,
             startTime: 0,

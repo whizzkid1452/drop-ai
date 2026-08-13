@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ZodError } from 'zod';
 import { ProjectDocumentReadError, ProjectDocumentReadErrorCode } from '../shared/types/project-document-reader';
 import { REGION_STATUS, TRACK_STATUS } from '../shared/types/statusTypes';
+import { createDefaultRegionProcessingState } from '../shared/types/region-processing';
 import type { ProjectAudioSource, ProjectDocument } from '../shared/types/project-document.schema';
 import {
   ProjectDocumentMappingError,
@@ -69,6 +70,7 @@ function createSessionSnapshot(): SessionProjectSnapshot {
           ],
           regions: [
             {
+              ...createDefaultRegionProcessingState(),
               id: REGION_ID,
               sourceId: SOURCE_ID,
               startTime: 2,
@@ -78,6 +80,7 @@ function createSessionSnapshot(): SessionProjectSnapshot {
               status: [REGION_STATUS.SELECTED],
             },
             {
+              ...createDefaultRegionProcessingState(),
               id: SECOND_REGION_ID,
               sourceId: SOURCE_ID,
               startTime: 6,
@@ -372,6 +375,7 @@ describe('ProjectDocument mapper', () => {
             pluginInstances: [],
             regions: [
               {
+                ...createDefaultRegionProcessingState(),
                 id: REGION_ID,
                 sourceId: SOURCE_ID,
                 startTime: 2,
@@ -381,6 +385,7 @@ describe('ProjectDocument mapper', () => {
                 status: [],
               },
               {
+                ...createDefaultRegionProcessingState(),
                 id: SECOND_REGION_ID,
                 sourceId: SOURCE_ID,
                 startTime: 6,

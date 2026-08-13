@@ -12,6 +12,7 @@ import type {
 import { insertArrayEntry, moveArrayEntry } from '../shared/array-order';
 import type { LoopLengthBars } from '../shared/loop-time';
 import type { LoopSlotRuntimeState } from '../shared/types/loop-state';
+import type { RegionFadeState } from '../shared/types/region-processing';
 import type { TimelineMeterChange, TimelineTempoChange } from '../shared/timeline-coordinate-mapper';
 import type { TimelineMarker } from '../shared/timeline-marker';
 
@@ -60,6 +61,11 @@ interface RegionCommonState {
   endTime: number;
   sourceStartTime: number;
   duration: number;
+  gain: number;
+  fadeIn: RegionFadeState;
+  fadeOut: RegionFadeState;
+  layer: number;
+  isOpaque: boolean;
   status: RegionStatus[];
 }
 
@@ -455,7 +461,12 @@ function cloneTrackState(track: TrackState): TrackState {
     ...track,
     status: [...track.status],
     pluginInstances: track.pluginInstances.map(clonePluginInstance),
-    regions: track.regions.map(region => ({ ...region, status: [...region.status] })),
+    regions: track.regions.map(region => ({
+      ...region,
+      fadeIn: { ...region.fadeIn },
+      fadeOut: { ...region.fadeOut },
+      status: [...region.status],
+    })),
     loopSlots: track.loopSlots?.map(slot => ({ ...slot, overdubSourceIds: [...slot.overdubSourceIds] })),
   };
 }

@@ -3,6 +3,7 @@ import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { AudioSourceRegistry } from '../audio-source-registry/audio-source-registry';
 import type { IObjectUrlAdapter } from '../audio-source-registry/i-object-url-adapter';
 import { createSessionStore, type RegionState, type TrackState } from '../session/session';
+import { createDefaultRegionProcessingState } from '../shared/types/region-processing';
 import { RegionController } from './region-controller';
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
@@ -17,6 +18,7 @@ class FakeObjectUrlAdapter implements IObjectUrlAdapter {
 
 function createRegion(): RegionState {
   return {
+    ...createDefaultRegionProcessingState(),
     duration: 2,
     endTime: 3,
     id: REGION_ID,
@@ -81,6 +83,7 @@ describe('RegionController 편집 runtime 교체', () => {
           trackId: TRACK_ID,
           regions: [
             {
+              ...createDefaultRegionProcessingState(),
               durationSeconds: 1.5,
               id: REGION_ID,
               sourceId: SOURCE_ID,
@@ -95,6 +98,7 @@ describe('RegionController 편집 runtime 교체', () => {
     expect(prepareProjectGraph).toHaveBeenCalledOnce();
     expect(sessionStore.getState().tracks.get(TRACK_ID)?.regions).toEqual([
       {
+        ...createDefaultRegionProcessingState(),
         duration: 1.5,
         endTime: 5.5,
         id: REGION_ID,
