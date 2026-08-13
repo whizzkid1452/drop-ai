@@ -9,6 +9,7 @@ import type {
   InstallAudioPluginRequest,
   LoadLoopRequest,
   LiveAudioInputDevice,
+  LiveInputRuntimeListener,
   LiveInputRuntimeState,
   LoopRuntimeEvent,
   LoopRuntimeListener,
@@ -67,6 +68,7 @@ export class MockAudioEngine implements IAudioEngine {
   private mockMeterFrames = new Map<string, MeterFrame>();
   private mockLiveInputDevices: LiveAudioInputDevice[] = [];
   private mockMonitoringTrackId: string | null = null;
+  private readonly liveInputStateListeners = new Set<LiveInputRuntimeListener>();
 
   getFeatureSupport(): AudioRuntimeFeatureSupport {
     return { ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT, metering: true, tempoLoopMetronome: true };
@@ -144,7 +146,9 @@ export class MockAudioEngine implements IAudioEngine {
   }
 
   async setLiveInputDevice(deviceId: string | null): Promise<string | null> {
+    const previousState = this.getLiveInputState();
     this.mockInputDeviceId = deviceId;
+    this.notifyLiveInputStateChange(previousState);
     return this.mockInputDeviceId;
   }
 
@@ -156,6 +160,11 @@ export class MockAudioEngine implements IAudioEngine {
     return this.mockLiveInputDevices.map(device => ({ ...device }));
   }
 
+  subscribeLiveInputState(listener: LiveInputRuntimeListener): () => void {
+    this.liveInputStateListeners.add(listener);
+    return () => this.liveInputStateListeners.delete(listener);
+  }
+
   setMockLiveInputDevices(devices: readonly LiveAudioInputDevice[]): void {
     this.mockLiveInputDevices = devices.map(device => ({ ...device }));
   }
@@ -164,7 +173,20 @@ export class MockAudioEngine implements IAudioEngine {
     if (request.enabled) {
       this.getTrack(request.trackId);
     }
+    const previousState = this.getLiveInputState();
     this.mockMonitoringTrackId = request.enabled ? request.trackId : null;
+    this.notifyLiveInputStateChange(previousState);
+  }
+
+  private notifyLiveInputStateChange(previousState: LiveInputRuntimeState): void {
+    const currentState = this.getLiveInputState();
+    if (
+      currentState.deviceId === previousState.deviceId &&
+      currentState.monitoringTrackId === previousState.monitoringTrackId
+    ) {
+      return;
+    }
+    this.liveInputStateListeners.forEach(listener => listener(currentState));
   }
 
   async armLoop(request: ArmLoopRequest): Promise<void> {

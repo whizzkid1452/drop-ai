@@ -624,6 +624,8 @@ describe('AudioEngine 실시간 상태 일관성', () => {
   it('선택한 입력 장치와 monitoring Track을 runtime 상태로 유지한다', async () => {
     const loopRuntime = new LoopRuntimeStub();
     const engine = new AudioEngine({ loopRuntime });
+    const listener = vi.fn();
+    const unsubscribe = engine.subscribeLiveInputState(listener);
     await engine.addTrack('track-1');
     await engine.addTrack('track-2');
 
@@ -637,6 +639,13 @@ describe('AudioEngine 실시간 상태 일관성', () => {
 
     await engine.setLiveInputMonitoring({ enabled: false, trackId: 'track-1' });
     expect(engine.getLiveInputState()).toEqual({ deviceId: 'input-1', monitoringTrackId: null });
+    expect(listener).toHaveBeenNthCalledWith(1, { deviceId: 'input-1', monitoringTrackId: null });
+    expect(listener).toHaveBeenNthCalledWith(2, { deviceId: 'input-1', monitoringTrackId: 'track-1' });
+    expect(listener).toHaveBeenNthCalledWith(3, { deviceId: 'input-1', monitoringTrackId: null });
+
+    unsubscribe();
+    await engine.setLiveInputDevice(null);
+    expect(listener).toHaveBeenCalledTimes(3);
   });
 
   it('mute 중 볼륨 변경은 음소거를 유지하고 unmute 전에 목표 볼륨을 적용한다', async () => {

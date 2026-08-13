@@ -1,5 +1,5 @@
 import type { IAudioEngine } from '../audio-engine/i-audio-engine';
-import type { LiveAudioInputDevice, LiveInputRuntimeState } from '../shared/types/live-input';
+import type { LiveAudioInputDevice, LiveInputRuntimeListener, LiveInputRuntimeState } from '../shared/types/live-input';
 
 export class LiveInputController {
   constructor(private readonly audioEngine: IAudioEngine) {}
@@ -10,5 +10,9 @@ export class LiveInputController {
 
   listLiveInputDevices(): Promise<readonly LiveAudioInputDevice[]> {
     return this.audioEngine.listLiveInputDevices();
+  }
+
+  subscribeLiveInputState(listener: LiveInputRuntimeListener): () => void {
+    return this.audioEngine.subscribeLiveInputState(listener);
   }
 }

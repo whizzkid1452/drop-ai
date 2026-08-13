@@ -16,6 +16,7 @@ import type {
   IPreparedAudioProjectGraph,
   LoadLoopRequest,
   LiveAudioInputDevice,
+  LiveInputRuntimeListener,
   LiveInputRuntimeState,
   LoopRuntimeListener,
   LoopSlotAddress,
@@ -202,6 +203,10 @@ export class DawEngineAdapter implements IAudioEngine {
 
   listLiveInputDevices(): Promise<readonly LiveAudioInputDevice[]> {
     return this.#runtime.listLiveInputDevices();
+  }
+
+  subscribeLiveInputState(listener: LiveInputRuntimeListener): () => void {
+    return this.#runtime.subscribeLiveInputState(listener);
   }
 
   setLiveInputDevice(deviceId: string | null): Promise<string | null> {

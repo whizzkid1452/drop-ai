@@ -19,6 +19,7 @@ import type {
   InstallAudioPluginRequest,
   LoadLoopRequest,
   LiveAudioInputDevice,
+  LiveInputRuntimeListener,
   LiveInputRuntimeState,
   LoopRuntimeListener,
   LoopSlotAddress,
@@ -186,6 +187,7 @@ export class AudioEngine implements IAudioEngine {
   private pendingTransportRecovery: TransportSnapshot | null = null;
   private liveInputDeviceId: string | null = null;
   private monitoringTrackId: string | null = null;
+  private readonly liveInputStateListeners = new Set<LiveInputRuntimeListener>();
 
   constructor(options: AudioEngineOptions = {}) {
     const { loopRuntime, meterRuntimeFactory = new ToneMeterRuntimeFactory(), pluginRuntimeFactories = [] } = options;
@@ -291,9 +293,16 @@ export class AudioEngine implements IAudioEngine {
     return this.loopRuntime.listInputDevices();
   }
 
+  subscribeLiveInputState(listener: LiveInputRuntimeListener): () => void {
+    this.liveInputStateListeners.add(listener);
+    return () => this.liveInputStateListeners.delete(listener);
+  }
+
   async setLiveInputDevice(deviceId: string | null): Promise<string | null> {
     const resolvedDeviceId = await this.loopRuntime.setInputDevice(deviceId);
+    const previousState = this.getLiveInputState();
     this.liveInputDeviceId = resolvedDeviceId;
+    this.notifyLiveInputStateChange(previousState);
     return resolvedDeviceId;
   }
 
@@ -303,7 +312,9 @@ export class AudioEngine implements IAudioEngine {
     }
     const destination = request.enabled ? this.getExistingInput(request.trackId).input : null;
     await this.loopRuntime.setMonitoring({ destination, enabled: request.enabled });
+    const previousState = this.getLiveInputState();
     this.monitoringTrackId = request.enabled ? request.trackId : null;
+    this.notifyLiveInputStateChange(previousState);
   }
 
   armLoop(request: ArmLoopRequest): Promise<void> {
@@ -360,9 +371,11 @@ export class AudioEngine implements IAudioEngine {
   removeTrack(trackId: string): void {
     this.ensureRuntimeReady();
     this.loopRuntime.clearTrack(trackId);
+    const previousLiveInputState = this.getLiveInputState();
     if (this.monitoringTrackId === trackId) {
       this.monitoringTrackId = null;
     }
+    this.notifyLiveInputStateChange(previousLiveInputState);
     const hadTrack = this.trackInputs.has(trackId) || this.channels.has(trackId) || this.players.has(trackId);
     if (hadTrack) {
       this.graphRevision += 1;
@@ -798,7 +811,9 @@ export class AudioEngine implements IAudioEngine {
           throw cause;
         }
         const retiredLoops = preparedLoops.activate();
+        const previousLiveInputState = this.getLiveInputState();
         this.monitoringTrackId = null;
+        this.notifyLiveInputStateChange(previousLiveInputState);
         this.graphRevision += 1;
         state = 'activated';
         retiredGraph = this.createRetiredGraph(previousGraph, retiredLoops);
@@ -1337,6 +1352,18 @@ export class AudioEngine implements IAudioEngine {
 
     this.useGraph(preparedGraph);
     return previousGraph;
+  }
+
+  private notifyLiveInputStateChange(previousState: LiveInputRuntimeState): void {
+    const currentState = this.getLiveInputState();
+    if (
+      currentState.deviceId === previousState.deviceId &&
+      currentState.monitoringTrackId === previousState.monitoringTrackId
+    ) {
+      return;
+    }
+
+    this.liveInputStateListeners.forEach(listener => listener(currentState));
   }
 
   private rollbackGraphActivation({

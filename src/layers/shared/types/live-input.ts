@@ -7,3 +7,5 @@ export interface LiveInputRuntimeState {
   readonly deviceId: string | null;
   readonly monitoringTrackId: string | null;
 }
+
+export type LiveInputRuntimeListener = (state: LiveInputRuntimeState) => void;
