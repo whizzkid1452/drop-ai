@@ -1,4 +1,5 @@
 import {
+  DEFAULT_METRONOME_VOLUME,
   createDefaultLoopSlots,
   type LoopSlotState,
   type ProjectSessionState,
@@ -15,6 +16,7 @@ import {
   readProjectDocumentV4,
   readProjectDocumentV5,
   readProjectDocumentV6,
+  readProjectDocumentV7,
 } from '../shared/types/project-document-reader';
 import {
   PROJECT_DOCUMENT_SCHEMA_VERSION,
@@ -23,12 +25,14 @@ import {
   PROJECT_DOCUMENT_SCHEMA_VERSION_V4,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V5,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V6,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V7,
   ProjectDocumentSchema,
   ProjectDocumentV2Schema,
   ProjectDocumentV3Schema,
   ProjectDocumentV4Schema,
   ProjectDocumentV5Schema,
   ProjectDocumentV6Schema,
+  ProjectDocumentV7Schema,
   type ProjectAudioSource,
   type ProjectDocument,
   type ProjectDocumentV2,
@@ -36,6 +40,7 @@ import {
   type ProjectDocumentV4,
   type ProjectDocumentV5,
   type ProjectDocumentV6,
+  type ProjectDocumentV7,
   type ProjectDocumentSnapshot,
   type ProjectLoopSlot,
   type ProjectLoopSlotV4,
@@ -63,6 +68,7 @@ export type CreateProjectDocumentV3FromSessionOptions = CreateProjectDocumentV2F
 export type CreateProjectDocumentV4FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 export type CreateProjectDocumentV5FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 export type CreateProjectDocumentV6FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
+export type CreateProjectDocumentV7FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 
 export interface ProjectRestoreSnapshot {
   readonly session: SessionProjectSnapshot;
@@ -82,6 +88,7 @@ export interface CreateProjectRestoreSnapshotFromDocumentV3Options {
 export type CreateProjectRestoreSnapshotFromDocumentV4Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 export type CreateProjectRestoreSnapshotFromDocumentV5Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 export type CreateProjectRestoreSnapshotFromDocumentV6Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
+export type CreateProjectRestoreSnapshotFromDocumentV7Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 
 interface SessionTrackEntry {
   readonly mapKey: string;
@@ -258,6 +265,43 @@ export function createProjectDocumentV6FromSession({
   return parseSessionDocumentCandidateV6(documentCandidate);
 }
 
+export function createProjectDocumentV7FromSession({
+  session,
+  audioSources,
+  pluginCatalog,
+}: CreateProjectDocumentV7FromSessionOptions): ProjectDocumentV7 {
+  const tempoChanges = session.tempoChanges ?? [{ quarterNotePosition: 0, bpm: session.tempo }];
+  const meterChanges = session.meterChanges ?? [{ quarterNotePosition: 0, beatsPerBar: 4, beatUnit: 4 }];
+  const loopRange = session.loopRange ? { ...session.loopRange } : null;
+  const documentCandidate = {
+    documentType: 'drop-ai-project',
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V7,
+    project: { ...session.project },
+    timeline: {
+      timeUnit: 'seconds',
+      tempoBpm: tempoChanges[0]?.bpm ?? session.tempo,
+      tempoChanges: tempoChanges.map(change => ({ ...change })),
+      meterChanges: meterChanges.map(change => ({ ...change })),
+      markers: (session.timelineMarkers ?? []).map(marker => ({ ...marker })),
+      loop: {
+        isEnabled: session.isLoopEnabled === true && loopRange !== null,
+        range: loopRange,
+      },
+      metronome: {
+        isEnabled: session.isMetronomeEnabled ?? false,
+        volume: session.metronomeVolume ?? DEFAULT_METRONOME_VOLUME,
+      },
+    },
+    mixer: { masterVolume: session.masterVolume },
+    exportRange: createExportRange(session),
+    audioSources: audioSources.map(source => ({ ...source })),
+    tracks: [...session.tracks.entries()].map(([mapKey, track]) =>
+      createProjectTrackV4({ mapKey, track, pluginCatalog })
+    ),
+  };
+  return parseSessionDocumentCandidateV7(documentCandidate);
+}
+
 export function createProjectRestoreSnapshotFromDocument(document: ProjectDocument): ProjectRestoreSnapshot {
   const validatedDocument = readDocumentForMapping(document);
   const tracks = new Map<string, TrackState>();
@@ -393,6 +437,36 @@ export function createProjectRestoreSnapshotFromDocumentV6({
       tempoChanges: validatedDocument.timeline.tempoChanges.map(change => ({ ...change })),
       meterChanges: validatedDocument.timeline.meterChanges.map(change => ({ ...change })),
       timelineMarkers: validatedDocument.timeline.markers.map(marker => ({ ...marker })),
+      masterVolume: validatedDocument.mixer.masterVolume,
+      exportStartTime: validatedDocument.exportRange?.startTimeSeconds ?? null,
+      exportEndTime: validatedDocument.exportRange?.endTimeSeconds ?? null,
+      tracks,
+    },
+    audioSources: validatedDocument.audioSources.map(source => ({ ...source })),
+  };
+}
+
+export function createProjectRestoreSnapshotFromDocumentV7({
+  document,
+  pluginCatalog,
+}: CreateProjectRestoreSnapshotFromDocumentV7Options): ProjectRestoreSnapshot {
+  const validatedDocument = readDocumentV7ForMapping(document);
+  const tracks = new Map<string, TrackState>();
+  validatedDocument.tracks.forEach(track => {
+    tracks.set(track.id, createSessionTrackV4({ track, pluginCatalog }));
+  });
+
+  return {
+    session: {
+      project: { ...validatedDocument.project },
+      tempo: validatedDocument.timeline.tempoBpm,
+      tempoChanges: validatedDocument.timeline.tempoChanges.map(change => ({ ...change })),
+      meterChanges: validatedDocument.timeline.meterChanges.map(change => ({ ...change })),
+      timelineMarkers: validatedDocument.timeline.markers.map(marker => ({ ...marker })),
+      loopRange: validatedDocument.timeline.loop.range ? { ...validatedDocument.timeline.loop.range } : null,
+      isLoopEnabled: validatedDocument.timeline.loop.isEnabled,
+      isMetronomeEnabled: validatedDocument.timeline.metronome.isEnabled,
+      metronomeVolume: validatedDocument.timeline.metronome.volume,
       masterVolume: validatedDocument.mixer.masterVolume,
       exportStartTime: validatedDocument.exportRange?.startTimeSeconds ?? null,
       exportEndTime: validatedDocument.exportRange?.endTimeSeconds ?? null,
@@ -771,6 +845,31 @@ function parseSessionDocumentCandidateV6(documentCandidate: unknown): ProjectDoc
   }
 }
 
+function parseSessionDocumentCandidateV7(documentCandidate: unknown): ProjectDocumentV7 {
+  try {
+    const result = ProjectDocumentV7Schema.safeParse(documentCandidate);
+    if (result.success) {
+      return result.data;
+    }
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
+      message: 'Session 프로젝트 상태를 유효한 ProjectDocument v7로 변환할 수 없습니다.',
+      details: { issues: result.error.issues, reason: 'PROJECT_DOCUMENT_SCHEMA_VIOLATION' },
+      cause: result.error,
+    });
+  } catch (cause) {
+    if (cause instanceof ProjectDocumentMappingError) {
+      throw cause;
+    }
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
+      message: 'Session 프로젝트 상태를 읽을 수 없습니다.',
+      details: { reason: 'PROJECT_DOCUMENT_SCHEMA_VIOLATION' },
+      cause,
+    });
+  }
+}
+
 function readDocumentForMapping(document: ProjectDocument): ProjectDocument {
   try {
     return readProjectDocument(document);
@@ -843,6 +942,19 @@ function readDocumentV6ForMapping(document: ProjectDocumentSnapshot): ProjectDoc
     throw new ProjectDocumentMappingError({
       code: ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT,
       message: '복원할 ProjectDocument v6가 유효하지 않습니다.',
+      details: { reason: 'PROJECT_DOCUMENT_READ_FAILED' },
+      cause,
+    });
+  }
+}
+
+function readDocumentV7ForMapping(document: ProjectDocumentSnapshot): ProjectDocumentV7 {
+  try {
+    return readProjectDocumentV7(document);
+  } catch (cause) {
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT,
+      message: '복원할 ProjectDocument v7이 유효하지 않습니다.',
       details: { reason: 'PROJECT_DOCUMENT_READ_FAILED' },
       cause,
     });

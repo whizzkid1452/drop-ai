@@ -9,6 +9,7 @@ export const PROJECT_DOCUMENT_SCHEMA_VERSION_V3 = 3 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V4 = 4 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V5 = 5 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V6 = 6 as const;
+export const PROJECT_DOCUMENT_SCHEMA_VERSION_V7 = 7 as const;
 
 const MAX_NAME_LENGTH = 255;
 const MAX_MIME_TYPE_LENGTH = 255;
@@ -146,7 +147,7 @@ export const ProjectTrackV4Schema = ProjectTrackV3Schema.safeExtend({
   loopSlots: z.array(ProjectLoopSlotV4Schema).max(MAX_LOOP_SLOTS),
 });
 
-const ProjectExportRangeSchema = z
+export const ProjectTimelineRangeSchema = z
   .strictObject({
     startTimeSeconds: z.number().nonnegative(),
     endTimeSeconds: z.number().nonnegative(),
@@ -171,7 +172,7 @@ const ProjectDocumentV1BaseSchema = z.strictObject({
   mixer: z.strictObject({
     masterVolume: normalizedAudioValueSchema,
   }),
-  exportRange: ProjectExportRangeSchema.nullable(),
+  exportRange: ProjectTimelineRangeSchema.nullable(),
   audioSources: z.array(ProjectAudioSourceSchema),
   tracks: z.array(ProjectTrackSchema),
 });
@@ -191,7 +192,7 @@ const ProjectDocumentV2BaseSchema = z.strictObject({
   mixer: z.strictObject({
     masterVolume: normalizedAudioValueSchema,
   }),
-  exportRange: ProjectExportRangeSchema.nullable(),
+  exportRange: ProjectTimelineRangeSchema.nullable(),
   audioSources: z.array(ProjectAudioSourceSchema),
   tracks: z.array(ProjectTrackV2Schema),
 });
@@ -211,7 +212,7 @@ const ProjectDocumentV3BaseSchema = z.strictObject({
   mixer: z.strictObject({
     masterVolume: normalizedAudioValueSchema,
   }),
-  exportRange: ProjectExportRangeSchema.nullable(),
+  exportRange: ProjectTimelineRangeSchema.nullable(),
   audioSources: z.array(ProjectAudioSourceSchema),
   tracks: z.array(ProjectTrackV3Schema),
 });
@@ -231,7 +232,7 @@ const ProjectDocumentV4BaseSchema = z.strictObject({
   mixer: z.strictObject({
     masterVolume: normalizedAudioValueSchema,
   }),
-  exportRange: ProjectExportRangeSchema.nullable(),
+  exportRange: ProjectTimelineRangeSchema.nullable(),
   audioSources: z.array(ProjectAudioSourceSchema),
   tracks: z.array(ProjectTrackV4Schema),
 });
@@ -270,7 +271,7 @@ const ProjectDocumentV5BaseSchema = z.strictObject({
   mixer: z.strictObject({
     masterVolume: normalizedAudioValueSchema,
   }),
-  exportRange: ProjectExportRangeSchema.nullable(),
+  exportRange: ProjectTimelineRangeSchema.nullable(),
   audioSources: z.array(ProjectAudioSourceSchema),
   tracks: z.array(ProjectTrackV4Schema),
 });
@@ -293,7 +294,51 @@ const ProjectDocumentV6BaseSchema = z.strictObject({
   mixer: z.strictObject({
     masterVolume: normalizedAudioValueSchema,
   }),
-  exportRange: ProjectExportRangeSchema.nullable(),
+  exportRange: ProjectTimelineRangeSchema.nullable(),
+  audioSources: z.array(ProjectAudioSourceSchema),
+  tracks: z.array(ProjectTrackV4Schema),
+});
+
+export const ProjectLoopSettingsSchema = z
+  .strictObject({
+    isEnabled: z.boolean(),
+    range: ProjectTimelineRangeSchema.nullable(),
+  })
+  .refine(loop => loop.range === null || loop.range.endTimeSeconds > loop.range.startTimeSeconds, {
+    message: 'Loop end time must be greater than start time',
+    path: ['range', 'endTimeSeconds'],
+  })
+  .refine(loop => !loop.isEnabled || loop.range !== null, {
+    message: 'An enabled Loop requires a range',
+    path: ['range'],
+  });
+
+export const ProjectMetronomeSettingsSchema = z.strictObject({
+  isEnabled: z.boolean(),
+  volume: normalizedAudioValueSchema,
+});
+
+const ProjectDocumentV7BaseSchema = z.strictObject({
+  documentType: z.literal('drop-ai-project'),
+  schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V7),
+  project: z.strictObject({
+    id: z.uuid('Invalid Project ID format'),
+    name: nonBlankNameSchema,
+    revision: z.number().int().nonnegative(),
+  }),
+  timeline: z.strictObject({
+    timeUnit: z.literal('seconds'),
+    tempoBpm: z.number().positive(),
+    tempoChanges: z.array(ProjectTempoChangeSchema).min(1).max(MAX_TIMELINE_MAP_ENTRIES),
+    meterChanges: z.array(ProjectMeterChangeSchema).min(1).max(MAX_TIMELINE_MAP_ENTRIES),
+    markers: z.array(ProjectTimelineMarkerSchema).max(MAX_TIMELINE_MAP_ENTRIES),
+    loop: ProjectLoopSettingsSchema,
+    metronome: ProjectMetronomeSettingsSchema,
+  }),
+  mixer: z.strictObject({
+    masterVolume: normalizedAudioValueSchema,
+  }),
+  exportRange: ProjectTimelineRangeSchema.nullable(),
   audioSources: z.array(ProjectAudioSourceSchema),
   tracks: z.array(ProjectTrackV4Schema),
 });
@@ -315,7 +360,8 @@ type RefinableProjectDocument =
   | z.infer<typeof ProjectDocumentV3BaseSchema>
   | z.infer<typeof ProjectDocumentV4BaseSchema>
   | z.infer<typeof ProjectDocumentV5BaseSchema>
-  | z.infer<typeof ProjectDocumentV6BaseSchema>;
+  | z.infer<typeof ProjectDocumentV6BaseSchema>
+  | z.infer<typeof ProjectDocumentV7BaseSchema>;
 type RefinableProjectTrack =
   | z.infer<typeof ProjectTrackSchema>
   | z.infer<typeof ProjectTrackV2Schema>
@@ -444,7 +490,8 @@ function validatePluginState(
     | z.infer<typeof ProjectDocumentV3BaseSchema>
     | z.infer<typeof ProjectDocumentV4BaseSchema>
     | z.infer<typeof ProjectDocumentV5BaseSchema>
-    | z.infer<typeof ProjectDocumentV6BaseSchema>,
+    | z.infer<typeof ProjectDocumentV6BaseSchema>
+    | z.infer<typeof ProjectDocumentV7BaseSchema>,
   context: z.RefinementCtx
 ): void {
   const instanceEntries = document.tracks.flatMap((track, trackIndex) =>
@@ -497,9 +544,25 @@ export const ProjectDocumentV6Schema = ProjectDocumentV6BaseSchema.superRefine((
     context,
   });
 });
+export const ProjectDocumentV7Schema = ProjectDocumentV7BaseSchema.superRefine((document, context) => {
+  validateProjectRelations(document, context);
+  validatePluginState(document, context);
+  validateTimelineMap(document, context);
+  addDuplicateIdIssues({
+    entries: document.timeline.markers.map((marker, index) => ({
+      id: marker.id,
+      path: ['timeline', 'markers', index, 'id'],
+    })),
+    label: 'Timeline marker',
+    context,
+  });
+});
 
 function validateTimelineMap(
-  document: z.infer<typeof ProjectDocumentV5BaseSchema> | z.infer<typeof ProjectDocumentV6BaseSchema>,
+  document:
+    | z.infer<typeof ProjectDocumentV5BaseSchema>
+    | z.infer<typeof ProjectDocumentV6BaseSchema>
+    | z.infer<typeof ProjectDocumentV7BaseSchema>,
   context: z.RefinementCtx
 ): void {
   validateTimelineMarkerPositions(document.timeline.tempoChanges, 'tempoChanges', context);
@@ -566,10 +629,13 @@ export type ProjectDocumentV4 = z.infer<typeof ProjectDocumentV4Schema>;
 export type ProjectDocumentV5 = z.infer<typeof ProjectDocumentV5Schema>;
 export type ProjectTimelineMarker = z.infer<typeof ProjectTimelineMarkerSchema>;
 export type ProjectDocumentV6 = z.infer<typeof ProjectDocumentV6Schema>;
+export type TimelineRange = z.infer<typeof ProjectTimelineRangeSchema>;
+export type ProjectDocumentV7 = z.infer<typeof ProjectDocumentV7Schema>;
 export type ProjectDocumentSnapshot =
   | ProjectDocument
   | ProjectDocumentV2
   | ProjectDocumentV3
   | ProjectDocumentV4
   | ProjectDocumentV5
-  | ProjectDocumentV6;
+  | ProjectDocumentV6
+  | ProjectDocumentV7;

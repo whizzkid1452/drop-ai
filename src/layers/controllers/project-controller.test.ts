@@ -233,7 +233,7 @@ describe('ProjectController', () => {
     expect(context.audioSourceRepository.create).toHaveBeenCalledWith(registration);
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        schemaVersion: 6,
+        schemaVersion: 7,
         project: INITIAL_PROJECT_METADATA,
         audioSources: [registration.metadata],
       })
@@ -247,7 +247,7 @@ describe('ProjectController', () => {
     expect(replaceProjectMetadata).toHaveBeenCalledWith(INITIAL_PROJECT_METADATA);
   });
 
-  it('Session Plugin 체인을 ProjectDocument v6에 저장한다', async () => {
+  it('Session Plugin 체인을 최신 ProjectDocument에 저장한다', async () => {
     const context = createTestContext();
     addPluginTrack(context.sessionStore.getState());
 
@@ -255,7 +255,7 @@ describe('ProjectController', () => {
 
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        schemaVersion: 6,
+        schemaVersion: 7,
         tracks: [
           expect.objectContaining({
             id: TRACK_ID,
@@ -274,7 +274,7 @@ describe('ProjectController', () => {
     );
   });
 
-  it('루프 슬롯과 연결 Source를 ProjectDocument v6에 저장한다', async () => {
+  it('루프 슬롯과 연결 Source를 최신 ProjectDocument에 저장한다', async () => {
     const context = createTestContext();
     const registration = createSourceRegistration();
     context.audioSourceRegistry.restoreCommitted(registration);
@@ -310,7 +310,7 @@ describe('ProjectController', () => {
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         audioSources: [registration.metadata],
-        schemaVersion: 6,
+        schemaVersion: 7,
         tracks: [
           expect.objectContaining({
             loopSlots: [expect.objectContaining({ id: LOOP_SLOT_ID, overdubSourceIds: [], sourceId: SOURCE_ID })],
@@ -331,7 +331,7 @@ describe('ProjectController', () => {
     expect(context.projectRepository.save).toHaveBeenCalledWith({
       document: expect.objectContaining({
         project: existingDocument.project,
-        schemaVersion: 6,
+        schemaVersion: 7,
       }),
       expectedRevision: 0,
     });
