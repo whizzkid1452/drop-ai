@@ -28,6 +28,7 @@ import {
 } from '../shared/types/routing-state';
 import type { TimelineMeterChange, TimelineTempoChange } from '../shared/timeline-coordinate-mapper';
 import type { TimelineMarker } from '../shared/timeline-marker';
+import { cloneAutomationLaneState, type AutomationLaneState } from '../shared/types/automation-state';
 
 export const DEFAULT_LOOP_SLOT_COUNT = 4;
 export const DEFAULT_METRONOME_VOLUME = 0.8;
@@ -101,6 +102,7 @@ export interface TrackState {
   regions: RegionState[];
   loopSlots?: LoopSlotState[];
   recording?: TrackRecordingState;
+  automationLanes?: readonly AutomationLaneState[];
 }
 
 export interface ProjectSessionState {
@@ -509,6 +511,7 @@ function cloneTrackState(track: TrackState): TrackState {
     })),
     loopSlots: track.loopSlots?.map(slot => ({ ...slot, overdubSourceIds: [...slot.overdubSourceIds] })),
     recording: track.recording ? cloneTrackRecordingState(track.recording) : undefined,
+    automationLanes: track.automationLanes?.map(cloneAutomationLaneState),
   };
 }
 

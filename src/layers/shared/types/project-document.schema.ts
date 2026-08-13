@@ -4,6 +4,7 @@ import { MAX_LOOP_OVERDUB_LAYERS } from '../loop-time';
 import { RECORD_MODES } from './multitrack-recording';
 import { calculateFiniteRegionEndTime } from '../region-timeline';
 import { ROUTING_CHANNEL_COUNTS, ROUTING_SEND_TAP_POINTS, ROUTING_TRACK_KINDS } from './routing-state';
+import { AUTOMATION_INTERPOLATIONS, getAutomationTargetKey } from './automation-state';
 
 export const PROJECT_DOCUMENT_SCHEMA_VERSION = 1 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V2 = 2 as const;
@@ -15,6 +16,7 @@ export const PROJECT_DOCUMENT_SCHEMA_VERSION_V7 = 7 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V8 = 8 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V9 = 9 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V10 = 10 as const;
+export const PROJECT_DOCUMENT_SCHEMA_VERSION_V11 = 11 as const;
 
 const MAX_NAME_LENGTH = 255;
 const MAX_MIME_TYPE_LENGTH = 255;
@@ -23,6 +25,8 @@ const MAX_LOOP_SLOTS = 16;
 const MAX_TIMELINE_MAP_ENTRIES = 256;
 const MAX_ROUTING_ENTRIES = 512;
 const MAX_RECORDING_ENTRIES = 512;
+const MAX_AUTOMATION_LANES = 128;
+const MAX_AUTOMATION_POINTS = 10_000;
 const nonBlankNameSchema = z.string().trim().min(1).max(MAX_NAME_LENGTH);
 const pluginTextSchema = z
   .string()
@@ -488,6 +492,40 @@ const ProjectDocumentV10BaseSchema = ProjectDocumentV9BaseSchema.omit({ schemaVe
   tracks: z.array(ProjectTrackV10Schema),
 });
 
+export const ProjectAutomationTargetSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('trackVolume') }),
+  z.strictObject({ kind: z.literal('trackPan') }),
+  z.strictObject({ kind: z.literal('sendGain'), sendId: z.uuid('Invalid Send ID format') }),
+  z.strictObject({
+    kind: z.literal('pluginParameter'),
+    parameterId: pluginTextSchema,
+    pluginInstanceId: z.uuid('Invalid Plugin instance ID format'),
+  }),
+]);
+
+export const ProjectAutomationPointSchema = z.strictObject({
+  id: z.uuid('Invalid Automation point ID format'),
+  interpolation: z.enum(AUTOMATION_INTERPOLATIONS),
+  timeSeconds: z.number().finite().nonnegative(),
+  value: normalizedAudioValueSchema,
+});
+
+export const ProjectAutomationLaneSchema = z.strictObject({
+  id: z.uuid('Invalid Automation lane ID format'),
+  isEnabled: z.boolean(),
+  points: z.array(ProjectAutomationPointSchema).max(MAX_AUTOMATION_POINTS),
+  target: ProjectAutomationTargetSchema,
+});
+
+export const ProjectTrackV11Schema = ProjectTrackV10Schema.safeExtend({
+  automationLanes: z.array(ProjectAutomationLaneSchema).max(MAX_AUTOMATION_LANES),
+});
+
+const ProjectDocumentV11BaseSchema = ProjectDocumentV10BaseSchema.omit({ schemaVersion: true, tracks: true }).extend({
+  schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V11),
+  tracks: z.array(ProjectTrackV11Schema),
+});
+
 interface IdentifiedDocumentPath {
   id: string;
   path: Array<string | number>;
@@ -509,14 +547,16 @@ type RefinableProjectDocument =
   | z.infer<typeof ProjectDocumentV7BaseSchema>
   | z.infer<typeof ProjectDocumentV8BaseSchema>
   | z.infer<typeof ProjectDocumentV9BaseSchema>
-  | z.infer<typeof ProjectDocumentV10BaseSchema>;
+  | z.infer<typeof ProjectDocumentV10BaseSchema>
+  | z.infer<typeof ProjectDocumentV11BaseSchema>;
 type RefinableProjectTrack =
   | z.infer<typeof ProjectTrackSchema>
   | z.infer<typeof ProjectTrackV2Schema>
   | z.infer<typeof ProjectTrackV3Schema>
   | z.infer<typeof ProjectTrackV4Schema>
   | z.infer<typeof ProjectTrackV8Schema>
-  | z.infer<typeof ProjectTrackV10Schema>;
+  | z.infer<typeof ProjectTrackV10Schema>
+  | z.infer<typeof ProjectTrackV11Schema>;
 
 function isProjectTrackWithLoopSlots(
   track: RefinableProjectTrack
@@ -524,7 +564,8 @@ function isProjectTrackWithLoopSlots(
   | z.infer<typeof ProjectTrackV3Schema>
   | z.infer<typeof ProjectTrackV4Schema>
   | z.infer<typeof ProjectTrackV8Schema>
-  | z.infer<typeof ProjectTrackV10Schema> {
+  | z.infer<typeof ProjectTrackV10Schema>
+  | z.infer<typeof ProjectTrackV11Schema> {
   return 'loopSlots' in track;
 }
 
@@ -648,7 +689,8 @@ function validatePluginState(
     | z.infer<typeof ProjectDocumentV7BaseSchema>
     | z.infer<typeof ProjectDocumentV8BaseSchema>
     | z.infer<typeof ProjectDocumentV9BaseSchema>
-    | z.infer<typeof ProjectDocumentV10BaseSchema>,
+    | z.infer<typeof ProjectDocumentV10BaseSchema>
+    | z.infer<typeof ProjectDocumentV11BaseSchema>,
   context: z.RefinementCtx
 ): void {
   const instanceEntries = document.tracks.flatMap((track, trackIndex) =>
@@ -759,6 +801,23 @@ export const ProjectDocumentV10Schema = ProjectDocumentV10BaseSchema.superRefine
   validateRoutingGraph(document, context);
   validateRecordingState(document, context);
 });
+export const ProjectDocumentV11Schema = ProjectDocumentV11BaseSchema.superRefine((document, context) => {
+  validateProjectRelations(document, context);
+  validatePluginState(document, context);
+  validateTimelineMap(document, context);
+  addDuplicateIdIssues({
+    entries: document.timeline.markers.map((marker, index) => ({
+      id: marker.id,
+      path: ['timeline', 'markers', index, 'id'],
+    })),
+    label: 'Timeline marker',
+    context,
+  });
+  validateRegionProcessing(document, context);
+  validateRoutingGraph(document, context);
+  validateRecordingState(document, context);
+  validateAutomationState(document, context);
+});
 
 interface CrossfadeEndpoint {
   readonly crossfadeId: string;
@@ -773,7 +832,8 @@ function validateRegionProcessing(
   document:
     | z.infer<typeof ProjectDocumentV8BaseSchema>
     | z.infer<typeof ProjectDocumentV9BaseSchema>
-    | z.infer<typeof ProjectDocumentV10BaseSchema>,
+    | z.infer<typeof ProjectDocumentV10BaseSchema>
+    | z.infer<typeof ProjectDocumentV11BaseSchema>,
   context: z.RefinementCtx
 ): void {
   document.tracks.forEach((track, trackIndex) => {
@@ -845,7 +905,10 @@ function validateCrossfadeEndpoints(endpoints: readonly CrossfadeEndpoint[], con
 }
 
 function validateRoutingGraph(
-  document: z.infer<typeof ProjectDocumentV9BaseSchema> | z.infer<typeof ProjectDocumentV10BaseSchema>,
+  document:
+    | z.infer<typeof ProjectDocumentV9BaseSchema>
+    | z.infer<typeof ProjectDocumentV10BaseSchema>
+    | z.infer<typeof ProjectDocumentV11BaseSchema>,
   context: z.RefinementCtx
 ): void {
   const routes = document.mixer.routing.routes;
@@ -996,7 +1059,7 @@ function validateRoutingGraph(
 }
 
 function validateRecordingState(
-  document: z.infer<typeof ProjectDocumentV10BaseSchema>,
+  document: z.infer<typeof ProjectDocumentV10BaseSchema> | z.infer<typeof ProjectDocumentV11BaseSchema>,
   context: z.RefinementCtx
 ): void {
   const trackIds = new Set(document.tracks.map(track => track.id));
@@ -1116,6 +1179,82 @@ function validateRecordingState(
   });
 }
 
+function validateAutomationState(
+  document: z.infer<typeof ProjectDocumentV11BaseSchema>,
+  context: z.RefinementCtx
+): void {
+  const sendsById = new Map(document.mixer.routing.sends.map(send => [send.id, send]));
+
+  addDuplicateIdIssues({
+    entries: document.tracks.flatMap((track, trackIndex) =>
+      track.automationLanes.map((lane, laneIndex) => ({
+        id: lane.id,
+        path: ['tracks', trackIndex, 'automationLanes', laneIndex, 'id'],
+      }))
+    ),
+    label: 'Automation lane',
+    context,
+  });
+
+  document.tracks.forEach((track, trackIndex) => {
+    const targetKeys = new Set<string>();
+    const pluginInstancesById = new Map(track.pluginInstances.map(instance => [instance.id, instance]));
+    track.automationLanes.forEach((lane, laneIndex) => {
+      const lanePath = ['tracks', trackIndex, 'automationLanes', laneIndex];
+      const targetKey = getAutomationTargetKey(lane.target);
+      if (targetKeys.has(targetKey)) {
+        context.addIssue({
+          code: 'custom',
+          message: `Duplicate Automation target: ${targetKey}`,
+          path: [...lanePath, 'target'],
+        });
+      }
+      targetKeys.add(targetKey);
+
+      addDuplicateIdIssues({
+        entries: lane.points.map((point, pointIndex) => ({
+          id: point.id,
+          path: [...lanePath, 'points', pointIndex, 'id'],
+        })),
+        label: 'Automation point',
+        context,
+      });
+      lane.points.slice(1).forEach((point, pointIndex) => {
+        if (point.timeSeconds <= lane.points[pointIndex].timeSeconds) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Automation point times must be strictly increasing',
+            path: [...lanePath, 'points', pointIndex + 1, 'timeSeconds'],
+          });
+        }
+      });
+
+      if (lane.target.kind === 'sendGain') {
+        const send = sendsById.get(lane.target.sendId);
+        if (send?.sourceTrackId !== track.id) {
+          context.addIssue({
+            code: 'custom',
+            message: `Automation Send must belong to its Track: ${lane.target.sendId}`,
+            path: [...lanePath, 'target', 'sendId'],
+          });
+        }
+      }
+      if (lane.target.kind === 'pluginParameter') {
+        const target = lane.target;
+        const instance = pluginInstancesById.get(target.pluginInstanceId);
+        const parameter = instance?.parameters.find(candidate => candidate.id === target.parameterId);
+        if (!instance || typeof parameter?.value !== 'number') {
+          context.addIssue({
+            code: 'custom',
+            message: `Automation Plugin parameter must be a numeric Track parameter: ${lane.target.parameterId}`,
+            path: [...lanePath, 'target'],
+          });
+        }
+      }
+    });
+  });
+}
+
 function hasDirectedCycle(nodes: readonly string[], edges: ReadonlyArray<readonly [string, string]>): boolean {
   const outgoing = new Map(nodes.map(node => [node, [] as string[]]));
   const inDegree = new Map(nodes.map(node => [node, 0]));
@@ -1153,7 +1292,8 @@ function validateTimelineMap(
     | z.infer<typeof ProjectDocumentV7BaseSchema>
     | z.infer<typeof ProjectDocumentV8BaseSchema>
     | z.infer<typeof ProjectDocumentV9BaseSchema>
-    | z.infer<typeof ProjectDocumentV10BaseSchema>,
+    | z.infer<typeof ProjectDocumentV10BaseSchema>
+    | z.infer<typeof ProjectDocumentV11BaseSchema>,
   context: z.RefinementCtx
 ): void {
   validateTimelineMarkerPositions(document.timeline.tempoChanges, 'tempoChanges', context);
@@ -1234,6 +1374,11 @@ export type ProjectTrackRecording = z.infer<typeof ProjectTrackRecordingSchema>;
 export type ProjectTrackV10 = z.infer<typeof ProjectTrackV10Schema>;
 export type ProjectRecording = z.infer<typeof ProjectRecordingSchema>;
 export type ProjectDocumentV10 = z.infer<typeof ProjectDocumentV10Schema>;
+export type ProjectAutomationTarget = z.infer<typeof ProjectAutomationTargetSchema>;
+export type ProjectAutomationPoint = z.infer<typeof ProjectAutomationPointSchema>;
+export type ProjectAutomationLane = z.infer<typeof ProjectAutomationLaneSchema>;
+export type ProjectTrackV11 = z.infer<typeof ProjectTrackV11Schema>;
+export type ProjectDocumentV11 = z.infer<typeof ProjectDocumentV11Schema>;
 export type ProjectDocumentSnapshot =
   | ProjectDocument
   | ProjectDocumentV2
@@ -1244,4 +1389,5 @@ export type ProjectDocumentSnapshot =
   | ProjectDocumentV7
   | ProjectDocumentV8
   | ProjectDocumentV9
-  | ProjectDocumentV10;
+  | ProjectDocumentV10
+  | ProjectDocumentV11;
