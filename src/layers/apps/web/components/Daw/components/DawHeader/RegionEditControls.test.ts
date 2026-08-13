@@ -27,7 +27,24 @@ const layerMocks = vi.hoisted(() => ({
       '11111111-1111-4111-8111-111111111111',
       {
         id: '11111111-1111-4111-8111-111111111111',
-        regions: [{ id: '22222222-2222-4222-8222-222222222222', sourceStartTime: 1 }],
+        regions: [
+          {
+            fadeIn: { crossfadeId: null, curve: 'linear', durationSeconds: 0 },
+            fadeOut: { crossfadeId: null, curve: 'linear', durationSeconds: 0 },
+            id: '22222222-2222-4222-8222-222222222222',
+            sourceStartTime: 1,
+            startTime: 1,
+            duration: 3,
+          },
+          {
+            fadeIn: { crossfadeId: null, curve: 'linear', durationSeconds: 0 },
+            fadeOut: { crossfadeId: null, curve: 'linear', durationSeconds: 0 },
+            id: '33333333-3333-4333-8333-333333333333',
+            sourceStartTime: 0,
+            startTime: 3,
+            duration: 2,
+          },
+        ],
       },
     ],
   ]),
@@ -63,6 +80,7 @@ afterEach(() => {
   act(() => mountedRoots.splice(0).forEach(root => root.unmount()));
   document.body.replaceChildren();
   layerMocks.execute.mockClear();
+  layerMocks.editorState.selection.regions.splice(1);
 });
 
 describe('RegionEditControls', () => {
@@ -92,6 +110,40 @@ describe('RegionEditControls', () => {
       type: AudioCommandType.SLIP_REGION,
       regionId: '22222222-2222-4222-8222-222222222222',
       sourceStartTimeSeconds: 1.1,
+      trackId: '11111111-1111-4111-8111-111111111111',
+    });
+  });
+
+  it.each([
+    ['Region 정규화', { type: AudioCommandType.NORMALIZE_SELECTED_REGIONS, targetPeak: 0.98 }],
+    ['Region 뒤집기', { type: AudioCommandType.REVERSE_SELECTED_REGIONS }],
+    [
+      'Region 무음 제거',
+      { type: AudioCommandType.STRIP_SILENCE_SELECTED_REGIONS, minimumSilenceSeconds: 0.2, thresholdDb: -60 },
+    ],
+  ] as const)('%s 버튼을 AudioCommand로 변환한다', async (label, command) => {
+    const host = renderControls();
+
+    await act(async () => host.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)?.click());
+
+    expect(layerMocks.execute).toHaveBeenCalledWith(command);
+  });
+
+  it('겹친 Region 두 개를 시간 순서의 Crossfade 명령으로 변환한다', async () => {
+    layerMocks.editorState.selection.regions.push({
+      regionId: '33333333-3333-4333-8333-333333333333',
+      trackId: '11111111-1111-4111-8111-111111111111',
+    });
+    const host = renderControls();
+
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Region Crossfade 생성"]')?.click());
+
+    expect(layerMocks.execute).toHaveBeenCalledWith({
+      type: AudioCommandType.CREATE_REGION_CROSSFADE,
+      crossfadeId: expect.any(String),
+      curve: 'linear',
+      fadeInRegionId: '33333333-3333-4333-8333-333333333333',
+      fadeOutRegionId: '22222222-2222-4222-8222-222222222222',
       trackId: '11111111-1111-4111-8111-111111111111',
     });
   });

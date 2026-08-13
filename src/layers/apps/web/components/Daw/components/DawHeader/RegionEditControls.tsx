@@ -6,6 +6,7 @@ import {
   useKeyboardShortcutAction,
 } from '@/layers/apps/web/keyboard-shortcuts/keyboard-shortcuts';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
+import type { RegionState } from '@/layers/session/session';
 import * as styles from './RegionEditControls.css.ts';
 
 const REGION_NUDGE_SECONDS = 0.1;
@@ -22,6 +23,12 @@ export function RegionEditControls() {
   const selectedRegionState = selectedRegion
     ? tracks.get(selectedRegion.trackId)?.regions.find(region => region.id === selectedRegion.regionId)
     : undefined;
+  const selectedRegionStates = editorRuntime.selection.regions.flatMap(selection => {
+    const region = tracks.get(selection.trackId)?.regions.find(candidate => candidate.id === selection.regionId);
+    return region ? [{ region, trackId: selection.trackId }] : [];
+  });
+  const crossfadeCandidate = resolveCrossfadeCandidate(selectedRegionStates);
+  const removableCrossfade = resolveRemovableCrossfade(selectedRegionStates);
 
   const execute = useCallback(
     async (command: AudioCommand) => {
@@ -80,6 +87,29 @@ export function RegionEditControls() {
       regionId: selectedRegion.regionId,
       sourceStartTimeSeconds: Math.max(0, selectedRegionState.sourceStartTime + deltaSeconds),
       trackId: selectedRegion.trackId,
+    });
+  };
+  const createCrossfade = () => {
+    if (!crossfadeCandidate) {
+      return Promise.resolve();
+    }
+    return execute({
+      type: AudioCommandType.CREATE_REGION_CROSSFADE,
+      crossfadeId: globalThis.crypto.randomUUID(),
+      curve: 'linear',
+      fadeInRegionId: crossfadeCandidate.fadeInRegionId,
+      fadeOutRegionId: crossfadeCandidate.fadeOutRegionId,
+      trackId: crossfadeCandidate.trackId,
+    });
+  };
+  const removeCrossfade = () => {
+    if (!removableCrossfade) {
+      return Promise.resolve();
+    }
+    return execute({
+      type: AudioCommandType.REMOVE_REGION_CROSSFADE,
+      crossfadeId: removableCrossfade.crossfadeId,
+      trackId: removableCrossfade.trackId,
     });
   };
 
@@ -158,8 +188,91 @@ export function RegionEditControls() {
           onClick={() => slip(REGION_NUDGE_SECONDS)}
         />
       </div>
+      <div className={styles.buttonGroup}>
+        <EditButton
+          label="Region 정규화"
+          text="NORM"
+          disabled={!hasSelectedRegions}
+          onClick={() => execute({ type: AudioCommandType.NORMALIZE_SELECTED_REGIONS, targetPeak: 0.98 })}
+        />
+        <EditButton
+          label="Region 뒤집기"
+          text="REV"
+          disabled={!hasSelectedRegions}
+          onClick={() => execute({ type: AudioCommandType.REVERSE_SELECTED_REGIONS })}
+        />
+        <EditButton
+          label="Region 무음 제거"
+          text="STRIP"
+          disabled={!hasSelectedRegions}
+          onClick={() =>
+            execute({
+              type: AudioCommandType.STRIP_SILENCE_SELECTED_REGIONS,
+              minimumSilenceSeconds: 0.2,
+              thresholdDb: -60,
+            })
+          }
+        />
+        <EditButton
+          label="Region Crossfade 생성"
+          text="XFADE"
+          disabled={!crossfadeCandidate}
+          onClick={createCrossfade}
+        />
+        <EditButton label="Region Crossfade 제거" text="X-" disabled={!removableCrossfade} onClick={removeCrossfade} />
+      </div>
     </section>
   );
+}
+
+interface SelectedRegionState {
+  readonly region: RegionState;
+  readonly trackId: string;
+}
+
+function resolveCrossfadeCandidate(selectedRegions: readonly SelectedRegionState[]): {
+  readonly fadeInRegionId: string;
+  readonly fadeOutRegionId: string;
+  readonly trackId: string;
+} | null {
+  if (selectedRegions.length !== 2 || selectedRegions[0]?.trackId !== selectedRegions[1]?.trackId) {
+    return null;
+  }
+  const [fadeOutRegion, fadeInRegion] = [...selectedRegions].sort(
+    (left, right) => left.region.startTime - right.region.startTime
+  );
+  if (!fadeOutRegion || !fadeInRegion || fadeOutRegion.region.startTime === fadeInRegion.region.startTime) {
+    return null;
+  }
+  const fadeOutEndTime = fadeOutRegion.region.startTime + fadeOutRegion.region.duration;
+  const fadeInEndTime = fadeInRegion.region.startTime + fadeInRegion.region.duration;
+  if (fadeOutEndTime <= fadeInRegion.region.startTime || fadeOutEndTime > fadeInEndTime) {
+    return null;
+  }
+  return {
+    fadeInRegionId: fadeInRegion.region.id,
+    fadeOutRegionId: fadeOutRegion.region.id,
+    trackId: fadeOutRegion.trackId,
+  };
+}
+
+function resolveRemovableCrossfade(selectedRegions: readonly SelectedRegionState[]): {
+  readonly crossfadeId: string;
+  readonly trackId: string;
+} | null {
+  const firstSelection = selectedRegions[0];
+  if (!firstSelection || selectedRegions.some(selection => selection.trackId !== firstSelection.trackId)) {
+    return null;
+  }
+  const selectedCrossfadeIds = new Set(
+    selectedRegions.flatMap(({ region }) =>
+      [region.fadeIn.crossfadeId, region.fadeOut.crossfadeId].filter(
+        (crossfadeId): crossfadeId is string => crossfadeId !== null
+      )
+    )
+  );
+  const [crossfadeId] = selectedCrossfadeIds;
+  return selectedCrossfadeIds.size === 1 && crossfadeId ? { crossfadeId, trackId: firstSelection.trackId } : null;
 }
 
 function EditButton({

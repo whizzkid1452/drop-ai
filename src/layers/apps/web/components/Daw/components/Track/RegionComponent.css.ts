@@ -16,6 +16,42 @@ export const selectedRegion = style({
   boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 0 2px rgba(255, 211, 77, 0.5)',
 });
 
+export const fadeRamp = style({
+  position: 'absolute',
+  top: 0,
+  bottom: 0,
+  zIndex: 1,
+  pointerEvents: 'none',
+  background: 'rgba(255, 242, 168, 0.2)',
+});
+
+export const fadeInRamp = style({
+  left: 0,
+  clipPath: 'polygon(0 100%, 100% 0, 100% 100%)',
+});
+
+export const fadeOutRamp = style({
+  right: 0,
+  clipPath: 'polygon(0 0, 100% 100%, 0 100%)',
+});
+
+export const fadeHandle = style({
+  position: 'absolute',
+  top: '3px',
+  zIndex: 4,
+  width: '10px',
+  height: '10px',
+  padding: 0,
+  border: '1px solid #241f19',
+  borderRadius: '50%',
+  background: '#fff2a8',
+  cursor: 'ew-resize',
+  touchAction: 'none',
+});
+
+export const fadeInHandle = style({ left: 0 });
+export const fadeOutHandle = style({ right: 0 });
+
 export const trimHandle = style({
   position: 'absolute',
   top: 0,

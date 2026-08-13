@@ -23,6 +23,7 @@ test('기능별 runtime 지원 상태를 확인한다', async ({ page }) => {
   await expect(capabilityPanel.locator('[data-feature="tempoLoopMetronome"]')).toContainText('사용 가능');
   await expect(capabilityPanel.locator('[data-feature="metering"]')).toContainText('사용 가능');
   await expect(capabilityPanel.locator('[data-feature="linearRecording"]')).toContainText('사용 가능');
+  await expect(capabilityPanel.locator('[data-feature="regionProcessing"]')).toContainText('사용 가능');
 });
 
 test('Loop 범위와 Metronome을 Transport에서 바로 제어한다', async ({ page }) => {
@@ -163,6 +164,38 @@ test('Region을 선택해 복제하고 Undo·Redo·저장·복원한다', async 
   await page.getByRole('button', { name: '불러오기' }).click();
   await expect(regions).toHaveCount(3);
   await expect(page.getByRole('region', { name: 'Region 편집 도구' })).toContainText('0 REGION');
+});
+
+test('Region gain과 Fade를 Inspector에서 변경하고 저장 후 복원한다', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('input[type="file"]').setInputFiles(ensureFakeAudioInputFixture());
+  await page.waitForURL('**/daw');
+
+  const region = page.locator('[data-region-id]').first();
+  await region.click({ position: { x: 24, y: 36 } });
+  await page.getByRole('button', { name: 'Open track inspector' }).click();
+
+  const gainInput = page.getByRole('slider', { name: 'Region gain' });
+  const fadeInInput = page.getByRole('slider', { name: 'Region fade in' });
+  await expect(gainInput).toBeVisible();
+  await gainInput.fill('0.5');
+  await fadeInInput.fill('0.25');
+  await expect(gainInput).toHaveValue('0.5');
+  await expect(fadeInInput).toHaveValue('0.25');
+  await expect(page.getByRole('button', { name: 'Region fade in' })).toBeVisible();
+
+  await page.getByTitle(/^Save/).click();
+  await expect(page.getByText('Save completed', { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: '불러오기' }).click();
+  await page
+    .locator('[data-region-id]')
+    .first()
+    .click({ position: { x: 24, y: 36 } });
+  await page.getByRole('button', { name: 'Open track inspector' }).click();
+
+  await expect(page.getByRole('slider', { name: 'Region gain' })).toHaveValue('0.5');
+  await expect(page.getByRole('slider', { name: 'Region fade in' })).toHaveValue('0.25');
 });
 
 test('오디오 입력 API가 없으면 원인 표시와 함께 관련 UI를 비활성화한다', async ({ page }) => {

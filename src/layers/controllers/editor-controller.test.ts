@@ -279,6 +279,71 @@ describe('EditorController Region 편집', () => {
     });
   });
 
+  it('trim으로 Region이 짧아지면 독립 Fade 길이를 새 Region 길이로 제한한다', async () => {
+    const { controller, replaceTrackRegions, sessionStore } = createController();
+    const track = sessionStore.getState().tracks.get(TRACK_ID);
+    sessionStore.getState().updateTrack(TRACK_ID, {
+      regions: track?.regions.map(region =>
+        region.id === REGION_ID
+          ? {
+              ...region,
+              fadeIn: { crossfadeId: null, curve: 'linear', durationSeconds: 1.5 },
+              fadeOut: { crossfadeId: null, curve: 'linear', durationSeconds: 1 },
+            }
+          : region
+      ),
+    });
+
+    await controller.trimRegion({
+      durationSeconds: 0.5,
+      regionId: REGION_ID,
+      sourceStartTimeSeconds: 1,
+      startTimeSeconds: 4,
+      trackId: TRACK_ID,
+    });
+
+    expect(replaceTrackRegions.mock.calls[0]?.[0].tracks[0]?.regions[0]).toMatchObject({
+      fadeIn: { crossfadeId: null, durationSeconds: 0.5 },
+      fadeOut: { crossfadeId: null, durationSeconds: 0.5 },
+    });
+  });
+
+  it('Crossfade Region을 trim하면 양쪽 Region의 Crossfade 연결을 해제한다', async () => {
+    const { controller, replaceTrackRegions, sessionStore } = createController();
+    const track = sessionStore.getState().tracks.get(TRACK_ID);
+    sessionStore.getState().updateTrack(TRACK_ID, {
+      regions: track?.regions.map(region => {
+        if (region.id === REGION_ID) {
+          return { ...region, fadeOut: { crossfadeId: CROSSFADE_ID, curve: 'linear', durationSeconds: 1 } };
+        }
+        return {
+          ...region,
+          endTime: 7,
+          fadeIn: { crossfadeId: CROSSFADE_ID, curve: 'linear', durationSeconds: 1 },
+          startTime: 5,
+        };
+      }),
+    });
+
+    await controller.trimRegion({
+      durationSeconds: 1,
+      regionId: REGION_ID,
+      sourceStartTimeSeconds: 1,
+      startTimeSeconds: 4,
+      trackId: TRACK_ID,
+    });
+
+    const regions = replaceTrackRegions.mock.calls[0]?.[0].tracks[0]?.regions;
+    expect(regions?.find(region => region.id === REGION_ID)?.fadeOut).toMatchObject({
+      crossfadeId: null,
+      durationSeconds: 0,
+    });
+    expect(regions?.find(region => region.id === SECOND_REGION_ID)?.fadeIn).toMatchObject({
+      crossfadeId: null,
+      durationSeconds: 0,
+    });
+  });
+
   it('Region 처리값을 변경하고 수동 Fade에서 기존 Crossfade 연결을 해제한다', async () => {
     const { controller, replaceTrackRegions } = createController();
 

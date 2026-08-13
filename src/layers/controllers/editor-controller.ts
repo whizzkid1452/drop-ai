@@ -234,12 +234,36 @@ export class EditorController {
 
   async trimRegion(request: TrimRegionRequest): Promise<void> {
     this.assertFiniteRegionPlacement(request);
-    await this.replaceRegion(request.trackId, request.regionId, region => ({
-      ...region,
-      durationSeconds: request.durationSeconds,
-      sourceStartTimeSeconds: request.sourceStartTimeSeconds,
-      startTimeSeconds: request.startTimeSeconds,
-    }));
+    const targetRegion = this.getRegion({ regionId: request.regionId, trackId: request.trackId });
+    const [track] = this.createTrackRegionSnapshots([request.trackId]);
+    if (!track) {
+      this.throwInvalidSelection(`Track을 찾을 수 없습니다: ${request.trackId}`);
+    }
+    const crossfadeIdsToClear = new Set(
+      [targetRegion.fadeIn.crossfadeId, targetRegion.fadeOut.crossfadeId].filter(
+        (crossfadeId): crossfadeId is string => crossfadeId !== null
+      )
+    );
+    const regions = this.clearRegionCrossfades(track.regions, crossfadeIdsToClear).map(region => {
+      if (region.id !== request.regionId) {
+        return region;
+      }
+      return this.validateRegionSnapshot({
+        ...region,
+        durationSeconds: request.durationSeconds,
+        fadeIn: {
+          ...region.fadeIn,
+          durationSeconds: Math.min(region.fadeIn.durationSeconds, request.durationSeconds),
+        },
+        fadeOut: {
+          ...region.fadeOut,
+          durationSeconds: Math.min(region.fadeOut.durationSeconds, request.durationSeconds),
+        },
+        sourceStartTimeSeconds: request.sourceStartTimeSeconds,
+        startTimeSeconds: request.startTimeSeconds,
+      });
+    });
+    await this.#regionRuntime.replaceTrackRegions({ tracks: [{ ...track, regions }] });
   }
 
   async slipRegion(request: SlipRegionRequest): Promise<void> {

@@ -26,6 +26,7 @@ export const TrackComponent = memo(function TrackComponent({
   coordinateMapper,
   gridSettings,
   onReady,
+  onFadeChange,
   onMuteChange,
   onSelect,
   onSoloChange,
@@ -41,6 +42,7 @@ export const TrackComponent = memo(function TrackComponent({
   coordinateMapper: TimelineCoordinateMapper;
   gridSettings: TimelineGridSettings;
   onReady: (event: RegionWaveSurferReadyEvent) => void;
+  onFadeChange: (regionId: string, edge: 'in' | 'out', durationSeconds: number) => Promise<void>;
   onMuteChange: (muted: boolean) => Promise<TrackToggleResult>;
   onSelect: () => void;
   onSoloChange: (soloed: boolean) => Promise<TrackToggleResult>;
@@ -234,6 +236,7 @@ export const TrackComponent = memo(function TrackComponent({
               })
             }
             onMove={newStartTime => handleMoveRegion(region.id, newStartTime)}
+            onFadeChange={(edge, durationSeconds) => onFadeChange(region.id, edge, durationSeconds)}
             onRemove={() => handleRemoveRegion(region.id)}
             onSelect={additive => onRegionSelect(region.id, additive)}
             onTrim={request => onTrimRegion(region.id, request)}

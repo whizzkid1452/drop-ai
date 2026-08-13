@@ -13,12 +13,27 @@ const showBoundary = vi.fn();
 const splitRegion = vi.fn().mockResolvedValue(undefined);
 const layerMocks = {
   currentTime: 5,
+  editorState: {
+    clipboard: { entries: [], pasteCount: 0 },
+    selection: {
+      editPointSeconds: 0,
+      range: null,
+      regions: [] as Array<{ regionId: string; trackId: string }>,
+      trackIds: [] as string[],
+    },
+  },
   tracks: new Map<string, TrackState>(),
 };
 
 vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
   useCommandExecutor: () => ({ execute: executeCommand }),
+  useEditorRuntimeState: () => layerMocks.editorState,
   useSession: (selector: (state: typeof layerMocks) => unknown) => selector(layerMocks),
+}));
+
+vi.mock('./RegionProcessingControls', () => ({
+  RegionProcessingControls: ({ region, trackId }: { region: TrackState['regions'][number]; trackId: string }) =>
+    createElement('div', { 'data-region-id': region.id, 'data-testid': 'region-processing', 'data-track-id': trackId }),
 }));
 
 vi.mock('react-error-boundary', () => ({
@@ -128,6 +143,8 @@ afterEach(() => {
   });
   document.body.replaceChildren();
   layerMocks.currentTime = 5;
+  layerMocks.editorState.selection.regions = [];
+  layerMocks.editorState.selection.trackIds = [];
   layerMocks.tracks = new Map();
   executeCommand.mockClear();
   showBoundary.mockClear();
@@ -149,6 +166,18 @@ describe('TrackInfoSidebar', () => {
     expect(host.querySelector<HTMLElement>('[data-testid="plugin-controls"]')?.dataset.trackId).toBe(selectedTrack.id);
     expect(host.querySelector<HTMLElement>('[data-testid="loop-controls"]')?.dataset.trackId).toBe(selectedTrack.id);
     expect(host.textContent).not.toContain(otherTrack.name);
+  });
+
+  it('단일 선택 Region의 처리 제어를 Inspector에 표시한다', () => {
+    layerMocks.tracks = new Map([[selectedTrack.id, selectedTrack]]);
+    layerMocks.editorState.selection.regions = [{ regionId: selectedTrack.regions[0].id, trackId: selectedTrack.id }];
+    layerMocks.editorState.selection.trackIds = [selectedTrack.id];
+
+    const host = renderSidebar(selectedTrack.id);
+
+    expect(host.querySelector<HTMLElement>('[data-testid="region-processing"]')?.dataset.regionId).toBe(
+      selectedTrack.regions[0].id
+    );
   });
 
   it('선택한 Track이 없으면 안내 문구를 표시한다', () => {
