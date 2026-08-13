@@ -27,6 +27,8 @@
     "docker:compose:build": "docker-compose build",
     "docker:compose:down": "docker-compose down",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium",
     "test:watch": "vitest",
     "test:daw-engine": "pnpm --dir daw-engine test",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
@@ -71,6 +73,7 @@
   "devDependencies": {
     "@eslint/js": "^9.33.0",
     "@netlify/functions": "^5.3.0",
+    "@playwright/test": "^1.62.1",
     "@types/node": "^26.1.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
