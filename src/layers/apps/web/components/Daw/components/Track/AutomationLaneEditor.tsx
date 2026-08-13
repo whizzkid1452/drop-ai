@@ -120,7 +120,7 @@ export function AutomationLaneEditor({
     }
     await commitAutomationLanes([
       ...automationLanes,
-      { id: createId(), isEnabled: true, points: [], target: selectedTarget.target },
+      { id: createId(), isEnabled: true, mode: 'read', points: [], target: selectedTarget.target },
     ]);
   };
 

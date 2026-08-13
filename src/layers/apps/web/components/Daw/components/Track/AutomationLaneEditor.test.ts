@@ -29,6 +29,7 @@ const track: TrackState = {
     {
       id: LANE_ID,
       isEnabled: true,
+      mode: 'read',
       points: [{ id: POINT_ID, interpolation: 'linear', timeSeconds: 1, value: 0.5 }],
       target: { kind: 'trackVolume' },
     },

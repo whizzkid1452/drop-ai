@@ -5,6 +5,7 @@ import { createAutomationRenderPlan, evaluateAutomationLane } from './automation
 const LANE: AutomationLaneState = {
   id: '11111111-1111-4111-8111-111111111111',
   isEnabled: true,
+  mode: 'read',
   target: { kind: 'trackVolume' },
   points: [
     {

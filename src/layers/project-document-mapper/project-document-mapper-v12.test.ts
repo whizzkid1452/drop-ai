@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectSessionState } from '../session/session';
 import {
-  createProjectDocumentV11FromSession,
-  createProjectRestoreSnapshotFromDocumentV11,
+  createProjectDocumentV12FromSession,
+  createProjectRestoreSnapshotFromDocumentV12,
 } from './project-document-mapper';
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
@@ -13,7 +13,7 @@ function createSession(): ProjectSessionState {
     exportEndTime: null,
     exportStartTime: null,
     masterVolume: 0.8,
-    project: { id: PROJECT_ID, name: 'Automation', revision: 1 },
+    project: { id: PROJECT_ID, name: 'Automation Write', revision: 1 },
     tempo: 120,
     tracks: new Map([
       [
@@ -23,15 +23,8 @@ function createSession(): ProjectSessionState {
             {
               id: '33333333-3333-4333-8333-333333333333',
               isEnabled: true,
-              mode: 'read',
-              points: [
-                {
-                  id: '44444444-4444-4444-8444-444444444444',
-                  interpolation: 'linear',
-                  timeSeconds: 1,
-                  value: 0.5,
-                },
-              ],
+              mode: 'latch',
+              points: [],
               target: { kind: 'trackVolume' },
             },
           ],
@@ -51,13 +44,14 @@ function createSession(): ProjectSessionState {
   };
 }
 
-describe('ProjectDocument v11 mapper', () => {
-  it('Automation lane과 point를 저장하고 복원한다', () => {
+describe('ProjectDocument v12 mapper', () => {
+  it('Automation mode를 저장하고 복원한다', () => {
     const session = createSession();
-    const document = createProjectDocumentV11FromSession({ audioSources: [], pluginCatalog: [], session });
-    const restored = createProjectRestoreSnapshotFromDocumentV11({ document, pluginCatalog: [] });
 
-    expect(document.schemaVersion).toBe(11);
+    const document = createProjectDocumentV12FromSession({ audioSources: [], pluginCatalog: [], session });
+    const restored = createProjectRestoreSnapshotFromDocumentV12({ document, pluginCatalog: [] });
+
+    expect(document.schemaVersion).toBe(12);
     expect(restored.session.tracks.get(TRACK_ID)?.automationLanes).toEqual(
       session.tracks.get(TRACK_ID)?.automationLanes
     );

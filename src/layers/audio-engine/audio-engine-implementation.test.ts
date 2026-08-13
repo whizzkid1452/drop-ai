@@ -751,6 +751,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
         {
           id: '11111111-1111-4111-8111-111111111111',
           isEnabled: true,
+          mode: 'read',
           points: [
             {
               id: '22222222-2222-4222-8222-222222222222',
@@ -782,6 +783,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     const createLane = (value: number) => ({
       id: '11111111-1111-4111-8111-111111111111',
       isEnabled: true,
+      mode: 'read' as const,
       points: [
         {
           id: '22222222-2222-4222-8222-222222222222',
@@ -849,6 +851,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
         {
           id: '44444444-4444-4444-8444-444444444444',
           isEnabled: true,
+          mode: 'read',
           points: [
             {
               id: '55555555-5555-4555-8555-555555555555',
@@ -913,6 +916,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
       {
         id: '88888888-8888-4888-8888-888888888888',
         isEnabled: false,
+        mode: 'read' as const,
         points: [
           {
             id: '99999999-9999-4999-8999-999999999999',
@@ -969,6 +973,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
         {
           id: '66666666-6666-4666-8666-666666666666',
           isEnabled: true,
+          mode: 'read',
           points: [
             {
               id: '77777777-7777-4777-8777-777777777777',
@@ -2972,6 +2977,7 @@ describe('AudioEngine Export 회귀', () => {
             {
               id: '11111111-1111-4111-8111-111111111111',
               isEnabled: true,
+              mode: 'read',
               points: [
                 {
                   id: '22222222-2222-4222-8222-222222222222',
@@ -3050,6 +3056,7 @@ describe('AudioEngine Export 회귀', () => {
             {
               id: '44444444-4444-4444-8444-444444444444',
               isEnabled: true,
+              mode: 'read',
               points: [
                 {
                   id: '55555555-5555-4555-8555-555555555555',

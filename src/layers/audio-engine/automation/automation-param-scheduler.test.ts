@@ -16,6 +16,7 @@ function createLane(interpolation: AutomationLaneState['points'][number]['interp
   return {
     id: '11111111-1111-4111-8111-111111111111',
     isEnabled: true,
+    mode: 'read',
     target: { kind: 'trackVolume' },
     points: [
       {
