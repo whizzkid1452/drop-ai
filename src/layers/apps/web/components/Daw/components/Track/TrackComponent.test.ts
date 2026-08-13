@@ -9,7 +9,10 @@ import type { TrackToggleResult } from '@/layers/apps/web/hooks/track-mute-solo-
 import { TrackComponent } from './TrackComponent';
 import { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 
-const { renderRegionComponent } = vi.hoisted(() => ({ renderRegionComponent: vi.fn() }));
+const { renderAutomationLaneEditor, renderRegionComponent } = vi.hoisted(() => ({
+  renderAutomationLaneEditor: vi.fn(),
+  renderRegionComponent: vi.fn(),
+}));
 
 vi.mock('@/layers/apps/web/hooks/useTrackActions', () => ({
   useTrackActions: () => ({
@@ -22,6 +25,13 @@ vi.mock('./RegionComponent', () => ({
   RegionComponent: (props: unknown) => {
     renderRegionComponent(props);
     return null;
+  },
+}));
+
+vi.mock('./AutomationLaneEditor', () => ({
+  AutomationLaneEditor: (props: unknown) => {
+    renderAutomationLaneEditor(props);
+    return createElement('div', { 'data-testid': 'automation-lane-editor' });
   },
 }));
 
@@ -41,6 +51,7 @@ vi.mock('./components/TrackRecordArmControl', () => ({
 
 vi.mock('./Track.css.ts', () => ({
   actionControls: 'actionControls',
+  automationButtonActive: 'automationButtonActive',
   muteButtonActive: 'muteButtonActive',
   rangeSelection: 'rangeSelection',
   soloButtonActive: 'soloButtonActive',
@@ -135,9 +146,15 @@ function renderTrack(
     root.render(
       createElement(TrackComponent, {
         track: options.track ?? track,
+        automationCapability: { blockers: [], status: 'available' },
         isSelected: options.isSelected ?? false,
         coordinateMapper,
+        editPointSeconds: 0,
         gridSettings,
+        onAutomationChange: vi.fn().mockResolvedValue(undefined),
+        pluginCatalog: new Map(),
+        routingGraph: { routes: [], sends: [] },
+        trackNamesById: new Map([[track.id, track.name]]),
         waveformRenderCache,
         onReady: vi.fn(),
         onFadeChange: options.onFadeChange ?? vi.fn().mockResolvedValue(undefined),
@@ -162,9 +179,27 @@ afterEach(() => {
   });
   document.body.replaceChildren();
   renderRegionComponent.mockReset();
+  renderAutomationLaneEditor.mockReset();
 });
 
 describe('TrackComponent 제어', () => {
+  it('Automation 버튼으로 Lane 편집기를 바로 열고 닫는다', () => {
+    const host = renderTrack();
+    const automationButton = host.querySelector<HTMLButtonElement>(
+      `button[aria-label="${track.name} Automation Lane 표시"]`
+    );
+
+    act(() => automationButton?.click());
+
+    expect(automationButton?.getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('[data-testid="automation-lane-editor"]')).not.toBeNull();
+    expect(renderAutomationLaneEditor).toHaveBeenCalledTimes(1);
+
+    act(() => automationButton?.click());
+
+    expect(host.querySelector('[data-testid="automation-lane-editor"]')).toBeNull();
+  });
+
   it('Track 제어부와 타임라인을 하나의 편집 행으로 렌더링한다', () => {
     const host = renderTrack();
 

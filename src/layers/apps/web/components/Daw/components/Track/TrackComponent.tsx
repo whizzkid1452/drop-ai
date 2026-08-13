@@ -12,6 +12,12 @@ import { snapTimelineSeconds, type TimelineGridSettings } from '../../timeline-g
 import { AudioLevelMeter } from '../AudioLevelMeter/AudioLevelMeter';
 import { TrackInputMonitoringControl } from '../LiveInputControls/TrackInputMonitoringControl';
 import { TrackRecordArmControl } from './components/TrackRecordArmControl';
+import { AutomationLaneEditor } from './AutomationLaneEditor';
+import type { AutomationLaneState } from '@/layers/shared/types/automation-state';
+import type { PluginCatalogEntry } from '@/layers/shared/types/plugin-state';
+import type { RoutingGraphSnapshot } from '@/layers/shared/types/routing-state';
+import type { AudioRuntimeFeatureCapability } from '@/layers/shared/utils/audio-runtime-capabilities';
+import { describeAudioRuntimeFeatureCapability } from '@/layers/apps/web/utils/audio-runtime-capability-labels';
 
 export interface RegionWaveSurferReadyEvent {
   trackId: string;
@@ -23,8 +29,14 @@ export interface RegionWaveSurferReadyEvent {
 export const TrackComponent = memo(function TrackComponent({
   isSelected,
   track,
+  automationCapability,
   coordinateMapper,
+  editPointSeconds,
   gridSettings,
+  pluginCatalog,
+  routingGraph,
+  trackNamesById,
+  onAutomationChange,
   onReady,
   onFadeChange,
   onMuteChange,
@@ -39,8 +51,14 @@ export const TrackComponent = memo(function TrackComponent({
 }: {
   isSelected: boolean;
   track: TrackState;
+  automationCapability: AudioRuntimeFeatureCapability;
   coordinateMapper: TimelineCoordinateMapper;
+  editPointSeconds: number;
   gridSettings: TimelineGridSettings;
+  pluginCatalog: ReadonlyMap<string, PluginCatalogEntry>;
+  routingGraph: RoutingGraphSnapshot;
+  trackNamesById: ReadonlyMap<string, string>;
+  onAutomationChange: (automationLanes: readonly AutomationLaneState[]) => Promise<void>;
   onReady: (event: RegionWaveSurferReadyEvent) => void;
   onFadeChange: (regionId: string, edge: 'in' | 'out', durationSeconds: number) => Promise<void>;
   onMuteChange: (muted: boolean) => Promise<TrackToggleResult>;
@@ -59,6 +77,7 @@ export const TrackComponent = memo(function TrackComponent({
   const { moveRegion, removeRegion } = useTrackActions();
   const [isMutePending, setIsMutePending] = useState(false);
   const [isSoloPending, setIsSoloPending] = useState(false);
+  const [isAutomationOpen, setIsAutomationOpen] = useState(false);
   const rangePointerId = useRef<number | null>(null);
   const rangeStartTime = useRef(0);
   const [rangePreview, setRangePreview] = useState<{ endTimeSeconds: number; startTimeSeconds: number } | null>(null);
@@ -160,6 +179,7 @@ export const TrackComponent = memo(function TrackComponent({
   };
 
   const displayedRange = rangePreview ?? selectedRange;
+  const isAutomationAvailable = automationCapability.status === 'available';
 
   return (
     <article
@@ -197,6 +217,17 @@ export const TrackComponent = memo(function TrackComponent({
             S
           </button>
           <TrackInputMonitoringControl trackId={track.id} trackName={track.name} />
+          <button
+            type="button"
+            className={`${styles.trackActionButton} ${isAutomationOpen ? styles.automationButtonActive : ''}`}
+            aria-label={`${track.name} Automation Lane 표시`}
+            aria-pressed={isAutomationOpen}
+            disabled={!isAutomationAvailable}
+            onClick={() => setIsAutomationOpen(isOpen => !isOpen)}
+            title={isAutomationAvailable ? 'Automation' : describeAudioRuntimeFeatureCapability(automationCapability)}
+          >
+            A
+          </button>
         </div>
         <AudioLevelMeter label="Track" target={{ kind: 'track', trackId: track.id }} />
       </div>
@@ -245,6 +276,18 @@ export const TrackComponent = memo(function TrackComponent({
           />
         ))}
       </div>
+      {isAutomationOpen ? (
+        <AutomationLaneEditor
+          coordinateMapper={coordinateMapper}
+          editPointSeconds={editPointSeconds}
+          onChange={onAutomationChange}
+          pluginCatalog={pluginCatalog}
+          routingGraph={routingGraph}
+          selectedRange={selectedRange}
+          track={track}
+          trackNamesById={trackNamesById}
+        />
+      ) : null}
     </article>
   );
 });
