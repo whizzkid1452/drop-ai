@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import * as styles from './MasterVolumeControl.css.ts';
 import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
 import { executeMasterVolumeChange, parseMasterVolumeInput } from '@/layers/apps/web/hooks/master-volume-command';
+import { AudioLevelMeter } from '../AudioLevelMeter/AudioLevelMeter';
 
 export function MasterVolumeControl() {
   const commandExecutor = useCommandExecutor();
@@ -63,6 +64,7 @@ export function MasterVolumeControl() {
       <button className={styles.button} type="submit" disabled={isPending}>
         {isPending ? '적용 중…' : '적용'}
       </button>
+      <AudioLevelMeter label="Master" target={{ kind: 'master' }} />
     </form>
   );
 }

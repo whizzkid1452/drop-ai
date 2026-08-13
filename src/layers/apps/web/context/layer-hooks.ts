@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 import { useStore } from 'zustand';
 import type { IAudioSourceResolver, IAudioSourceStager } from '../../../audio-source-registry/i-audio-source-registry';
 import type { CommandExecutor } from '../../../commands/command-executor';
@@ -6,6 +6,7 @@ import type { CommandHistorySnapshot } from '../../../commands/command-history';
 import type { IPlaybackClockQuery } from '../../../queries/playback-clock-query';
 import type { IMeterQuery } from '../../../queries/meter-query';
 import type { ILiveInputQuery } from '../../../queries/live-input-query';
+import type { LiveInputRuntimeState } from '../../../shared/types/live-input';
 import type { IProjectCatalogQuery } from '../../../queries/project-catalog-query';
 import type { SessionState } from '../../../session/session';
 import type { AudioRuntimeCapabilities } from '../../../shared/utils/audio-runtime-capabilities';
@@ -62,6 +63,13 @@ export function useMeterQuery(): IMeterQuery {
 
 export function useLiveInputQuery(): ILiveInputQuery {
   return useLayer().liveInput;
+}
+
+export function useLiveInputRuntimeState(): LiveInputRuntimeState {
+  const liveInput = useLiveInputQuery();
+  const subscribe = useCallback((listener: () => void) => liveInput.subscribe(listener), [liveInput]);
+  const getSnapshot = useCallback(() => liveInput.readState(), [liveInput]);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 export function useProjectCatalog(): IProjectCatalogQuery {

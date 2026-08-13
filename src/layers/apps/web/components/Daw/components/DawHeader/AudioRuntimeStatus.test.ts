@@ -105,7 +105,7 @@ describe('AudioRuntimeStatus', () => {
     expect(panel).not.toBeNull();
     expect(liveInput?.textContent).toContain('환경 차단');
     expect(liveInput?.textContent).toContain('오디오 입력 요청 API');
-    expect(metering?.textContent).toContain('미구현');
+    expect(metering?.textContent).toContain('사용 가능');
     expect(playback?.textContent).toContain('사용 가능');
   });
 

@@ -21,7 +21,7 @@ test('기능 지원 상태를 확인하고 미구현 기능을 구분한다', as
   await expect(capabilityPanel).toBeVisible();
   await expect(capabilityPanel.locator('[data-feature="timelinePlayback"]')).toContainText('사용 가능');
   await expect(capabilityPanel.locator('[data-feature="tempoLoopMetronome"]')).toContainText('사용 가능');
-  await expect(capabilityPanel.locator('[data-feature="metering"]')).toContainText('미구현');
+  await expect(capabilityPanel.locator('[data-feature="metering"]')).toContainText('사용 가능');
   await expect(capabilityPanel.locator('[data-feature="linearRecording"]')).toContainText('미구현');
 });
 
@@ -57,6 +57,34 @@ test('Loop 범위와 Metronome을 Transport에서 바로 제어한다', async ({
   await expect(page.getByLabel('Metronome 볼륨')).toHaveValue('0.4');
 });
 
+test('Track·Master·입력 meter와 Track monitoring을 즉시 확인한다', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('input[type="file"]').setInputFiles(ensureFakeAudioInputFixture());
+  await page.waitForURL('**/daw');
+
+  const trackMeter = page.getByRole('meter', { name: 'Track' });
+  const masterMeter = page.getByRole('meter', { name: 'Master' });
+  const inputMeter = page.getByRole('meter', { name: 'Input' });
+  await expect(trackMeter).toBeVisible();
+  await expect(masterMeter).toBeVisible();
+  await expect(inputMeter).toBeVisible();
+
+  await page.getByTitle(/^Play/).click();
+  await expect.poll(async () => Number(await trackMeter.getAttribute('data-peak-dbfs'))).toBeGreaterThan(-60);
+  await expect.poll(async () => Number(await masterMeter.getAttribute('data-peak-dbfs'))).toBeGreaterThan(-60);
+
+  await page.getByRole('button', { name: 'Track Mute' }).click();
+  await expect.poll(async () => Number(await trackMeter.getAttribute('data-peak-dbfs'))).toBeLessThanOrEqual(-60);
+
+  await page.getByRole('button', { name: '입력 장치 연결' }).click();
+  await expect.poll(async () => Number(await inputMeter.getAttribute('data-peak-dbfs'))).toBeGreaterThan(-60);
+
+  const monitoringButton = page.getByRole('button', { name: /입력 모니터링$/ });
+  await expect(monitoringButton).toBeEnabled();
+  await monitoringButton.click();
+  await expect(monitoringButton).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('오디오 입력 API가 없으면 원인 표시와 함께 관련 UI를 비활성화한다', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
@@ -69,7 +97,8 @@ test('오디오 입력 API가 없으면 원인 표시와 함께 관련 UI를 비
   const liveInputCapability = page.locator('[data-feature="liveInput"]');
   await expect(liveInputCapability).toContainText('환경 차단');
   await expect(liveInputCapability).toContainText('미디어 장치 API 없음');
+  await expect(page.getByLabel('입력 장치', { exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '입력 장치 연결' })).toBeDisabled();
   await page.getByRole('button', { name: 'Open track inspector' }).click();
-  await expect(page.getByRole('button', { name: 'DEFAULT INPUT' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'CONNECT' })).toBeDisabled();
 });

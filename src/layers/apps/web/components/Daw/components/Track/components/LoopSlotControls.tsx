@@ -147,11 +147,7 @@ export function LoopSlotControls({
   readonly loopSlots: readonly LoopSlotState[];
   readonly trackId: string;
 }) {
-  const commandExecutor = useCommandExecutor();
   const capabilities = useAudioRuntimeCapabilities();
-  const [isMonitoring, setIsMonitoring] = useState(false);
-  const [isInputPending, setIsInputPending] = useState(false);
-  const [inputErrorMessage, setInputErrorMessage] = useState<string | null>(null);
   const liveInputCapability = capabilities.features[AudioRuntimeFeature.LIVE_INPUT];
   const liveLoopCapability = capabilities.features[AudioRuntimeFeature.LIVE_LOOP];
   const isLiveInputAvailable = liveInputCapability.status === 'available';
@@ -162,32 +158,8 @@ export function LoopSlotControls({
     isLiveInputAvailable ? null : `실시간 입력: ${liveInputUnavailableReason}`,
     isLiveLoopAvailable ? null : `라이브 Loop: ${liveLoopUnavailableReason}`,
   ].filter((reason): reason is string => reason !== null);
-
-  const handleDefaultInput = async () => {
-    setIsInputPending(true);
-    setInputErrorMessage(null);
-    try {
-      await commandExecutor.execute({ deviceId: null, type: AudioCommandType.SET_AUDIO_INPUT_DEVICE });
-    } catch (error) {
-      setInputErrorMessage(error instanceof Error ? error.message : '입력 장치를 선택하지 못했습니다.');
-    } finally {
-      setIsInputPending(false);
-    }
-  };
-
-  const handleMonitoring = async () => {
-    const enabled = !isMonitoring;
-    setIsInputPending(true);
-    setInputErrorMessage(null);
-    try {
-      await commandExecutor.execute({ enabled, trackId, type: AudioCommandType.SET_INPUT_MONITORING });
-      setIsMonitoring(enabled);
-    } catch (error) {
-      setInputErrorMessage(error instanceof Error ? error.message : '입력 모니터링을 변경하지 못했습니다.');
-    } finally {
-      setIsInputPending(false);
-    }
-  };
+  const isLoopAvailable = isLiveInputAvailable && isLiveLoopAvailable;
+  const loopUnavailableReason = unavailableReasons.join(' / ');
 
   return (
     <section
@@ -196,40 +168,18 @@ export function LoopSlotControls({
       className={styles.container}
       title={unavailableReasons.join(' / ') || undefined}
     >
-      <div className={styles.inputControls}>
-        <button
-          type="button"
-          className={styles.inputButton}
-          disabled={isInputPending || !isLiveInputAvailable}
-          title={isLiveInputAvailable ? undefined : liveInputUnavailableReason}
-          onClick={() => void handleDefaultInput()}
-        >
-          DEFAULT INPUT
-        </button>
-        <button
-          type="button"
-          aria-pressed={isMonitoring}
-          className={`${styles.inputButton} ${isMonitoring ? styles.monitoringActive : ''}`}
-          disabled={isInputPending || !isLiveInputAvailable}
-          title={isLiveInputAvailable ? undefined : liveInputUnavailableReason}
-          onClick={() => void handleMonitoring()}
-        >
-          MON {isMonitoring ? 'ON' : 'OFF'}
-        </button>
-      </div>
       <div className={styles.slotGrid}>
         {loopSlots.map((loopSlot, index) => (
           <LoopSlotControl
             index={index}
-            isLoopAvailable={isLiveLoopAvailable}
+            isLoopAvailable={isLoopAvailable}
             key={loopSlot.id}
             loopSlot={loopSlot}
-            loopUnavailableReason={liveLoopUnavailableReason}
+            loopUnavailableReason={loopUnavailableReason}
             trackId={trackId}
           />
         ))}
       </div>
-      {inputErrorMessage ? <span className={styles.error}>{inputErrorMessage}</span> : null}
     </section>
   );
 }

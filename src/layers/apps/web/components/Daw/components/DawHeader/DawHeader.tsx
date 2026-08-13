@@ -13,6 +13,7 @@ import { MidiLoopControl } from './MidiLoopControl';
 import { AccountControl } from '@/layers/apps/web/components/Auth/AccountControl';
 import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 import { MusicalPositionClock } from './MusicalPositionClock';
+import { InputDeviceControl } from '../LiveInputControls/InputDeviceControl';
 
 interface DawHeaderProps {
   trackCount: number;
@@ -47,6 +48,7 @@ export function DawHeader({ coordinateMapper, trackCount }: DawHeaderProps) {
         </div>
         <div className={styles.statusSection}>
           <LoopMetronomeControl />
+          <InputDeviceControl />
           <MasterVolumeControl />
           <TempoMetadataControl />
           <span className={styles.trackCount}>{trackCount} tracks</span>

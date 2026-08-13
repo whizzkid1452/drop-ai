@@ -9,6 +9,8 @@ import * as styles from './Track.css.ts';
 import type { WaveformRenderData } from '@/layers/apps/web/components/Daw/components/TrackList/waveform-render-cache';
 import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 import type { TimelineGridSettings } from '../../timeline-grid';
+import { AudioLevelMeter } from '../AudioLevelMeter/AudioLevelMeter';
+import { TrackInputMonitoringControl } from '../LiveInputControls/TrackInputMonitoringControl';
 
 export interface RegionWaveSurferReadyEvent {
   trackId: string;
@@ -110,7 +112,9 @@ export const TrackComponent = memo(function TrackComponent({
           >
             S
           </button>
+          <TrackInputMonitoringControl trackId={track.id} trackName={track.name} />
         </div>
+        <AudioLevelMeter label="Track" target={{ kind: 'track', trackId: track.id }} />
       </div>
       <div className={styles.trackTimeline} aria-label={`${track.name} timeline`}>
         {track.regions.map(region => (
