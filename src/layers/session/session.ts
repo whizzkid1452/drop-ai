@@ -16,6 +16,7 @@ import type { RegionFadeState } from '../shared/types/region-processing';
 import {
   cloneRoutingGraphSnapshot,
   createDefaultRoutingGraphSnapshot,
+  removeTrackFromRoutingGraph,
   type RoutingGraphSnapshot,
 } from '../shared/types/routing-state';
 import type { TimelineMeterChange, TimelineTempoChange } from '../shared/timeline-coordinate-mapper';
@@ -479,20 +480,6 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
 
 function cloneProjectTracks(tracks: ReadonlyMap<string, TrackState>): Map<string, TrackState> {
   return new Map([...tracks.entries()].map(([trackId, track]) => [trackId, cloneTrackState(track)]));
-}
-
-function removeTrackFromRoutingGraph(graph: RoutingGraphSnapshot, trackId: string): RoutingGraphSnapshot {
-  return {
-    routes: graph.routes
-      .filter(route => route.trackId !== trackId)
-      .map(route => ({
-        ...route,
-        folderId: route.folderId === trackId ? null : route.folderId,
-        output: route.output.kind === 'track' && route.output.trackId === trackId ? { kind: 'master' } : route.output,
-        vcaIds: route.vcaIds.filter(vcaId => vcaId !== trackId),
-      })),
-    sends: graph.sends.filter(send => send.sourceTrackId !== trackId && send.destinationTrackId !== trackId),
-  };
 }
 
 function cloneTrackState(track: TrackState): TrackState {

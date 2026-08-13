@@ -3,6 +3,7 @@ import type { PluginInstanceState } from '../shared/types/plugin-state';
 import type { TimelineMeterChange, TimelineTempoChange } from '../shared/timeline-coordinate-mapper';
 import type { TimelineMarker } from '../shared/timeline-marker';
 import { AudioCommandType, type AudioCommand } from '../shared/types/audioCommand.schema';
+import { cloneRoutingGraphSnapshot } from '../shared/types/routing-state';
 import type { CommandHistoryEntry } from './command-history';
 import type {
   EditorRuntimeState,
@@ -375,6 +376,28 @@ export function createCommandHistoryEntry({
         redoCommand: command,
       });
 
+    case AudioCommandType.SET_ROUTING_GRAPH:
+    case AudioCommandType.SET_TRACK_ROUTING:
+    case AudioCommandType.ADD_SEND:
+    case AudioCommandType.UPDATE_SEND:
+    case AudioCommandType.REMOVE_SEND:
+    case AudioCommandType.SET_TRACK_GROUPS:
+      if (beforeSession.routingGraph === afterSession.routingGraph) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        undoCommand: {
+          type: AudioCommandType.SET_ROUTING_GRAPH,
+          graph: cloneRoutingGraphSnapshot(beforeSession.routingGraph),
+        },
+        redoCommand: {
+          type: AudioCommandType.SET_ROUTING_GRAPH,
+          graph: cloneRoutingGraphSnapshot(afterSession.routingGraph),
+        },
+      });
+
     case AudioCommandType.SET_TRACK_VOLUME: {
       const beforeTrack = command.trackId ? beforeSession.tracks.get(command.trackId) : undefined;
       const afterTrack = command.trackId ? afterSession.tracks.get(command.trackId) : undefined;
@@ -720,6 +743,7 @@ export function createCommandHistoryEntry({
     case AudioCommandType.PLAY:
     case AudioCommandType.PAUSE:
     case AudioCommandType.STOP:
+    case AudioCommandType.SET_MONITOR_STATE:
     case AudioCommandType.SET_AUDIO_INPUT_DEVICE:
     case AudioCommandType.SET_INPUT_MONITORING:
     case AudioCommandType.SET_TRACK_RECORD_ARM:

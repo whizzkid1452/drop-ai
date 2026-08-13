@@ -16,6 +16,7 @@ import { CommandBatchExecutionError, CommandExecutor } from './command-executor'
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
 const SECOND_REGION_ID = '33333333-3333-4333-8333-333333333333';
+const BUS_TRACK_ID = '99999999-9999-4999-8999-999999999999';
 const CROSSFADE_ID = '88888888-8888-4888-8888-888888888888';
 const SOURCE_ID = '55555555-5555-4555-8555-555555555555';
 const SOURCE_OBJECT_URL = 'blob:command-source';
@@ -546,6 +547,51 @@ describe('CommandExecutor', () => {
     await commandExecutor.execute({ type: AudioCommandType.REDO });
     expect(session.getState().masterVolume).toBe(0.4);
     expect(setMasterVolume).toHaveBeenCalledTimes(3);
+  });
+
+  it('Monitor 상태를 runtime에만 적용하고 Undo 기록은 만들지 않는다', async () => {
+    const { audioEngine, commandExecutor, commandHistory } = createTestContext();
+
+    await commandExecutor.execute({
+      type: AudioCommandType.SET_MONITOR_STATE,
+      isCut: false,
+      isDimmed: true,
+      isMono: true,
+    });
+
+    expect(audioEngine.getMonitorState()).toEqual({ isCut: false, isDimmed: true, isMono: true });
+    expect(commandHistory.getSnapshot()).toEqual({ canRedo: false, canUndo: false });
+  });
+
+  it('Track Route 변경을 실행하고 Undo와 Redo로 복원한다', async () => {
+    const { audioEngine, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await commandExecutor.execute({
+      type: AudioCommandType.ADD_TRACK,
+      channelCount: 2,
+      kind: 'bus',
+      trackId: BUS_TRACK_ID,
+    });
+
+    await commandExecutor.execute({
+      type: AudioCommandType.SET_TRACK_ROUTING,
+      channelCount: 2,
+      kind: 'audio',
+      output: { kind: 'track', trackId: BUS_TRACK_ID },
+      trackId: TRACK_ID,
+    });
+    expect(session.getState().routingGraph.routes.find(route => route.trackId === TRACK_ID)?.output).toEqual({
+      kind: 'track',
+      trackId: BUS_TRACK_ID,
+    });
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().routingGraph.routes.find(route => route.trackId === TRACK_ID)?.output).toEqual({
+      kind: 'master',
+    });
+
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(audioEngine.getRoutingGraph()).toEqual(session.getState().routingGraph);
   });
 
   it('실패한 편집은 Undo 기록에 추가하지 않는다', async () => {
