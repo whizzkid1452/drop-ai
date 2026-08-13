@@ -22,6 +22,7 @@ import {
   readProjectDocumentV10,
   readProjectDocumentV11,
   readProjectDocumentV12,
+  readProjectDocumentV13,
 } from '../shared/types/project-document-reader';
 import {
   PROJECT_DOCUMENT_SCHEMA_VERSION,
@@ -36,6 +37,7 @@ import {
   PROJECT_DOCUMENT_SCHEMA_VERSION_V10,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V11,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V12,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V13,
   ProjectDocumentSchema,
   ProjectDocumentV2Schema,
   ProjectDocumentV3Schema,
@@ -48,6 +50,7 @@ import {
   ProjectDocumentV10Schema,
   ProjectDocumentV11Schema,
   ProjectDocumentV12Schema,
+  ProjectDocumentV13Schema,
   type ProjectAudioSource,
   type ProjectDocument,
   type ProjectDocumentV2,
@@ -61,6 +64,7 @@ import {
   type ProjectDocumentV10,
   type ProjectDocumentV11,
   type ProjectDocumentV12,
+  type ProjectDocumentV13,
   type ProjectDocumentSnapshot,
   type ProjectLoopSlot,
   type ProjectLoopSlotV4,
@@ -75,8 +79,10 @@ import {
   type ProjectTrackV10,
   type ProjectTrackV11,
   type ProjectTrackV12,
+  type ProjectTrackV13,
 } from '../shared/types/project-document.schema';
 import { cloneAutomationLaneState } from '../shared/types/automation-state';
+import { cloneMidiTrackState } from '../shared/types/midi-state';
 import {
   cloneProjectRecordingState,
   cloneTrackRecordingState,
@@ -107,6 +113,7 @@ export type CreateProjectDocumentV9FromSessionOptions = CreateProjectDocumentV2F
 export type CreateProjectDocumentV10FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 export type CreateProjectDocumentV11FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 export type CreateProjectDocumentV12FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
+export type CreateProjectDocumentV13FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 
 export interface ProjectRestoreSnapshot {
   readonly session: SessionProjectSnapshot;
@@ -132,6 +139,7 @@ export type CreateProjectRestoreSnapshotFromDocumentV9Options = CreateProjectRes
 export type CreateProjectRestoreSnapshotFromDocumentV10Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 export type CreateProjectRestoreSnapshotFromDocumentV11Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 export type CreateProjectRestoreSnapshotFromDocumentV12Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
+export type CreateProjectRestoreSnapshotFromDocumentV13Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 
 interface SessionTrackEntry {
   readonly mapKey: string;
@@ -530,6 +538,23 @@ export function createProjectDocumentV12FromSession({
   return parseSessionDocumentCandidateV12(documentCandidate);
 }
 
+export function createProjectDocumentV13FromSession({
+  session,
+  audioSources,
+  pluginCatalog,
+}: CreateProjectDocumentV13FromSessionOptions): ProjectDocumentV13 {
+  const v12Document = createProjectDocumentV12FromSession({ audioSources, pluginCatalog, session });
+  const documentCandidate = {
+    ...v12Document,
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V13,
+    tracks: v12Document.tracks.map(track => {
+      const midi = session.tracks.get(track.id)?.midi ?? null;
+      return { ...track, midi: midi ? cloneMidiTrackState(midi) : null };
+    }),
+  };
+  return parseSessionDocumentCandidateV13(documentCandidate);
+}
+
 export function createProjectRestoreSnapshotFromDocument(document: ProjectDocument): ProjectRestoreSnapshot {
   const validatedDocument = readDocumentForMapping(document);
   const tracks = new Map<string, TrackState>();
@@ -837,6 +862,38 @@ export function createProjectRestoreSnapshotFromDocumentV12({
   const tracks = new Map<string, TrackState>();
   validatedDocument.tracks.forEach(track => {
     tracks.set(track.id, createSessionTrackV12({ track, pluginCatalog }));
+  });
+
+  return {
+    session: {
+      project: { ...validatedDocument.project },
+      tempo: validatedDocument.timeline.tempoBpm,
+      tempoChanges: validatedDocument.timeline.tempoChanges.map(change => ({ ...change })),
+      meterChanges: validatedDocument.timeline.meterChanges.map(change => ({ ...change })),
+      timelineMarkers: validatedDocument.timeline.markers.map(marker => ({ ...marker })),
+      loopRange: validatedDocument.timeline.loop.range ? { ...validatedDocument.timeline.loop.range } : null,
+      isLoopEnabled: validatedDocument.timeline.loop.isEnabled,
+      isMetronomeEnabled: validatedDocument.timeline.metronome.isEnabled,
+      metronomeVolume: validatedDocument.timeline.metronome.volume,
+      masterVolume: validatedDocument.mixer.masterVolume,
+      routingGraph: cloneRoutingGraphSnapshot(validatedDocument.mixer.routing),
+      recording: cloneProjectRecordingState(validatedDocument.recording),
+      exportStartTime: validatedDocument.exportRange?.startTimeSeconds ?? null,
+      exportEndTime: validatedDocument.exportRange?.endTimeSeconds ?? null,
+      tracks,
+    },
+    audioSources: validatedDocument.audioSources.map(source => ({ ...source })),
+  };
+}
+
+export function createProjectRestoreSnapshotFromDocumentV13({
+  document,
+  pluginCatalog,
+}: CreateProjectRestoreSnapshotFromDocumentV13Options): ProjectRestoreSnapshot {
+  const validatedDocument = readDocumentV13ForMapping(document);
+  const tracks = new Map<string, TrackState>();
+  validatedDocument.tracks.forEach(track => {
+    tracks.set(track.id, createSessionTrackV13({ track, pluginCatalog }));
   });
 
   return {
@@ -1430,6 +1487,31 @@ function parseSessionDocumentCandidateV12(documentCandidate: unknown): ProjectDo
   }
 }
 
+function parseSessionDocumentCandidateV13(documentCandidate: unknown): ProjectDocumentV13 {
+  try {
+    const result = ProjectDocumentV13Schema.safeParse(documentCandidate);
+    if (result.success) {
+      return result.data;
+    }
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
+      message: 'Session 프로젝트 상태를 유효한 ProjectDocument v13으로 변환할 수 없습니다.',
+      details: { issues: result.error.issues, reason: 'PROJECT_DOCUMENT_SCHEMA_VIOLATION' },
+      cause: result.error,
+    });
+  } catch (cause) {
+    if (cause instanceof ProjectDocumentMappingError) {
+      throw cause;
+    }
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
+      message: 'Session 프로젝트 상태를 읽을 수 없습니다.',
+      details: { reason: 'PROJECT_DOCUMENT_SCHEMA_VIOLATION' },
+      cause,
+    });
+  }
+}
+
 function readDocumentForMapping(document: ProjectDocument): ProjectDocument {
   try {
     return readProjectDocument(document);
@@ -1586,6 +1668,19 @@ function readDocumentV12ForMapping(document: ProjectDocumentSnapshot): ProjectDo
   }
 }
 
+function readDocumentV13ForMapping(document: ProjectDocumentSnapshot): ProjectDocumentV13 {
+  try {
+    return readProjectDocumentV13(document);
+  } catch (cause) {
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT,
+      message: '복원할 ProjectDocument v13이 유효하지 않습니다.',
+      details: { reason: 'PROJECT_DOCUMENT_READ_FAILED' },
+      cause,
+    });
+  }
+}
+
 function createSessionTrack(track: ProjectTrack): TrackState {
   return {
     id: track.id,
@@ -1725,6 +1820,19 @@ function createSessionTrackV12({
   return {
     ...createSessionTrackV10({ track, pluginCatalog }),
     automationLanes: track.automationLanes.map(cloneAutomationLaneState),
+  };
+}
+
+function createSessionTrackV13({
+  track,
+  pluginCatalog,
+}: {
+  readonly track: ProjectTrackV13;
+  readonly pluginCatalog: readonly PluginCatalogEntry[];
+}): TrackState {
+  return {
+    ...createSessionTrackV12({ track, pluginCatalog }),
+    midi: track.midi ? cloneMidiTrackState(track.midi) : null,
   };
 }
 
