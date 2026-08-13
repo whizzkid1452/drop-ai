@@ -7,10 +7,11 @@ import {
   type AudioCommand,
 } from '../shared/types/audioCommand.schema';
 import type { ICommandHistory } from './command-history';
+import type { RecordedTake } from '../shared/types/linear-recording';
 import { createCommandHistoryEntry } from './create-command-history-entry';
 import { assertLiveOperationAllowed } from './live-operation-guard';
 
-export type CommandExecutionResult = Blob | void;
+export type CommandExecutionResult = Blob | RecordedTake | void;
 export type CommandBatchExecutionResult = readonly CommandExecutionResult[];
 
 interface CommandBatchExecutionErrorOptions {
@@ -168,6 +169,21 @@ export class CommandExecutor {
 
       case AudioCommandType.SET_INPUT_MONITORING:
         await this.controller.loop.setMonitoring(validatedCommand);
+        return;
+
+      case AudioCommandType.SET_TRACK_RECORD_ARM:
+        this.controller.recording.setTrackRecordArm(validatedCommand);
+        return;
+
+      case AudioCommandType.START_RECORDING:
+        await this.controller.recording.startRecording(validatedCommand);
+        return;
+
+      case AudioCommandType.STOP_RECORDING:
+        return this.controller.recording.stopRecording();
+
+      case AudioCommandType.CANCEL_RECORDING:
+        this.controller.recording.cancelRecording();
         return;
 
       case AudioCommandType.ARM_LOOP_SLOT:
@@ -455,6 +471,7 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.MOVE_REGION:
     case AudioCommandType.SET_EXPORT_RANGE:
     case AudioCommandType.CLEAR_EXPORT_RANGE:
+    case AudioCommandType.STOP_RECORDING:
       return true;
 
     case AudioCommandType.PLAY:
@@ -462,6 +479,9 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.STOP:
     case AudioCommandType.SET_AUDIO_INPUT_DEVICE:
     case AudioCommandType.SET_INPUT_MONITORING:
+    case AudioCommandType.SET_TRACK_RECORD_ARM:
+    case AudioCommandType.START_RECORDING:
+    case AudioCommandType.CANCEL_RECORDING:
     case AudioCommandType.CANCEL_LOOP_SLOT:
     case AudioCommandType.TRIGGER_LOOP_SLOT:
     case AudioCommandType.STOP_LOOP_SLOT:

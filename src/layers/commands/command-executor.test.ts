@@ -56,7 +56,16 @@ function createTestContext() {
   });
   const commandExecutor = new CommandExecutor(session, controller, commandHistory);
 
-  return { audioEngine, audioSourceRegistry, commandExecutor, commandHistory, controller, projectRepository, session };
+  return {
+    audioEngine,
+    audioSourceRegistry,
+    audioSourceRepository,
+    commandExecutor,
+    commandHistory,
+    controller,
+    projectRepository,
+    session,
+  };
 }
 
 function stageSource(audioSourceRegistry: IAudioSourceRegistry): void {
@@ -115,6 +124,83 @@ async function addRegion(commandExecutor: CommandExecutor, audioSourceRegistry: 
 }
 
 describe('CommandExecutor', () => {
+  it('단일 Track 녹음을 count-in과 preroll 뒤 시작하고 RecordedTake를 Region으로 저장한다', async () => {
+    const { audioEngine, audioSourceRegistry, audioSourceRepository, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await commandExecutor.execute({ type: AudioCommandType.SET_CURRENT_TIME, time: 4 });
+    await commandExecutor.execute({ type: AudioCommandType.SET_TRACK_RECORD_ARM, trackId: TRACK_ID, armed: true });
+    const recordedBlob = new Blob(['recorded'], { type: 'audio/wav' });
+    vi.spyOn(audioEngine, 'stopRecording').mockResolvedValueOnce({
+      blob: recordedBlob,
+      durationSeconds: 1.5,
+      sampleRate: 48_000,
+      startedAtSeconds: 6,
+      trackId: TRACK_ID,
+    });
+
+    await commandExecutor.execute({ type: AudioCommandType.START_RECORDING, countInBars: 1, prerollSeconds: 1 });
+    expect(audioEngine.getMockTransportState().isMetronomeEnabled).toBe(true);
+    const take = await commandExecutor.execute({ type: AudioCommandType.STOP_RECORDING });
+
+    expect(take).toMatchObject({ durationSeconds: 1.5, startedAtSeconds: 6, trackId: TRACK_ID });
+    expect(audioEngine.getCurrentTime()).toBe(3);
+    expect(audioEngine.getMockTransportState().isMetronomeEnabled).toBe(false);
+    expect(session.getState().tracks.get(TRACK_ID)?.regions).toEqual([
+      expect.objectContaining({ duration: 1.5, sourceStartTime: 0, startTime: 6 }),
+    ]);
+    const createdRegistration = vi.mocked(audioSourceRepository.create).mock.calls[0]?.[0];
+    expect(createdRegistration).toMatchObject({
+      blob: recordedBlob,
+      metadata: { byteLength: recordedBlob.size, durationSeconds: 1.5, mimeType: 'audio/wav' },
+    });
+    expect(audioSourceRegistry.resolve(createdRegistration?.metadata.id ?? '')).toMatchObject({ isCommitted: true });
+  });
+
+  it('녹음 Source 저장이 실패하면 Region과 runtime Source를 추가하지 않는다', async () => {
+    const { audioEngine, audioSourceRegistry, audioSourceRepository, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await commandExecutor.execute({ type: AudioCommandType.SET_TRACK_RECORD_ARM, trackId: TRACK_ID, armed: true });
+    await commandExecutor.execute({ type: AudioCommandType.START_RECORDING, countInBars: 0, prerollSeconds: 0 });
+    vi.spyOn(audioEngine, 'stopRecording').mockResolvedValueOnce({
+      blob: new Blob(['recorded'], { type: 'audio/wav' }),
+      durationSeconds: 1,
+      sampleRate: 48_000,
+      startedAtSeconds: 0,
+      trackId: TRACK_ID,
+    });
+    vi.mocked(audioSourceRepository.create).mockRejectedValueOnce(new Error('OPFS 저장 실패'));
+
+    await expect(commandExecutor.execute({ type: AudioCommandType.STOP_RECORDING })).rejects.toThrow('OPFS 저장 실패');
+
+    expect(session.getState().tracks.get(TRACK_ID)?.regions).toEqual([]);
+    expect(audioSourceRegistry.listCommittedMetadata()).toEqual([]);
+    expect(audioSourceRepository.delete).not.toHaveBeenCalled();
+  });
+
+  it('녹음 Region 연결이 실패하면 저장된 Source와 runtime Source를 정리한다', async () => {
+    const { audioEngine, audioSourceRegistry, audioSourceRepository, commandExecutor, controller } =
+      createTestContext();
+    await addTrack(commandExecutor);
+    await commandExecutor.execute({ type: AudioCommandType.SET_TRACK_RECORD_ARM, trackId: TRACK_ID, armed: true });
+    await commandExecutor.execute({ type: AudioCommandType.START_RECORDING, countInBars: 0, prerollSeconds: 0 });
+    vi.spyOn(audioEngine, 'stopRecording').mockResolvedValueOnce({
+      blob: new Blob(['recorded'], { type: 'audio/wav' }),
+      durationSeconds: 1,
+      sampleRate: 48_000,
+      startedAtSeconds: 0,
+      trackId: TRACK_ID,
+    });
+    vi.spyOn(controller.region, 'addRegion').mockRejectedValueOnce(new Error('Region 연결 실패'));
+
+    await expect(commandExecutor.execute({ type: AudioCommandType.STOP_RECORDING })).rejects.toThrow(
+      'Region 연결 실패'
+    );
+
+    const sourceId = vi.mocked(audioSourceRepository.create).mock.calls[0]?.[0].metadata.id ?? '';
+    expect(audioSourceRepository.delete).toHaveBeenCalledWith(sourceId);
+    expect(audioSourceRegistry.resolve(sourceId)).toBeNull();
+  });
+
   it('SAVE_PROJECT를 ProjectController에 위임한다', async () => {
     const { commandExecutor, controller } = createTestContext();
     const saveProject = vi.spyOn(controller.project, 'saveProject').mockResolvedValue(undefined);
@@ -1241,7 +1327,10 @@ describe('CommandExecutor', () => {
     });
 
     expect(result).toBeInstanceOf(Blob);
-    expect(result?.type).toBe('audio/wav');
+    if (!(result instanceof Blob)) {
+      throw new Error('내보내기 결과가 Blob이 아닙니다.');
+    }
+    expect(result.type).toBe('audio/wav');
   });
 
   it('기본 대상 Track이 없으면 명령을 거부한다', async () => {

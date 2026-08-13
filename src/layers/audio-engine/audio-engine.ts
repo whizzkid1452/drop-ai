@@ -55,6 +55,7 @@ import type { IAudioMeterRuntime } from './metering/audio-meter-runtime';
 import { ToneMeterRuntimeFactory, type IAudioMeterRuntimeFactory } from './metering/tone-meter-runtime-factory';
 import type { IAudioPluginRuntime, IAudioPluginRuntimeFactory } from './plugins/audio-plugin-runtime';
 import { AudioPluginRuntimeError } from './plugins/errors';
+import type { ILinearRecordingAudioRuntime } from './recording-runtime/linear-recording-runtime';
 import { RegionRenderer, type RegionRenderParams } from './renderers/region-renderer';
 import { ToneTransportRuntime } from './transport-runtime/tone-transport-runtime';
 
@@ -87,6 +88,7 @@ interface AudioEngineOptions {
   readonly loopRuntime?: ILoopAudioRuntime;
   readonly meterRuntimeFactory?: IAudioMeterRuntimeFactory;
   readonly pluginRuntimeFactories?: readonly IAudioPluginRuntimeFactory[];
+  readonly recordingRuntime?: ILinearRecordingAudioRuntime;
 }
 
 interface CreateGraphOutputRequest {
@@ -161,6 +163,7 @@ export class AudioEngine implements IAudioEngine {
   private disabledPluginInstanceIds: Map<string, Set<string>> = new Map();
   private readonly pluginRuntimeFactories: ReadonlyMap<string, IAudioPluginRuntimeFactory>;
   private readonly loopRuntime: ILoopAudioRuntime;
+  private readonly recordingRuntime: ILinearRecordingAudioRuntime | null;
   private readonly meterRuntimeFactory: IAudioMeterRuntimeFactory;
   private readonly featureSupport: AudioRuntimeFeatureSupport;
   private readonly transportRuntime = new ToneTransportRuntime();
@@ -193,16 +196,30 @@ export class AudioEngine implements IAudioEngine {
   private liveInputDeviceId: string | null = null;
   private monitoringTrackId: string | null = null;
   private readonly liveInputStateListeners = new Set<LiveInputRuntimeListener>();
+  private readonly recordingStateListeners = new Set<RecordingRuntimeListener>();
+  private recordingState: RecordingRuntimeState = {
+    armedTrackId: null,
+    phase: 'idle',
+    recordStartTimeSeconds: null,
+  };
+  private activeRecordingRequest: StartLinearRecordingRequest | null = null;
 
   constructor(options: AudioEngineOptions = {}) {
-    const { loopRuntime, meterRuntimeFactory = new ToneMeterRuntimeFactory(), pluginRuntimeFactories = [] } = options;
+    const {
+      loopRuntime,
+      meterRuntimeFactory = new ToneMeterRuntimeFactory(),
+      pluginRuntimeFactories = [],
+      recordingRuntime,
+    } = options;
     this.loopRuntime = loopRuntime ?? new UnavailableLoopAudioRuntime();
+    this.recordingRuntime = recordingRuntime ?? null;
     this.meterRuntimeFactory = meterRuntimeFactory;
     this.featureSupport = {
       ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
       [AudioRuntimeFeature.LIVE_INPUT]: loopRuntime !== undefined,
       [AudioRuntimeFeature.LIVE_LOOP]: loopRuntime !== undefined,
       [AudioRuntimeFeature.METERING]: true,
+      [AudioRuntimeFeature.LINEAR_RECORDING]: recordingRuntime !== undefined,
       [AudioRuntimeFeature.TEMPO_LOOP_METRONOME]: true,
     };
     this.pluginRuntimeFactories = createPluginRuntimeFactoryMap(pluginRuntimeFactories);
@@ -359,36 +376,98 @@ export class AudioEngine implements IAudioEngine {
   }
 
   getRecordingState(): RecordingRuntimeState {
-    return { armedTrackId: null, phase: 'idle', recordStartTimeSeconds: null };
+    return { ...this.recordingState };
   }
 
   subscribeRecordingState(listener: RecordingRuntimeListener): () => void {
-    void listener;
-    return () => undefined;
+    this.recordingStateListeners.add(listener);
+    return () => this.recordingStateListeners.delete(listener);
   }
 
   setTrackRecordArm(request: SetTrackRecordArmRequest): void {
-    void request;
-    throw new UnsupportedAudioFeatureError({
-      feature: AudioRuntimeFeature.LINEAR_RECORDING,
-      method: 'setTrackRecordArm',
+    this.getRecordingRuntime('setTrackRecordArm');
+    if (this.recordingState.phase !== 'idle') {
+      throw new Error('녹음 대기 또는 진행 중에는 Track arm을 변경할 수 없습니다.');
+    }
+    if (request.armed) {
+      this.getExistingInput(request.trackId);
+    }
+    if (!request.armed && this.recordingState.armedTrackId !== request.trackId) {
+      return;
+    }
+    this.updateRecordingState({
+      armedTrackId: request.armed ? request.trackId : null,
+      phase: 'idle',
+      recordStartTimeSeconds: null,
     });
   }
 
   async startRecording(request: StartLinearRecordingRequest): Promise<void> {
-    void request;
-    throw new UnsupportedAudioFeatureError({ feature: AudioRuntimeFeature.LINEAR_RECORDING, method: 'startRecording' });
+    const recordingRuntime = this.getRecordingRuntime('startRecording');
+    if (this.recordingState.phase !== 'idle') {
+      throw new Error('이미 녹음 대기 또는 녹음이 진행 중입니다.');
+    }
+    if (this.recordingState.armedTrackId !== request.trackId) {
+      throw new Error('녹음할 Track이 arm 상태가 아닙니다.');
+    }
+    if (!Number.isFinite(request.recordStartTimeSeconds) || request.recordStartTimeSeconds < 0) {
+      throw new RangeError('녹음 시작 위치는 0 이상의 유한한 값이어야 합니다.');
+    }
+    if (!Number.isFinite(request.startDelaySeconds) || request.startDelaySeconds < 0) {
+      throw new RangeError('녹음 시작 지연은 0 이상의 유한한 값이어야 합니다.');
+    }
+
+    this.activeRecordingRequest = { ...request };
+    this.updateRecordingState({
+      armedTrackId: request.trackId,
+      phase: 'scheduled',
+      recordStartTimeSeconds: request.recordStartTimeSeconds,
+    });
+    try {
+      await recordingRuntime.startRecording({
+        startDelaySeconds: request.startDelaySeconds,
+        onStarted: () => {
+          if (this.activeRecordingRequest !== null && this.recordingState.phase === 'scheduled') {
+            this.updateRecordingState({ ...this.recordingState, phase: 'recording' });
+          }
+        },
+      });
+    } catch (cause) {
+      this.activeRecordingRequest = null;
+      this.updateRecordingState({
+        armedTrackId: request.trackId,
+        phase: 'idle',
+        recordStartTimeSeconds: null,
+      });
+      throw cause;
+    }
   }
 
   async stopRecording(): Promise<RecordedTake> {
-    throw new UnsupportedAudioFeatureError({ feature: AudioRuntimeFeature.LINEAR_RECORDING, method: 'stopRecording' });
+    const recordingRuntime = this.getRecordingRuntime('stopRecording');
+    const activeRequest = this.activeRecordingRequest;
+    if (!activeRequest || !['scheduled', 'recording'].includes(this.recordingState.phase)) {
+      throw new Error('중지할 녹음이 없습니다.');
+    }
+    this.updateRecordingState({ ...this.recordingState, phase: 'stopping' });
+    try {
+      const capture = await recordingRuntime.stopRecording();
+      return { ...capture, startedAtSeconds: activeRequest.recordStartTimeSeconds, trackId: activeRequest.trackId };
+    } finally {
+      this.activeRecordingRequest = null;
+      this.updateRecordingState({
+        armedTrackId: activeRequest.trackId,
+        phase: 'idle',
+        recordStartTimeSeconds: null,
+      });
+    }
   }
 
   cancelRecording(): void {
-    throw new UnsupportedAudioFeatureError({
-      feature: AudioRuntimeFeature.LINEAR_RECORDING,
-      method: 'cancelRecording',
-    });
+    this.getRecordingRuntime('cancelRecording').cancelRecording();
+    const armedTrackId = this.recordingState.armedTrackId;
+    this.activeRecordingRequest = null;
+    this.updateRecordingState({ armedTrackId, phase: 'idle', recordStartTimeSeconds: null });
   }
 
   setMasterVolume(volume: number): void {
@@ -408,6 +487,13 @@ export class AudioEngine implements IAudioEngine {
 
   removeTrack(trackId: string): void {
     this.ensureRuntimeReady();
+    if (this.recordingState.armedTrackId === trackId) {
+      if (this.activeRecordingRequest) {
+        this.recordingRuntime?.cancelRecording();
+      }
+      this.activeRecordingRequest = null;
+      this.updateRecordingState({ armedTrackId: null, phase: 'idle', recordStartTimeSeconds: null });
+    }
     this.loopRuntime.clearTrack(trackId);
     const previousLiveInputState = this.getLiveInputState();
     if (this.monitoringTrackId === trackId) {
@@ -849,6 +935,11 @@ export class AudioEngine implements IAudioEngine {
           throw cause;
         }
         const retiredLoops = preparedLoops.activate();
+        if (this.activeRecordingRequest) {
+          this.recordingRuntime?.cancelRecording();
+        }
+        this.activeRecordingRequest = null;
+        this.updateRecordingState({ armedTrackId: null, phase: 'idle', recordStartTimeSeconds: null });
         const previousLiveInputState = this.getLiveInputState();
         this.monitoringTrackId = null;
         this.notifyLiveInputStateChange(previousLiveInputState);
@@ -1402,6 +1493,26 @@ export class AudioEngine implements IAudioEngine {
     }
 
     this.liveInputStateListeners.forEach(listener => listener(currentState));
+  }
+
+  private getRecordingRuntime(method: string): ILinearRecordingAudioRuntime {
+    if (this.recordingRuntime) {
+      return this.recordingRuntime;
+    }
+    throw new UnsupportedAudioFeatureError({ feature: AudioRuntimeFeature.LINEAR_RECORDING, method });
+  }
+
+  private updateRecordingState(nextState: RecordingRuntimeState): void {
+    const previousState = this.recordingState;
+    if (
+      previousState.armedTrackId === nextState.armedTrackId &&
+      previousState.phase === nextState.phase &&
+      previousState.recordStartTimeSeconds === nextState.recordStartTimeSeconds
+    ) {
+      return;
+    }
+    this.recordingState = { ...nextState };
+    this.recordingStateListeners.forEach(listener => listener(this.getRecordingState()));
   }
 
   private rollbackGraphActivation({

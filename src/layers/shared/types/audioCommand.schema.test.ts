@@ -301,6 +301,31 @@ describe('Plugin 명령 계약', () => {
 });
 
 describe('AudioCommandSchema 프로젝트 변경 명령', () => {
+  it('선형 녹음 arm, start, stop, cancel 명령을 검증한다', () => {
+    const commands = [
+      { type: AudioCommandType.SET_TRACK_RECORD_ARM, trackId: '11111111-1111-4111-8111-111111111111', armed: true },
+      { type: AudioCommandType.START_RECORDING, countInBars: 1, prerollSeconds: 2 },
+      { type: AudioCommandType.STOP_RECORDING },
+      { type: AudioCommandType.CANCEL_RECORDING },
+    ];
+
+    commands.forEach(command => {
+      expect(AudioCommandSchema.safeParse(command).success).toBe(true);
+      expect(StrictAudioCommandSchema.safeParse(command).success).toBe(true);
+    });
+  });
+
+  it('선형 녹음의 count-in과 preroll 경계를 벗어난 값을 거부한다', () => {
+    expect(
+      AudioCommandSchema.safeParse({ type: AudioCommandType.START_RECORDING, countInBars: 5, prerollSeconds: 0 })
+        .success
+    ).toBe(false);
+    expect(
+      AudioCommandSchema.safeParse({ type: AudioCommandType.START_RECORDING, countInBars: 1, prerollSeconds: -1 })
+        .success
+    ).toBe(false);
+  });
+
   it.each([
     { type: AudioCommandType.UNDO },
     { type: AudioCommandType.REDO },

@@ -2,7 +2,12 @@ import { calculateLoopDurationSeconds, calculateNextLoopBoundarySeconds } from '
 import { COMPLETE_RESOURCE_CLEANUP, type ResourceCleanupResult } from '../../shared/types/resource-cleanup';
 import { encodeAudioBufferToWav } from '../encoders/wav-encoder';
 import type { ILiveAudioInput, ILiveAudioInputConnection } from '../live-input/live-audio-input';
-import type { ILivePcmCapture, ScheduledPcmCapture } from '../live-input/live-pcm-capture';
+import type { ActivePcmCapture, ILivePcmCapture, ScheduledPcmCapture } from '../live-input/live-pcm-capture';
+import type {
+  ILinearRecordingAudioRuntime,
+  LinearRecordingCapture,
+  StartLinearRecordingRuntimeRequest,
+} from '../recording-runtime/linear-recording-runtime';
 import type { ILoopPlaybackAdapter, ILoopPlayer } from './loop-playback-adapter';
 import type {
   ArmLoopRuntimeRequest,
@@ -51,7 +56,7 @@ function describeError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-export class QuantizedLoopRuntime implements ILoopAudioRuntime {
+export class QuantizedLoopRuntime implements ILoopAudioRuntime, ILinearRecordingAudioRuntime {
   readonly #encodeAudioBuffer: (audioBuffer: AudioBuffer) => Blob;
   readonly #liveAudioInput: ILiveAudioInput;
   readonly #listeners = new Set<LoopRuntimeListener>();
@@ -61,6 +66,8 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
   #playbackEntries = new Map<string, LoopPlaybackEntry>();
   #revision = 0;
   #inputConnection: ILiveAudioInputConnection | null = null;
+  #linearRecordingCapture: ActivePcmCapture | null = null;
+  #linearRecordingStopPromise: Promise<LinearRecordingCapture> | null = null;
   #monitorDestination: AudioNode | null = null;
 
   constructor(options: QuantizedLoopRuntimeOptions) {
@@ -68,6 +75,58 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
     this.#liveAudioInput = options.liveAudioInput;
     this.#pcmCapture = options.pcmCapture;
     this.#playback = options.playback;
+  }
+
+  async startRecording(request: StartLinearRecordingRuntimeRequest): Promise<void> {
+    if (this.#linearRecordingCapture !== null) {
+      throw new Error('이미 선형 녹음 캡처가 진행 중입니다.');
+    }
+    if (!Number.isFinite(request.startDelaySeconds) || request.startDelaySeconds < 0) {
+      throw new RangeError('녹음 시작 지연은 0 이상의 유한한 값이어야 합니다.');
+    }
+
+    await this.#playback.prepare();
+    const connection = await this.#ensureInputConnection();
+    this.#linearRecordingCapture = await this.#pcmCapture.start({
+      audioContext: this.#playback.getAudioContext(),
+      onStarted: request.onStarted,
+      startTimeSeconds: this.#playback.getContextTimeSeconds() + request.startDelaySeconds,
+      stream: connection.stream,
+    });
+  }
+
+  stopRecording(): Promise<LinearRecordingCapture> {
+    const capture = this.#linearRecordingCapture;
+    if (!capture) {
+      return Promise.reject(new Error('중지할 선형 녹음 캡처가 없습니다.'));
+    }
+    this.#linearRecordingStopPromise ??= this.#completeLinearRecording(capture);
+    return this.#linearRecordingStopPromise;
+  }
+
+  cancelRecording(): void {
+    const capture = this.#linearRecordingCapture;
+    this.#linearRecordingCapture = null;
+    this.#linearRecordingStopPromise = null;
+    capture?.cancel();
+  }
+
+  async #completeLinearRecording(capture: ActivePcmCapture): Promise<LinearRecordingCapture> {
+    try {
+      const capturedPcm = await capture.stop();
+      const audioBuffer = this.#playback.createAudioBuffer(capturedPcm);
+      const frameCount = Math.min(...capturedPcm.channels.map(channel => channel.length));
+      return {
+        blob: this.#encodeAudioBuffer(audioBuffer),
+        durationSeconds: frameCount / capturedPcm.sampleRate,
+        sampleRate: capturedPcm.sampleRate,
+      };
+    } finally {
+      if (this.#linearRecordingCapture === capture) {
+        this.#linearRecordingCapture = null;
+        this.#linearRecordingStopPromise = null;
+      }
+    }
   }
 
   async arm(request: ArmLoopRuntimeRequest): Promise<void> {

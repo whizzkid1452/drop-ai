@@ -58,6 +58,12 @@ const COMMAND_REFERENCE = {
     '{"type":"SET_AUDIO_INPUT_DEVICE","deviceId":"<browser audio input device ID or null>"} - 실시간 입력 장치 선택',
   [AudioCommandType.SET_INPUT_MONITORING]:
     '{"type":"SET_INPUT_MONITORING","trackId":"<existing Track UUID>","enabled":<boolean>} - 입력 모니터링 설정',
+  [AudioCommandType.SET_TRACK_RECORD_ARM]:
+    '{"type":"SET_TRACK_RECORD_ARM","trackId":"<existing Track UUID>","armed":<boolean>} - 단일 Track 녹음 arm 변경',
+  [AudioCommandType.START_RECORDING]:
+    '{"type":"START_RECORDING","countInBars":<0..4 integer>,"prerollSeconds":<0..60>} - arm된 Track 선형 녹음 시작',
+  [AudioCommandType.STOP_RECORDING]: '{"type":"STOP_RECORDING"} - 녹음을 끝내고 RecordedTake를 Region으로 저장',
+  [AudioCommandType.CANCEL_RECORDING]: '{"type":"CANCEL_RECORDING"} - 진행 중인 녹음을 저장하지 않고 취소',
   [AudioCommandType.ARM_LOOP_SLOT]:
     '{"type":"ARM_LOOP_SLOT","trackId":"<existing Track UUID>","slotId":"<existing Loop Slot UUID>","lengthBars":<1|2|4|8>,"quantizationBars":<1|2|4|8>} - 루프 녹음 대기',
   [AudioCommandType.ARM_LOOP_OVERDUB]:

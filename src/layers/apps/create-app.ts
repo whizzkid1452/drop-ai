@@ -186,12 +186,14 @@ class ProjectSyncServiceDelegate implements IProjectSyncService {
 function createDefaultAudioEngine(): IAudioEngine {
   const [gainParameter] = gainPluginManifest.parameters;
   const [saturationDriveParameter] = saturationPluginManifest.parameters;
+  const liveAudioRuntime = new QuantizedLoopRuntime({
+    liveAudioInput: new BrowserLiveAudioInput(),
+    pcmCapture: new AudioWorkletPcmCapture(),
+    playback: new ToneLoopPlaybackAdapter(),
+  });
   const toneAudioRuntime = new AudioEngine({
-    loopRuntime: new QuantizedLoopRuntime({
-      liveAudioInput: new BrowserLiveAudioInput(),
-      pcmCapture: new AudioWorkletPcmCapture(),
-      playback: new ToneLoopPlaybackAdapter(),
-    }),
+    loopRuntime: liveAudioRuntime,
+    recordingRuntime: liveAudioRuntime,
     pluginRuntimeFactories: [
       new ToneGainPluginRuntimeFactory({
         manifestId: gainPluginManifest.id,
