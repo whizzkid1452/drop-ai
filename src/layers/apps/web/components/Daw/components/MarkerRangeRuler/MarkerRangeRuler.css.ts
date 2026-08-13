@@ -104,6 +104,33 @@ export const exportRangeLabel = style({
   whiteSpace: 'nowrap',
 });
 
+export const loopRange = style({
+  position: 'absolute',
+  top: '2px',
+  zIndex: 2,
+  height: '19px',
+  border: '1px solid #9b6ca8',
+  borderRadius: '2px',
+  backgroundColor: 'rgba(132, 75, 146, 0.26)',
+  pointerEvents: 'none',
+});
+
+export const loopRangeEnabled = style({
+  borderColor: '#dc6df5',
+  backgroundColor: 'rgba(185, 66, 211, 0.34)',
+});
+
+export const loopRangeLabel = style({
+  position: 'absolute',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  color: '#edc5f6',
+  fontFamily: '"Consolas", "SFMono-Regular", monospace',
+  fontSize: '9px',
+  lineHeight: '17px',
+  whiteSpace: 'nowrap',
+});
+
 export const clearButton = style({
   position: 'absolute',
   top: '3px',

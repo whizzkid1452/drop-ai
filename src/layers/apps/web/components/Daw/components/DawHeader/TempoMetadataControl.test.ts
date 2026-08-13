@@ -48,7 +48,7 @@ function renderControl() {
   const input = host.querySelector<HTMLInputElement>('input[name="tempo"]');
   const form = host.querySelector('form');
   if (!input || !form) {
-    throw new Error('Tempo 메타데이터 입력 폼을 찾지 못했습니다.');
+    throw new Error('Tempo 입력 폼을 찾지 못했습니다.');
   }
 
   return { form, host, input, root };
@@ -94,7 +94,8 @@ describe('TempoMetadataControl', () => {
     const { form, input } = renderControl();
 
     expect(input.value).toBe('120');
-    expect(form.title).toContain('오디오 속도는 바뀌지 않습니다');
+    expect(form.title).toContain('오디오 scheduler');
+    expect(form.textContent).not.toContain('오디오 속도 미변경');
     changeInput(input, '128.555');
     await submitForm(form);
 

@@ -20,8 +20,41 @@ test('기능 지원 상태를 확인하고 미구현 기능을 구분한다', as
   const capabilityPanel = page.getByRole('region', { name: '오디오 기능 지원 상태' });
   await expect(capabilityPanel).toBeVisible();
   await expect(capabilityPanel.locator('[data-feature="timelinePlayback"]')).toContainText('사용 가능');
+  await expect(capabilityPanel.locator('[data-feature="tempoLoopMetronome"]')).toContainText('사용 가능');
   await expect(capabilityPanel.locator('[data-feature="metering"]')).toContainText('미구현');
   await expect(capabilityPanel.locator('[data-feature="linearRecording"]')).toContainText('미구현');
+});
+
+test('Loop 범위와 Metronome을 Transport에서 바로 제어한다', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('input[type="file"]').setInputFiles(ensureFakeAudioInputFixture());
+  await page.waitForURL('**/daw');
+
+  const loopLane = page.getByLabel('Loop Range');
+  const laneBox = await loopLane.boundingBox();
+  if (!laneBox) {
+    throw new Error('Loop Range lane의 화면 위치를 확인하지 못했습니다.');
+  }
+  await page.mouse.move(laneBox.x + 96, laneBox.y + laneBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(laneBox.x + 288, laneBox.y + laneBox.height / 2);
+  await page.mouse.up();
+
+  await expect(page.getByTestId('loop-range')).toBeVisible();
+  const loopButton = page.getByRole('button', { name: 'Loop 끄기' });
+  await expect(loopButton).toHaveAttribute('aria-pressed', 'true');
+  await loopButton.click();
+  await expect(page.getByRole('button', { name: 'Loop 켜기' })).toHaveAttribute('aria-pressed', 'false');
+
+  const metronomeButton = page.getByRole('button', { name: 'Metronome 켜기' });
+  await metronomeButton.click();
+  await expect(page.getByRole('button', { name: 'Metronome 끄기' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByLabel('Metronome 볼륨').evaluate(input => {
+    const volumeInput = input as HTMLInputElement;
+    volumeInput.value = '0.4';
+    volumeInput.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(page.getByLabel('Metronome 볼륨')).toHaveValue('0.4');
 });
 
 test('오디오 입력 API가 없으면 원인 표시와 함께 관련 UI를 비활성화한다', async ({ page }) => {
