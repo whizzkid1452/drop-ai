@@ -14,6 +14,7 @@ import { PluginController } from './plugin-controller';
 import { MixerController } from './mixer-controller';
 import { LoopController } from './loop-controller';
 import { TimelineController } from './timeline-controller';
+import { MeterController } from './meter-controller';
 
 interface AppControllerDependencies {
   sessionStore: SessionStore;
@@ -38,6 +39,7 @@ export class AppController {
   public readonly mixer: MixerController;
   public readonly loop: LoopController;
   public readonly timeline: TimelineController;
+  public readonly meter: MeterController;
 
   constructor({
     sessionStore,
@@ -64,6 +66,7 @@ export class AppController {
     this.plugin = new PluginController({ pluginHost, sessionStore, audioEngine });
     this.mixer = new MixerController({ sessionStore, audioEngine });
     this.timeline = new TimelineController(sessionStore);
+    this.meter = new MeterController(audioEngine);
     this.loop = new LoopController({
       sessionStore,
       audioEngine,

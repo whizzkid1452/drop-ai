@@ -17,6 +17,8 @@ import type {
   LoadLoopRequest,
   LoopRuntimeListener,
   LoopSlotAddress,
+  MeterFrame,
+  MeterTarget,
   MoveAudioPluginRequest,
   PrepareAudioProjectGraphRequest,
   RegionData,
@@ -186,6 +188,10 @@ export class DawEngineAdapter implements IAudioEngine {
 
   setMetronomeVolume(volume: number): void {
     this.#runtime.setMetronomeVolume(volume);
+  }
+
+  readMeterFrame(target: MeterTarget): MeterFrame {
+    return this.#runtime.readMeterFrame(target);
   }
 
   setLiveInputDevice(deviceId: string | null): Promise<string | null> {

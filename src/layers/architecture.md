@@ -10,8 +10,9 @@
 `SET_EXPORT_RANGE`는 `0 <= startTime <= endTime`만 허용하며, `ExportController`도 Session 변경 전에 같은 조건을
 검증한다. 실제 오디오 내보내기는 별도로 `startTime < endTime`을 요구한다.
 
-재생 중 현재 시각처럼 Session 구독만으로 갱신되지 않는 값은 읽기 전용 Query로 조회한다. Apps에는 Controller나
-AudioEngine 객체를 노출하지 않는다. 현재 `PlaybackClockQuery`는 `PlaybackController.getCurrentTime()`만 노출한다.
+재생 중 현재 시각이나 Meter 표본처럼 Session 구독만으로 갱신되지 않는 값은 읽기 전용 Query로 조회한다. Apps에는
+Controller나 AudioEngine 객체를 노출하지 않는다. `PlaybackClockQuery`는 `PlaybackController.getCurrentTime()`만,
+`MeterQuery`는 `MeterController.readMeterFrame()`만 노출한다. Meter 표본은 runtime 상태이며 `ProjectDocument`에 저장하지 않는다.
 
 `executeMany`는 묶음 전체를 먼저 검증하고, 다른 명령이 끼어들지 않게 순서대로 실행한다. 실행 중 첫 오류가 나면
 남은 명령은 실행하지 않는다. 이미 완료된 변경은 되돌리지 않으므로 묶음 실행은 원자적 트랜잭션이 아니다.
@@ -52,8 +53,8 @@ boolean type을, number는 범위를, enum은 option을 지켜야 한다. catalo
 없으면 Plugin 명령 전체를 막는다. 프로젝트와 Plugin
 컨텍스트는 모델 입력 한도를 넘길 위험을 줄이도록 각각 길이를 제한하고 잘림 여부를 표시한다.
 
-현재 Region의 `startTime`과 `endTime`은 절대 초 단위다. 음악 시간(musical time) 모델을 도입하기 전까지 Session의
-tempo 변경은 AudioEngine의 Transport BPM과 Region 예약을 변경하지 않는다.
+현재 Region의 `startTime`과 `endTime`은 절대 초 단위다. Session의 tempo 변경은 AudioEngine의 Transport BPM과
+마디 단위 Loop·Metronome 예약에는 반영하지만, 기존 Region의 절대 시작 시각과 길이는 변경하지 않는다.
 
 Region 타임라인 범위는 `startTime`과 `duration`이 유한한 0 이상 숫자이고, 두 값의 합인 `endTime`도 유한해야 한다.
 Session에 저장된 `endTime`은 이 합과 일치해야 하며, 비교할 때는 절대 오차 `1e-9`초와

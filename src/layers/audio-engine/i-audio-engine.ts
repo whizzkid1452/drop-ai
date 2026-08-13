@@ -1,6 +1,7 @@
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
 import type { PluginParameterValue } from '../shared/types/plugin-state';
 import type { TimelineRange } from '../shared/types/project-document.schema';
+import type { MeterFrame, MeterTarget } from '../shared/types/meter-frame';
 import type { AudioRuntimeFeatureSupport } from '../shared/utils/audio-runtime-capabilities';
 import type {
   ArmLoopRequest,
@@ -23,6 +24,7 @@ export type {
   StopAllLoopsRequest,
   TriggerLoopRequest,
 } from './loop-runtime/loop-runtime-contract';
+export type { MeterChannelFrame, MeterFrame, MeterTarget } from '../shared/types/meter-frame';
 
 export interface RegionData {
   id: string;
@@ -165,6 +167,9 @@ export interface IAudioEngine {
   setLoopEnabled(isEnabled: boolean): void;
   setMetronomeEnabled(isEnabled: boolean): void;
   setMetronomeVolume(volume: number): void;
+
+  // Runtime Meter Query
+  readMeterFrame(target: MeterTarget): MeterFrame;
 
   // Live Loop Control
   setLiveInputDevice(deviceId: string | null): Promise<string | null>;

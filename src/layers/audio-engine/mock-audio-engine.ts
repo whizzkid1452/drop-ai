@@ -12,6 +12,8 @@ import type {
   LoopRuntimeListener,
   LoopRuntimeState,
   LoopSlotAddress,
+  MeterFrame,
+  MeterTarget,
   MoveAudioPluginRequest,
   IPreparedAudioProjectGraph,
   IRetiredAudioProjectGraph,
@@ -60,9 +62,10 @@ export class MockAudioEngine implements IAudioEngine {
   private mockLoopEnabled = false;
   private mockMetronomeEnabled = false;
   private mockMetronomeVolume = 0.8;
+  private mockMeterFrames = new Map<string, MeterFrame>();
 
   getFeatureSupport(): AudioRuntimeFeatureSupport {
-    return { ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT, tempoLoopMetronome: true };
+    return { ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT, metering: true, tempoLoopMetronome: true };
   }
 
   async play(): Promise<void> {
@@ -121,6 +124,19 @@ export class MockAudioEngine implements IAudioEngine {
       metronomeVolume: this.mockMetronomeVolume,
       tempoChanges: this.mockTempoChanges.map(change => ({ ...change })),
     };
+  }
+
+  readMeterFrame(target: MeterTarget): MeterFrame {
+    return cloneMeterFrame(
+      this.mockMeterFrames.get(createMeterTargetKey(target)) ?? {
+        capturedAtSeconds: this.mockTime,
+        channels: [createSilentMeterChannel(), createSilentMeterChannel()],
+      }
+    );
+  }
+
+  setMockMeterFrame(target: MeterTarget, frame: MeterFrame): void {
+    this.mockMeterFrames.set(createMeterTargetKey(target), cloneMeterFrame(frame));
   }
 
   async setLiveInputDevice(deviceId: string | null): Promise<string | null> {
@@ -560,4 +576,19 @@ export class MockAudioEngine implements IAudioEngine {
   private cloneRegionData(regionData: RegionData): RegionData {
     return { ...regionData };
   }
+}
+
+function createMeterTargetKey(target: MeterTarget): string {
+  return target.kind === 'track' ? `track:${target.trackId}` : target.kind;
+}
+
+function createSilentMeterChannel(): MeterFrame['channels'][number] {
+  return { isClipHeld: false, peakDbfs: -Infinity, rmsDbfs: -Infinity };
+}
+
+function cloneMeterFrame(frame: MeterFrame): MeterFrame {
+  return {
+    capturedAtSeconds: frame.capturedAtSeconds,
+    channels: frame.channels.map(channel => ({ ...channel })),
+  };
 }
