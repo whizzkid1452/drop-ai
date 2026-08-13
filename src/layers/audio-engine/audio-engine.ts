@@ -59,6 +59,7 @@ import type {
   SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
   SetAutomationLanesRequest,
+  SetMidiTrackStateRequest,
   SetLiveInputMonitoringRequest,
   SetTrackRecordArmRequest,
   SetTrackRecordingInputRequest,
@@ -86,6 +87,8 @@ import { AudioRoutingRuntime, type AudioRoutingTrackNodes } from './routing/audi
 import { scheduleAutomationLane, type IAutomationAudioTarget } from './automation/automation-param-scheduler';
 import { ToneAutomationRuntime } from './automation/tone-automation-runtime';
 import { createMappedAutomationTarget } from './automation/tone-automation-target';
+import { ToneMidiRuntime } from './midi/tone-midi-runtime';
+import { BUILTIN_MIDI_INSTRUMENT_ID } from '../shared/types/midi-state';
 
 interface RegionPlayerEntry {
   players: Tone.Player[];
@@ -118,6 +121,7 @@ interface AudioProjectGraphState {
   readonly pluginRuntimes: Map<string, IAudioPluginRuntime[]>;
   readonly disabledPluginInstanceIds: Map<string, Set<string>>;
   readonly routingRuntime: AudioRoutingRuntime;
+  readonly midiRuntime: ToneMidiRuntime;
 }
 
 interface AudioEngineOptions {
@@ -213,6 +217,7 @@ export class AudioEngine implements IAudioEngine {
   private pluginRuntimes: Map<string, IAudioPluginRuntime[]> = new Map();
   private disabledPluginInstanceIds: Map<string, Set<string>> = new Map();
   private routingRuntime = new AudioRoutingRuntime();
+  private midiRuntime = new ToneMidiRuntime();
   private readonly pluginRuntimeFactories: ReadonlyMap<string, IAudioPluginRuntimeFactory>;
   private readonly loopRuntime: ILoopAudioRuntime;
   private readonly recordingRuntime: ILinearRecordingAudioRuntime | null;
@@ -276,6 +281,7 @@ export class AudioEngine implements IAudioEngine {
       [AudioRuntimeFeature.LIVE_INPUT]: loopRuntime !== undefined,
       [AudioRuntimeFeature.LIVE_LOOP]: loopRuntime !== undefined,
       [AudioRuntimeFeature.METERING]: true,
+      [AudioRuntimeFeature.MIDI]: true,
       [AudioRuntimeFeature.LINEAR_RECORDING]: recordingRuntime !== undefined,
       [AudioRuntimeFeature.TEMPO_LOOP_METRONOME]: true,
     };
@@ -308,17 +314,20 @@ export class AudioEngine implements IAudioEngine {
   pause(): void {
     this.ensureRuntimeReady();
     Tone.getTransport().pause();
+    this.midiRuntime.panic();
     this.automationRuntime.holdAtCurrentPosition();
   }
 
   stop(): void {
     this.ensureRuntimeReady();
     Tone.getTransport().stop();
+    this.midiRuntime.panic();
     this.automationRuntime.holdAtCurrentPosition();
   }
 
   setTime(time: number): void {
     this.ensureRuntimeReady();
+    this.midiRuntime.panic();
     Tone.getTransport().seconds = time;
     this.automationRuntime.refresh();
   }
@@ -664,9 +673,23 @@ export class AudioEngine implements IAudioEngine {
     this.getOrInitTrackNodes(trackId);
   }
 
+  async addMidiTrack(trackId: string): Promise<void> {
+    await this.addTrack(trackId);
+    try {
+      this.setMidiTrackState({
+        midi: { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, regions: [] },
+        trackId,
+      });
+    } catch (cause) {
+      this.removeTrack(trackId);
+      throw cause;
+    }
+  }
+
   removeTrack(trackId: string): void {
     this.ensureRuntimeReady();
     const automationLanes = this.automationLanes.get(trackId) ?? [];
+    this.midiRuntime.removeTrack(trackId);
     this.automationRuntime.clearTargets([{ automationLanes, trackId }]);
     if (this.recordingState.armedTrackIds.includes(trackId)) {
       if (this.activeRecordingRequest) {
@@ -838,6 +861,21 @@ export class AudioEngine implements IAudioEngine {
       throw cause;
     }
     this.graphRevision += 1;
+  }
+
+  setMidiTrackState(request: SetMidiTrackStateRequest): void {
+    this.ensureRuntimeReady();
+    this.midiRuntime.setTrackState({
+      destination: this.getExistingInput(request.trackId),
+      midi: request.midi,
+      trackId: request.trackId,
+    });
+    this.graphRevision += 1;
+  }
+
+  midiPanic(): void {
+    this.ensureRuntimeReady();
+    this.midiRuntime.panic();
   }
 
   installPlugin(request: InstallAudioPluginRequest): void {
@@ -1706,6 +1744,9 @@ export class AudioEngine implements IAudioEngine {
         graph.desiredTrackVolumes.set(track.id, track.volume);
         graph.desiredTrackPans.set(track.id, track.pan);
         graph.automationLanes.set(track.id, (track.automationLanes ?? []).map(cloneAutomationLaneState));
+        if (track.midi) {
+          graph.midiRuntime.setTrackState({ destination: input, midi: track.midi, trackId: track.id });
+        }
         graph.players.set(track.id, new Map());
         if (track.isMuted) {
           graph.mutedTrackIds.add(track.id);
@@ -1802,6 +1843,7 @@ export class AudioEngine implements IAudioEngine {
       pluginRuntimes: new Map(),
       disabledPluginInstanceIds: new Map(),
       routingRuntime: new AudioRoutingRuntime(),
+      midiRuntime: new ToneMidiRuntime(),
     };
   }
 
@@ -1824,6 +1866,7 @@ export class AudioEngine implements IAudioEngine {
       pluginRuntimes: this.pluginRuntimes,
       disabledPluginInstanceIds: this.disabledPluginInstanceIds,
       routingRuntime: this.routingRuntime,
+      midiRuntime: this.midiRuntime,
     };
   }
 
@@ -1845,6 +1888,7 @@ export class AudioEngine implements IAudioEngine {
     this.pluginRuntimes = graph.pluginRuntimes;
     this.disabledPluginInstanceIds = graph.disabledPluginInstanceIds;
     this.routingRuntime = graph.routingRuntime;
+    this.midiRuntime = graph.midiRuntime;
   }
 
   private createRetiredGraph(graph: AudioProjectGraphState, loops: IRetiredLoopRuntime): IRetiredAudioProjectGraph {
@@ -1867,6 +1911,7 @@ export class AudioEngine implements IAudioEngine {
   private disposeGraph(graph: AudioProjectGraphState, errorMessage: string): ResourceCleanupResult {
     this.pendingGraphCleanup.add(graph);
     graph.routingRuntime.dispose();
+    const midiCleanupResult = graph.midiRuntime.dispose();
     const isMasterMeterDisposed = this.disposeMeterRuntimeSafely(graph.masterMeterRuntime, errorMessage);
     const isMonitorMonoDisposed = this.disposeMonitorMonoSafely(graph.monitorMono, errorMessage);
     const isOutputDisposed = this.disposeOutput(graph.output, errorMessage);
@@ -1947,7 +1992,8 @@ export class AudioEngine implements IAudioEngine {
       graph.channels.size +
       (isMasterMeterDisposed ? 0 : 1) +
       (isMonitorMonoDisposed ? 0 : 1) +
-      (isOutputDisposed ? 0 : 1);
+      (isOutputDisposed ? 0 : 1) +
+      midiCleanupResult.failedResourceCount;
     if (failedResourceCount > 0) {
       return { isComplete: false, failedResourceCount };
     }

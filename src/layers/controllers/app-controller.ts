@@ -20,6 +20,7 @@ import { RecordingController } from './recording-controller';
 import { EditorController } from './editor-controller';
 import { RegionProcessingController } from './region-processing-controller';
 import { AutomationController } from './automation-controller';
+import { MidiController } from './midi-controller';
 
 interface AppControllerDependencies {
   sessionStore: SessionStore;
@@ -50,6 +51,7 @@ export class AppController {
   public readonly editor: EditorController;
   public readonly regionProcessing: RegionProcessingController;
   public readonly automation: AutomationController;
+  public readonly midi: MidiController;
 
   constructor({
     sessionStore,
@@ -63,6 +65,7 @@ export class AppController {
     this.playback = new PlaybackController(sessionStore, audioEngine);
     this.track = new TrackController({ sessionStore, audioEngine, audioSourceRegistry });
     this.automation = new AutomationController({ audioEngine, sessionStore });
+    this.midi = new MidiController({ audioEngine, sessionStore });
     this.region = new RegionController({ sessionStore, audioEngine, audioSourceRegistry });
     this.editor = new EditorController({ regionRuntime: this.region, sessionStore });
     this.regionProcessing = new RegionProcessingController({

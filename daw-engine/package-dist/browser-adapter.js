@@ -8466,6 +8466,8 @@ var Source = class {
 };
 export {
   AudioEngine,
+  MidiNote,
+  MidiRegion,
   Region,
   Session,
   Source,

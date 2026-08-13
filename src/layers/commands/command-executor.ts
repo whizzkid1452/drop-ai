@@ -173,6 +173,10 @@ export class CommandExecutor {
         }
         return;
 
+      case AudioCommandType.ADD_MIDI_TRACK:
+        await this.controller.midi.addTrack(validatedCommand.trackId);
+        return;
+
       case AudioCommandType.REMOVE_TRACK:
         this.controller.track.removeTrack(validatedCommand.trackId);
         this.controller.editor.reset();
@@ -356,6 +360,14 @@ export class CommandExecutor {
 
       case AudioCommandType.SET_AUTOMATION_LANES:
         this.controller.automation.setTrackAutomation(validatedCommand);
+        return;
+
+      case AudioCommandType.SET_MIDI_TRACK_STATE:
+        this.controller.midi.setTrackState(validatedCommand);
+        return;
+
+      case AudioCommandType.MIDI_PANIC:
+        this.controller.midi.panic();
         return;
 
       case AudioCommandType.PREVIEW_AUTOMATION_WRITE_PASS:
@@ -597,6 +609,7 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.UNDO:
     case AudioCommandType.REDO:
     case AudioCommandType.ADD_TRACK:
+    case AudioCommandType.ADD_MIDI_TRACK:
     case AudioCommandType.REMOVE_TRACK:
     case AudioCommandType.ARM_LOOP_SLOT:
     case AudioCommandType.ARM_LOOP_OVERDUB:
@@ -625,6 +638,7 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.SET_TRACK_MUTE:
     case AudioCommandType.SET_TRACK_SOLO:
     case AudioCommandType.SET_AUTOMATION_LANES:
+    case AudioCommandType.SET_MIDI_TRACK_STATE:
     case AudioCommandType.COMMIT_AUTOMATION_WRITE_PASS:
     case AudioCommandType.INSTALL_PLUGIN:
     case AudioCommandType.REMOVE_PLUGIN:
@@ -672,6 +686,7 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.COPY_SELECTED_REGIONS:
     case AudioCommandType.PREVIEW_AUTOMATION_WRITE_PASS:
     case AudioCommandType.CANCEL_AUTOMATION_WRITE_PREVIEW:
+    case AudioCommandType.MIDI_PANIC:
     case AudioCommandType.EXPORT_AUDIO:
     case AudioCommandType.SAVE_PROJECT:
     case AudioCommandType.LOAD_PROJECT:

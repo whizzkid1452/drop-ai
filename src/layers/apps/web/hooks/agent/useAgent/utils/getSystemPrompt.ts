@@ -92,6 +92,8 @@ const COMMAND_REFERENCE = {
   [AudioCommandType.REDO]: '{"type":"REDO"} - 마지막으로 취소한 편집 다시 실행',
   [AudioCommandType.ADD_TRACK]:
     '{"type":"ADD_TRACK","trackId":"<new UUID>"} - 빈 Track 추가. kind(audio|aux|bus|folder|vca)와 channelCount(1|2)는 선택 사항. 현재 Agent 생성은 금지',
+  [AudioCommandType.ADD_MIDI_TRACK]:
+    '{"type":"ADD_MIDI_TRACK","trackId":"<new UUID>"} - 빈 MIDI Track 추가. 현재 Agent 생성은 금지',
   [AudioCommandType.REMOVE_TRACK]:
     '{"type":"REMOVE_TRACK","trackId":"<existing Track UUID>"} - Track과 포함된 Region을 제거',
   [AudioCommandType.PLAY]: '{"type":"PLAY"} - 재생',
@@ -136,6 +138,8 @@ const COMMAND_REFERENCE = {
     '{"type":"SET_TRACK_SOLO","trackId":"<existing Track UUID>","soloed":<boolean>} - Track solo 변경',
   [AudioCommandType.SET_AUTOMATION_LANES]:
     '{"type":"SET_AUTOMATION_LANES","trackId":"<existing Track UUID>","automationLanes":[]} - Track Automation lane 전체 교체',
+  [AudioCommandType.SET_MIDI_TRACK_STATE]: 'UI 전용 편집 명령 - MIDI Track의 Instrument·Region·Note 상태 전체 교체',
+  [AudioCommandType.MIDI_PANIC]: '{"type":"MIDI_PANIC"} - 재생 중인 모든 MIDI Note 즉시 해제',
   [AudioCommandType.PREVIEW_AUTOMATION_WRITE_PASS]:
     'UI 전용 runtime 명령 - Automation write pass sample을 저장하지 않고 미리 듣기',
   [AudioCommandType.COMMIT_AUTOMATION_WRITE_PASS]:

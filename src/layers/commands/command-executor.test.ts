@@ -1119,6 +1119,53 @@ describe('CommandExecutor', () => {
     expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances).toEqual([]);
   });
 
+  it('MIDI Track과 Note 상태를 실행하고 Undo와 Redo로 복원한다', async () => {
+    const { audioEngine, commandExecutor, session } = createTestContext();
+    const midi = {
+      instrumentId: 'builtin.poly-synth',
+      regions: [
+        {
+          durationSeconds: 2,
+          id: REGION_ID,
+          name: 'Verse',
+          notes: [
+            {
+              channel: 1,
+              durationSeconds: 0.5,
+              id: SECOND_REGION_ID,
+              pitch: 60,
+              startOffsetSeconds: 0.25,
+              velocity: 100,
+            },
+          ],
+          startTimeSeconds: 1,
+        },
+      ],
+    };
+
+    await commandExecutor.execute({ trackId: TRACK_ID, type: AudioCommandType.ADD_MIDI_TRACK });
+    await commandExecutor.execute({ midi, trackId: TRACK_ID, type: AudioCommandType.SET_MIDI_TRACK_STATE });
+    expect(session.getState().tracks.get(TRACK_ID)?.midi).toEqual(midi);
+    expect(audioEngine.getMockMidiTrackState(TRACK_ID)).toEqual(midi);
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.midi?.regions).toEqual([]);
+
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.midi).toEqual(midi);
+  });
+
+  it('MIDI_PANIC을 runtime에 전달하고 저장 상태는 변경하지 않는다', async () => {
+    const { audioEngine, commandExecutor, session } = createTestContext();
+    const panic = vi.spyOn(audioEngine, 'midiPanic');
+    const beforeRevision = session.getState().project.revision;
+
+    await commandExecutor.execute({ type: AudioCommandType.MIDI_PANIC });
+
+    expect(panic).toHaveBeenCalledTimes(1);
+    expect(session.getState().project.revision).toBe(beforeRevision);
+  });
+
   it('SET_PLUGIN_ENABLED 명령을 실행하고 Undo와 Redo로 복원한다', async () => {
     const { commandExecutor, session } = createTestContext();
     await addTrack(commandExecutor);

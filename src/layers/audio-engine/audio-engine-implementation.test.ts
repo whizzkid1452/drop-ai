@@ -96,12 +96,15 @@ const toneMocks = vi.hoisted(() => ({
   playerSync: vi.fn(),
   playerUnsync: vi.fn(),
   transportPause: vi.fn(),
+  transportSchedule: vi.fn<(callback: (time: number) => void, time: number) => number>(() => 1),
   transportStart: vi.fn(),
   transportStop: vi.fn(),
   transportSeconds: 0,
   transportSecondsFailures: [] as Array<Error | undefined>,
   transportState: 'stopped' as 'paused' | 'started' | 'stopped',
   contextTimeSeconds: 0,
+  midiTriggerAttackRelease: vi.fn(),
+  midiReleaseAll: vi.fn(),
 }));
 
 vi.mock('tone', () => {
@@ -441,6 +444,31 @@ vi.mock('tone', () => {
     }
   }
 
+  class PolySynth {
+    connect(destination: unknown) {
+      void destination;
+      return this;
+    }
+
+    disconnect() {
+      return this;
+    }
+
+    dispose() {
+      return this;
+    }
+
+    releaseAll() {
+      toneMocks.midiReleaseAll();
+      return this;
+    }
+
+    triggerAttackRelease(frequency: number, duration: number, time: number, velocity: number) {
+      toneMocks.midiTriggerAttackRelease(frequency, duration, time, velocity);
+      return this;
+    }
+  }
+
   const bpm = {
     currentValue: 120,
     get value() {
@@ -454,7 +482,7 @@ vi.mock('tone', () => {
 
   const transport = {
     clear: vi.fn(),
-    schedule: vi.fn(() => 1),
+    schedule: toneMocks.transportSchedule,
     pause: () => {
       toneMocks.transportPause();
       toneMocks.transportState = 'paused';
@@ -492,7 +520,10 @@ vi.mock('tone', () => {
     Gain,
     Mono,
     Player,
+    PolySynth,
+    Synth: class Synth {},
     Transport: { bpm },
+    Frequency: (pitch: number) => ({ toFrequency: () => 440 * 2 ** ((pitch - 69) / 12) }),
     dbToGain: (value: number) => (value === Number.NEGATIVE_INFINITY ? 0 : value),
     gainToDb: (value: number) => (value === 0 ? Number.NEGATIVE_INFINITY : value),
     getContext: () => ({ state: 'running' }),
@@ -687,6 +718,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     toneMocks.transportSecondsFailures.length = 0;
     toneMocks.transportState = 'stopped';
     toneMocks.contextTimeSeconds = 0;
+    toneMocks.transportSchedule.mockClear();
   });
 
   afterEach(() => {
@@ -701,6 +733,41 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     engine.setTrackSolo('track-1', true);
 
     expect(toneMocks.channels[0]).toMatchObject({ mute: true, solo: false });
+  });
+
+  it('MIDI Note를 Track 입력에 연결하고 Transport 시간에 예약한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addMidiTrack('midi-track-1');
+
+    engine.setMidiTrackState({
+      midi: {
+        instrumentId: 'builtin.poly-synth',
+        regions: [
+          {
+            durationSeconds: 2,
+            id: '11111111-1111-4111-8111-111111111111',
+            name: 'Verse',
+            notes: [
+              {
+                channel: 1,
+                durationSeconds: 0.5,
+                id: '22222222-2222-4222-8222-222222222222',
+                pitch: 69,
+                startOffsetSeconds: 0.25,
+                velocity: 64,
+              },
+            ],
+            startTimeSeconds: 1,
+          },
+        ],
+      },
+      trackId: 'midi-track-1',
+    });
+
+    const midiSchedule = toneMocks.transportSchedule.mock.calls.find(([, time]) => time === 1.25);
+    expect(midiSchedule).toBeDefined();
+    midiSchedule?.[0](3);
+    expect(toneMocks.midiTriggerAttackRelease).toHaveBeenCalledWith(440, 0.5, 3, 64 / 127);
   });
 
   it('VCA 볼륨과 mute를 소속 Track의 계산된 gain에 반영한다', async () => {

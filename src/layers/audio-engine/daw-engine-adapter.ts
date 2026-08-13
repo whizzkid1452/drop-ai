@@ -1,5 +1,7 @@
 import {
   AudioEngine as DawAudioEngine,
+  MidiNote,
+  MidiRegion,
   Region,
   Session,
   Source,
@@ -40,6 +42,7 @@ import type {
   SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
   SetAutomationLanesRequest,
+  SetMidiTrackStateRequest,
   SetLiveInputMonitoringRequest,
   SetTrackRecordArmRequest,
   SetTrackRecordingInputRequest,
@@ -50,6 +53,12 @@ import type {
 import type { TimelineRange } from '../shared/types/project-document.schema';
 import { createDefaultRegionProcessingState } from '../shared/types/region-processing';
 import { UnsupportedAudioFeatureError } from './errors';
+import {
+  BUILTIN_MIDI_INSTRUMENT_ID,
+  cloneMidiTrackState,
+  type MidiRegionState,
+  type MidiTrackState,
+} from '../shared/types/midi-state';
 import {
   AudioRuntimeFeature,
   type AudioRuntimeFeature as AudioRuntimeFeatureName,
@@ -72,7 +81,7 @@ export const DAW_AUDIO_PROVIDER_SUPPORT = {
   connectIO: 'adapter-handled',
   createAuxTrack: 'runtime-delegated',
   createBusTrack: 'runtime-delegated',
-  createMidiTrack: 'unsupported',
+  createMidiTrack: 'runtime-delegated',
   createTrack: 'runtime-delegated',
   deleteTrack: 'runtime-delegated',
   disconnectIO: 'adapter-handled',
@@ -91,26 +100,26 @@ export const DAW_AUDIO_PROVIDER_SUPPORT = {
   getMeterData: 'unsupported',
   getMeterLevel: 'unsupported',
   initialize: 'adapter-handled',
-  midiPanic: 'unsupported',
+  midiPanic: 'runtime-delegated',
   normalizeRegion: 'unsupported',
   pause: 'runtime-delegated',
   prepareRecording: 'unsupported',
   registerMasterIO: 'adapter-handled',
   removeMasterProcessor: 'adapter-handled',
-  removeMidiRegion: 'unsupported',
+  removeMidiRegion: 'adapter-handled',
   removeProcessor: 'adapter-handled',
   removeRegion: 'runtime-delegated',
   removeSendBus: 'unsupported',
   renderRegionsToBuffer: 'unsupported',
   reverseRegionBuffer: 'unsupported',
-  scheduleMidiRegion: 'unsupported',
+  scheduleMidiRegion: 'adapter-handled',
   scheduleRegion: 'runtime-delegated',
   seek: 'runtime-delegated',
   setMasterGain: 'runtime-delegated',
   setMasterProcessorParameter: 'adapter-handled',
   setLoopRange: 'adapter-handled',
   setMetronomeVolume: 'adapter-handled',
-  setMidiInstrument: 'unsupported',
+  setMidiInstrument: 'adapter-handled',
   setMonitor: 'unsupported',
   setMonitorMode: 'unsupported',
   setMonitorWithEffects: 'unsupported',
@@ -323,6 +332,11 @@ export class DawEngineAdapter implements IAudioEngine {
     await this.#providerBridge.waitForTrack(trackId);
   }
 
+  async addMidiTrack(trackId: string): Promise<void> {
+    this.#engine.addTrack(trackId, TrackType.MIDI, trackId);
+    await this.#providerBridge.waitForTrack(trackId);
+  }
+
   removeTrack(trackId: string): void {
     this.#engine.removeTrack(trackId);
   }
@@ -333,6 +347,23 @@ export class DawEngineAdapter implements IAudioEngine {
 
   setAutomationLanes(request: SetAutomationLanesRequest): void {
     this.#runtime.setAutomationLanes(request);
+  }
+
+  setMidiTrackState(request: SetMidiTrackStateRequest): void {
+    this.#runtime.setMidiTrackState(request);
+    this.#providerBridge.setMidiProjection(request);
+    this.#providerBridge.runSuppressed(() => {
+      const track = this.#engine.session.getTrack(request.trackId);
+      if (!track || track.type !== TrackType.MIDI) {
+        throw new Error(`DAW Engine MIDI Track을 찾을 수 없습니다: ${request.trackId}`);
+      }
+      track.playlist.getMidiRegions().forEach(region => track.playlist.removeMidiRegion(region.id));
+      request.midi.regions.forEach(region => track.playlist.addMidiRegion(createDawMidiRegion(region)));
+    });
+  }
+
+  midiPanic(): void {
+    this.#engine.midiPanic();
   }
 
   setTrackPan(trackId: string, pan: number): void {
@@ -465,6 +496,7 @@ export class DawAudioProviderBridge {
   readonly #stagedRegions = new Map<string, RegionData>();
   readonly #pendingTracks = new Map<string, Promise<void>>();
   readonly #pendingRegions = new Map<string, Promise<void>>();
+  readonly #midiStates = new Map<string, MidiTrackState>();
   #isSuppressed = false;
 
   constructor(runtime: IAudioEngine) {
@@ -485,7 +517,17 @@ export class DawAudioProviderBridge {
       track.route.processors.forEach(processor => {
         this.#rememberProcessor(track.id, processor.id, processor.name);
       });
+      if (track.type === TrackType.MIDI) {
+        this.#midiStates.set(track.id, {
+          instrumentId: BUILTIN_MIDI_INSTRUMENT_ID,
+          regions: track.playlist.getMidiRegions().map(createProductMidiRegion),
+        });
+      }
     });
+  }
+
+  setMidiProjection(request: SetMidiTrackStateRequest): void {
+    this.#midiStates.set(request.trackId, cloneMidiTrackState(request.midi));
   }
 
   async waitForTrack(trackId: string): Promise<void> {
@@ -525,7 +567,11 @@ export class DawAudioProviderBridge {
       createTrack: trackId => this.#createTrack(trackId),
       createAuxTrack: trackId => this.#createTrack(trackId),
       createBusTrack: trackId => this.#createTrack(trackId),
-      deleteTrack: trackId => this.#runUnlessSuppressed(() => this.#runtime.removeTrack(trackId)),
+      deleteTrack: trackId =>
+        this.#runUnlessSuppressed(() => {
+          this.#midiStates.delete(trackId);
+          this.#runtime.removeTrack(trackId);
+        }),
       // 실제 연결 graph는 product runtime이 소유하므로 DAW Route 연결은 projection으로만 유지한다.
       connectIO: (sourceId, destinationId) => {
         void sourceId;
@@ -636,10 +682,10 @@ export class DawAudioProviderBridge {
       stopAudition: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.REGION_PROCESSING, 'stopAudition'),
       stripSilence: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.REGION_PROCESSING, 'stripSilence'),
       normalizeRegion: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.REGION_PROCESSING, 'normalizeRegion'),
-      createMidiTrack: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.MIDI, 'createMidiTrack'),
-      scheduleMidiRegion: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.MIDI, 'scheduleMidiRegion'),
-      removeMidiRegion: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.MIDI, 'removeMidiRegion'),
-      setMidiInstrument: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.MIDI, 'setMidiInstrument'),
+      createMidiTrack: trackId => this.#createMidiTrack(trackId),
+      scheduleMidiRegion: (trackId, region) => this.#scheduleMidiRegion(trackId, region),
+      removeMidiRegion: (trackId, regionId) => this.#removeMidiRegion(trackId, regionId),
+      setMidiInstrument: (trackId, instrumentId) => this.#setMidiInstrument(trackId, instrumentId),
       enableLoop: isEnabled => {
         void isEnabled;
       },
@@ -647,7 +693,7 @@ export class DawAudioProviderBridge {
         void startTime;
         void endTime;
       },
-      midiPanic: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.MIDI, 'midiPanic'),
+      midiPanic: () => this.#runUnlessSuppressed(() => this.#runtime.midiPanic()),
       getMasterStereoMeterData: createUnsupportedAudioProviderMethod(
         AudioRuntimeFeature.METERING,
         'getMasterStereoMeterData'
@@ -671,6 +717,87 @@ export class DawAudioProviderBridge {
       return;
     }
     this.#pendingTracks.set(trackId, this.#runtime.addTrack(trackId));
+  }
+
+  #createMidiTrack(trackId: string): void {
+    if (this.#isSuppressed) {
+      return;
+    }
+    this.#midiStates.set(trackId, { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, regions: [] });
+    this.#pendingTracks.set(trackId, this.#runtime.addMidiTrack(trackId));
+  }
+
+  #scheduleMidiRegion(
+    trackId: string,
+    region: {
+      readonly id: string;
+      readonly length: FrameCount;
+      readonly name: string;
+      readonly notes: readonly {
+        readonly channel: number;
+        readonly durationFrames: FrameCount;
+        readonly id: string;
+        readonly pitch: number;
+        readonly startFrame: FrameCount;
+        readonly velocity: number;
+      }[];
+      readonly start: FrameCount;
+    }
+  ): void {
+    if (this.#isSuppressed) {
+      return;
+    }
+    const current = this.#getMidiState(trackId);
+    const next = {
+      ...current,
+      regions: [
+        ...current.regions.filter(candidate => candidate.id !== region.id),
+        {
+          durationSeconds: framesToSeconds(region.length),
+          id: region.id,
+          name: region.name,
+          notes: region.notes.map(note => ({
+            channel: note.channel + 1,
+            durationSeconds: framesToSeconds(note.durationFrames),
+            id: note.id,
+            pitch: note.pitch,
+            startOffsetSeconds: framesToSeconds(note.startFrame),
+            velocity: Math.max(1, note.velocity),
+          })),
+          startTimeSeconds: framesToSeconds(region.start),
+        },
+      ],
+    };
+    this.#runtime.setMidiTrackState({ midi: next, trackId });
+    this.#midiStates.set(trackId, cloneMidiTrackState(next));
+  }
+
+  #removeMidiRegion(trackId: string, regionId: string): void {
+    if (this.#isSuppressed) {
+      return;
+    }
+    const current = this.#getMidiState(trackId);
+    const next = { ...current, regions: current.regions.filter(region => region.id !== regionId) };
+    this.#runtime.setMidiTrackState({ midi: next, trackId });
+    this.#midiStates.set(trackId, cloneMidiTrackState(next));
+  }
+
+  #setMidiInstrument(trackId: string, instrumentId: string): void {
+    if (this.#isSuppressed) {
+      return;
+    }
+    const current = this.#getMidiState(trackId);
+    const next = { ...current, instrumentId };
+    this.#runtime.setMidiTrackState({ midi: next, trackId });
+    this.#midiStates.set(trackId, cloneMidiTrackState(next));
+  }
+
+  #getMidiState(trackId: string): MidiTrackState {
+    const midi = this.#midiStates.get(trackId);
+    if (!midi) {
+      throw new Error(`DAW Engine MIDI Track projection을 찾을 수 없습니다: ${trackId}`);
+    }
+    return cloneMidiTrackState(midi);
   }
 
   #rememberProcessor(trackId: string, processorId: string, type: string): void {
@@ -750,7 +877,11 @@ function createDawSession(request: PrepareAudioProjectGraphRequest): Session {
     session.masterBus.volume = linearGainToDecibels(request.masterVolume);
   }
   request.tracks.forEach(projectTrack => {
-    const track = session.addTrack(projectTrack.id, TrackType.AUDIO, projectTrack.id);
+    const track = session.addTrack(
+      projectTrack.id,
+      projectTrack.midi ? TrackType.MIDI : TrackType.AUDIO,
+      projectTrack.id
+    );
     track.route.volume = linearGainToDecibels(projectTrack.volume);
     track.route.pan = projectTrack.pan;
     track.setMute(projectTrack.isMuted);
@@ -760,6 +891,7 @@ function createDawSession(request: PrepareAudioProjectGraphRequest): Session {
       session.addSource(createDawSource(sourceId, regionData));
       track.playlist.addRegion(createDawRegion(sourceId, regionData));
     });
+    projectTrack.midi?.regions.forEach(region => track.playlist.addMidiRegion(createDawMidiRegion(region)));
   });
   return session;
 }
@@ -785,6 +917,45 @@ function createDawRegion(sourceId: string, regionData: RegionData): Region {
   region.gain = regionData.gain;
   region.opaque = regionData.isOpaque;
   return region;
+}
+
+function createDawMidiRegion(regionState: MidiRegionState): MidiRegion {
+  const region = new MidiRegion(
+    regionState.id as RegionId,
+    regionState.name,
+    secondsToFrames(regionState.startTimeSeconds),
+    secondsToFrames(regionState.durationSeconds)
+  );
+  regionState.notes.forEach(note => {
+    region.addNote(
+      new MidiNote(
+        note.id,
+        note.pitch,
+        note.velocity,
+        secondsToFrames(note.startOffsetSeconds),
+        secondsToFrames(note.durationSeconds),
+        note.channel - 1
+      )
+    );
+  });
+  return region;
+}
+
+function createProductMidiRegion(region: MidiRegion): MidiRegionState {
+  return {
+    durationSeconds: framesToSeconds(region.length),
+    id: region.id,
+    name: region.name,
+    notes: region.getNotes().map(note => ({
+      channel: note.channel + 1,
+      durationSeconds: framesToSeconds(note.durationFrames),
+      id: note.id,
+      pitch: note.pitch,
+      startOffsetSeconds: framesToSeconds(note.startFrame),
+      velocity: Math.max(1, note.velocity),
+    })),
+    startTimeSeconds: framesToSeconds(region.start),
+  };
 }
 
 function createSourceId(trackId: string, regionId: string): string {

@@ -4,6 +4,7 @@ import { calculateFiniteRegionEndTime } from '../region-timeline';
 import {
   ProjectAutomationLaneV12Schema,
   ProjectAutomationPointSchema,
+  ProjectMidiTrackSchema,
   ProjectCompSegmentSchema,
   ProjectRoutingGraphSchema,
   ProjectRoutingRouteTargetSchema,
@@ -18,6 +19,7 @@ export const AudioCommandType = {
   UNDO: 'UNDO',
   REDO: 'REDO',
   ADD_TRACK: 'ADD_TRACK',
+  ADD_MIDI_TRACK: 'ADD_MIDI_TRACK',
   REMOVE_TRACK: 'REMOVE_TRACK',
   PLAY: 'PLAY',
   PAUSE: 'PAUSE',
@@ -61,6 +63,8 @@ export const AudioCommandType = {
   SET_TRACK_MUTE: 'SET_TRACK_MUTE',
   SET_TRACK_SOLO: 'SET_TRACK_SOLO',
   SET_AUTOMATION_LANES: 'SET_AUTOMATION_LANES',
+  SET_MIDI_TRACK_STATE: 'SET_MIDI_TRACK_STATE',
+  MIDI_PANIC: 'MIDI_PANIC',
   PREVIEW_AUTOMATION_WRITE_PASS: 'PREVIEW_AUTOMATION_WRITE_PASS',
   COMMIT_AUTOMATION_WRITE_PASS: 'COMMIT_AUTOMATION_WRITE_PASS',
   CANCEL_AUTOMATION_WRITE_PREVIEW: 'CANCEL_AUTOMATION_WRITE_PREVIEW',
@@ -298,6 +302,10 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
     channelCount: z.union([z.literal(ROUTING_CHANNEL_COUNTS[0]), z.literal(ROUTING_CHANNEL_COUNTS[1])]).optional(),
   }),
   z.strictObject({
+    type: z.literal(AudioCommandType.ADD_MIDI_TRACK),
+    trackId: z.uuid('Invalid MIDI Track ID format'),
+  }),
+  z.strictObject({
     type: z.literal(AudioCommandType.REMOVE_TRACK),
     trackId: z.uuid('Invalid track ID format'),
   }),
@@ -511,6 +519,12 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
     automationLanes: z.array(ProjectAutomationLaneV12Schema).max(128),
     trackId: z.uuid('Invalid track ID format'),
   }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_MIDI_TRACK_STATE),
+    midi: ProjectMidiTrackSchema,
+    trackId: z.uuid('Invalid MIDI Track ID format'),
+  }),
+  z.strictObject({ type: z.literal(AudioCommandType.MIDI_PANIC) }),
   PreviewAutomationWritePassCommandSchema,
   CommitAutomationWritePassCommandSchema,
   z.strictObject({

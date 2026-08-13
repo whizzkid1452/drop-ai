@@ -1441,7 +1441,7 @@ export declare class Region {
 	setVideoLocked(locked: boolean): void;
 }
 export type MidiNoteId = string;
-declare class MidiNote {
+export declare class MidiNote {
 	readonly id: MidiNoteId;
 	pitch: number;
 	velocity: number;
@@ -1475,7 +1475,7 @@ export interface MidiNoteSnapshot {
 	durationFrames: number;
 	channel: number;
 }
-declare class MidiRegion {
+export declare class MidiRegion {
 	id: RegionId;
 	name: string;
 	start: FrameCount;

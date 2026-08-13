@@ -47,6 +47,7 @@ import type {
   SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
   SetAutomationLanesRequest,
+  SetMidiTrackStateRequest,
   SetLiveInputMonitoringRequest,
   SetTrackRecordArmRequest,
   SetTrackRecordingInputRequest,
@@ -59,6 +60,7 @@ import {
   CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
   type AudioRuntimeFeatureSupport,
 } from '../shared/utils/audio-runtime-capabilities';
+import { BUILTIN_MIDI_INSTRUMENT_ID, cloneMidiTrackState, type MidiTrackState } from '../shared/types/midi-state';
 
 interface MockTrackState {
   muted: boolean;
@@ -104,9 +106,34 @@ export class MockAudioEngine implements IAudioEngine {
   private readonly liveInputStateListeners = new Set<LiveInputRuntimeListener>();
   private mockAudioRegionPeak = 0.5;
   private mockAutomationLanes = new Map<string, SetAutomationLanesRequest['automationLanes']>();
+  private mockMidiTracks = new Map<string, MidiTrackState>();
 
   getFeatureSupport(): AudioRuntimeFeatureSupport {
-    return { ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT, metering: true, tempoLoopMetronome: true };
+    return { ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT, metering: true, midi: true, tempoLoopMetronome: true };
+  }
+
+  async addMidiTrack(trackId: string): Promise<void> {
+    await this.addTrack(trackId);
+    this.mockMidiTracks.set(trackId, { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, regions: [] });
+  }
+
+  setMidiTrackState(request: SetMidiTrackStateRequest): void {
+    this.getTrack(request.trackId);
+    if (!this.mockMidiTracks.has(request.trackId)) {
+      throw new AudioEngineError(AudioEngineErrorCode.TRACK_NOT_FOUND, ERROR_MESSAGES.TRACK_NOT_FOUND, {
+        reason: 'TRACK_NOT_MIDI',
+        trackId: request.trackId,
+      });
+    }
+    this.mockMidiTracks.set(request.trackId, cloneMidiTrackState(request.midi));
+    this.graphRevision += 1;
+  }
+
+  midiPanic(): void {}
+
+  getMockMidiTrackState(trackId: string): MidiTrackState | null {
+    const midi = this.mockMidiTracks.get(trackId);
+    return midi ? cloneMidiTrackState(midi) : null;
   }
 
   setAutomationLanes(request: SetAutomationLanesRequest): void {
@@ -431,6 +458,7 @@ export class MockAudioEngine implements IAudioEngine {
     this.mockTracks.delete(trackId);
     this.mockRegions.delete(trackId);
     this.mockPlugins.delete(trackId);
+    this.mockMidiTracks.delete(trackId);
     this.mockRoutingGraph = removeTrackFromRoutingGraph(this.mockRoutingGraph, trackId);
     [...this.mockLoopStates.keys()]
       .filter(key => key.startsWith(`${trackId}\u0000`))
@@ -607,6 +635,7 @@ export class MockAudioEngine implements IAudioEngine {
     const nextRegions = new Map<string, Map<string, RegionData>>();
     const nextPlugins = new Map<string, Map<string, MockPluginState>>();
     const nextLoopStates = new Map<string, LoopRuntimeState>();
+    const nextMidiTracks = new Map<string, MidiTrackState>();
 
     tracks.forEach(track => {
       if (nextTracks.has(track.id)) {
@@ -648,6 +677,9 @@ export class MockAudioEngine implements IAudioEngine {
       });
       nextRegions.set(track.id, trackRegions);
       nextPlugins.set(track.id, trackPlugins);
+      if (track.midi) {
+        nextMidiTracks.set(track.id, cloneMidiTrackState(track.midi));
+      }
       (track.loops ?? []).forEach(loop => {
         const loopKey = this.createLoopKey({ slotId: loop.slotId, trackId: track.id });
         if (nextLoopStates.has(loopKey)) {
@@ -683,6 +715,7 @@ export class MockAudioEngine implements IAudioEngine {
         this.mockRegions = nextRegions;
         this.mockPlugins = nextPlugins;
         this.mockLoopStates = nextLoopStates;
+        this.mockMidiTracks = nextMidiTracks;
         this.mockMasterVolume = masterVolume;
         this.mockRoutingGraph = cloneRoutingGraphSnapshot(routingGraph);
         this.mockTime = 0;
