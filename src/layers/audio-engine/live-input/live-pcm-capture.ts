@@ -3,12 +3,18 @@ export interface CapturedPcm {
   readonly sampleRate: number;
 }
 
+export interface PcmCaptureWorkletRuntime {
+  createAudioWorkletNode(name: string, options: AudioWorkletNodeOptions): AudioWorkletNode;
+  loadAudioWorkletModule(url: string): Promise<void>;
+}
+
 export interface SchedulePcmCaptureRequest {
   readonly audioContext: AudioContext;
   readonly durationSeconds: number;
   readonly onStarted: () => void;
   readonly startTimeSeconds: number;
   readonly stream: MediaStream;
+  readonly workletRuntime: PcmCaptureWorkletRuntime;
 }
 
 export interface StartPcmCaptureRequest {
@@ -16,6 +22,7 @@ export interface StartPcmCaptureRequest {
   readonly onStarted: () => void;
   readonly startTimeSeconds: number;
   readonly stream: MediaStream;
+  readonly workletRuntime: PcmCaptureWorkletRuntime;
 }
 
 export interface ScheduledPcmCapture {

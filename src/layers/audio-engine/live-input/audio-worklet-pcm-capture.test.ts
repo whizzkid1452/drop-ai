@@ -24,6 +24,13 @@ class AudioWorkletNodeStub {
   }
 }
 
+function createWorkletRuntime() {
+  return {
+    createAudioWorkletNode: vi.fn(() => new AudioWorkletNodeStub() as unknown as AudioWorkletNode),
+    loadAudioWorkletModule: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   AudioWorkletNodeStub.instance = null;
@@ -42,12 +49,14 @@ describe('AudioWorkletPcmCapture', () => {
       sampleRate: 4,
     } as unknown as AudioContext;
     const onStarted = vi.fn();
+    const workletRuntime = createWorkletRuntime();
 
     const session = await new AudioWorkletPcmCapture().start({
       audioContext,
       onStarted,
       startTimeSeconds: 2,
       stream: {} as MediaStream,
+      workletRuntime,
     });
     const worklet = AudioWorkletNodeStub.instance;
 
@@ -76,11 +85,13 @@ describe('AudioWorkletPcmCapture', () => {
       destination: {},
       sampleRate: 48_000,
     } as unknown as AudioContext;
+    const workletRuntime = createWorkletRuntime();
     const session = await new AudioWorkletPcmCapture().start({
       audioContext,
       onStarted: vi.fn(),
       startTimeSeconds: 2,
       stream: {} as MediaStream,
+      workletRuntime,
     });
 
     session.cancel();
@@ -102,6 +113,7 @@ describe('AudioWorkletPcmCapture', () => {
       sampleRate: 4,
     } as unknown as AudioContext;
     const onStarted = vi.fn();
+    const workletRuntime = createWorkletRuntime();
 
     const session = await new AudioWorkletPcmCapture().schedule({
       audioContext,
@@ -109,10 +121,11 @@ describe('AudioWorkletPcmCapture', () => {
       onStarted,
       startTimeSeconds: 2,
       stream: {} as MediaStream,
+      workletRuntime,
     });
     const worklet = AudioWorkletNodeStub.instance;
 
-    expect(audioContext.audioWorklet.addModule).toHaveBeenCalledWith('/loop-pcm-capture-worklet.js');
+    expect(workletRuntime.loadAudioWorkletModule).toHaveBeenCalledWith('/loop-pcm-capture-worklet.js');
     expect(worklet?.port.postMessage).toHaveBeenCalledWith({ endFrame: 12, startFrame: 8, type: 'schedule' });
     expect(silentGain.gain.value).toBe(0);
 
@@ -142,12 +155,14 @@ describe('AudioWorkletPcmCapture', () => {
       destination: {},
       sampleRate: 48_000,
     } as unknown as AudioContext;
+    const workletRuntime = createWorkletRuntime();
     const session = await new AudioWorkletPcmCapture().schedule({
       audioContext,
       durationSeconds: 1,
       onStarted: vi.fn(),
       startTimeSeconds: 2,
       stream: {} as MediaStream,
+      workletRuntime,
     });
 
     session.cancel();
@@ -155,5 +170,32 @@ describe('AudioWorkletPcmCapture', () => {
     await expect(session.completion).rejects.toThrow('PCM 캡처가 취소되었습니다.');
     expect(AudioWorkletNodeStub.instance?.port.postMessage).toHaveBeenLastCalledWith({ type: 'cancel' });
     expect(source.disconnect).toHaveBeenCalledOnce();
+  });
+
+  it('주입된 Worklet runtime에서 module과 node를 생성한다', async () => {
+    const source = { connect: vi.fn(), disconnect: vi.fn() };
+    const silentGain = { connect: vi.fn(), disconnect: vi.fn(), gain: { value: 1 } };
+    const audioContext = {
+      createGain: () => silentGain,
+      createMediaStreamSource: () => source,
+      destination: {},
+      sampleRate: 48_000,
+    } as unknown as AudioContext;
+    const workletRuntime = createWorkletRuntime();
+
+    await new AudioWorkletPcmCapture().start({
+      audioContext,
+      onStarted: vi.fn(),
+      startTimeSeconds: 0,
+      stream: {} as MediaStream,
+      workletRuntime,
+    });
+
+    expect(workletRuntime.loadAudioWorkletModule).toHaveBeenCalledWith('/loop-pcm-capture-worklet.js');
+    expect(workletRuntime.createAudioWorkletNode).toHaveBeenCalledWith('loop-pcm-capture', {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [1],
+    });
   });
 });
