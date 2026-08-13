@@ -134,11 +134,36 @@ const destination = {} as AudioNode;
 const address = { slotId: 'slot-1', trackId: 'track-1' };
 
 describe('QuantizedLoopRuntime', () => {
+  it('Track별 채널을 독립 캡처하고 한 Track의 실패를 다른 결과와 분리한다', async () => {
+    const { pcmCapture, runtime } = createRuntime();
+
+    await runtime.startRecording({
+      assignments: [
+        { channelIndex: 0, deviceId: null, trackId: 'track-1' },
+        { channelIndex: 1, deviceId: null, trackId: 'track-2' },
+      ],
+      onStarted: vi.fn(),
+      startDelaySeconds: 0,
+    });
+    const stopPromise = runtime.stopRecording();
+    pcmCapture.activeCompletions[0].resolve({ channels: [new Float32Array(24_000)], sampleRate: 48_000 });
+    pcmCapture.activeCompletions[1].resolve({ channels: [new Float32Array(24_000)], sampleRate: 48_000 });
+
+    await expect(stopPromise).resolves.toEqual([
+      expect.objectContaining({ status: 'success', trackId: 'track-1' }),
+      expect.objectContaining({ status: 'failure', trackId: 'track-2' }),
+    ]);
+  });
+
   it('지정한 지연 뒤 선형 PCM 캡처를 시작하고 stop 결과를 WAV로 반환한다', async () => {
     const { encodeAudioBuffer, pcmCapture, runtime } = createRuntime();
     const onStarted = vi.fn();
 
-    await runtime.startRecording({ onStarted, startDelaySeconds: 1.5 });
+    await runtime.startRecording({
+      assignments: [{ channelIndex: 0, deviceId: null, trackId: 'track-1' }],
+      onStarted,
+      startDelaySeconds: 1.5,
+    });
 
     expect(pcmCapture.activeRequests[0]).toMatchObject({ startTimeSeconds: 21.5 });
     pcmCapture.activeRequests[0].onStarted();
@@ -148,20 +173,30 @@ describe('QuantizedLoopRuntime', () => {
     expect(pcmCapture.activeSessions[0].stop).toHaveBeenCalledOnce();
     pcmCapture.activeCompletions[0].resolve({ channels: [new Float32Array(24_000)], sampleRate: 48_000 });
 
-    await expect(stopPromise).resolves.toEqual({
-      blob: expect.any(Blob),
-      durationSeconds: 0.5,
-      sampleRate: 48_000,
-    });
+    await expect(stopPromise).resolves.toEqual([
+      {
+        capture: { blob: expect.any(Blob), durationSeconds: 0.5, sampleRate: 48_000 },
+        status: 'success',
+        trackId: 'track-1',
+      },
+    ]);
     expect(encodeAudioBuffer).toHaveBeenCalledOnce();
   });
 
   it('활성 선형 캡처를 취소하고 같은 runtime에서 다시 시작할 수 있다', async () => {
     const { pcmCapture, runtime } = createRuntime();
-    await runtime.startRecording({ onStarted: vi.fn(), startDelaySeconds: 0 });
+    await runtime.startRecording({
+      assignments: [{ channelIndex: 0, deviceId: null, trackId: 'track-1' }],
+      onStarted: vi.fn(),
+      startDelaySeconds: 0,
+    });
 
     runtime.cancelRecording();
-    await runtime.startRecording({ onStarted: vi.fn(), startDelaySeconds: 0 });
+    await runtime.startRecording({
+      assignments: [{ channelIndex: 0, deviceId: null, trackId: 'track-1' }],
+      onStarted: vi.fn(),
+      startDelaySeconds: 0,
+    });
 
     expect(pcmCapture.activeSessions[0].cancel).toHaveBeenCalledOnce();
     expect(pcmCapture.activeRequests).toHaveLength(2);
@@ -169,11 +204,19 @@ describe('QuantizedLoopRuntime', () => {
 
   it('동시에 두 선형 캡처를 시작하지 않는다', async () => {
     const { runtime } = createRuntime();
-    await runtime.startRecording({ onStarted: vi.fn(), startDelaySeconds: 0 });
+    await runtime.startRecording({
+      assignments: [{ channelIndex: 0, deviceId: null, trackId: 'track-1' }],
+      onStarted: vi.fn(),
+      startDelaySeconds: 0,
+    });
 
-    await expect(runtime.startRecording({ onStarted: vi.fn(), startDelaySeconds: 0 })).rejects.toThrow(
-      '이미 선형 녹음 캡처가 진행 중입니다.'
-    );
+    await expect(
+      runtime.startRecording({
+        assignments: [{ channelIndex: 0, deviceId: null, trackId: 'track-2' }],
+        onStarted: vi.fn(),
+        startDelaySeconds: 0,
+      })
+    ).rejects.toThrow('이미 선형 녹음 캡처가 진행 중입니다.');
   });
 
   it('다음 마디 경계부터 지정한 길이만큼 녹음하고 완료 버퍼를 반복 재생한다', async () => {

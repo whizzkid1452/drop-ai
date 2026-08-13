@@ -235,6 +235,38 @@ function createLoopRangeCommand(session: SessionState): AudioCommand {
   };
 }
 
+function findPlaylist(session: SessionState, trackId: string, playlistId: string) {
+  return session.tracks.get(trackId)?.recording?.playlists.find(playlist => playlist.id === playlistId) ?? null;
+}
+
+function areCompSegmentsEqual(
+  left: readonly {
+    readonly endTimeSeconds: number;
+    readonly id: string;
+    readonly startTimeSeconds: number;
+    readonly takeId: string;
+  }[],
+  right: readonly {
+    readonly endTimeSeconds: number;
+    readonly id: string;
+    readonly startTimeSeconds: number;
+    readonly takeId: string;
+  }[]
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((segment, index) => {
+      const candidate = right[index];
+      return (
+        candidate?.endTimeSeconds === segment.endTimeSeconds &&
+        candidate.id === segment.id &&
+        candidate.startTimeSeconds === segment.startTimeSeconds &&
+        candidate.takeId === segment.takeId
+      );
+    })
+  );
+}
+
 export function createCommandHistoryEntry({
   afterSession,
   afterEditorRuntime,
@@ -375,6 +407,75 @@ export function createCommandHistoryEntry({
         undoCommand: { type: AudioCommandType.SET_MASTER_VOLUME, volume: beforeSession.masterVolume },
         redoCommand: command,
       });
+
+    case AudioCommandType.SET_PUNCH_RECORDING: {
+      const beforePunch = beforeSession.recording.punch;
+      const afterPunch = afterSession.recording.punch;
+      if (
+        beforePunch.isEnabled === afterPunch.isEnabled &&
+        beforePunch.range?.startTimeSeconds === afterPunch.range?.startTimeSeconds &&
+        beforePunch.range?.endTimeSeconds === afterPunch.range?.endTimeSeconds
+      ) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        redoCommand: {
+          type: AudioCommandType.SET_PUNCH_RECORDING,
+          isEnabled: afterPunch.isEnabled,
+          range: afterPunch.range ? { ...afterPunch.range } : null,
+        },
+        undoCommand: {
+          type: AudioCommandType.SET_PUNCH_RECORDING,
+          isEnabled: beforePunch.isEnabled,
+          range: beforePunch.range ? { ...beforePunch.range } : null,
+        },
+      });
+    }
+
+    case AudioCommandType.SET_TRACK_RECORD_MODE: {
+      const beforeMode = beforeSession.tracks.get(command.trackId)?.recording?.recordMode ?? 'layered';
+      const afterMode = afterSession.tracks.get(command.trackId)?.recording?.recordMode ?? 'layered';
+      if (beforeMode === afterMode) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        redoCommand: { ...command, recordMode: afterMode },
+        undoCommand: { ...command, recordMode: beforeMode },
+      });
+    }
+
+    case AudioCommandType.SELECT_TAKE:
+    case AudioCommandType.SET_COMP_SEGMENTS: {
+      const beforePlaylist = findPlaylist(beforeSession, command.trackId, command.playlistId);
+      const afterPlaylist = findPlaylist(afterSession, command.trackId, command.playlistId);
+      if (
+        !beforePlaylist ||
+        !afterPlaylist ||
+        areCompSegmentsEqual(beforePlaylist.compSegments, afterPlaylist.compSegments)
+      ) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        redoCommand: {
+          type: AudioCommandType.SET_COMP_SEGMENTS,
+          compSegments: afterPlaylist.compSegments.map(segment => ({ ...segment })),
+          playlistId: command.playlistId,
+          trackId: command.trackId,
+        },
+        undoCommand: {
+          type: AudioCommandType.SET_COMP_SEGMENTS,
+          compSegments: beforePlaylist.compSegments.map(segment => ({ ...segment })),
+          playlistId: command.playlistId,
+          trackId: command.trackId,
+        },
+      });
+    }
 
     case AudioCommandType.SET_ROUTING_GRAPH:
     case AudioCommandType.SET_TRACK_ROUTING:
@@ -747,6 +848,7 @@ export function createCommandHistoryEntry({
     case AudioCommandType.SET_AUDIO_INPUT_DEVICE:
     case AudioCommandType.SET_INPUT_MONITORING:
     case AudioCommandType.SET_TRACK_RECORD_ARM:
+    case AudioCommandType.SET_TRACK_RECORDING_INPUT:
     case AudioCommandType.START_RECORDING:
     case AudioCommandType.STOP_RECORDING:
     case AudioCommandType.CANCEL_RECORDING:

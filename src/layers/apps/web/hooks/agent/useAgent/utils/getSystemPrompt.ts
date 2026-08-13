@@ -59,10 +59,21 @@ const COMMAND_REFERENCE = {
   [AudioCommandType.SET_INPUT_MONITORING]:
     '{"type":"SET_INPUT_MONITORING","trackId":"<existing Track UUID>","enabled":<boolean>} - 입력 모니터링 설정',
   [AudioCommandType.SET_TRACK_RECORD_ARM]:
-    '{"type":"SET_TRACK_RECORD_ARM","trackId":"<existing Track UUID>","armed":<boolean>} - 단일 Track 녹음 arm 변경',
+    '{"type":"SET_TRACK_RECORD_ARM","trackId":"<existing Track UUID>","armed":<boolean>} - Track 녹음 arm 변경',
+  [AudioCommandType.SET_TRACK_RECORDING_INPUT]:
+    '{"type":"SET_TRACK_RECORDING_INPUT","trackId":"<existing Track UUID>","deviceId":"<device ID or null>","channelIndex":<integer >= 0>} - Track 입력 Route 변경',
+  [AudioCommandType.SET_PUNCH_RECORDING]:
+    '{"type":"SET_PUNCH_RECORDING","isEnabled":<boolean>,"range":{"startTimeSeconds":<seconds>,"endTimeSeconds":<seconds>}|null} - Punch 범위 변경',
+  [AudioCommandType.SET_TRACK_RECORD_MODE]:
+    '{"type":"SET_TRACK_RECORD_MODE","trackId":"<existing Track UUID>","recordMode":"soundOnSound|nonLayered|layered"} - Track 녹음 모드 변경',
+  [AudioCommandType.SELECT_TAKE]:
+    '{"type":"SELECT_TAKE","trackId":"<Track UUID>","playlistId":"<Playlist UUID>","takeId":"<Take UUID>"} - 전체 Take를 활성 Comp로 선택',
+  [AudioCommandType.SET_COMP_SEGMENTS]:
+    '{"type":"SET_COMP_SEGMENTS","trackId":"<Track UUID>","playlistId":"<Playlist UUID>","compSegments":[]} - Playlist Comp 구간 교체',
   [AudioCommandType.START_RECORDING]:
     '{"type":"START_RECORDING","countInBars":<0..4 integer>,"prerollSeconds":<0..60>} - arm된 Track 선형 녹음 시작',
-  [AudioCommandType.STOP_RECORDING]: '{"type":"STOP_RECORDING"} - 녹음을 끝내고 RecordedTake를 Region으로 저장',
+  [AudioCommandType.STOP_RECORDING]:
+    '{"type":"STOP_RECORDING"} - 녹음을 끝내고 성공한 Track별 RecordedTake를 Region으로 저장',
   [AudioCommandType.CANCEL_RECORDING]: '{"type":"CANCEL_RECORDING"} - 진행 중인 녹음을 저장하지 않고 취소',
   [AudioCommandType.ARM_LOOP_SLOT]:
     '{"type":"ARM_LOOP_SLOT","trackId":"<existing Track UUID>","slotId":"<existing Loop Slot UUID>","lengthBars":<1|2|4|8>,"quantizationBars":<1|2|4|8>} - 루프 녹음 대기',

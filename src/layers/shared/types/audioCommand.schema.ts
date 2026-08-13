@@ -1,9 +1,16 @@
 import { z } from 'zod';
 import { calculateFiniteRegionSourceEndTime } from '../audio-source-range';
 import { calculateFiniteRegionEndTime } from '../region-timeline';
-import { ProjectTempoChangeSchema, ProjectTimelineMarkerSchema } from './project-document.schema';
+import {
+  ProjectCompSegmentSchema,
+  ProjectRoutingGraphSchema,
+  ProjectRoutingRouteTargetSchema,
+  ProjectTempoChangeSchema,
+  ProjectTimelineMarkerSchema,
+  ProjectTimelineRangeSchema,
+} from './project-document.schema';
+import { RECORD_MODES } from './multitrack-recording';
 import { ROUTING_CHANNEL_COUNTS, ROUTING_SEND_TAP_POINTS, ROUTING_TRACK_KINDS } from './routing-state';
-import { ProjectRoutingGraphSchema, ProjectRoutingRouteTargetSchema } from './project-document.schema';
 
 export const AudioCommandType = {
   UNDO: 'UNDO',
@@ -16,6 +23,11 @@ export const AudioCommandType = {
   SET_AUDIO_INPUT_DEVICE: 'SET_AUDIO_INPUT_DEVICE',
   SET_INPUT_MONITORING: 'SET_INPUT_MONITORING',
   SET_TRACK_RECORD_ARM: 'SET_TRACK_RECORD_ARM',
+  SET_TRACK_RECORDING_INPUT: 'SET_TRACK_RECORDING_INPUT',
+  SET_PUNCH_RECORDING: 'SET_PUNCH_RECORDING',
+  SET_TRACK_RECORD_MODE: 'SET_TRACK_RECORD_MODE',
+  SELECT_TAKE: 'SELECT_TAKE',
+  SET_COMP_SEGMENTS: 'SET_COMP_SEGMENTS',
   START_RECORDING: 'START_RECORDING',
   STOP_RECORDING: 'STOP_RECORDING',
   CANCEL_RECORDING: 'CANCEL_RECORDING',
@@ -244,6 +256,43 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
     type: z.literal(AudioCommandType.SET_TRACK_RECORD_ARM),
     trackId: z.uuid('Invalid Track ID format'),
     armed: z.boolean(),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_TRACK_RECORDING_INPUT),
+    channelIndex: z.number().int().nonnegative(),
+    deviceId: z.string().trim().min(1).max(512).nullable(),
+    trackId: z.uuid('Invalid Track ID format'),
+  }),
+  z
+    .strictObject({
+      type: z.literal(AudioCommandType.SET_PUNCH_RECORDING),
+      isEnabled: z.boolean(),
+      range: ProjectTimelineRangeSchema.nullable(),
+    })
+    .refine(command => command.range === null || command.range.endTimeSeconds > command.range.startTimeSeconds, {
+      message: 'Punch end time must be greater than start time',
+      path: ['range', 'endTimeSeconds'],
+    })
+    .refine(command => !command.isEnabled || command.range !== null, {
+      message: 'Enabled Punch recording requires a range',
+      path: ['range'],
+    }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_TRACK_RECORD_MODE),
+    recordMode: z.enum(RECORD_MODES),
+    trackId: z.uuid('Invalid Track ID format'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SELECT_TAKE),
+    playlistId: z.uuid('Invalid Playlist ID format'),
+    takeId: z.uuid('Invalid Take ID format'),
+    trackId: z.uuid('Invalid Track ID format'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_COMP_SEGMENTS),
+    compSegments: z.array(ProjectCompSegmentSchema).max(10_000),
+    playlistId: z.uuid('Invalid Playlist ID format'),
+    trackId: z.uuid('Invalid Track ID format'),
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.START_RECORDING),

@@ -37,7 +37,7 @@ import type {
   LoopSlotAddress,
   MeterFrame,
   MeterTarget,
-  RecordedTake,
+  MultiTrackRecordingResult,
   RecordingRuntimeListener,
   RecordingRuntimeState,
   MoveAudioPluginRequest,
@@ -55,6 +55,7 @@ import type {
   SetAudioPluginParameterRequest,
   SetLiveInputMonitoringRequest,
   SetTrackRecordArmRequest,
+  SetTrackRecordingInputRequest,
   StartLinearRecordingRequest,
   StopAllLoopsRequest,
   TriggerLoopRequest,
@@ -230,7 +231,8 @@ export class AudioEngine implements IAudioEngine {
   private readonly recordingStateListeners = new Set<RecordingRuntimeListener>();
   private readonly monitorStateListeners = new Set<AudioMonitorStateListener>();
   private recordingState: RecordingRuntimeState = {
-    armedTrackId: null,
+    armedTrackIds: [],
+    inputRoutes: [],
     phase: 'idle',
     recordStartTimeSeconds: null,
   };
@@ -409,7 +411,11 @@ export class AudioEngine implements IAudioEngine {
   }
 
   getRecordingState(): RecordingRuntimeState {
-    return { ...this.recordingState };
+    return {
+      ...this.recordingState,
+      armedTrackIds: [...this.recordingState.armedTrackIds],
+      inputRoutes: this.recordingState.inputRoutes.map(route => ({ ...route })),
+    };
   }
 
   subscribeRecordingState(listener: RecordingRuntimeListener): () => void {
@@ -422,16 +428,46 @@ export class AudioEngine implements IAudioEngine {
     if (this.recordingState.phase !== 'idle') {
       throw new Error('녹음 대기 또는 진행 중에는 Track arm을 변경할 수 없습니다.');
     }
-    if (request.armed) {
-      this.getExistingInput(request.trackId);
-    }
-    if (!request.armed && this.recordingState.armedTrackId !== request.trackId) {
+    this.getExistingInput(request.trackId);
+    const armedTrackIds = new Set(this.recordingState.armedTrackIds);
+    if (!request.armed && !armedTrackIds.has(request.trackId)) {
       return;
     }
+    if (request.armed) {
+      armedTrackIds.add(request.trackId);
+    } else {
+      armedTrackIds.delete(request.trackId);
+    }
+    const hasInputRoute = this.recordingState.inputRoutes.some(route => route.trackId === request.trackId);
     this.updateRecordingState({
-      armedTrackId: request.armed ? request.trackId : null,
+      armedTrackIds: [...armedTrackIds],
+      inputRoutes:
+        request.armed && !hasInputRoute
+          ? [
+              ...this.recordingState.inputRoutes,
+              { channelIndex: 0, deviceId: this.liveInputDeviceId, trackId: request.trackId },
+            ]
+          : this.recordingState.inputRoutes,
       phase: 'idle',
       recordStartTimeSeconds: null,
+    });
+  }
+
+  setTrackRecordingInput(request: SetTrackRecordingInputRequest): void {
+    this.getRecordingRuntime('setTrackRecordingInput');
+    if (this.recordingState.phase !== 'idle') {
+      throw new Error('녹음 대기 또는 진행 중에는 Track 입력 Route를 변경할 수 없습니다.');
+    }
+    this.getExistingInput(request.trackId);
+    if (!Number.isInteger(request.channelIndex) || request.channelIndex < 0) {
+      throw new RangeError('입력 채널 index는 0 이상의 정수여야 합니다.');
+    }
+    this.updateRecordingState({
+      ...this.recordingState,
+      inputRoutes: [
+        ...this.recordingState.inputRoutes.filter(route => route.trackId !== request.trackId),
+        { ...request },
+      ],
     });
   }
 
@@ -440,7 +476,7 @@ export class AudioEngine implements IAudioEngine {
     if (this.recordingState.phase !== 'idle') {
       throw new Error('이미 녹음 대기 또는 녹음이 진행 중입니다.');
     }
-    if (this.recordingState.armedTrackId !== request.trackId) {
+    if (this.recordingState.armedTrackIds.length === 0) {
       throw new Error('녹음할 Track이 arm 상태가 아닙니다.');
     }
     if (!Number.isFinite(request.recordStartTimeSeconds) || request.recordStartTimeSeconds < 0) {
@@ -452,12 +488,13 @@ export class AudioEngine implements IAudioEngine {
 
     this.activeRecordingRequest = { ...request };
     this.updateRecordingState({
-      armedTrackId: request.trackId,
+      ...this.recordingState,
       phase: 'scheduled',
       recordStartTimeSeconds: request.recordStartTimeSeconds,
     });
     try {
       await recordingRuntime.startRecording({
+        assignments: this.recordingState.armedTrackIds.map(trackId => this.getRecordingInputRoute(trackId)),
         startDelaySeconds: request.startDelaySeconds,
         onStarted: () => {
           if (this.activeRecordingRequest !== null && this.recordingState.phase === 'scheduled') {
@@ -468,7 +505,7 @@ export class AudioEngine implements IAudioEngine {
     } catch (cause) {
       this.activeRecordingRequest = null;
       this.updateRecordingState({
-        armedTrackId: request.trackId,
+        ...this.recordingState,
         phase: 'idle',
         recordStartTimeSeconds: null,
       });
@@ -476,7 +513,7 @@ export class AudioEngine implements IAudioEngine {
     }
   }
 
-  async stopRecording(): Promise<RecordedTake> {
+  async stopRecording(): Promise<MultiTrackRecordingResult> {
     const recordingRuntime = this.getRecordingRuntime('stopRecording');
     const activeRequest = this.activeRecordingRequest;
     if (!activeRequest || !['scheduled', 'recording'].includes(this.recordingState.phase)) {
@@ -484,12 +521,23 @@ export class AudioEngine implements IAudioEngine {
     }
     this.updateRecordingState({ ...this.recordingState, phase: 'stopping' });
     try {
-      const capture = await recordingRuntime.stopRecording();
-      return { ...capture, startedAtSeconds: activeRequest.recordStartTimeSeconds, trackId: activeRequest.trackId };
+      const results = await recordingRuntime.stopRecording();
+      return {
+        failures: results
+          .filter(result => result.status === 'failure')
+          .map(result => ({ cause: result.cause, stage: 'capture' as const, trackId: result.trackId })),
+        takes: results
+          .filter(result => result.status === 'success')
+          .map(result => ({
+            ...result.capture,
+            startedAtSeconds: activeRequest.recordStartTimeSeconds,
+            trackId: result.trackId,
+          })),
+      };
     } finally {
       this.activeRecordingRequest = null;
       this.updateRecordingState({
-        armedTrackId: activeRequest.trackId,
+        ...this.recordingState,
         phase: 'idle',
         recordStartTimeSeconds: null,
       });
@@ -498,9 +546,8 @@ export class AudioEngine implements IAudioEngine {
 
   cancelRecording(): void {
     this.getRecordingRuntime('cancelRecording').cancelRecording();
-    const armedTrackId = this.recordingState.armedTrackId;
     this.activeRecordingRequest = null;
-    this.updateRecordingState({ armedTrackId, phase: 'idle', recordStartTimeSeconds: null });
+    this.updateRecordingState({ ...this.recordingState, phase: 'idle', recordStartTimeSeconds: null });
   }
 
   setMasterVolume(volume: number): void {
@@ -558,12 +605,17 @@ export class AudioEngine implements IAudioEngine {
 
   removeTrack(trackId: string): void {
     this.ensureRuntimeReady();
-    if (this.recordingState.armedTrackId === trackId) {
+    if (this.recordingState.armedTrackIds.includes(trackId)) {
       if (this.activeRecordingRequest) {
         this.recordingRuntime?.cancelRecording();
       }
       this.activeRecordingRequest = null;
-      this.updateRecordingState({ armedTrackId: null, phase: 'idle', recordStartTimeSeconds: null });
+      this.updateRecordingState({
+        armedTrackIds: this.recordingState.armedTrackIds.filter(armedTrackId => armedTrackId !== trackId),
+        inputRoutes: this.recordingState.inputRoutes.filter(route => route.trackId !== trackId),
+        phase: 'idle',
+        recordStartTimeSeconds: null,
+      });
     }
     this.loopRuntime.clearTrack(trackId);
     const previousLiveInputState = this.getLiveInputState();
@@ -1108,7 +1160,7 @@ export class AudioEngine implements IAudioEngine {
           this.recordingRuntime?.cancelRecording();
         }
         this.activeRecordingRequest = null;
-        this.updateRecordingState({ armedTrackId: null, phase: 'idle', recordStartTimeSeconds: null });
+        this.updateRecordingState({ armedTrackIds: [], inputRoutes: [], phase: 'idle', recordStartTimeSeconds: null });
         const previousLiveInputState = this.getLiveInputState();
         this.monitoringTrackId = null;
         this.notifyLiveInputStateChange(previousLiveInputState);
@@ -1841,16 +1893,29 @@ export class AudioEngine implements IAudioEngine {
     throw new UnsupportedAudioFeatureError({ feature: AudioRuntimeFeature.LINEAR_RECORDING, method });
   }
 
+  private getRecordingInputRoute(trackId: string): SetTrackRecordingInputRequest {
+    const route = this.recordingState.inputRoutes.find(inputRoute => inputRoute.trackId === trackId);
+    if (route) {
+      return { ...route };
+    }
+    throw new Error(`arm된 Track의 입력 Route를 찾을 수 없습니다: ${trackId}`);
+  }
+
   private updateRecordingState(nextState: RecordingRuntimeState): void {
     const previousState = this.recordingState;
     if (
-      previousState.armedTrackId === nextState.armedTrackId &&
+      areStringArraysEqual(previousState.armedTrackIds, nextState.armedTrackIds) &&
+      areRecordingInputRoutesEqual(previousState.inputRoutes, nextState.inputRoutes) &&
       previousState.phase === nextState.phase &&
       previousState.recordStartTimeSeconds === nextState.recordStartTimeSeconds
     ) {
       return;
     }
-    this.recordingState = { ...nextState };
+    this.recordingState = {
+      ...nextState,
+      armedTrackIds: [...nextState.armedTrackIds],
+      inputRoutes: nextState.inputRoutes.map(route => ({ ...route })),
+    };
     this.recordingStateListeners.forEach(listener => listener(this.getRecordingState()));
   }
 
@@ -2715,4 +2780,23 @@ function getEnabledPluginRuntimes(
   disabledInstanceIds: ReadonlySet<string>
 ): IAudioPluginRuntime[] {
   return runtimes.filter(runtime => !disabledInstanceIds.has(runtime.instanceId));
+}
+
+function areStringArraysEqual(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function areRecordingInputRoutesEqual(
+  left: readonly SetTrackRecordingInputRequest[],
+  right: readonly SetTrackRecordingInputRequest[]
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every(
+      (route, index) =>
+        route.trackId === right[index]?.trackId &&
+        route.deviceId === right[index]?.deviceId &&
+        route.channelIndex === right[index]?.channelIndex
+    )
+  );
 }

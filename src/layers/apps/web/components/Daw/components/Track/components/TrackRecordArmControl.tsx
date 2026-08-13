@@ -20,7 +20,7 @@ export function TrackRecordArmControl({ trackId, trackName }: TrackRecordArmCont
   const recordingState = useRecordingRuntimeState();
   const [isPending, setIsPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const isArmed = recordingState.armedTrackId === trackId;
+  const isArmed = recordingState.armedTrackIds.includes(trackId);
   const isRecordingIdle = recordingState.phase === 'idle';
   const unavailableReason =
     capability.status === 'available' ? undefined : describeAudioRuntimeFeatureCapability(capability);

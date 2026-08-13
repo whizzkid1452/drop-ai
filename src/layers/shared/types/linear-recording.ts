@@ -1,7 +1,14 @@
 export type LinearRecordingPhase = 'idle' | 'scheduled' | 'recording' | 'stopping';
 
+export interface TrackRecordingInput {
+  readonly channelIndex: number;
+  readonly deviceId: string | null;
+  readonly trackId: string;
+}
+
 export interface RecordingRuntimeState {
-  readonly armedTrackId: string | null;
+  readonly armedTrackIds: readonly string[];
+  readonly inputRoutes: readonly TrackRecordingInput[];
   readonly phase: LinearRecordingPhase;
   readonly recordStartTimeSeconds: number | null;
 }
@@ -11,10 +18,11 @@ export interface SetTrackRecordArmRequest {
   readonly trackId: string;
 }
 
+export type SetTrackRecordingInputRequest = TrackRecordingInput;
+
 export interface StartLinearRecordingRequest {
   readonly recordStartTimeSeconds: number;
   readonly startDelaySeconds: number;
-  readonly trackId: string;
 }
 
 export interface RecordedTake {
@@ -23,6 +31,17 @@ export interface RecordedTake {
   readonly sampleRate: number;
   readonly startedAtSeconds: number;
   readonly trackId: string;
+}
+
+export interface RecordingTrackFailure {
+  readonly cause: unknown;
+  readonly stage: 'capture' | 'persist';
+  readonly trackId: string;
+}
+
+export interface MultiTrackRecordingResult {
+  readonly failures: readonly RecordingTrackFailure[];
+  readonly takes: readonly RecordedTake[];
 }
 
 export type RecordingRuntimeListener = (state: RecordingRuntimeState) => void;

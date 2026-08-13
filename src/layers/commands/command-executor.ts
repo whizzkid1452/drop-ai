@@ -7,12 +7,12 @@ import {
   type AudioCommand,
 } from '../shared/types/audioCommand.schema';
 import type { ICommandHistory } from './command-history';
-import type { RecordedTake } from '../shared/types/linear-recording';
+import type { MultiTrackRecordingResult } from '../shared/types/linear-recording';
 import type { EditorRuntimeState } from '../shared/types/editor-runtime';
 import { createCommandHistoryEntry } from './create-command-history-entry';
 import { assertLiveOperationAllowed } from './live-operation-guard';
 
-export type CommandExecutionResult = Blob | RecordedTake | void;
+export type CommandExecutionResult = Blob | MultiTrackRecordingResult | void;
 export type CommandBatchExecutionResult = readonly CommandExecutionResult[];
 
 interface CommandBatchExecutionErrorOptions {
@@ -200,6 +200,26 @@ export class CommandExecutor {
 
       case AudioCommandType.SET_TRACK_RECORD_ARM:
         this.controller.recording.setTrackRecordArm(validatedCommand);
+        return;
+
+      case AudioCommandType.SET_TRACK_RECORDING_INPUT:
+        this.controller.recording.setTrackRecordingInput(validatedCommand);
+        return;
+
+      case AudioCommandType.SET_PUNCH_RECORDING:
+        this.controller.recording.setPunchRecording(validatedCommand);
+        return;
+
+      case AudioCommandType.SET_TRACK_RECORD_MODE:
+        this.controller.recording.setTrackRecordMode(validatedCommand);
+        return;
+
+      case AudioCommandType.SELECT_TAKE:
+        await this.controller.recording.selectTake(validatedCommand);
+        return;
+
+      case AudioCommandType.SET_COMP_SEGMENTS:
+        await this.controller.recording.setCompSegments(validatedCommand);
         return;
 
       case AudioCommandType.START_RECORDING:
@@ -579,6 +599,10 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.UPDATE_SEND:
     case AudioCommandType.REMOVE_SEND:
     case AudioCommandType.SET_TRACK_GROUPS:
+    case AudioCommandType.SET_PUNCH_RECORDING:
+    case AudioCommandType.SET_TRACK_RECORD_MODE:
+    case AudioCommandType.SELECT_TAKE:
+    case AudioCommandType.SET_COMP_SEGMENTS:
     case AudioCommandType.SET_TRACK_NAME:
     case AudioCommandType.SET_TRACK_VOLUME:
     case AudioCommandType.SET_TRACK_PAN:
@@ -618,6 +642,7 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.SET_AUDIO_INPUT_DEVICE:
     case AudioCommandType.SET_INPUT_MONITORING:
     case AudioCommandType.SET_TRACK_RECORD_ARM:
+    case AudioCommandType.SET_TRACK_RECORDING_INPUT:
     case AudioCommandType.START_RECORDING:
     case AudioCommandType.CANCEL_RECORDING:
     case AudioCommandType.CANCEL_LOOP_SLOT:
