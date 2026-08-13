@@ -9,6 +9,7 @@ import { AudioRuntimeStatus } from './AudioRuntimeStatus';
 const layerMocks = vi.hoisted((): { capabilities: AudioRuntimeCapabilities } => ({
   capabilities: {
     blockers: { audioWorklet: [], liveInput: [], sharedMemory: [], wasm: [] },
+    features: {} as AudioRuntimeCapabilities['features'],
     meetsAudioWorkletPreconditions: true,
     meetsLiveInputPreconditions: true,
     meetsSharedMemoryPreconditions: true,
@@ -55,6 +56,7 @@ afterEach(() => {
   document.body.replaceChildren();
   layerMocks.capabilities = {
     blockers: { audioWorklet: [], liveInput: [], sharedMemory: [], wasm: [] },
+    features: {} as AudioRuntimeCapabilities['features'],
     meetsAudioWorkletPreconditions: true,
     meetsLiveInputPreconditions: true,
     meetsSharedMemoryPreconditions: true,
@@ -85,6 +87,7 @@ describe('AudioRuntimeStatus', () => {
         ],
         wasm: [],
       },
+      features: {} as AudioRuntimeCapabilities['features'],
       meetsAudioWorkletPreconditions: true,
       meetsLiveInputPreconditions: true,
       meetsSharedMemoryPreconditions: false,
@@ -106,6 +109,7 @@ describe('AudioRuntimeStatus', () => {
         sharedMemory: [AudioRuntimeBlocker.INSECURE_CONTEXT],
         wasm: [AudioRuntimeBlocker.WEBASSEMBLY_API_UNAVAILABLE],
       },
+      features: {} as AudioRuntimeCapabilities['features'],
       meetsAudioWorkletPreconditions: false,
       meetsLiveInputPreconditions: false,
       meetsSharedMemoryPreconditions: false,
@@ -128,6 +132,7 @@ describe('AudioRuntimeStatus', () => {
         sharedMemory: [],
         wasm: [],
       },
+      features: {} as AudioRuntimeCapabilities['features'],
       meetsAudioWorkletPreconditions: true,
       meetsLiveInputPreconditions: false,
       meetsSharedMemoryPreconditions: true,

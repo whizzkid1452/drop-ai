@@ -1,3 +1,5 @@
+import type { AudioRuntimeFeature } from '../shared/utils/audio-runtime-capabilities';
+
 export class AudioEngineError extends Error {
   constructor(
     public readonly code: AudioEngineErrorCode,
@@ -14,6 +16,7 @@ export class AudioEngineError extends Error {
 }
 
 export enum AudioEngineErrorCode {
+  UNSUPPORTED_FEATURE = 'UNSUPPORTED_FEATURE',
   TRACK_INIT_FAILED = 'TRACK_INIT_FAILED',
   TRACK_NOT_FOUND = 'TRACK_NOT_FOUND',
   PLUGIN_FACTORY_ID_CONFLICT = 'PLUGIN_FACTORY_ID_CONFLICT',
@@ -40,6 +43,7 @@ export enum AudioEngineErrorCode {
 }
 
 export const ERROR_MESSAGES: Record<AudioEngineErrorCode, string> = {
+  [AudioEngineErrorCode.UNSUPPORTED_FEATURE]: '현재 오디오 runtime에서 지원하지 않는 기능입니다.',
   [AudioEngineErrorCode.TRACK_INIT_FAILED]: '트랙을 초기화할 수 없습니다.',
   [AudioEngineErrorCode.TRACK_NOT_FOUND]: '트랙을 찾을 수 없습니다.',
   [AudioEngineErrorCode.PLUGIN_FACTORY_ID_CONFLICT]: '플러그인 오디오 팩토리 ID가 중복되었습니다.',
@@ -64,6 +68,25 @@ export const ERROR_MESSAGES: Record<AudioEngineErrorCode, string> = {
   [AudioEngineErrorCode.RENDER_FAILED]: '오디오 렌더링에 실패했습니다.',
   [AudioEngineErrorCode.CONTEXT_ERROR]: '오디오 컨텍스트 오류가 발생했습니다.',
 };
+
+interface UnsupportedAudioFeatureErrorOptions {
+  readonly feature: AudioRuntimeFeature;
+  readonly method: string;
+}
+
+export class UnsupportedAudioFeatureError extends AudioEngineError {
+  constructor({ feature, method }: UnsupportedAudioFeatureErrorOptions) {
+    super(AudioEngineErrorCode.UNSUPPORTED_FEATURE, ERROR_MESSAGES[AudioEngineErrorCode.UNSUPPORTED_FEATURE], {
+      feature,
+      method,
+    });
+    this.name = 'UnsupportedAudioFeatureError';
+
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, UnsupportedAudioFeatureError);
+    }
+  }
+}
 
 export function getUserFriendlyMessage(error: AudioEngineError): string {
   return ERROR_MESSAGES[error.code] || '알 수 없는 오류가 발생했습니다.';

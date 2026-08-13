@@ -1,5 +1,6 @@
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
 import type { PluginParameterValue } from '../shared/types/plugin-state';
+import type { AudioRuntimeFeatureSupport } from '../shared/utils/audio-runtime-capabilities';
 import type {
   ArmLoopRequest,
   LoadLoopRequest,
@@ -141,6 +142,8 @@ export interface IPreparedAudioProjectGraph {
 }
 
 export interface IAudioEngine {
+  getFeatureSupport(): AudioRuntimeFeatureSupport;
+
   // Transport Control
   play(): Promise<void>;
   pause(): void;
