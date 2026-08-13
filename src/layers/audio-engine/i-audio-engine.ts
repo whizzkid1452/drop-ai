@@ -8,6 +8,7 @@ import type {
 import type { PluginParameterValue } from '../shared/types/plugin-state';
 import type { TimelineRange } from '../shared/types/project-document.schema';
 import type { MeterFrame, MeterTarget } from '../shared/types/meter-frame';
+import type { RoutingGraphSnapshot } from '../shared/types/routing-state';
 import type { LiveAudioInputDevice, LiveInputRuntimeListener, LiveInputRuntimeState } from '../shared/types/live-input';
 import type { AudioRuntimeFeatureSupport } from '../shared/utils/audio-runtime-capabilities';
 import type {
@@ -39,6 +40,7 @@ export type {
   TriggerLoopRequest,
 } from './loop-runtime/loop-runtime-contract';
 export type { MeterChannelFrame, MeterFrame, MeterTarget } from '../shared/types/meter-frame';
+export type { RoutingGraphSnapshot } from '../shared/types/routing-state';
 export type { LiveAudioInputDevice, LiveInputRuntimeListener, LiveInputRuntimeState } from '../shared/types/live-input';
 export type {
   RecordedTake,
@@ -167,6 +169,7 @@ export interface AudioProjectGraphTrack {
 
 export interface PrepareAudioProjectGraphRequest {
   readonly masterVolume?: number;
+  readonly routingGraph?: RoutingGraphSnapshot;
   readonly tracks: readonly AudioProjectGraphTrack[];
 }
 

@@ -13,6 +13,11 @@ import { insertArrayEntry, moveArrayEntry } from '../shared/array-order';
 import type { LoopLengthBars } from '../shared/loop-time';
 import type { LoopSlotRuntimeState } from '../shared/types/loop-state';
 import type { RegionFadeState } from '../shared/types/region-processing';
+import {
+  cloneRoutingGraphSnapshot,
+  createDefaultRoutingGraphSnapshot,
+  type RoutingGraphSnapshot,
+} from '../shared/types/routing-state';
 import type { TimelineMeterChange, TimelineTempoChange } from '../shared/timeline-coordinate-mapper';
 import type { TimelineMarker } from '../shared/timeline-marker';
 
@@ -100,6 +105,7 @@ export interface ProjectSessionState {
   readonly isMetronomeEnabled?: boolean;
   readonly metronomeVolume?: number;
   readonly masterVolume: number;
+  readonly routingGraph?: RoutingGraphSnapshot;
   readonly exportStartTime: number | null;
   readonly exportEndTime: number | null;
   readonly tracks: ReadonlyMap<string, TrackState>;
@@ -161,6 +167,7 @@ export interface SessionState {
   isMetronomeEnabled: boolean;
   metronomeVolume: number;
   masterVolume: number;
+  routingGraph: RoutingGraphSnapshot;
   exportStartTime: number | null;
   exportEndTime: number | null;
   tracks: Map<string, TrackState>;
@@ -198,6 +205,7 @@ export interface SessionState {
   setMetronomeVolume: (volume: number) => void;
   setMetronomeState: (state: { readonly isEnabled: boolean; readonly volume: number }) => void;
   setMasterVolume: (volume: number) => void;
+  setRoutingGraph: (routingGraph: RoutingGraphSnapshot) => void;
   setExportRange: (startTime: number | null, endTime: number | null) => void;
   replaceProjectMetadata: (project: ProjectMetadata) => void;
   replaceProjectState: (projectState: ProjectSessionState) => void;
@@ -246,6 +254,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     isMetronomeEnabled: false,
     metronomeVolume: DEFAULT_METRONOME_VOLUME,
     masterVolume: 1.0,
+    routingGraph: createDefaultRoutingGraphSnapshot([]),
     exportStartTime: null,
     exportEndTime: null,
     tracks: new Map(),
@@ -293,6 +302,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     setMetronomeVolume: metronomeVolume => set({ metronomeVolume }),
     setMetronomeState: ({ isEnabled, volume }) => set({ isMetronomeEnabled: isEnabled, metronomeVolume: volume }),
     setMasterVolume: volume => set({ masterVolume: volume }),
+    setRoutingGraph: routingGraph => set({ routingGraph: cloneRoutingGraphSnapshot(routingGraph) }),
     setExportRange: (startTime, endTime) => set({ exportStartTime: startTime, exportEndTime: endTime }),
     replaceProjectMetadata: project => set({ project: { ...project } }),
     replaceProjectState: projectState =>
@@ -311,6 +321,9 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
         isMetronomeEnabled: projectState.isMetronomeEnabled ?? false,
         metronomeVolume: projectState.metronomeVolume ?? DEFAULT_METRONOME_VOLUME,
         masterVolume: projectState.masterVolume,
+        routingGraph: cloneRoutingGraphSnapshot(
+          projectState.routingGraph ?? createDefaultRoutingGraphSnapshot([...projectState.tracks.keys()])
+        ),
         exportStartTime: projectState.exportStartTime,
         exportEndTime: projectState.exportEndTime,
         tracks: cloneProjectTracks(projectState.tracks),
@@ -323,7 +336,16 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
       set(state => {
         const newTracks = new Map(state.tracks);
         newTracks.set(track.id, track);
-        return { tracks: newTracks };
+        return {
+          routingGraph: {
+            ...state.routingGraph,
+            routes: [
+              ...state.routingGraph.routes.filter(route => route.trackId !== track.id),
+              ...createDefaultRoutingGraphSnapshot([track.id]).routes,
+            ],
+          },
+          tracks: newTracks,
+        };
       }),
     updateTrack: (id, updates) =>
       set(state => {
@@ -343,7 +365,10 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
       set(state => {
         const newTracks = new Map(state.tracks);
         newTracks.delete(id);
-        return { tracks: newTracks };
+        return {
+          routingGraph: removeTrackFromRoutingGraph(state.routingGraph, id),
+          tracks: newTracks,
+        };
       }),
     updateLoopSlot: ({ trackId, slotId, updates }) =>
       set(state => {
@@ -454,6 +479,20 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
 
 function cloneProjectTracks(tracks: ReadonlyMap<string, TrackState>): Map<string, TrackState> {
   return new Map([...tracks.entries()].map(([trackId, track]) => [trackId, cloneTrackState(track)]));
+}
+
+function removeTrackFromRoutingGraph(graph: RoutingGraphSnapshot, trackId: string): RoutingGraphSnapshot {
+  return {
+    routes: graph.routes
+      .filter(route => route.trackId !== trackId)
+      .map(route => ({
+        ...route,
+        folderId: route.folderId === trackId ? null : route.folderId,
+        output: route.output.kind === 'track' && route.output.trackId === trackId ? { kind: 'master' } : route.output,
+        vcaIds: route.vcaIds.filter(vcaId => vcaId !== trackId),
+      })),
+    sends: graph.sends.filter(send => send.sourceTrackId !== trackId && send.destinationTrackId !== trackId),
+  };
 }
 
 function cloneTrackState(track: TrackState): TrackState {

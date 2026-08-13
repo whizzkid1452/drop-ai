@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { calculateFiniteRegionSourceEndTime, isRegionSourceRangeWithinDuration } from '../audio-source-range';
 import { MAX_LOOP_OVERDUB_LAYERS } from '../loop-time';
 import { calculateFiniteRegionEndTime } from '../region-timeline';
+import { ROUTING_CHANNEL_COUNTS, ROUTING_SEND_TAP_POINTS, ROUTING_TRACK_KINDS } from './routing-state';
 
 export const PROJECT_DOCUMENT_SCHEMA_VERSION = 1 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V2 = 2 as const;
@@ -11,12 +12,14 @@ export const PROJECT_DOCUMENT_SCHEMA_VERSION_V5 = 5 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V6 = 6 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V7 = 7 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V8 = 8 as const;
+export const PROJECT_DOCUMENT_SCHEMA_VERSION_V9 = 9 as const;
 
 const MAX_NAME_LENGTH = 255;
 const MAX_MIME_TYPE_LENGTH = 255;
 const MAX_PLUGIN_ENTRIES = 128;
 const MAX_LOOP_SLOTS = 16;
 const MAX_TIMELINE_MAP_ENTRIES = 256;
+const MAX_ROUTING_ENTRIES = 512;
 const nonBlankNameSchema = z.string().trim().min(1).max(MAX_NAME_LENGTH);
 const pluginTextSchema = z
   .string()
@@ -372,6 +375,43 @@ const ProjectDocumentV8BaseSchema = ProjectDocumentV7BaseSchema.omit({ schemaVer
   tracks: z.array(ProjectTrackV8Schema),
 });
 
+export const ProjectRoutingRouteTargetSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('master') }),
+  z.strictObject({ kind: z.literal('track'), trackId: z.uuid('Invalid Track ID format') }),
+  z.strictObject({ kind: z.literal('none') }),
+]);
+
+export const ProjectRoutingRouteSchema = z.strictObject({
+  trackId: z.uuid('Invalid Track ID format'),
+  kind: z.enum(ROUTING_TRACK_KINDS),
+  channelCount: z.union([z.literal(ROUTING_CHANNEL_COUNTS[0]), z.literal(ROUTING_CHANNEL_COUNTS[1])]),
+  output: ProjectRoutingRouteTargetSchema,
+  folderId: z.uuid('Invalid Folder Track ID format').nullable(),
+  vcaIds: z.array(z.uuid('Invalid VCA Track ID format')).max(MAX_ROUTING_ENTRIES),
+});
+
+export const ProjectRoutingSendSchema = z.strictObject({
+  id: z.uuid('Invalid Send ID format'),
+  sourceTrackId: z.uuid('Invalid Track ID format'),
+  destinationTrackId: z.uuid('Invalid Track ID format'),
+  gain: normalizedAudioValueSchema,
+  tapPoint: z.enum(ROUTING_SEND_TAP_POINTS),
+  isEnabled: z.boolean(),
+});
+
+export const ProjectRoutingGraphSchema = z.strictObject({
+  routes: z.array(ProjectRoutingRouteSchema).max(MAX_ROUTING_ENTRIES),
+  sends: z.array(ProjectRoutingSendSchema).max(MAX_ROUTING_ENTRIES),
+});
+
+const ProjectDocumentV9BaseSchema = ProjectDocumentV8BaseSchema.omit({ schemaVersion: true, mixer: true }).extend({
+  schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V9),
+  mixer: z.strictObject({
+    masterVolume: normalizedAudioValueSchema,
+    routing: ProjectRoutingGraphSchema,
+  }),
+});
+
 interface IdentifiedDocumentPath {
   id: string;
   path: Array<string | number>;
@@ -391,7 +431,8 @@ type RefinableProjectDocument =
   | z.infer<typeof ProjectDocumentV5BaseSchema>
   | z.infer<typeof ProjectDocumentV6BaseSchema>
   | z.infer<typeof ProjectDocumentV7BaseSchema>
-  | z.infer<typeof ProjectDocumentV8BaseSchema>;
+  | z.infer<typeof ProjectDocumentV8BaseSchema>
+  | z.infer<typeof ProjectDocumentV9BaseSchema>;
 type RefinableProjectTrack =
   | z.infer<typeof ProjectTrackSchema>
   | z.infer<typeof ProjectTrackV2Schema>
@@ -523,7 +564,8 @@ function validatePluginState(
     | z.infer<typeof ProjectDocumentV5BaseSchema>
     | z.infer<typeof ProjectDocumentV6BaseSchema>
     | z.infer<typeof ProjectDocumentV7BaseSchema>
-    | z.infer<typeof ProjectDocumentV8BaseSchema>,
+    | z.infer<typeof ProjectDocumentV8BaseSchema>
+    | z.infer<typeof ProjectDocumentV9BaseSchema>,
   context: z.RefinementCtx
 ): void {
   const instanceEntries = document.tracks.flatMap((track, trackIndex) =>
@@ -603,6 +645,21 @@ export const ProjectDocumentV8Schema = ProjectDocumentV8BaseSchema.superRefine((
   });
   validateRegionProcessing(document, context);
 });
+export const ProjectDocumentV9Schema = ProjectDocumentV9BaseSchema.superRefine((document, context) => {
+  validateProjectRelations(document, context);
+  validatePluginState(document, context);
+  validateTimelineMap(document, context);
+  addDuplicateIdIssues({
+    entries: document.timeline.markers.map((marker, index) => ({
+      id: marker.id,
+      path: ['timeline', 'markers', index, 'id'],
+    })),
+    label: 'Timeline marker',
+    context,
+  });
+  validateRegionProcessing(document, context);
+  validateRoutingGraph(document, context);
+});
 
 interface CrossfadeEndpoint {
   readonly crossfadeId: string;
@@ -614,7 +671,7 @@ interface CrossfadeEndpoint {
 }
 
 function validateRegionProcessing(
-  document: z.infer<typeof ProjectDocumentV8BaseSchema>,
+  document: z.infer<typeof ProjectDocumentV8BaseSchema> | z.infer<typeof ProjectDocumentV9BaseSchema>,
   context: z.RefinementCtx
 ): void {
   document.tracks.forEach((track, trackIndex) => {
@@ -685,12 +742,191 @@ function validateCrossfadeEndpoints(endpoints: readonly CrossfadeEndpoint[], con
   );
 }
 
+function validateRoutingGraph(document: z.infer<typeof ProjectDocumentV9BaseSchema>, context: z.RefinementCtx): void {
+  const routes = document.mixer.routing.routes;
+  const routeByTrackId = new Map(routes.map(route => [route.trackId, route]));
+  const documentTrackIds = new Set(document.tracks.map(track => track.id));
+
+  addDuplicateIdIssues({
+    entries: routes.map((route, index) => ({
+      id: route.trackId,
+      path: ['mixer', 'routing', 'routes', index, 'trackId'],
+    })),
+    label: 'Route Track',
+    context,
+  });
+  addDuplicateIdIssues({
+    entries: document.mixer.routing.sends.map((send, index) => ({
+      id: send.id,
+      path: ['mixer', 'routing', 'sends', index, 'id'],
+    })),
+    label: 'Send',
+    context,
+  });
+
+  document.tracks.forEach((track, trackIndex) => {
+    if (!routeByTrackId.has(track.id)) {
+      context.addIssue({
+        code: 'custom',
+        message: `Track requires one Route: ${track.id}`,
+        path: ['tracks', trackIndex, 'id'],
+      });
+    }
+  });
+
+  const signalEdges: Array<readonly [string, string]> = [];
+  const folderEdges: Array<readonly [string, string]> = [];
+  routes.forEach((route, routeIndex) => {
+    const path = ['mixer', 'routing', 'routes', routeIndex];
+    if (!documentTrackIds.has(route.trackId)) {
+      context.addIssue({
+        code: 'custom',
+        message: `Route references a missing Track ID: ${route.trackId}`,
+        path: [...path, 'trackId'],
+      });
+    }
+
+    const isSignalRoute = route.kind === 'audio' || route.kind === 'aux' || route.kind === 'bus';
+    if (isSignalRoute === (route.output.kind === 'none')) {
+      context.addIssue({
+        code: 'custom',
+        message: isSignalRoute ? 'An Audio Route requires an output' : 'Folder and VCA Routes cannot have an output',
+        path: [...path, 'output'],
+      });
+    }
+    if (route.output.kind === 'track') {
+      const destination = routeByTrackId.get(route.output.trackId);
+      if (!destination || (destination.kind !== 'aux' && destination.kind !== 'bus')) {
+        context.addIssue({
+          code: 'custom',
+          message: `Route output must reference an Aux or Bus Track: ${route.output.trackId}`,
+          path: [...path, 'output', 'trackId'],
+        });
+      } else {
+        signalEdges.push([route.trackId, route.output.trackId]);
+      }
+    }
+
+    if (route.folderId !== null) {
+      const folder = routeByTrackId.get(route.folderId);
+      if (folder?.kind !== 'folder') {
+        context.addIssue({
+          code: 'custom',
+          message: `Folder assignment must reference a Folder Track: ${route.folderId}`,
+          path: [...path, 'folderId'],
+        });
+      } else {
+        folderEdges.push([route.trackId, route.folderId]);
+      }
+    }
+
+    const vcaIds = new Set<string>();
+    route.vcaIds.forEach((vcaId, vcaIndex) => {
+      const vca = routeByTrackId.get(vcaId);
+      if (vca?.kind !== 'vca') {
+        context.addIssue({
+          code: 'custom',
+          message: `VCA assignment must reference a VCA Track: ${vcaId}`,
+          path: [...path, 'vcaIds', vcaIndex],
+        });
+      }
+      if (vcaIds.has(vcaId)) {
+        context.addIssue({
+          code: 'custom',
+          message: `Duplicate VCA assignment: ${vcaId}`,
+          path: [...path, 'vcaIds', vcaIndex],
+        });
+      }
+      vcaIds.add(vcaId);
+    });
+  });
+
+  document.mixer.routing.sends.forEach((send, sendIndex) => {
+    const path = ['mixer', 'routing', 'sends', sendIndex];
+    const source = routeByTrackId.get(send.sourceTrackId);
+    const destination = routeByTrackId.get(send.destinationTrackId);
+    if (!source || (source.kind !== 'audio' && source.kind !== 'aux' && source.kind !== 'bus')) {
+      context.addIssue({
+        code: 'custom',
+        message: `Send source must reference an Audio, Aux, or Bus Track: ${send.sourceTrackId}`,
+        path: [...path, 'sourceTrackId'],
+      });
+    }
+    if (!destination || (destination.kind !== 'aux' && destination.kind !== 'bus')) {
+      context.addIssue({
+        code: 'custom',
+        message: `Send destination must reference an Aux or Bus Track: ${send.destinationTrackId}`,
+        path: [...path, 'destinationTrackId'],
+      });
+    }
+    if (send.isEnabled && source && destination) {
+      signalEdges.push([send.sourceTrackId, send.destinationTrackId]);
+    }
+  });
+
+  if (
+    hasDirectedCycle(
+      routes.map(route => route.trackId),
+      signalEdges
+    )
+  ) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Routing graph must not contain an active signal cycle',
+      path: ['mixer', 'routing'],
+    });
+  }
+  if (
+    hasDirectedCycle(
+      routes.map(route => route.trackId),
+      folderEdges
+    )
+  ) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Folder assignments must not contain a hierarchy cycle',
+      path: ['mixer', 'routing', 'routes'],
+    });
+  }
+}
+
+function hasDirectedCycle(nodes: readonly string[], edges: ReadonlyArray<readonly [string, string]>): boolean {
+  const outgoing = new Map(nodes.map(node => [node, [] as string[]]));
+  const inDegree = new Map(nodes.map(node => [node, 0]));
+  edges.forEach(([source, destination]) => {
+    if (!outgoing.has(source) || !inDegree.has(destination)) {
+      return;
+    }
+    outgoing.get(source)?.push(destination);
+    inDegree.set(destination, (inDegree.get(destination) ?? 0) + 1);
+  });
+
+  const remaining = [...inDegree.entries()].filter(([, degree]) => degree === 0).map(([node]) => node);
+  let visitedCount = 0;
+  while (remaining.length > 0) {
+    const node = remaining.pop();
+    if (!node) {
+      continue;
+    }
+    visitedCount += 1;
+    outgoing.get(node)?.forEach(destination => {
+      const nextDegree = (inDegree.get(destination) ?? 0) - 1;
+      inDegree.set(destination, nextDegree);
+      if (nextDegree === 0) {
+        remaining.push(destination);
+      }
+    });
+  }
+  return visitedCount !== nodes.length;
+}
+
 function validateTimelineMap(
   document:
     | z.infer<typeof ProjectDocumentV5BaseSchema>
     | z.infer<typeof ProjectDocumentV6BaseSchema>
     | z.infer<typeof ProjectDocumentV7BaseSchema>
-    | z.infer<typeof ProjectDocumentV8BaseSchema>,
+    | z.infer<typeof ProjectDocumentV8BaseSchema>
+    | z.infer<typeof ProjectDocumentV9BaseSchema>,
   context: z.RefinementCtx
 ): void {
   validateTimelineMarkerPositions(document.timeline.tempoChanges, 'tempoChanges', context);
@@ -763,6 +999,7 @@ export type ProjectRegionFade = z.infer<typeof ProjectRegionFadeSchema>;
 export type ProjectRegionV8 = z.infer<typeof ProjectRegionV8Schema>;
 export type ProjectTrackV8 = z.infer<typeof ProjectTrackV8Schema>;
 export type ProjectDocumentV8 = z.infer<typeof ProjectDocumentV8Schema>;
+export type ProjectDocumentV9 = z.infer<typeof ProjectDocumentV9Schema>;
 export type ProjectDocumentSnapshot =
   | ProjectDocument
   | ProjectDocumentV2
@@ -771,4 +1008,5 @@ export type ProjectDocumentSnapshot =
   | ProjectDocumentV5
   | ProjectDocumentV6
   | ProjectDocumentV7
-  | ProjectDocumentV8;
+  | ProjectDocumentV8
+  | ProjectDocumentV9;
