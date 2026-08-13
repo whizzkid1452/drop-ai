@@ -9,6 +9,8 @@ import { RecordingControl } from './RecordingControl';
 const layerMocks = vi.hoisted(() => ({
   capability: { blockers: [], status: 'available' as 'available' | 'unavailable' },
   execute: vi.fn().mockResolvedValue(undefined),
+  punch: { isEnabled: false, range: null as { endTimeSeconds: number; startTimeSeconds: number } | null },
+  selectionRange: { endTimeSeconds: 8, startTimeSeconds: 4, trackIds: ['track-1'] },
   state: {
     armedTrackIds: ['track-1'] as string[],
     inputRoutes: [{ channelIndex: 0, deviceId: null, trackId: 'track-1' }],
@@ -19,7 +21,10 @@ const layerMocks = vi.hoisted(() => ({
 vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
   useAudioRuntimeCapabilities: () => ({ features: { linearRecording: layerMocks.capability } }),
   useCommandExecutor: () => ({ execute: layerMocks.execute }),
+  useEditorRuntimeState: () => ({ selection: { range: layerMocks.selectionRange } }),
   useRecordingRuntimeState: () => ({ ...layerMocks.state, recordStartTimeSeconds: null }),
+  useSession: (selector: (state: { recording: { punch: typeof layerMocks.punch } }) => unknown) =>
+    selector({ recording: { punch: layerMocks.punch } }),
 }));
 
 vi.mock('./RecordingControl.css.ts', () => ({
@@ -28,6 +33,8 @@ vi.mock('./RecordingControl.css.ts', () => ({
   error: 'error',
   field: 'field',
   input: 'input',
+  punchButtonActive: 'punchButtonActive',
+  rangeStatus: 'rangeStatus',
   recordingButton: 'recordingButton',
   recordingButtonActive: 'recordingButtonActive',
   status: 'status',
@@ -52,6 +59,7 @@ afterEach(() => {
   layerMocks.capability.status = 'available';
   layerMocks.state.armedTrackIds = ['track-1'];
   layerMocks.state.phase = 'idle';
+  layerMocks.punch = { isEnabled: false, range: null };
 });
 
 describe('RecordingControl', () => {
@@ -98,5 +106,43 @@ describe('RecordingControl', () => {
     const host = renderControl();
 
     expect(host.querySelector<HTMLButtonElement>('[aria-label="녹음 시작"]')?.disabled).toBe(true);
+  });
+
+  it('Editor 선택 범위를 활성 Punch 범위로 보낸다', async () => {
+    const host = renderControl();
+
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="선택 범위를 Punch로 설정"]')?.click());
+
+    expect(layerMocks.execute).toHaveBeenCalledWith({
+      isEnabled: true,
+      range: { endTimeSeconds: 8, startTimeSeconds: 4 },
+      type: AudioCommandType.SET_PUNCH_RECORDING,
+    });
+  });
+
+  it('설정된 Punch 범위를 유지하며 Punch를 끈다', async () => {
+    layerMocks.punch = { isEnabled: true, range: { endTimeSeconds: 8, startTimeSeconds: 4 } };
+    const host = renderControl();
+
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Punch 녹음 끄기"]')?.click());
+
+    expect(layerMocks.execute).toHaveBeenCalledWith({
+      isEnabled: false,
+      range: { endTimeSeconds: 8, startTimeSeconds: 4 },
+      type: AudioCommandType.SET_PUNCH_RECORDING,
+    });
+  });
+
+  it('일부 Track 녹음 실패를 성공 결과와 구분해 표시한다', async () => {
+    layerMocks.state.phase = 'recording';
+    layerMocks.execute.mockResolvedValueOnce({
+      failures: [{ cause: new Error('저장 실패'), stage: 'persist', trackId: 'track-2' }],
+      takes: [],
+    });
+    const host = renderControl();
+
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="녹음 중지"]')?.click());
+
+    expect(host.textContent).toContain('1개 Track 녹음 실패: track-2 (persist)');
   });
 });
