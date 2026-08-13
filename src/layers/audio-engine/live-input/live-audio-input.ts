@@ -9,5 +9,7 @@ export interface ILiveAudioInputConnection {
 }
 
 export interface ILiveAudioInput {
+  listDevices(): Promise<readonly LiveAudioInputDevice[]>;
   open(options: OpenLiveAudioInputOptions): Promise<ILiveAudioInputConnection>;
 }
+import type { LiveAudioInputDevice } from '../../shared/types/live-input';

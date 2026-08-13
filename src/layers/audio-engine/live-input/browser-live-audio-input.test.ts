@@ -7,6 +7,20 @@ afterEach(() => {
 });
 
 describe('BrowserLiveAudioInput', () => {
+  it('audioinput 장치만 브라우저 순서대로 반환한다', async () => {
+    const enumerateDevices = vi.fn().mockResolvedValue([
+      { deviceId: 'camera', kind: 'videoinput', label: 'Camera' },
+      { deviceId: 'mic-1', kind: 'audioinput', label: 'Mic 1' },
+      { deviceId: 'mic-2', kind: 'audioinput', label: '' },
+    ]);
+    vi.stubGlobal('navigator', { mediaDevices: { enumerateDevices } });
+
+    await expect(new BrowserLiveAudioInput().listDevices()).resolves.toEqual([
+      { deviceId: 'mic-1', label: 'Mic 1' },
+      { deviceId: 'mic-2', label: '' },
+    ]);
+  });
+
   it('지정한 장치를 처리 효과 없이 열고 연결 종료 시 트랙을 정지한다', async () => {
     const stop = vi.fn();
     const stream = {

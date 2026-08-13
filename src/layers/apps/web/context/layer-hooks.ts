@@ -5,6 +5,7 @@ import type { CommandExecutor } from '../../../commands/command-executor';
 import type { CommandHistorySnapshot } from '../../../commands/command-history';
 import type { IPlaybackClockQuery } from '../../../queries/playback-clock-query';
 import type { IMeterQuery } from '../../../queries/meter-query';
+import type { ILiveInputQuery } from '../../../queries/live-input-query';
 import type { IProjectCatalogQuery } from '../../../queries/project-catalog-query';
 import type { SessionState } from '../../../session/session';
 import type { AudioRuntimeCapabilities } from '../../../shared/utils/audio-runtime-capabilities';
@@ -57,6 +58,10 @@ export function usePlaybackClock(): IPlaybackClockQuery {
 
 export function useMeterQuery(): IMeterQuery {
   return useLayer().meter;
+}
+
+export function useLiveInputQuery(): ILiveInputQuery {
+  return useLayer().liveInput;
 }
 
 export function useProjectCatalog(): IProjectCatalogQuery {

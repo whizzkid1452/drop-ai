@@ -8,6 +8,8 @@ import type {
   IAudioEngine,
   InstallAudioPluginRequest,
   LoadLoopRequest,
+  LiveAudioInputDevice,
+  LiveInputRuntimeState,
   LoopRuntimeEvent,
   LoopRuntimeListener,
   LoopRuntimeState,
@@ -63,6 +65,8 @@ export class MockAudioEngine implements IAudioEngine {
   private mockMetronomeEnabled = false;
   private mockMetronomeVolume = 0.8;
   private mockMeterFrames = new Map<string, MeterFrame>();
+  private mockLiveInputDevices: LiveAudioInputDevice[] = [];
+  private mockMonitoringTrackId: string | null = null;
 
   getFeatureSupport(): AudioRuntimeFeatureSupport {
     return { ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT, metering: true, tempoLoopMetronome: true };
@@ -144,10 +148,23 @@ export class MockAudioEngine implements IAudioEngine {
     return this.mockInputDeviceId;
   }
 
+  getLiveInputState(): LiveInputRuntimeState {
+    return { deviceId: this.mockInputDeviceId, monitoringTrackId: this.mockMonitoringTrackId };
+  }
+
+  async listLiveInputDevices(): Promise<readonly LiveAudioInputDevice[]> {
+    return this.mockLiveInputDevices.map(device => ({ ...device }));
+  }
+
+  setMockLiveInputDevices(devices: readonly LiveAudioInputDevice[]): void {
+    this.mockLiveInputDevices = devices.map(device => ({ ...device }));
+  }
+
   async setLiveInputMonitoring(request: SetLiveInputMonitoringRequest): Promise<void> {
     if (request.enabled) {
       this.getTrack(request.trackId);
     }
+    this.mockMonitoringTrackId = request.enabled ? request.trackId : null;
   }
 
   async armLoop(request: ArmLoopRequest): Promise<void> {

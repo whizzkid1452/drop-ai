@@ -26,5 +26,7 @@ export interface ILoopPlaybackAdapter {
   getContextTimeSeconds(): number;
   getTransportTimeSeconds(): number;
   prepare(): Promise<void>;
+  readInputMeterFrame(): MeterFrame;
   setMonitoring(request: SetLoopMonitoringRequest): void;
 }
+import type { MeterFrame } from '../../shared/types/meter-frame';

@@ -1,4 +1,5 @@
 import type { ILiveAudioInput, ILiveAudioInputConnection, OpenLiveAudioInputOptions } from './live-audio-input';
+import type { LiveAudioInputDevice } from '../../shared/types/live-input';
 import { LiveAudioInputError, LiveAudioInputErrorCode } from './live-audio-input-error';
 
 const LIVE_INPUT_MESSAGES = {
@@ -56,6 +57,18 @@ function mapOpenError(error: unknown): LiveAudioInputError {
 }
 
 export class BrowserLiveAudioInput implements ILiveAudioInput {
+  async listDevices(): Promise<readonly LiveAudioInputDevice[]> {
+    const mediaDevices = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices;
+    if (mediaDevices?.enumerateDevices === undefined) {
+      throw new LiveAudioInputError(LiveAudioInputErrorCode.API_UNAVAILABLE, LIVE_INPUT_MESSAGES.apiUnavailable);
+    }
+
+    const devices = await mediaDevices.enumerateDevices();
+    return devices
+      .filter(device => device.kind === 'audioinput')
+      .map(device => ({ deviceId: device.deviceId, label: device.label }));
+  }
+
   async open(options: OpenLiveAudioInputOptions): Promise<ILiveAudioInputConnection> {
     const mediaDevices = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices;
     if (mediaDevices?.getUserMedia === undefined) {

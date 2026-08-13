@@ -172,6 +172,10 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
     this.#emit({ ...request, state: 'stopped', type: 'STATE_CHANGED' });
   }
 
+  listInputDevices() {
+    return this.#liveAudioInput.listDevices();
+  }
+
   async prepareReplacement(requests: readonly LoadLoopRuntimeRequest[]): Promise<IPreparedLoopRuntimeReplacement> {
     if (this.#pendingCaptures.size > 0) {
       throw new Error('녹음 대기 또는 녹음 중에는 프로젝트 루프를 교체할 수 없습니다.');
@@ -202,12 +206,19 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime {
   async setInputDevice(deviceId: string | null): Promise<string | null> {
     const nextConnection = await this.#liveAudioInput.open(deviceId === null ? {} : { deviceId });
     const previousConnection = this.#inputConnection;
-    this.#inputConnection = nextConnection;
-    if (this.#monitorDestination) {
+    try {
       this.#playback.setMonitoring({ destination: this.#monitorDestination, stream: nextConnection.stream });
+    } catch (error) {
+      nextConnection.close();
+      throw error;
     }
+    this.#inputConnection = nextConnection;
     previousConnection?.close();
     return nextConnection.deviceId;
+  }
+
+  readInputMeterFrame() {
+    return this.#playback.readInputMeterFrame();
   }
 
   async setMonitoring(request: SetLiveInputMonitoringRuntimeRequest): Promise<void> {
