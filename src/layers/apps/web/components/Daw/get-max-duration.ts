@@ -7,6 +7,9 @@ export function getMaxDuration(tracks: readonly TrackState[]): number {
     track.regions.forEach(region => {
       maxDuration = Math.max(maxDuration, region.startTime + region.duration);
     });
+    track.midi?.regions.forEach(region => {
+      maxDuration = Math.max(maxDuration, region.startTimeSeconds + region.durationSeconds);
+    });
   });
 
   return maxDuration;

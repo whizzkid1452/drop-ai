@@ -160,6 +160,13 @@ export const automationButtonActive = style({
   color: '#fff5fd',
 });
 
+export const midiButtonActive = style({
+  borderColor: '#6f245d',
+  background: 'linear-gradient(180deg, #bd4da7 0%, #7e2e70 100%)',
+  boxShadow: 'inset 0 1px 0 #f381da',
+  color: '#fff5fd',
+});
+
 export const controls = style({
   width: '100%',
   minWidth: 0,

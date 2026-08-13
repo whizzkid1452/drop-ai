@@ -31,6 +31,7 @@ const stagingMocks = vi.hoisted(() => ({
 
 const executionMocks = vi.hoisted(() => ({
   executeAudioFileImport: vi.fn(),
+  executeMidiFileImport: vi.fn(),
 }));
 
 vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
@@ -41,6 +42,9 @@ vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
   useCommandExecutor: () => ({
     execute: layerMocks.execute,
     executeMany: layerMocks.executeMany,
+  }),
+  useAudioRuntimeCapabilities: () => ({
+    features: { midi: { blockers: [], status: 'available' } },
   }),
 }));
 
@@ -54,6 +58,10 @@ vi.mock('@/layers/apps/web/hooks/stage-web-audio-source', () => ({
 
 vi.mock('@/layers/apps/web/components/common/FileDrop/execute-audio-file-import', () => ({
   executeAudioFileImport: executionMocks.executeAudioFileImport,
+}));
+
+vi.mock('@/layers/apps/web/midi/execute-midi-file-import', () => ({
+  executeMidiFileImport: executionMocks.executeMidiFileImport,
 }));
 
 vi.mock('./AddTrackControl.css.ts', () => ({
@@ -137,11 +145,42 @@ afterEach(() => {
   conversionMocks.convertFileToAudioFile.mockReset();
   stagingMocks.stageWebAudioSource.mockReset();
   executionMocks.executeAudioFileImport.mockReset();
+  executionMocks.executeMidiFileImport.mockReset();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
 describe('AddTrackControl', () => {
+  it('빈 MIDI Track 추가를 명령 경로로 전달한다', async () => {
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue(TRACK_ID);
+    layerMocks.execute.mockResolvedValue(undefined);
+    renderControl();
+    const midiButton = document.querySelector<HTMLButtonElement>('button[aria-label="빈 MIDI Track 추가"]');
+
+    await act(async () => midiButton?.click());
+
+    expect(layerMocks.execute).toHaveBeenCalledWith({ trackId: TRACK_ID, type: 'ADD_MIDI_TRACK' });
+  });
+
+  it('선택한 MIDI 파일을 명령 기반 가져오기로 전달한다', async () => {
+    const file = new File(['midi'], 'keys.mid', { type: 'audio/midi' });
+    executionMocks.executeMidiFileImport.mockResolvedValue([TRACK_ID]);
+    renderControl();
+    const input = document.querySelector<HTMLInputElement>('input[aria-label="MIDI 파일 선택"]');
+    if (!input) {
+      throw new Error('MIDI 파일 입력을 찾지 못했습니다.');
+    }
+
+    selectFile(input, file);
+    await flushAsyncWork();
+
+    expect(executionMocks.executeMidiFileImport).toHaveBeenCalledWith({
+      commandExecutor: { execute: layerMocks.execute, executeMany: layerMocks.executeMany },
+      createId: expect.any(Function),
+      file,
+    });
+  });
+
   it('선택한 파일로 새 Track과 첫 Region을 가져온다', async () => {
     const file = new File(['audio'], 'voice.wav', { type: 'audio/wav' });
     const audioFileMetadata = createAudioFileMetadata(file);

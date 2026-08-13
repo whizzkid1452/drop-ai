@@ -8327,6 +8327,337 @@ var AudioEngine = class _AudioEngine {
   }
 };
 
+// core/src/midi/MidiFileParser.ts
+function parseMidiFile(data, sampleRate = 44100) {
+  const view = new DataView(data);
+  let offset = 0;
+  const headerTag = readString(view, offset, 4);
+  if (headerTag !== "MThd") {
+    throw new Error("Not a valid MIDI file: missing MThd header");
+  }
+  offset += 4;
+  const headerLength = view.getUint32(offset, false);
+  offset += 4;
+  const format = view.getUint16(offset, false);
+  offset += 2;
+  const numTracks = view.getUint16(offset, false);
+  offset += 2;
+  const division = view.getUint16(offset, false);
+  offset += 2;
+  offset += headerLength - 6;
+  let ticksPerBeat;
+  if (division & 32768) {
+    const fps = -((division >> 8 & 255) << 24 >> 24);
+    const tpf = division & 255;
+    ticksPerBeat = fps * tpf;
+  } else {
+    ticksPerBeat = division;
+  }
+  let globalTempo = 120;
+  const tracks = [];
+  for (let t = 0; t < numTracks && offset < data.byteLength; t++) {
+    const trackTag = readString(view, offset, 4);
+    if (trackTag !== "MTrk") {
+      throw new Error(`Expected MTrk at offset ${offset}, got ${trackTag}`);
+    }
+    offset += 4;
+    const trackLength = view.getUint32(offset, false);
+    offset += 4;
+    const trackEnd = offset + trackLength;
+    const track = parseTrack(view, offset, trackEnd, ticksPerBeat, sampleRate);
+    if (track.tempo > 0) {
+      globalTempo = track.tempo;
+    }
+    tracks.push({
+      name: track.name || `Track ${t + 1}`,
+      notes: track.notes,
+      channel: track.channel
+    });
+    offset = trackEnd;
+  }
+  const secondsPerTick = 60 / (globalTempo * ticksPerBeat);
+  for (const track of tracks) {
+    for (const note of track.notes) {
+      note.startFrame = Math.round(
+        note.startTick * secondsPerTick * sampleRate
+      );
+      note.durationFrames = Math.round(
+        note.durationTicks * secondsPerTick * sampleRate
+      );
+    }
+  }
+  return {
+    format,
+    numTracks,
+    ticksPerBeat,
+    tempo: globalTempo,
+    tracks
+  };
+}
+function parseTrack(view, start, end, ticksPerBeat, sampleRate) {
+  let offset = start;
+  let tick = 0;
+  let name = "";
+  let tempo = 0;
+  let primaryChannel = 0;
+  const activeNotes = /* @__PURE__ */ new Map();
+  const notes = [];
+  let prevStatus = 0;
+  while (offset < end) {
+    const [deltaTime, bytesRead] = readVLQ(view, offset);
+    offset += bytesRead;
+    tick += deltaTime;
+    if (offset >= end) break;
+    let statusByte = view.getUint8(offset);
+    if (statusByte < 128) {
+      statusByte = prevStatus;
+    } else {
+      offset++;
+      prevStatus = statusByte;
+    }
+    const type = statusByte & 240;
+    const channel = statusByte & 15;
+    switch (type) {
+      case 144: {
+        const pitch = view.getUint8(offset++);
+        const velocity = view.getUint8(offset++);
+        if (velocity === 0) {
+          finishNote(activeNotes, notes, channel, pitch, tick);
+        } else {
+          const key = `${channel}-${pitch}`;
+          finishNote(activeNotes, notes, channel, pitch, tick);
+          activeNotes.set(key, { pitch, velocity, channel, startTick: tick });
+          primaryChannel = channel;
+        }
+        break;
+      }
+      case 128: {
+        const pitch = view.getUint8(offset++);
+        offset++;
+        finishNote(activeNotes, notes, channel, pitch, tick);
+        break;
+      }
+      case 160:
+      // Aftertouch
+      case 176:
+      // Control Change
+      case 224:
+        offset += 2;
+        break;
+      case 192:
+      // Program Change
+      case 208:
+        offset += 1;
+        break;
+      case 240: {
+        if (statusByte === 255) {
+          const metaType = view.getUint8(offset++);
+          const [metaLength, metaLenBytes] = readVLQ(view, offset);
+          offset += metaLenBytes;
+          if (metaType === 3) {
+            name = readString(view, offset, metaLength);
+          } else if (metaType === 81) {
+            if (metaLength >= 3) {
+              const uspqn = view.getUint8(offset) << 16 | view.getUint8(offset + 1) << 8 | view.getUint8(offset + 2);
+              tempo = 6e7 / uspqn;
+            }
+          } else if (metaType === 47) {
+            offset += metaLength;
+            for (const [key, note] of activeNotes) {
+              notes.push({
+                pitch: note.pitch,
+                velocity: note.velocity,
+                channel: note.channel,
+                startTick: note.startTick,
+                durationTicks: tick - note.startTick,
+                startFrame: 0,
+                durationFrames: 0
+              });
+            }
+            activeNotes.clear();
+            return { name, notes, channel: primaryChannel, tempo };
+          }
+          offset += metaLength;
+        } else if (statusByte === 240 || statusByte === 247) {
+          const [sysexLen, sysexLenBytes] = readVLQ(view, offset);
+          offset += sysexLenBytes + sysexLen;
+        } else {
+          break;
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  for (const [key, note] of activeNotes) {
+    notes.push({
+      pitch: note.pitch,
+      velocity: note.velocity,
+      channel: note.channel,
+      startTick: note.startTick,
+      durationTicks: tick - note.startTick,
+      startFrame: 0,
+      durationFrames: 0
+    });
+  }
+  return { name, notes, channel: primaryChannel, tempo };
+}
+function finishNote(activeNotes, notes, channel, pitch, tick) {
+  const key = `${channel}-${pitch}`;
+  const active = activeNotes.get(key);
+  if (active) {
+    notes.push({
+      pitch: active.pitch,
+      velocity: active.velocity,
+      channel: active.channel,
+      startTick: active.startTick,
+      durationTicks: tick - active.startTick,
+      startFrame: 0,
+      durationFrames: 0
+    });
+    activeNotes.delete(key);
+  }
+}
+function readVLQ(view, offset) {
+  let value = 0;
+  let bytesRead = 0;
+  while (offset + bytesRead < view.byteLength) {
+    const byte = view.getUint8(offset + bytesRead);
+    value = value << 7 | byte & 127;
+    bytesRead++;
+    if ((byte & 128) === 0) break;
+    if (bytesRead > 4) break;
+  }
+  return [value, bytesRead];
+}
+function readString(view, offset, length) {
+  const availableLength = Math.max(0, Math.min(length, view.byteLength - offset));
+  const bytes = new Uint8Array(
+    view.buffer,
+    view.byteOffset + offset,
+    availableLength
+  );
+  return new TextDecoder().decode(bytes);
+}
+
+// core/src/midi/MidiFileWriter.ts
+function writeMidiFile(tracks, options = {}) {
+  const ticksPerBeat = options.ticksPerBeat ?? 480;
+  const tempo = options.tempo ?? 120;
+  const sampleRate = options.sampleRate ?? 44100;
+  const secondsPerTick = 60 / (tempo * ticksPerBeat);
+  const framesToTicks = (frames) => Math.round(frames / (secondsPerTick * sampleRate));
+  const trackChunks = [];
+  trackChunks.push(buildTempoTrack(tempo, ticksPerBeat));
+  for (const track of tracks) {
+    trackChunks.push(buildNoteTrack(track, framesToTicks));
+  }
+  const numTracks = trackChunks.length;
+  const headerChunk = buildHeaderChunk(1, numTracks, ticksPerBeat);
+  let totalSize = headerChunk.byteLength;
+  for (const chunk of trackChunks) {
+    totalSize += chunk.byteLength;
+  }
+  const result = new Uint8Array(totalSize);
+  let offset = 0;
+  result.set(new Uint8Array(headerChunk), offset);
+  offset += headerChunk.byteLength;
+  for (const chunk of trackChunks) {
+    result.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return result.buffer;
+}
+function buildHeaderChunk(format, numTracks, ticksPerBeat) {
+  const buffer = new ArrayBuffer(14);
+  const view = new DataView(buffer);
+  view.setUint8(0, 77);
+  view.setUint8(1, 84);
+  view.setUint8(2, 104);
+  view.setUint8(3, 100);
+  view.setUint32(4, 6, false);
+  view.setUint16(8, format, false);
+  view.setUint16(10, numTracks, false);
+  view.setUint16(12, ticksPerBeat, false);
+  return buffer;
+}
+function buildTempoTrack(tempo, ticksPerBeat) {
+  const events = [];
+  events.push(0);
+  const uspqn = Math.round(6e7 / tempo);
+  events.push(255, 81, 3);
+  events.push(uspqn >> 16 & 255);
+  events.push(uspqn >> 8 & 255);
+  events.push(uspqn & 255);
+  events.push(0, 255, 47, 0);
+  return wrapTrackChunk(new Uint8Array(events));
+}
+function buildNoteTrack(track, framesToTicks) {
+  const events = [];
+  if (track.name) {
+    const nameBytes = new TextEncoder().encode(track.name);
+    events.push({
+      tick: 0,
+      data: [255, 3, ...writeVLQ(nameBytes.length), ...nameBytes]
+    });
+  }
+  for (const note of track.notes) {
+    const startTick = framesToTicks(note.startFrame);
+    const endTick = framesToTicks(note.startFrame + note.durationFrames);
+    const channel = Math.max(0, Math.min(15, note.channel));
+    events.push({
+      tick: startTick,
+      data: [144 | channel, note.pitch & 127, note.velocity & 127]
+    });
+    events.push({
+      tick: endTick,
+      data: [128 | channel, note.pitch & 127, 64]
+      // release velocity 64
+    });
+  }
+  events.sort((a, b) => {
+    if (a.tick !== b.tick) return a.tick - b.tick;
+    const aIsOff = (a.data[0] & 240) === 128 ? 0 : 1;
+    const bIsOff = (b.data[0] & 240) === 128 ? 0 : 1;
+    return aIsOff - bIsOff;
+  });
+  const bytes = [];
+  let prevTick = 0;
+  for (const event of events) {
+    const delta = Math.max(0, event.tick - prevTick);
+    bytes.push(...writeVLQ(delta));
+    bytes.push(...event.data);
+    prevTick = event.tick;
+  }
+  bytes.push(0, 255, 47, 0);
+  return wrapTrackChunk(new Uint8Array(bytes));
+}
+function wrapTrackChunk(trackData) {
+  const chunk = new Uint8Array(8 + trackData.length);
+  const view = new DataView(chunk.buffer);
+  chunk[0] = 77;
+  chunk[1] = 84;
+  chunk[2] = 114;
+  chunk[3] = 107;
+  view.setUint32(4, trackData.length, false);
+  chunk.set(trackData, 8);
+  return chunk;
+}
+function writeVLQ(value) {
+  if (value < 0) value = 0;
+  if (value < 128) return [value];
+  const bytes = [];
+  let v = value;
+  bytes.unshift(v & 127);
+  v >>= 7;
+  while (v > 0) {
+    bytes.unshift(v & 127 | 128);
+    v >>= 7;
+  }
+  return bytes;
+}
+
 // core/src/domain/Source.ts
 var Source = class {
   constructor(id, name, url, duration, sampleRate = 44100, channelCount = 2, videoMetadata) {
@@ -8471,5 +8802,7 @@ export {
   Region,
   Session,
   Source,
-  TrackType
+  TrackType,
+  parseMidiFile,
+  writeMidiFile
 };

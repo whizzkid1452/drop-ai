@@ -3304,5 +3304,61 @@ export declare class AudioEngine {
 	loadSession(newSession: Session): void;
 	loadSessionFromSnapshot(snapshot: SessionSnapshot): void;
 }
+/**
+ * Standard MIDI File (SMF) Parser
+ *
+ * Parses SMF Type 0 (single track) and Type 1 (multi-track) files.
+ * Converts MIDI ticks to frames based on tempo.
+ */
+export interface MidiFileNote {
+	pitch: number;
+	velocity: number;
+	channel: number;
+	startTick: number;
+	durationTicks: number;
+	startFrame: number;
+	durationFrames: number;
+}
+export interface MidiFileTrack {
+	name: string;
+	notes: MidiFileNote[];
+	channel: number;
+}
+export interface MidiFileData {
+	format: number;
+	numTracks: number;
+	ticksPerBeat: number;
+	tempo: number;
+	tracks: MidiFileTrack[];
+}
+/**
+ * Parse a Standard MIDI File from an ArrayBuffer.
+ */
+export declare function parseMidiFile(data: ArrayBuffer, sampleRate?: number): MidiFileData;
+/**
+ * Standard MIDI File (SMF) Writer
+ *
+ * Generates SMF Type 1 files from MidiRegion/MidiNote data.
+ */
+export interface MidiWriteNote {
+	pitch: number;
+	velocity: number;
+	channel: number;
+	startFrame: number;
+	durationFrames: number;
+}
+export interface MidiWriteTrack {
+	name: string;
+	notes: MidiWriteNote[];
+}
+export interface MidiWriteOptions {
+	ticksPerBeat?: number;
+	tempo?: number;
+	sampleRate?: number;
+}
+/**
+ * Write a Standard MIDI File (Type 1) to an ArrayBuffer.
+ */
+export declare function writeMidiFile(tracks: MidiWriteTrack[], options?: MidiWriteOptions): ArrayBuffer;
 
 export {};

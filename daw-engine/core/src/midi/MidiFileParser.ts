@@ -325,9 +325,11 @@ function readVLQ(view: DataView, offset: number): [number, number] {
 }
 
 function readString(view: DataView, offset: number, length: number): string {
-  let str = "";
-  for (let i = 0; i < length && offset + i < view.byteLength; i++) {
-    str += String.fromCharCode(view.getUint8(offset + i));
-  }
-  return str;
+  const availableLength = Math.max(0, Math.min(length, view.byteLength - offset));
+  const bytes = new Uint8Array(
+    view.buffer,
+    view.byteOffset + offset,
+    availableLength,
+  );
+  return new TextDecoder().decode(bytes);
 }
