@@ -1,11 +1,22 @@
-import type { IAudioEngine, RegionData } from '../audio-engine/i-audio-engine';
-import type { IAudioSourceRegistry, RuntimeAudioSource } from '../audio-source-registry/i-audio-source-registry';
+import type {
+  AudioProjectGraphTrack,
+  IAudioEngine,
+  IPreparedAudioProjectGraph,
+  RegionData,
+} from '../audio-engine/i-audio-engine';
+import type {
+  IAudioSourceRegistry,
+  IPreparedAudioSourceRegistryReplacement,
+  RuntimeAudioSource,
+} from '../audio-source-registry/i-audio-source-registry';
 import type { RegionState, SessionStore, TrackState } from '../session/session';
 import { calculateFiniteRegionSourceEndTime, isRegionSourceRangeWithinDuration } from '../shared/audio-source-range';
 import { calculateFiniteRegionEndTime, isRegionEndTimeConsistent } from '../shared/region-timeline';
 import { ProjectMutationCompensationError } from './project-mutation-compensation-error';
 import { ProjectStateError, ProjectStateErrorCode } from './project-state-error';
 import { calculateSplitRegions } from './utils/split-region';
+import type { ReplaceEditorTrackRegionsRequest } from '../shared/types/editor-runtime';
+import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
 
 interface RegionPlacementFields {
   id: string;
@@ -307,6 +318,236 @@ export class RegionController {
       region.id === regionId ? { ...region, startTime: newStartTime, endTime: newEndTime } : region
     );
     this.sessionStore.getState().updateTrack(trackId, { regions });
+  }
+
+  async replaceTrackRegions(request: ReplaceEditorTrackRegionsRequest): Promise<void> {
+    const nextTracks = this.createEditedTracks(request);
+    const preparedRegistry = this.audioSourceRegistry.beginReplacement();
+    let preparedGraph: IPreparedAudioProjectGraph | undefined;
+
+    try {
+      this.audioSourceRegistry
+        .listCommittedRegistrations()
+        .forEach(registration => preparedRegistry.restoreCommitted(registration));
+      this.attachProjectSources(nextTracks, preparedRegistry);
+      preparedGraph = await this.audioEngine.prepareProjectGraph({
+        masterVolume: this.sessionStore.getState().masterVolume,
+        tracks: this.createAudioGraphTracks(nextTracks, preparedRegistry),
+      });
+      preparedRegistry.assertActivatable();
+      preparedGraph.assertActivatable();
+    } catch (cause) {
+      this.discardPreparedRegionRuntime(preparedRegistry, preparedGraph);
+      throw cause;
+    }
+
+    let retiredGraph;
+    try {
+      retiredGraph = preparedGraph.activate();
+    } catch (cause) {
+      this.discardPreparedRegionRuntime(preparedRegistry, preparedGraph);
+      throw cause;
+    }
+
+    const retiredRegistry = preparedRegistry.activate();
+    let publicationError: unknown;
+    try {
+      this.sessionStore
+        .getState()
+        .replaceTrackStates(request.tracks.map(track => this.getTrackFromMap(nextTracks, track.trackId)));
+    } catch (error) {
+      publicationError = error;
+    }
+    this.disposeRetiredRegionRuntime(
+      () => retiredGraph.dispose(),
+      () => retiredRegistry.dispose()
+    );
+    if (publicationError) {
+      throw publicationError;
+    }
+  }
+
+  private createEditedTracks(request: ReplaceEditorTrackRegionsRequest): ReadonlyMap<string, TrackState> {
+    const currentTracks = this.sessionStore.getState().tracks;
+    const nextTracks = new Map(currentTracks);
+    const requestedTrackIds = new Set<string>();
+
+    request.tracks.forEach(snapshot => {
+      if (requestedTrackIds.has(snapshot.trackId)) {
+        throw new ProjectStateError(
+          ProjectStateErrorCode.INVALID_EDITOR_SELECTION,
+          `중복 Track 편집 요청입니다: ${snapshot.trackId}`
+        );
+      }
+      requestedTrackIds.add(snapshot.trackId);
+      const currentTrack = this.getTrackOrThrow(snapshot.trackId);
+      const regions = snapshot.regions.map(region => {
+        const source = this.audioSourceRegistry.resolve(region.sourceId);
+        if (!source) {
+          throw new ProjectStateError(
+            ProjectStateErrorCode.REGION_SOURCE_MISSING,
+            `Region Source를 찾을 수 없습니다: ${region.sourceId}`,
+            { regionId: region.id, sourceId: region.sourceId }
+          );
+        }
+        const endTime = this.calculateRegionEndTimeOrThrow({
+          duration: region.durationSeconds,
+          regionId: region.id,
+          startTime: region.startTimeSeconds,
+        });
+        const sourceEndTime = calculateFiniteRegionSourceEndTime({
+          regionDurationSeconds: region.durationSeconds,
+          sourceStartTimeSeconds: region.sourceStartTimeSeconds,
+        });
+        if (source.metadata.durationSeconds === null) {
+          throw new ProjectStateError(
+            ProjectStateErrorCode.REGION_DURATION_REQUIRED,
+            `편집하려는 Region Source의 길이를 알 수 없습니다: ${region.sourceId}`,
+            { regionId: region.id, sourceId: region.sourceId }
+          );
+        }
+        if (
+          sourceEndTime === null ||
+          !isRegionSourceRangeWithinDuration({
+            regionDurationSeconds: region.durationSeconds,
+            sourceDurationSeconds: source.metadata.durationSeconds,
+            sourceStartTimeSeconds: region.sourceStartTimeSeconds,
+          })
+        ) {
+          throw new ProjectStateError(
+            ProjectStateErrorCode.REGION_SOURCE_RANGE_EXCEEDED,
+            `Region Source 범위가 Source 길이를 벗어납니다: ${region.id}`,
+            { regionId: region.id, sourceEndTime, sourceId: region.sourceId }
+          );
+        }
+        return {
+          duration: region.durationSeconds,
+          endTime,
+          id: region.id,
+          sourceId: region.sourceId,
+          sourceStartTime: region.sourceStartTimeSeconds,
+          startTime: region.startTimeSeconds,
+          status: [],
+        };
+      });
+      nextTracks.set(snapshot.trackId, { ...currentTrack, regions });
+    });
+
+    const regionIds = new Set<string>();
+    nextTracks.forEach(track =>
+      track.regions.forEach(region => {
+        if (regionIds.has(region.id)) {
+          throw new ProjectStateError(ProjectStateErrorCode.REGION_ID_CONFLICT, `중복 Region ID입니다: ${region.id}`);
+        }
+        regionIds.add(region.id);
+      })
+    );
+    return nextTracks;
+  }
+
+  private attachProjectSources(
+    tracks: ReadonlyMap<string, TrackState>,
+    registry: IPreparedAudioSourceRegistryReplacement
+  ): void {
+    tracks.forEach(track => {
+      track.regions.forEach(region => registry.attach({ regionId: region.id, sourceId: region.sourceId }));
+      (track.loopSlots ?? []).forEach(loopSlot => {
+        const sourceIds = loopSlot.sourceId === null ? [] : [loopSlot.sourceId, ...loopSlot.overdubSourceIds];
+        sourceIds.forEach(sourceId => registry.attachLoopSlot({ loopSlotId: loopSlot.id, sourceId }));
+      });
+    });
+  }
+
+  private createAudioGraphTracks(
+    tracks: ReadonlyMap<string, TrackState>,
+    registry: IPreparedAudioSourceRegistryReplacement
+  ): AudioProjectGraphTrack[] {
+    return [...tracks.values()].map(track => ({
+      id: track.id,
+      isMuted: track.isMuted,
+      isSoloed: track.isSoloed,
+      loops: (track.loopSlots ?? []).flatMap(loopSlot => {
+        if (loopSlot.sourceId === null) {
+          return [];
+        }
+        return [loopSlot.sourceId, ...loopSlot.overdubSourceIds].map(sourceId => ({
+          slotId: loopSlot.id,
+          url: this.resolvePreparedSource(registry, sourceId, loopSlot.id),
+        }));
+      }),
+      pan: track.pan,
+      pluginInstances: track.pluginInstances.map(instance => ({
+        instanceId: instance.id,
+        isEnabled: instance.isEnabled,
+        manifestId: instance.manifestSummary.id,
+        parameterValues: new Map(instance.parameters.map(parameter => [parameter.id, parameter.value] as const)),
+      })),
+      regions: track.regions.map(region => ({
+        duration: region.duration,
+        id: region.id,
+        sourceStartTime: region.sourceStartTime,
+        startTime: region.startTime,
+        url: this.resolvePreparedSource(registry, region.sourceId, region.id),
+      })),
+      volume: track.volume,
+    }));
+  }
+
+  private resolvePreparedSource(
+    registry: IPreparedAudioSourceRegistryReplacement,
+    sourceId: string,
+    ownerId: string
+  ): string {
+    const source = registry.resolve(sourceId);
+    if (!source) {
+      throw new ProjectStateError(
+        ProjectStateErrorCode.REGION_SOURCE_MISSING,
+        `Runtime Source를 찾을 수 없습니다: ${sourceId}`,
+        {
+          ownerId,
+          sourceId,
+        }
+      );
+    }
+    return source.objectUrl;
+  }
+
+  private getTrackFromMap(tracks: ReadonlyMap<string, TrackState>, trackId: string): TrackState {
+    const track = tracks.get(trackId);
+    if (!track) {
+      throw new ProjectStateError(ProjectStateErrorCode.TRACK_NOT_FOUND, `Track을 찾을 수 없습니다: ${trackId}`);
+    }
+    return track;
+  }
+
+  private discardPreparedRegionRuntime(
+    registry: IPreparedAudioSourceRegistryReplacement,
+    graph?: IPreparedAudioProjectGraph
+  ): void {
+    this.disposeRuntimeResource('편집 Audio graph 준비 취소', graph ? () => graph.discard() : null);
+    this.disposeRuntimeResource('편집 Source Registry 준비 취소', () => registry.discard());
+  }
+
+  private disposeRetiredRegionRuntime(
+    disposeGraph: () => ResourceCleanupResult,
+    disposeRegistry: () => ResourceCleanupResult
+  ): void {
+    this.disposeRuntimeResource('이전 편집 Audio graph 정리', disposeGraph);
+    this.disposeRuntimeResource('이전 편집 Source Registry 정리', disposeRegistry);
+  }
+
+  private disposeRuntimeResource(label: string, dispose: (() => ResourceCleanupResult) | null): void {
+    if (!dispose) {
+      return;
+    }
+    try {
+      const result = dispose();
+      if (!result.isComplete) {
+        console.error(`[RegionController] ${label} 미완료`, result);
+      }
+    } catch (error) {
+      console.error(`[RegionController] ${label} 실패`, error);
+    }
   }
 
   private getTrackOrThrow(trackId: string): TrackState {

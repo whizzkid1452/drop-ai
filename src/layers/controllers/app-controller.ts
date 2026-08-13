@@ -57,9 +57,9 @@ export class AppController {
     pluginHost,
   }: AppControllerDependencies) {
     this.playback = new PlaybackController(sessionStore, audioEngine);
-    this.editor = new EditorController(sessionStore);
     this.track = new TrackController({ sessionStore, audioEngine, audioSourceRegistry });
     this.region = new RegionController({ sessionStore, audioEngine, audioSourceRegistry });
+    this.editor = new EditorController({ regionRuntime: this.region, sessionStore });
     this.export = new ExportController({ sessionStore, audioEngine, audioSourceResolver: audioSourceRegistry });
     this.project = new ProjectController({
       sessionStore,

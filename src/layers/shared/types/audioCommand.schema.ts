@@ -46,6 +46,15 @@ export const AudioCommandType = {
   UNLOAD_REGION: 'UNLOAD_REGION',
   SPLIT_REGION: 'SPLIT_REGION',
   MOVE_REGION: 'MOVE_REGION',
+  SET_EDITOR_SELECTION: 'SET_EDITOR_SELECTION',
+  COPY_SELECTED_REGIONS: 'COPY_SELECTED_REGIONS',
+  CUT_SELECTED_REGIONS: 'CUT_SELECTED_REGIONS',
+  PASTE_REGIONS: 'PASTE_REGIONS',
+  DUPLICATE_SELECTED_REGIONS: 'DUPLICATE_SELECTED_REGIONS',
+  NUDGE_SELECTED_REGIONS: 'NUDGE_SELECTED_REGIONS',
+  ALIGN_SELECTED_REGIONS: 'ALIGN_SELECTED_REGIONS',
+  TRIM_REGION: 'TRIM_REGION',
+  SLIP_REGION: 'SLIP_REGION',
   SET_CURRENT_TIME: 'SET_CURRENT_TIME',
   SET_EXPORT_RANGE: 'SET_EXPORT_RANGE',
   CLEAR_EXPORT_RANGE: 'CLEAR_EXPORT_RANGE',
@@ -99,6 +108,20 @@ const loopSlotAddressSchema = {
   slotId: z.uuid('Invalid Loop Slot ID format'),
   trackId: z.uuid('Invalid Track ID format'),
 };
+const editorRegionSelectionSchema = z.strictObject({
+  regionId: z.uuid('Invalid Region ID format'),
+  trackId: z.uuid('Invalid Track ID format'),
+});
+const editorRangeSelectionSchema = z
+  .strictObject({
+    endTimeSeconds: z.number().finite().nonnegative(),
+    startTimeSeconds: z.number().finite().nonnegative(),
+    trackIds: z.array(z.uuid('Invalid Track ID format')),
+  })
+  .refine(range => range.endTimeSeconds > range.startTimeSeconds, {
+    message: 'Range end time must be greater than start time',
+    path: ['endTimeSeconds'],
+  });
 
 const LoadRegionCommandSchema = z
   .strictObject({
@@ -333,6 +356,63 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
     trackId: z.uuid('Invalid track ID format'),
     regionId: z.uuid('Invalid region ID format'),
     newStartTime: z.number().min(0, 'New start time must be >= 0'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_EDITOR_SELECTION),
+    editPointSeconds: z.number().finite().nonnegative(),
+    range: editorRangeSelectionSchema.nullable(),
+    regions: z.array(editorRegionSelectionSchema),
+    trackIds: z.array(z.uuid('Invalid Track ID format')),
+  }),
+  z.strictObject({ type: z.literal(AudioCommandType.COPY_SELECTED_REGIONS) }),
+  z.strictObject({ type: z.literal(AudioCommandType.CUT_SELECTED_REGIONS) }),
+  z.strictObject({ type: z.literal(AudioCommandType.PASTE_REGIONS) }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.DUPLICATE_SELECTED_REGIONS),
+    offsetSeconds: z.number().finite().positive(),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.NUDGE_SELECTED_REGIONS),
+    deltaSeconds: z
+      .number()
+      .finite()
+      .refine(deltaSeconds => deltaSeconds !== 0, 'Nudge delta must not be zero'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.ALIGN_SELECTED_REGIONS),
+    edge: z.enum(['end', 'start']),
+    targetTimeSeconds: z.number().finite().nonnegative(),
+  }),
+  z
+    .strictObject({
+      type: z.literal(AudioCommandType.TRIM_REGION),
+      trackId: z.uuid('Invalid Track ID format'),
+      regionId: z.uuid('Invalid Region ID format'),
+      startTimeSeconds: z.number().finite().nonnegative(),
+      sourceStartTimeSeconds: z.number().finite().nonnegative(),
+      durationSeconds: z.number().finite().positive(),
+    })
+    .refine(
+      command =>
+        calculateFiniteRegionEndTime({
+          startTime: command.startTimeSeconds,
+          duration: command.durationSeconds,
+        }) !== null,
+      { message: 'Trimmed Region end time must be finite', path: ['durationSeconds'] }
+    )
+    .refine(
+      command =>
+        calculateFiniteRegionSourceEndTime({
+          sourceStartTimeSeconds: command.sourceStartTimeSeconds,
+          regionDurationSeconds: command.durationSeconds,
+        }) !== null,
+      { message: 'Trimmed Region Source end time must be finite', path: ['durationSeconds'] }
+    ),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SLIP_REGION),
+    trackId: z.uuid('Invalid Track ID format'),
+    regionId: z.uuid('Invalid Region ID format'),
+    sourceStartTimeSeconds: z.number().finite().nonnegative(),
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.SET_CURRENT_TIME),

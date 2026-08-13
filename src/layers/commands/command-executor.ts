@@ -8,6 +8,7 @@ import {
 } from '../shared/types/audioCommand.schema';
 import type { ICommandHistory } from './command-history';
 import type { RecordedTake } from '../shared/types/linear-recording';
+import type { EditorRuntimeState } from '../shared/types/editor-runtime';
 import { createCommandHistoryEntry } from './create-command-history-entry';
 import { assertLiveOperationAllowed } from './live-operation-guard';
 
@@ -94,33 +95,42 @@ export class CommandExecutor {
     }
 
     const beforeSession = this.sessionStore.getState();
+    const beforeEditorRuntime = this.controller.editor.getState();
     const preparedCommand = this.prepareCommandForExecution(validatedCommand, beforeSession);
     let result: CommandExecutionResult;
     try {
       result = await this.executeWithoutHistory(preparedCommand);
     } catch (cause) {
       if (this.sessionStore.getState() !== beforeSession) {
-        this.updateHistoryAfterCommittedCommand(preparedCommand, beforeSession);
+        this.updateHistoryAfterCommittedCommand(preparedCommand, beforeSession, beforeEditorRuntime);
       }
       throw cause;
     }
 
-    this.updateHistoryAfterCommittedCommand(preparedCommand, beforeSession);
+    this.updateHistoryAfterCommittedCommand(preparedCommand, beforeSession, beforeEditorRuntime);
     return result;
   }
 
-  private updateHistoryAfterCommittedCommand(command: AudioCommand, beforeSession: SessionState): void {
+  private updateHistoryAfterCommittedCommand(
+    command: AudioCommand,
+    beforeSession: SessionState,
+    beforeEditorRuntime: EditorRuntimeState
+  ): void {
     if (this.isHistoryBoundary(command)) {
       this.commandHistory.clear();
       return;
     }
     const historyEntry = createCommandHistoryEntry({
       beforeSession,
+      beforeEditorRuntime,
       afterSession: this.sessionStore.getState(),
+      afterEditorRuntime: this.controller.editor.getState(),
       command,
       executeCommand: async command => {
         await this.executeWithoutHistory(AudioCommandSchema.parse(command));
       },
+      replaceTrackRegions: request => this.controller.editor.restoreTrackRegions(request),
+      restoreEditorRuntime: state => this.controller.editor.restoreRuntimeState(state),
     });
     if (historyEntry) {
       this.commandHistory.record(historyEntry);
@@ -149,6 +159,7 @@ export class CommandExecutor {
 
       case AudioCommandType.REMOVE_TRACK:
         this.controller.track.removeTrack(validatedCommand.trackId);
+        this.controller.editor.reset();
         return;
 
       case AudioCommandType.PLAY:
@@ -343,6 +354,42 @@ export class CommandExecutor {
         });
         return;
 
+      case AudioCommandType.SET_EDITOR_SELECTION:
+        this.controller.editor.setSelection(validatedCommand);
+        return;
+
+      case AudioCommandType.COPY_SELECTED_REGIONS:
+        this.controller.editor.copySelectedRegions();
+        return;
+
+      case AudioCommandType.CUT_SELECTED_REGIONS:
+        await this.controller.editor.cutSelectedRegions();
+        return;
+
+      case AudioCommandType.PASTE_REGIONS:
+        await this.controller.editor.pasteRegions();
+        return;
+
+      case AudioCommandType.DUPLICATE_SELECTED_REGIONS:
+        await this.controller.editor.duplicateSelectedRegions(validatedCommand.offsetSeconds);
+        return;
+
+      case AudioCommandType.NUDGE_SELECTED_REGIONS:
+        await this.controller.editor.nudgeSelectedRegions(validatedCommand.deltaSeconds);
+        return;
+
+      case AudioCommandType.ALIGN_SELECTED_REGIONS:
+        await this.controller.editor.alignSelectedRegions(validatedCommand);
+        return;
+
+      case AudioCommandType.TRIM_REGION:
+        await this.controller.editor.trimRegion(validatedCommand);
+        return;
+
+      case AudioCommandType.SLIP_REGION:
+        await this.controller.editor.slipRegion(validatedCommand);
+        return;
+
       case AudioCommandType.SET_EXPORT_RANGE:
         this.controller.export.setExportRange(validatedCommand.startTime, validatedCommand.endTime);
         return;
@@ -360,6 +407,7 @@ export class CommandExecutor {
 
       case AudioCommandType.LOAD_PROJECT:
         await this.controller.project.loadProject(validatedCommand.projectId);
+        this.controller.editor.reset();
         return;
     }
 
@@ -469,6 +517,13 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.UNLOAD_REGION:
     case AudioCommandType.SPLIT_REGION:
     case AudioCommandType.MOVE_REGION:
+    case AudioCommandType.CUT_SELECTED_REGIONS:
+    case AudioCommandType.PASTE_REGIONS:
+    case AudioCommandType.DUPLICATE_SELECTED_REGIONS:
+    case AudioCommandType.NUDGE_SELECTED_REGIONS:
+    case AudioCommandType.ALIGN_SELECTED_REGIONS:
+    case AudioCommandType.TRIM_REGION:
+    case AudioCommandType.SLIP_REGION:
     case AudioCommandType.SET_EXPORT_RANGE:
     case AudioCommandType.CLEAR_EXPORT_RANGE:
     case AudioCommandType.STOP_RECORDING:
@@ -487,6 +542,8 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.STOP_LOOP_SLOT:
     case AudioCommandType.STOP_ALL_LOOPS:
     case AudioCommandType.SET_CURRENT_TIME:
+    case AudioCommandType.SET_EDITOR_SELECTION:
+    case AudioCommandType.COPY_SELECTED_REGIONS:
     case AudioCommandType.EXPORT_AUDIO:
     case AudioCommandType.SAVE_PROJECT:
     case AudioCommandType.LOAD_PROJECT:
