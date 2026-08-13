@@ -16,6 +16,7 @@ import { LoopController } from './loop-controller';
 import { TimelineController } from './timeline-controller';
 import { MeterController } from './meter-controller';
 import { LiveInputController } from './live-input-controller';
+import { RecordingController } from './recording-controller';
 
 interface AppControllerDependencies {
   sessionStore: SessionStore;
@@ -42,6 +43,7 @@ export class AppController {
   public readonly timeline: TimelineController;
   public readonly meter: MeterController;
   public readonly liveInput: LiveInputController;
+  public readonly recording: RecordingController;
 
   constructor({
     sessionStore,
@@ -70,6 +72,7 @@ export class AppController {
     this.timeline = new TimelineController(sessionStore);
     this.meter = new MeterController(audioEngine);
     this.liveInput = new LiveInputController(audioEngine);
+    this.recording = new RecordingController(audioEngine);
     this.loop = new LoopController({
       sessionStore,
       audioEngine,

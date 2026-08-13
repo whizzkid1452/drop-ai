@@ -13,7 +13,8 @@
 재생 중 현재 시각이나 Meter 표본처럼 Session 구독만으로 갱신되지 않는 값은 읽기 전용 Query로 조회한다. Apps에는
 Controller나 AudioEngine 객체를 노출하지 않는다. `PlaybackClockQuery`는 `PlaybackController.getCurrentTime()`만,
 `MeterQuery`는 `MeterController.readMeterFrame()`만 노출한다. `LiveInputQuery`는 입력 장치 목록과 현재 선택·monitoring
-상태만 노출한다. Meter 표본, 입력 장치, 권한, monitoring 상태는 runtime 값이며 `ProjectDocument`에 저장하지 않는다.
+상태만 노출한다. `RecordingQuery`는 Track arm과 녹음 진행 상태만 노출한다. Meter 표본, 입력 장치, 권한, monitoring,
+Track arm, 활성 녹음 상태는 runtime 값이며 `ProjectDocument`에 저장하지 않는다.
 
 `executeMany`는 묶음 전체를 먼저 검증하고, 다른 명령이 끼어들지 않게 순서대로 실행한다. 실행 중 첫 오류가 나면
 남은 명령은 실행하지 않는다. 이미 완료된 변경은 되돌리지 않으므로 묶음 실행은 원자적 트랜잭션이 아니다.

@@ -5,6 +5,13 @@ import type { MeterFrame, MeterTarget } from '../shared/types/meter-frame';
 import type { LiveAudioInputDevice, LiveInputRuntimeListener, LiveInputRuntimeState } from '../shared/types/live-input';
 import type { AudioRuntimeFeatureSupport } from '../shared/utils/audio-runtime-capabilities';
 import type {
+  RecordedTake,
+  RecordingRuntimeListener,
+  RecordingRuntimeState,
+  SetTrackRecordArmRequest,
+  StartLinearRecordingRequest,
+} from '../shared/types/linear-recording';
+import type {
   ArmLoopRequest,
   LoadLoopRequest,
   LoopRuntimeListener,
@@ -27,6 +34,13 @@ export type {
 } from './loop-runtime/loop-runtime-contract';
 export type { MeterChannelFrame, MeterFrame, MeterTarget } from '../shared/types/meter-frame';
 export type { LiveAudioInputDevice, LiveInputRuntimeListener, LiveInputRuntimeState } from '../shared/types/live-input';
+export type {
+  RecordedTake,
+  RecordingRuntimeListener,
+  RecordingRuntimeState,
+  SetTrackRecordArmRequest,
+  StartLinearRecordingRequest,
+} from '../shared/types/linear-recording';
 
 export interface RegionData {
   id: string;
@@ -188,6 +202,14 @@ export interface IAudioEngine {
   stopAllLoops(request: StopAllLoopsRequest): void;
   loadLoop(request: LoadLoopRequest): Promise<void>;
   subscribeLoopEvents(listener: LoopRuntimeListener): () => void;
+
+  // Linear Recording
+  getRecordingState(): RecordingRuntimeState;
+  subscribeRecordingState(listener: RecordingRuntimeListener): () => void;
+  setTrackRecordArm(request: SetTrackRecordArmRequest): void;
+  startRecording(request: StartLinearRecordingRequest): Promise<void>;
+  stopRecording(): Promise<RecordedTake>;
+  cancelRecording(): void;
 
   // Mixer Control
   setMasterVolume(volume: number): void;

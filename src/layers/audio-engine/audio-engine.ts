@@ -25,6 +25,9 @@ import type {
   LoopSlotAddress,
   MeterFrame,
   MeterTarget,
+  RecordedTake,
+  RecordingRuntimeListener,
+  RecordingRuntimeState,
   MoveAudioPluginRequest,
   IPreparedAudioProjectGraph,
   IRetiredAudioProjectGraph,
@@ -36,6 +39,8 @@ import type {
   SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
   SetLiveInputMonitoringRequest,
+  SetTrackRecordArmRequest,
+  StartLinearRecordingRequest,
   StopAllLoopsRequest,
   TriggerLoopRequest,
 } from './i-audio-engine';
@@ -351,6 +356,39 @@ export class AudioEngine implements IAudioEngine {
 
   subscribeLoopEvents(listener: LoopRuntimeListener): () => void {
     return this.loopRuntime.subscribe(listener);
+  }
+
+  getRecordingState(): RecordingRuntimeState {
+    return { armedTrackId: null, phase: 'idle', recordStartTimeSeconds: null };
+  }
+
+  subscribeRecordingState(listener: RecordingRuntimeListener): () => void {
+    void listener;
+    return () => undefined;
+  }
+
+  setTrackRecordArm(request: SetTrackRecordArmRequest): void {
+    void request;
+    throw new UnsupportedAudioFeatureError({
+      feature: AudioRuntimeFeature.LINEAR_RECORDING,
+      method: 'setTrackRecordArm',
+    });
+  }
+
+  async startRecording(request: StartLinearRecordingRequest): Promise<void> {
+    void request;
+    throw new UnsupportedAudioFeatureError({ feature: AudioRuntimeFeature.LINEAR_RECORDING, method: 'startRecording' });
+  }
+
+  async stopRecording(): Promise<RecordedTake> {
+    throw new UnsupportedAudioFeatureError({ feature: AudioRuntimeFeature.LINEAR_RECORDING, method: 'stopRecording' });
+  }
+
+  cancelRecording(): void {
+    throw new UnsupportedAudioFeatureError({
+      feature: AudioRuntimeFeature.LINEAR_RECORDING,
+      method: 'cancelRecording',
+    });
   }
 
   setMasterVolume(volume: number): void {
