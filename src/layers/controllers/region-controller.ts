@@ -490,7 +490,12 @@ export class RegionController {
       })),
       regions: track.regions.map(region => ({
         duration: region.duration,
+        fadeIn: { ...region.fadeIn },
+        fadeOut: { ...region.fadeOut },
+        gain: region.gain,
         id: region.id,
+        isOpaque: region.isOpaque,
+        layer: region.layer,
         sourceStartTime: region.sourceStartTime,
         startTime: region.startTime,
         url: this.resolvePreparedSource(registry, region.sourceId, region.id),
@@ -908,7 +913,9 @@ export class RegionController {
   }
 
   private toEngineRegionData(regionData: RegionPlacementFields, source: PreparedRegionSource): RegionData {
+    const processingState = createDefaultRegionProcessingState();
     return {
+      ...processingState,
       id: regionData.id,
       url: source.url,
       startTime: regionData.startTime,
@@ -1148,7 +1155,12 @@ export class RegionController {
 
   private toRegionData(region: RegionState, url: string): RegionData {
     return {
+      fadeIn: { ...region.fadeIn },
+      fadeOut: { ...region.fadeOut },
+      gain: region.gain,
       id: region.id,
+      isOpaque: region.isOpaque,
+      layer: region.layer,
       url,
       startTime: region.startTime,
       sourceStartTime: region.sourceStartTime,

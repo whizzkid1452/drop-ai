@@ -392,6 +392,30 @@ export class CommandExecutor {
         await this.controller.editor.slipRegion(validatedCommand);
         return;
 
+      case AudioCommandType.SET_REGION_PROCESSING:
+        await this.controller.editor.setRegionProcessing(validatedCommand);
+        return;
+
+      case AudioCommandType.CREATE_REGION_CROSSFADE:
+        await this.controller.editor.createRegionCrossfade(validatedCommand);
+        return;
+
+      case AudioCommandType.REMOVE_REGION_CROSSFADE:
+        await this.controller.editor.removeRegionCrossfade(validatedCommand);
+        return;
+
+      case AudioCommandType.NORMALIZE_SELECTED_REGIONS:
+        await this.controller.regionProcessing.normalizeSelectedRegions(validatedCommand.targetPeak);
+        return;
+
+      case AudioCommandType.REVERSE_SELECTED_REGIONS:
+        await this.controller.regionProcessing.reverseSelectedRegions();
+        return;
+
+      case AudioCommandType.STRIP_SILENCE_SELECTED_REGIONS:
+        await this.controller.regionProcessing.stripSilenceFromSelectedRegions(validatedCommand);
+        return;
+
       case AudioCommandType.SET_EXPORT_RANGE:
         this.controller.export.setExportRange(validatedCommand.startTime, validatedCommand.endTime);
         return;
@@ -526,6 +550,12 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.ALIGN_SELECTED_REGIONS:
     case AudioCommandType.TRIM_REGION:
     case AudioCommandType.SLIP_REGION:
+    case AudioCommandType.SET_REGION_PROCESSING:
+    case AudioCommandType.CREATE_REGION_CROSSFADE:
+    case AudioCommandType.REMOVE_REGION_CROSSFADE:
+    case AudioCommandType.NORMALIZE_SELECTED_REGIONS:
+    case AudioCommandType.REVERSE_SELECTED_REGIONS:
+    case AudioCommandType.STRIP_SILENCE_SELECTED_REGIONS:
     case AudioCommandType.SET_EXPORT_RANGE:
     case AudioCommandType.CLEAR_EXPORT_RANGE:
     case AudioCommandType.STOP_RECORDING:

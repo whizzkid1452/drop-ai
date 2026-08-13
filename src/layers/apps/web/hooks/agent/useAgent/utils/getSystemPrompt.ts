@@ -143,6 +143,18 @@ const COMMAND_REFERENCE = {
     '{"type":"TRIM_REGION","trackId":"<Track UUID>","regionId":"<Region UUID>","startTimeSeconds":<seconds >= 0>,"sourceStartTimeSeconds":<seconds >= 0>,"durationSeconds":<seconds > 0>} - 원본을 보존하며 Region 범위 변경',
   [AudioCommandType.SLIP_REGION]:
     '{"type":"SLIP_REGION","trackId":"<Track UUID>","regionId":"<Region UUID>","sourceStartTimeSeconds":<seconds >= 0>} - Timeline 위치를 유지하며 Source 시작 위치 변경',
+  [AudioCommandType.SET_REGION_PROCESSING]:
+    '{"type":"SET_REGION_PROCESSING","trackId":"<Track UUID>","regionId":"<Region UUID>","gain":<number >= 0>} - Region gain·Fade·layer·opaque 처리값 변경',
+  [AudioCommandType.CREATE_REGION_CROSSFADE]:
+    '{"type":"CREATE_REGION_CROSSFADE","trackId":"<Track UUID>","fadeOutRegionId":"<Region UUID>","fadeInRegionId":"<Region UUID>","crossfadeId":"<new UUID>","curve":"linear|equalPower"} - 겹치는 두 Region에 Crossfade 생성',
+  [AudioCommandType.REMOVE_REGION_CROSSFADE]:
+    '{"type":"REMOVE_REGION_CROSSFADE","trackId":"<Track UUID>","crossfadeId":"<Crossfade UUID>"} - Crossfade 제거',
+  [AudioCommandType.NORMALIZE_SELECTED_REGIONS]:
+    '{"type":"NORMALIZE_SELECTED_REGIONS","targetPeak":<0..1>} - 원본 Source를 바꾸지 않고 선택 Region gain 정규화',
+  [AudioCommandType.REVERSE_SELECTED_REGIONS]:
+    '{"type":"REVERSE_SELECTED_REGIONS"} - 선택 Region 범위를 뒤집은 파생 Source 생성',
+  [AudioCommandType.STRIP_SILENCE_SELECTED_REGIONS]:
+    '{"type":"STRIP_SILENCE_SELECTED_REGIONS","thresholdDb":<-120..0>,"minimumSilenceSeconds":<seconds > 0>} - 선택 Region의 연속 무음을 제거한 파생 Source 생성',
   [AudioCommandType.SET_CURRENT_TIME]: '{"type":"SET_CURRENT_TIME","time":<seconds >= 0>} - 재생 위치 변경',
   [AudioCommandType.SET_EXPORT_RANGE]:
     '{"type":"SET_EXPORT_RANGE","startTime":<seconds >= 0>,"endTime":<seconds >= 0>} - 내보내기 범위 선택. endTime > startTime',

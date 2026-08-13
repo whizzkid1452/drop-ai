@@ -7,6 +7,8 @@ import { createDefaultRegionProcessingState } from '../shared/types/region-proce
 
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
+const SECOND_REGION_ID = '55555555-5555-4555-8555-555555555555';
+const CROSSFADE_ID = '77777777-7777-4777-8777-777777777777';
 
 function createRegion(overrides: Partial<RegionState> = {}): RegionState {
   return {
@@ -33,7 +35,7 @@ function createController() {
     name: 'Vocal',
     pan: 0,
     pluginInstances: [],
-    regions: [createRegion(), createRegion({ id: '55555555-5555-4555-8555-555555555555', startTime: 8, endTime: 10 })],
+    regions: [createRegion(), createRegion({ id: SECOND_REGION_ID, startTime: 8, endTime: 10 })],
     status: [],
     volume: 1,
   };
@@ -275,5 +277,67 @@ describe('EditorController Region 편집', () => {
       sourceStartTimeSeconds: 2,
       startTimeSeconds: 4.5,
     });
+  });
+
+  it('Region 처리값을 변경하고 수동 Fade에서 기존 Crossfade 연결을 해제한다', async () => {
+    const { controller, replaceTrackRegions } = createController();
+
+    await controller.setRegionProcessing({
+      fadeIn: { curve: 'equalPower', durationSeconds: 0.5 },
+      gain: 0.5,
+      isOpaque: true,
+      layer: 2,
+      regionId: REGION_ID,
+      trackId: TRACK_ID,
+    });
+
+    expect(replaceTrackRegions.mock.calls[0]?.[0].tracks[0]?.regions[0]).toMatchObject({
+      fadeIn: { crossfadeId: null, curve: 'equalPower', durationSeconds: 0.5 },
+      gain: 0.5,
+      isOpaque: true,
+      layer: 2,
+    });
+  });
+
+  it('겹치는 두 Region에 같은 시간 창의 Crossfade를 만들고 두 Region을 transparent로 바꾼다', async () => {
+    const { controller, replaceTrackRegions, sessionStore } = createController();
+    const track = sessionStore.getState().tracks.get(TRACK_ID);
+    sessionStore.getState().updateTrack(TRACK_ID, {
+      regions: track?.regions.map(region =>
+        region.id === SECOND_REGION_ID ? { ...region, endTime: 7, startTime: 5 } : region
+      ),
+    });
+
+    await controller.createRegionCrossfade({
+      crossfadeId: CROSSFADE_ID,
+      curve: 'equalPower',
+      fadeInRegionId: SECOND_REGION_ID,
+      fadeOutRegionId: REGION_ID,
+      trackId: TRACK_ID,
+    });
+
+    const regions = replaceTrackRegions.mock.calls[0]?.[0].tracks[0]?.regions;
+    expect(regions?.find(region => region.id === REGION_ID)).toMatchObject({
+      fadeOut: { crossfadeId: CROSSFADE_ID, curve: 'equalPower', durationSeconds: 1 },
+      isOpaque: false,
+    });
+    expect(regions?.find(region => region.id === SECOND_REGION_ID)).toMatchObject({
+      fadeIn: { crossfadeId: CROSSFADE_ID, curve: 'equalPower', durationSeconds: 1 },
+      isOpaque: false,
+    });
+  });
+
+  it('겹치지 않는 Region의 Crossfade 생성을 거부한다', async () => {
+    const { controller } = createController();
+
+    await expect(
+      controller.createRegionCrossfade({
+        crossfadeId: CROSSFADE_ID,
+        curve: 'linear',
+        fadeInRegionId: SECOND_REGION_ID,
+        fadeOutRegionId: REGION_ID,
+        trackId: TRACK_ID,
+      })
+    ).rejects.toThrow(ProjectStateError);
   });
 });

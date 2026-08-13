@@ -55,6 +55,12 @@ export const AudioCommandType = {
   ALIGN_SELECTED_REGIONS: 'ALIGN_SELECTED_REGIONS',
   TRIM_REGION: 'TRIM_REGION',
   SLIP_REGION: 'SLIP_REGION',
+  SET_REGION_PROCESSING: 'SET_REGION_PROCESSING',
+  CREATE_REGION_CROSSFADE: 'CREATE_REGION_CROSSFADE',
+  REMOVE_REGION_CROSSFADE: 'REMOVE_REGION_CROSSFADE',
+  NORMALIZE_SELECTED_REGIONS: 'NORMALIZE_SELECTED_REGIONS',
+  REVERSE_SELECTED_REGIONS: 'REVERSE_SELECTED_REGIONS',
+  STRIP_SILENCE_SELECTED_REGIONS: 'STRIP_SILENCE_SELECTED_REGIONS',
   SET_CURRENT_TIME: 'SET_CURRENT_TIME',
   SET_EXPORT_RANGE: 'SET_EXPORT_RANGE',
   CLEAR_EXPORT_RANGE: 'CLEAR_EXPORT_RANGE',
@@ -122,6 +128,30 @@ const editorRangeSelectionSchema = z
     message: 'Range end time must be greater than start time',
     path: ['endTimeSeconds'],
   });
+const regionFadeCommandSchema = z.strictObject({
+  curve: z.enum(['equalPower', 'linear']),
+  durationSeconds: z.number().finite().nonnegative(),
+});
+const SetRegionProcessingCommandSchema = z
+  .strictObject({
+    type: z.literal(AudioCommandType.SET_REGION_PROCESSING),
+    fadeIn: regionFadeCommandSchema.optional(),
+    fadeOut: regionFadeCommandSchema.optional(),
+    gain: z.number().finite().nonnegative().optional(),
+    isOpaque: z.boolean().optional(),
+    layer: z.number().int().nonnegative().optional(),
+    regionId: z.uuid('Invalid Region ID format'),
+    trackId: z.uuid('Invalid Track ID format'),
+  })
+  .refine(
+    command =>
+      command.fadeIn !== undefined ||
+      command.fadeOut !== undefined ||
+      command.gain !== undefined ||
+      command.isOpaque !== undefined ||
+      command.layer !== undefined,
+    { message: 'At least one Region processing value is required' }
+  );
 
 const LoadRegionCommandSchema = z
   .strictObject({
@@ -413,6 +443,30 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
     trackId: z.uuid('Invalid Track ID format'),
     regionId: z.uuid('Invalid Region ID format'),
     sourceStartTimeSeconds: z.number().finite().nonnegative(),
+  }),
+  SetRegionProcessingCommandSchema,
+  z.strictObject({
+    type: z.literal(AudioCommandType.CREATE_REGION_CROSSFADE),
+    crossfadeId: z.uuid('Invalid Crossfade ID format'),
+    curve: z.enum(['equalPower', 'linear']),
+    fadeInRegionId: z.uuid('Invalid fade-in Region ID format'),
+    fadeOutRegionId: z.uuid('Invalid fade-out Region ID format'),
+    trackId: z.uuid('Invalid Track ID format'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.REMOVE_REGION_CROSSFADE),
+    crossfadeId: z.uuid('Invalid Crossfade ID format'),
+    trackId: z.uuid('Invalid Track ID format'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.NORMALIZE_SELECTED_REGIONS),
+    targetPeak: z.number().finite().positive().max(1),
+  }),
+  z.strictObject({ type: z.literal(AudioCommandType.REVERSE_SELECTED_REGIONS) }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.STRIP_SILENCE_SELECTED_REGIONS),
+    minimumSilenceSeconds: z.number().finite().positive().max(60),
+    thresholdDb: z.number().finite().min(-120).max(0),
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.SET_CURRENT_TIME),

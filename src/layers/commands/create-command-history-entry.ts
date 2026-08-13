@@ -670,7 +670,13 @@ export function createCommandHistoryEntry({
     case AudioCommandType.NUDGE_SELECTED_REGIONS:
     case AudioCommandType.ALIGN_SELECTED_REGIONS:
     case AudioCommandType.TRIM_REGION:
-    case AudioCommandType.SLIP_REGION: {
+    case AudioCommandType.SLIP_REGION:
+    case AudioCommandType.SET_REGION_PROCESSING:
+    case AudioCommandType.CREATE_REGION_CROSSFADE:
+    case AudioCommandType.REMOVE_REGION_CROSSFADE:
+    case AudioCommandType.NORMALIZE_SELECTED_REGIONS:
+    case AudioCommandType.REVERSE_SELECTED_REGIONS:
+    case AudioCommandType.STRIP_SILENCE_SELECTED_REGIONS: {
       const undoTracks = createRegionSnapshotsForChangedTracks({
         referenceSession: afterSession,
         targetSession: beforeSession,

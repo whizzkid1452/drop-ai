@@ -1,4 +1,10 @@
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
+import type { RegionProcessingState } from '../shared/types/region-processing';
+import type {
+  AnalyzeAudioRegionPeakRequest,
+  RenderDerivedAudioRegionRequest,
+  RenderedDerivedAudioRegion,
+} from '../shared/types/region-audio-processing';
 import type { PluginParameterValue } from '../shared/types/plugin-state';
 import type { TimelineRange } from '../shared/types/project-document.schema';
 import type { MeterFrame, MeterTarget } from '../shared/types/meter-frame';
@@ -41,13 +47,18 @@ export type {
   SetTrackRecordArmRequest,
   StartLinearRecordingRequest,
 } from '../shared/types/linear-recording';
+export type {
+  AnalyzeAudioRegionPeakRequest,
+  RenderDerivedAudioRegionRequest,
+  RenderedDerivedAudioRegion,
+} from '../shared/types/region-audio-processing';
 
-export interface RegionData {
+export interface RegionData extends RegionProcessingState {
   id: string;
   url: string;
   startTime: number;
   sourceStartTime: number;
-  duration?: number;
+  duration: number;
 }
 
 export const DEFAULT_EXPORT_SAMPLE_RATE = 44100;
@@ -57,7 +68,7 @@ export interface ExportRange {
   endTime: number;
 }
 
-export interface ExportRegion {
+export interface ExportRegion extends RegionProcessingState {
   id: string;
   url: string;
   startTime: number;
@@ -239,4 +250,6 @@ export interface IAudioEngine {
 
   // Export
   exportProject(request: ExportRequest): Promise<Blob>;
+  analyzeAudioRegionPeak(request: AnalyzeAudioRegionPeakRequest): Promise<number>;
+  renderDerivedAudioRegion(request: RenderDerivedAudioRegionRequest): Promise<RenderedDerivedAudioRegion>;
 }

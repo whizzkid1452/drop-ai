@@ -47,7 +47,7 @@ export const CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT: AudioRuntimeFeatureSupport =
   [AudioRuntimeFeature.METERING]: true,
   [AudioRuntimeFeature.MIDI]: false,
   [AudioRuntimeFeature.PROJECT_EXPORT]: true,
-  [AudioRuntimeFeature.REGION_PROCESSING]: false,
+  [AudioRuntimeFeature.REGION_PROCESSING]: true,
   [AudioRuntimeFeature.ROUTING]: false,
   [AudioRuntimeFeature.TEMPO_LOOP_METRONOME]: false,
   [AudioRuntimeFeature.TIMELINE_PLAYBACK]: true,

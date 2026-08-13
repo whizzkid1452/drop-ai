@@ -28,6 +28,9 @@ import type {
   MoveAudioPluginRequest,
   PrepareAudioProjectGraphRequest,
   RegionData,
+  AnalyzeAudioRegionPeakRequest,
+  RenderDerivedAudioRegionRequest,
+  RenderedDerivedAudioRegion,
   ReplaceRegionRequest,
   RescheduleRegionRequest,
   SetAudioTempoMapRequest,
@@ -40,6 +43,7 @@ import type {
   TriggerLoopRequest,
 } from './i-audio-engine';
 import type { TimelineRange } from '../shared/types/project-document.schema';
+import { createDefaultRegionProcessingState } from '../shared/types/region-processing';
 import { UnsupportedAudioFeatureError } from './errors';
 import {
   AudioRuntimeFeature,
@@ -47,7 +51,6 @@ import {
 } from '../shared/utils/audio-runtime-capabilities';
 
 const DAW_SAMPLE_RATE = 44_100;
-const MINIMUM_REGION_FRAMES = 1;
 const FADER_PROCESSOR_TYPE = 'Fader';
 const PANNER_PROCESSOR_TYPE = 'Panner';
 
@@ -400,6 +403,14 @@ export class DawEngineAdapter implements IAudioEngine {
   exportProject(request: ExportRequest): Promise<Blob> {
     return this.#runtime.exportProject(request);
   }
+
+  analyzeAudioRegionPeak(request: AnalyzeAudioRegionPeakRequest): Promise<number> {
+    return this.#runtime.analyzeAudioRegionPeak(request);
+  }
+
+  renderDerivedAudioRegion(request: RenderDerivedAudioRegionRequest): Promise<RenderedDerivedAudioRegion> {
+    return this.#runtime.renderDerivedAudioRegion(request);
+  }
 }
 
 interface StageRegionRequest {
@@ -676,6 +687,7 @@ export class DawAudioProviderBridge {
     const regionKey = createRegionKey({ regionId: region.id, trackId });
     const stagedRegion = this.#stagedRegions.get(regionKey);
     const regionData: RegionData = stagedRegion ?? {
+      ...createDefaultRegionProcessingState(),
       duration: framesToSeconds(region.length),
       id: region.id,
       sourceStartTime: framesToSeconds(region.sourceStart),
@@ -720,24 +732,26 @@ function createDawSession(request: PrepareAudioProjectGraphRequest): Session {
 }
 
 function createDawSource(sourceId: string, regionData: RegionData): Source {
-  return new Source(
-    sourceId,
-    regionData.id,
-    regionData.url,
-    secondsToFrames(regionData.duration ?? framesToSeconds(MINIMUM_REGION_FRAMES)),
-    DAW_SAMPLE_RATE
-  );
+  return new Source(sourceId, regionData.id, regionData.url, secondsToFrames(regionData.duration), DAW_SAMPLE_RATE);
 }
 
 function createDawRegion(sourceId: string, regionData: RegionData): Region {
-  return new Region(
+  const region = new Region(
     regionData.id as RegionId,
     sourceId,
     secondsToFrames(regionData.startTime),
-    secondsToFrames(regionData.duration ?? framesToSeconds(MINIMUM_REGION_FRAMES)),
+    secondsToFrames(regionData.duration),
     secondsToFrames(regionData.sourceStartTime),
-    regionData.id
+    regionData.id,
+    regionData.layer
   );
+  region.fadeIn = secondsToFrames(regionData.fadeIn.durationSeconds);
+  region.fadeOut = secondsToFrames(regionData.fadeOut.durationSeconds);
+  region.fadeInShape = regionData.fadeIn.curve === 'linear' ? 0 : 1;
+  region.fadeOutShape = regionData.fadeOut.curve === 'linear' ? 0 : 1;
+  region.gain = regionData.gain;
+  region.opaque = regionData.isOpaque;
+  return region;
 }
 
 function createSourceId(trackId: string, regionId: string): string {

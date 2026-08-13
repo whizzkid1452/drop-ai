@@ -1,6 +1,7 @@
 import type { RegionState, SessionStore } from '../session/session';
 import type {
   AlignSelectedRegionsRequest,
+  CreateRegionCrossfadeRequest,
   EditorClipboardEntry,
   EditorRegionSelection,
   EditorRegionSnapshot,
@@ -10,8 +11,10 @@ import type {
   IEditorRegionRuntime,
   ReplaceEditorTrackRegionsRequest,
   SetEditorSelectionRequest,
+  SetRegionProcessingRequest,
   SlipRegionRequest,
   TrimRegionRequest,
+  RemoveRegionCrossfadeRequest,
 } from '../shared/types/editor-runtime';
 import { ProjectStateError, ProjectStateErrorCode } from './project-state-error';
 
@@ -249,6 +252,100 @@ export class EditorController {
     }));
   }
 
+  async setRegionProcessing(request: SetRegionProcessingRequest): Promise<void> {
+    const [track] = this.createTrackRegionSnapshots([request.trackId]);
+    if (!track) {
+      this.throwInvalidSelection(`Track을 찾을 수 없습니다: ${request.trackId}`);
+    }
+    const targetRegion = track.regions.find(region => region.id === request.regionId);
+    if (!targetRegion) {
+      this.throwInvalidSelection(`Region을 찾을 수 없습니다: ${request.regionId}`);
+    }
+
+    const crossfadeIdsToClear = new Set<string>();
+    if (request.fadeIn !== undefined && targetRegion.fadeIn.crossfadeId !== null) {
+      crossfadeIdsToClear.add(targetRegion.fadeIn.crossfadeId);
+    }
+    if (request.fadeOut !== undefined && targetRegion.fadeOut.crossfadeId !== null) {
+      crossfadeIdsToClear.add(targetRegion.fadeOut.crossfadeId);
+    }
+    const regions = this.clearRegionCrossfades(track.regions, crossfadeIdsToClear).map(region => {
+      if (region.id !== request.regionId) {
+        return region;
+      }
+      return this.validateRegionSnapshot({
+        ...region,
+        fadeIn: request.fadeIn ? { ...request.fadeIn, crossfadeId: null } : region.fadeIn,
+        fadeOut: request.fadeOut ? { ...request.fadeOut, crossfadeId: null } : region.fadeOut,
+        gain: request.gain ?? region.gain,
+        isOpaque: request.isOpaque ?? region.isOpaque,
+        layer: request.layer ?? region.layer,
+      });
+    });
+
+    await this.#regionRuntime.replaceTrackRegions({ tracks: [{ ...track, regions }] });
+  }
+
+  async createRegionCrossfade(request: CreateRegionCrossfadeRequest): Promise<void> {
+    const [track] = this.createTrackRegionSnapshots([request.trackId]);
+    if (!track) {
+      this.throwInvalidSelection(`Track을 찾을 수 없습니다: ${request.trackId}`);
+    }
+    if (track.regions.some(region => this.regionUsesCrossfadeId(region, request.crossfadeId))) {
+      this.throwInvalidSelection(`이미 사용 중인 Crossfade ID입니다: ${request.crossfadeId}`);
+    }
+    const fadeOutRegion = track.regions.find(region => region.id === request.fadeOutRegionId);
+    const fadeInRegion = track.regions.find(region => region.id === request.fadeInRegionId);
+    if (!fadeOutRegion || !fadeInRegion || fadeOutRegion.id === fadeInRegion.id) {
+      this.throwInvalidSelection('Crossfade를 만들 두 Region을 찾을 수 없습니다.');
+    }
+
+    const fadeOutRegionEnd = fadeOutRegion.startTimeSeconds + fadeOutRegion.durationSeconds;
+    const fadeInRegionEnd = fadeInRegion.startTimeSeconds + fadeInRegion.durationSeconds;
+    const durationSeconds = fadeOutRegionEnd - fadeInRegion.startTimeSeconds;
+    if (
+      fadeOutRegion.startTimeSeconds >= fadeInRegion.startTimeSeconds ||
+      durationSeconds <= 0 ||
+      fadeOutRegionEnd > fadeInRegionEnd
+    ) {
+      this.throwInvalidSelection('Crossfade는 앞 Region의 끝과 뒤 Region의 시작이 겹쳐야 합니다.');
+    }
+
+    const crossfadeIdsToClear = new Set(
+      [fadeOutRegion.fadeOut.crossfadeId, fadeInRegion.fadeIn.crossfadeId].filter(
+        (crossfadeId): crossfadeId is string => crossfadeId !== null
+      )
+    );
+    const regions = this.clearRegionCrossfades(track.regions, crossfadeIdsToClear).map(region => {
+      if (region.id === fadeOutRegion.id) {
+        return {
+          ...region,
+          fadeOut: { crossfadeId: request.crossfadeId, curve: request.curve, durationSeconds },
+          isOpaque: false,
+        };
+      }
+      if (region.id === fadeInRegion.id) {
+        return {
+          ...region,
+          fadeIn: { crossfadeId: request.crossfadeId, curve: request.curve, durationSeconds },
+          isOpaque: false,
+        };
+      }
+      return region;
+    });
+
+    await this.#regionRuntime.replaceTrackRegions({ tracks: [{ ...track, regions }] });
+  }
+
+  async removeRegionCrossfade(request: RemoveRegionCrossfadeRequest): Promise<void> {
+    const [track] = this.createTrackRegionSnapshots([request.trackId]);
+    if (!track || !track.regions.some(region => this.regionUsesCrossfadeId(region, request.crossfadeId))) {
+      this.throwInvalidSelection(`Crossfade를 찾을 수 없습니다: ${request.crossfadeId}`);
+    }
+    const regions = this.clearRegionCrossfades(track.regions, new Set([request.crossfadeId]));
+    await this.#regionRuntime.replaceTrackRegions({ tracks: [{ ...track, regions }] });
+  }
+
   restoreTrackRegions(request: ReplaceEditorTrackRegionsRequest): Promise<void> {
     return this.#regionRuntime.replaceTrackRegions(request);
   }
@@ -423,7 +520,43 @@ export class EditorController {
 
   private validateRegionSnapshot(region: EditorRegionSnapshot): EditorRegionSnapshot {
     this.assertFiniteRegionPlacement(region);
+    if (
+      !Number.isFinite(region.gain) ||
+      region.gain < 0 ||
+      !Number.isSafeInteger(region.layer) ||
+      region.layer < 0 ||
+      !Number.isFinite(region.fadeIn.durationSeconds) ||
+      !Number.isFinite(region.fadeOut.durationSeconds) ||
+      region.fadeIn.durationSeconds < 0 ||
+      region.fadeOut.durationSeconds < 0 ||
+      region.fadeIn.durationSeconds > region.durationSeconds ||
+      region.fadeOut.durationSeconds > region.durationSeconds
+    ) {
+      this.throwInvalidSelection('Region gain, layer, Fade 값이 허용 범위를 벗어났습니다.');
+    }
     return region;
+  }
+
+  private clearRegionCrossfades(
+    regions: readonly EditorRegionSnapshot[],
+    crossfadeIds: ReadonlySet<string>
+  ): EditorRegionSnapshot[] {
+    if (crossfadeIds.size === 0) {
+      return regions.map(region => ({ ...region, fadeIn: { ...region.fadeIn }, fadeOut: { ...region.fadeOut } }));
+    }
+    return regions.map(region => ({
+      ...region,
+      fadeIn: crossfadeIds.has(region.fadeIn.crossfadeId ?? '')
+        ? { ...region.fadeIn, crossfadeId: null, durationSeconds: 0 }
+        : { ...region.fadeIn },
+      fadeOut: crossfadeIds.has(region.fadeOut.crossfadeId ?? '')
+        ? { ...region.fadeOut, crossfadeId: null, durationSeconds: 0 }
+        : { ...region.fadeOut },
+    }));
+  }
+
+  private regionUsesCrossfadeId(region: EditorRegionSnapshot, crossfadeId: string): boolean {
+    return region.fadeIn.crossfadeId === crossfadeId || region.fadeOut.crossfadeId === crossfadeId;
   }
 
   private assertFiniteRegionPlacement(region: {
