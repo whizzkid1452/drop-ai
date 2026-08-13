@@ -145,7 +145,7 @@ describe('CommandExecutor', () => {
   });
 
   it('SET_TIMELINE_MAP을 적용하고 Undo와 Redo로 전체 Map을 복원한다', async () => {
-    const { commandExecutor, session } = createTestContext();
+    const { audioEngine, commandExecutor, session } = createTestContext();
     const command: AudioCommand = {
       type: AudioCommandType.SET_TIMELINE_MAP,
       tempoChanges: [
@@ -164,6 +164,7 @@ describe('CommandExecutor', () => {
       { quarterNotePosition: 4, bpm: 90 },
     ]);
     expect(session.getState().meterChanges[1]).toEqual({ quarterNotePosition: 8, beatsPerBar: 6, beatUnit: 8 });
+    expect(audioEngine.getMockTransportState().tempoChanges).toEqual(command.tempoChanges);
 
     await commandExecutor.execute({ type: AudioCommandType.UNDO });
     expect(session.getState().tempoChanges).toEqual([{ quarterNotePosition: 0, bpm: 120 }]);
@@ -172,6 +173,39 @@ describe('CommandExecutor', () => {
     await commandExecutor.execute({ type: AudioCommandType.REDO });
     expect(session.getState().tempoChanges).toEqual(command.tempoChanges);
     expect(session.getState().meterChanges).toEqual(command.meterChanges);
+  });
+
+  it('Loop 범위·활성 상태와 Metronome 설정을 runtime과 Session에 함께 적용한다', async () => {
+    const { audioEngine, commandExecutor, session } = createTestContext();
+
+    await commandExecutor.execute({ type: AudioCommandType.SET_LOOP_RANGE, startTimeSeconds: 2, endTimeSeconds: 8 });
+    await commandExecutor.execute({ type: AudioCommandType.SET_LOOP_ENABLED, isEnabled: true });
+    await commandExecutor.execute({ type: AudioCommandType.SET_METRONOME, isEnabled: true, volume: 0.5 });
+
+    expect(session.getState()).toMatchObject({
+      isLoopEnabled: true,
+      isMetronomeEnabled: true,
+      loopRange: { endTimeSeconds: 8, startTimeSeconds: 2 },
+      metronomeVolume: 0.5,
+    });
+    expect(audioEngine.getMockTransportState()).toMatchObject({
+      isLoopEnabled: true,
+      isMetronomeEnabled: true,
+      loopRange: { endTimeSeconds: 8, startTimeSeconds: 2 },
+      metronomeVolume: 0.5,
+    });
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState()).toMatchObject({ isMetronomeEnabled: false, metronomeVolume: 0.8 });
+    expect(audioEngine.getMockTransportState()).toMatchObject({ isMetronomeEnabled: false, metronomeVolume: 0.8 });
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().isLoopEnabled).toBe(false);
+    expect(audioEngine.getMockTransportState().isLoopEnabled).toBe(false);
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().loopRange).toBeNull();
+    expect(audioEngine.getMockTransportState().loopRange).toBeNull();
   });
 
   it('SET_TIMELINE_MARKERS를 적용하고 Undo와 Redo로 전체 목록을 복원한다', async () => {

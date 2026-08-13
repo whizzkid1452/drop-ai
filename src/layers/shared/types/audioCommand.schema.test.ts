@@ -307,6 +307,10 @@ describe('AudioCommandSchema 프로젝트 변경 명령', () => {
     { type: AudioCommandType.SAVE_PROJECT },
     { type: AudioCommandType.LOAD_PROJECT, projectId: TRACK_ID },
     { type: AudioCommandType.SET_TEMPO, tempo: 120 },
+    { type: AudioCommandType.SET_LOOP_RANGE, startTimeSeconds: 1, endTimeSeconds: 4 },
+    { type: AudioCommandType.CLEAR_LOOP_RANGE },
+    { type: AudioCommandType.SET_LOOP_ENABLED, isEnabled: true },
+    { type: AudioCommandType.SET_METRONOME, isEnabled: true, volume: 0.5 },
     { type: AudioCommandType.SET_MASTER_VOLUME, volume: 0.5 },
     { type: AudioCommandType.REMOVE_TRACK, trackId: TRACK_ID },
     { type: AudioCommandType.SET_TRACK_MUTE, trackId: TRACK_ID, muted: true },
@@ -354,6 +358,9 @@ describe('AudioCommandSchema 프로젝트 변경 명령', () => {
     { type: AudioCommandType.SET_MASTER_VOLUME, volume: -0.001 },
     { type: AudioCommandType.SET_MASTER_VOLUME, volume: 1.001 },
     { type: AudioCommandType.SET_MASTER_VOLUME, volume: Number.POSITIVE_INFINITY },
+    { type: AudioCommandType.SET_LOOP_RANGE, startTimeSeconds: 1, endTimeSeconds: 1 },
+    { type: AudioCommandType.SET_LOOP_RANGE, startTimeSeconds: 2, endTimeSeconds: 1 },
+    { type: AudioCommandType.SET_METRONOME, isEnabled: true, volume: 1.001 },
     {
       type: AudioCommandType.SPLIT_REGION,
       trackId: TRACK_ID,
@@ -406,6 +413,8 @@ describe('AudioCommandSchema 프로젝트 변경 명령', () => {
   it.each([
     { type: AudioCommandType.SET_TRACK_MUTE, trackId: TRACK_ID, muted: 'true' },
     { type: AudioCommandType.SET_TRACK_SOLO, trackId: TRACK_ID, soloed: 1 },
+    { type: AudioCommandType.SET_LOOP_ENABLED, isEnabled: 1 },
+    { type: AudioCommandType.SET_METRONOME, isEnabled: 'true', volume: 0.5 },
   ])('$type의 boolean이 아닌 상태값을 거부한다', command => {
     expect(AudioCommandSchema.safeParse(command).success).toBe(false);
   });
@@ -415,6 +424,9 @@ describe('AudioCommandSchema 프로젝트 변경 명령', () => {
     { type: AudioCommandType.REMOVE_TRACK },
     { type: AudioCommandType.SET_TEMPO },
     { type: AudioCommandType.SET_MASTER_VOLUME },
+    { type: AudioCommandType.SET_LOOP_RANGE, startTimeSeconds: 1 },
+    { type: AudioCommandType.SET_LOOP_ENABLED },
+    { type: AudioCommandType.SET_METRONOME, isEnabled: true },
     { type: AudioCommandType.SET_TRACK_MUTE, trackId: TRACK_ID },
     { type: AudioCommandType.SET_TRACK_SOLO, trackId: TRACK_ID },
     {

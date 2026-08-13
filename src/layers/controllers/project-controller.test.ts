@@ -6,7 +6,10 @@ import type { IAudioSourceRepository } from '../audio-source-repository/i-audio-
 import { AudioSourceRepositoryError } from '../audio-source-repository/errors';
 import type { IProjectRepository } from '../project-repository/i-project-repository';
 import { ProjectRepositoryError } from '../project-repository/errors';
-import { createProjectDocumentV3FromSession } from '../project-document-mapper/project-document-mapper';
+import {
+  createProjectDocumentV3FromSession,
+  createProjectDocumentV7FromSession,
+} from '../project-document-mapper/project-document-mapper';
 import { gainPluginManifest } from '../plugins/builtin/gain/gain-plugin-manifest';
 import type { IProjectSyncService } from '../project-sync/i-project-sync';
 import { createSessionStore, type SessionState } from '../session/session';
@@ -529,6 +532,44 @@ describe('ProjectController', () => {
 
     expect(events).toEqual(['media-download', 'source-load']);
     expect(projectSync.ensureLocalProjectMedia).toHaveBeenCalledWith(document);
+  });
+
+  it('v7 프로젝트의 Tempo·Loop·Metronome을 runtime과 Session에 복원한다', async () => {
+    const context = createTestContext();
+    const sourceSession = createSessionStore({
+      initialProjectMetadata: { id: LOADED_PROJECT_ID, name: 'Transport 프로젝트', revision: 3 },
+    });
+    sourceSession.getState().setTimelineMap({
+      tempoChanges: [
+        { bpm: 120, quarterNotePosition: 0 },
+        { bpm: 90, quarterNotePosition: 4 },
+      ],
+      meterChanges: [{ beatUnit: 4, beatsPerBar: 4, quarterNotePosition: 0 }],
+    });
+    sourceSession.getState().setLoopState({ range: { endTimeSeconds: 8, startTimeSeconds: 2 }, isEnabled: true });
+    sourceSession.getState().setMetronomeState({ isEnabled: true, volume: 0.5 });
+    const document = createProjectDocumentV7FromSession({
+      audioSources: [],
+      pluginCatalog: [],
+      session: sourceSession.getState(),
+    });
+    context.projectRepository.load.mockResolvedValue(document);
+
+    await context.controller.loadProject(LOADED_PROJECT_ID);
+
+    expect(context.audioEngine.getMockTransportState()).toMatchObject({
+      isLoopEnabled: true,
+      isMetronomeEnabled: true,
+      loopRange: { endTimeSeconds: 8, startTimeSeconds: 2 },
+      metronomeVolume: 0.5,
+      tempoChanges: document.timeline.tempoChanges,
+    });
+    expect(context.sessionStore.getState()).toMatchObject({
+      isLoopEnabled: true,
+      isMetronomeEnabled: true,
+      loopRange: { endTimeSeconds: 8, startTimeSeconds: 2 },
+      metronomeVolume: 0.5,
+    });
   });
 
   it('로컬 문서가 없으면 원격 프로젝트를 복원한 뒤 불러온다', async () => {

@@ -23,6 +23,8 @@ const LIVE_OPERATION_CONFLICT_COMMAND_TYPES = new Set<AudioCommand['type']>([
   AudioCommandType.SET_PLUGIN_PARAMETER,
   AudioCommandType.SET_TEMPO,
   AudioCommandType.SET_TIMELINE_MAP,
+  AudioCommandType.SET_LOOP_RANGE,
+  AudioCommandType.CLEAR_LOOP_RANGE,
 ]);
 
 export class LiveOperationConflictError extends Error {

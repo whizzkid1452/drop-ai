@@ -1,10 +1,15 @@
 import type { IAudioEngine } from '../audio-engine/i-audio-engine';
 import { type SessionStore } from '../session/session';
+import type { TimelineRange } from '../shared/types/project-document.schema';
 import {
   TimelineCoordinateMapper,
   type TimelineMeterChange,
   type TimelineTempoChange,
 } from '../shared/timeline-coordinate-mapper';
+import {
+  ProjectMutationCompensationError,
+  type ProjectMutationCompensationFailure,
+} from './project-mutation-compensation-error';
 
 interface SetTimelineMapRequest {
   readonly tempoChanges: readonly TimelineTempoChange[];
@@ -61,7 +66,10 @@ export class PlaybackController {
   handleSetTempo(tempo: number): void {
     console.log(`[PlaybackController] Setting tempo to ${tempo}`);
 
-    // Region 좌표가 절대 초이므로 BPM으로 기존 예약 시점을 바꾸지 않는다.
+    const tempoChanges = this.sessionStore
+      .getState()
+      .tempoChanges.map((change, index) => (index === 0 ? { ...change, bpm: tempo } : change));
+    this.audioEngine.setTempoMap({ changes: tempoChanges });
     this.sessionStore.getState().setTempo(tempo);
   }
 
@@ -80,10 +88,127 @@ export class PlaybackController {
       tempoChanges,
       meterChanges,
     });
+    this.audioEngine.setTempoMap({ changes: tempoChanges });
     this.sessionStore.getState().setTimelineMap({ tempoChanges, meterChanges });
+  }
+
+  handleSetLoopRange(range: TimelineRange | null, isEnabled?: boolean): void {
+    const sessionState = this.sessionStore.getState();
+    const previousRange = sessionState.loopRange;
+    const previousIsEnabled = sessionState.isLoopEnabled;
+    const nextIsEnabled = range !== null && (isEnabled ?? previousIsEnabled);
+
+    try {
+      this.audioEngine.setLoopRange(range);
+      this.audioEngine.setLoopEnabled(nextIsEnabled);
+    } catch (cause) {
+      this.restoreLoopRuntime({ range: previousRange, isEnabled: previousIsEnabled, cause });
+    }
+
+    this.sessionStore.getState().setLoopState({ range, isEnabled: nextIsEnabled });
+  }
+
+  handleSetLoopEnabled(isEnabled: boolean): void {
+    if (isEnabled && this.sessionStore.getState().loopRange === null) {
+      throw new RangeError('Loop를 활성화하려면 범위를 먼저 설정해야 합니다.');
+    }
+    this.audioEngine.setLoopEnabled(isEnabled);
+    this.sessionStore.getState().setLoopEnabled(isEnabled);
+  }
+
+  handleSetMetronome({ isEnabled, volume }: { readonly isEnabled: boolean; readonly volume: number }): void {
+    const sessionState = this.sessionStore.getState();
+
+    try {
+      this.audioEngine.setMetronomeVolume(volume);
+      this.audioEngine.setMetronomeEnabled(isEnabled);
+    } catch (cause) {
+      this.restoreMetronomeRuntime({
+        isEnabled: sessionState.isMetronomeEnabled,
+        volume: sessionState.metronomeVolume,
+        cause,
+      });
+    }
+
+    this.sessionStore.getState().setMetronomeState({ isEnabled, volume });
   }
 
   getCurrentTime(): number {
     return this.audioEngine.getCurrentTime();
+  }
+
+  private restoreLoopRuntime({
+    range,
+    isEnabled,
+    cause,
+  }: {
+    readonly range: TimelineRange | null;
+    readonly isEnabled: boolean;
+    readonly cause: unknown;
+  }): never {
+    const compensationFailures: ProjectMutationCompensationFailure[] = [];
+    this.tryRuntimeCompensation(() => this.audioEngine.setLoopRange(range), 'Loop 범위 복원', compensationFailures);
+    this.tryRuntimeCompensation(
+      () => this.audioEngine.setLoopEnabled(isEnabled),
+      'Loop 활성 상태 복원',
+      compensationFailures
+    );
+    this.throwRuntimeFailure({ operation: 'Loop 상태 변경', cause, compensationFailures });
+  }
+
+  private restoreMetronomeRuntime({
+    isEnabled,
+    volume,
+    cause,
+  }: {
+    readonly isEnabled: boolean;
+    readonly volume: number;
+    readonly cause: unknown;
+  }): never {
+    const compensationFailures: ProjectMutationCompensationFailure[] = [];
+    this.tryRuntimeCompensation(
+      () => this.audioEngine.setMetronomeVolume(volume),
+      'Metronome 볼륨 복원',
+      compensationFailures
+    );
+    this.tryRuntimeCompensation(
+      () => this.audioEngine.setMetronomeEnabled(isEnabled),
+      'Metronome 활성 상태 복원',
+      compensationFailures
+    );
+    this.throwRuntimeFailure({ operation: 'Metronome 상태 변경', cause, compensationFailures });
+  }
+
+  private tryRuntimeCompensation(
+    operation: () => void,
+    step: string,
+    compensationFailures: ProjectMutationCompensationFailure[]
+  ): void {
+    try {
+      operation();
+    } catch (cause) {
+      compensationFailures.push({ step, cause });
+    }
+  }
+
+  private throwRuntimeFailure({
+    operation,
+    cause,
+    compensationFailures,
+  }: {
+    readonly operation: string;
+    readonly cause: unknown;
+    readonly compensationFailures: readonly ProjectMutationCompensationFailure[];
+  }): never {
+    if (compensationFailures.length === 0) {
+      throw cause;
+    }
+
+    throw new ProjectMutationCompensationError({
+      operation,
+      failedPhase: 'AudioEngine runtime 상태',
+      cause,
+      compensationFailures,
+    });
   }
 }

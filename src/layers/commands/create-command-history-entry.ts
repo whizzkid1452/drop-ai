@@ -156,6 +156,18 @@ function createExportRangeCommand(session: SessionState): AudioCommand | null {
   };
 }
 
+function createLoopRangeCommand(session: SessionState): AudioCommand {
+  if (session.loopRange === null) {
+    return { type: AudioCommandType.CLEAR_LOOP_RANGE };
+  }
+  return {
+    type: AudioCommandType.SET_LOOP_RANGE,
+    startTimeSeconds: session.loopRange.startTimeSeconds,
+    endTimeSeconds: session.loopRange.endTimeSeconds,
+    isEnabled: session.isLoopEnabled,
+  };
+}
+
 export function createCommandHistoryEntry({
   afterSession,
   beforeSession,
@@ -229,6 +241,57 @@ export function createCommandHistoryEntry({
           markers: beforeSession.timelineMarkers.map(marker => ({ ...marker })),
         },
         redoCommand: command,
+      });
+
+    case AudioCommandType.SET_LOOP_RANGE:
+    case AudioCommandType.CLEAR_LOOP_RANGE: {
+      const isUnchanged =
+        beforeSession.loopRange?.startTimeSeconds === afterSession.loopRange?.startTimeSeconds &&
+        beforeSession.loopRange?.endTimeSeconds === afterSession.loopRange?.endTimeSeconds &&
+        beforeSession.isLoopEnabled === afterSession.isLoopEnabled;
+      if (isUnchanged) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        redoCommand: createLoopRangeCommand(afterSession),
+        undoCommand: createLoopRangeCommand(beforeSession),
+      });
+    }
+
+    case AudioCommandType.SET_LOOP_ENABLED:
+      if (
+        beforeSession.isLoopEnabled === afterSession.isLoopEnabled ||
+        afterSession.isLoopEnabled !== command.isEnabled
+      ) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        redoCommand: command,
+        undoCommand: { type: AudioCommandType.SET_LOOP_ENABLED, isEnabled: beforeSession.isLoopEnabled },
+      });
+
+    case AudioCommandType.SET_METRONOME:
+      if (
+        (beforeSession.isMetronomeEnabled === afterSession.isMetronomeEnabled &&
+          beforeSession.metronomeVolume === afterSession.metronomeVolume) ||
+        afterSession.isMetronomeEnabled !== command.isEnabled ||
+        afterSession.metronomeVolume !== command.volume
+      ) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        redoCommand: command,
+        undoCommand: {
+          type: AudioCommandType.SET_METRONOME,
+          isEnabled: beforeSession.isMetronomeEnabled,
+          volume: beforeSession.metronomeVolume,
+        },
       });
 
     case AudioCommandType.SET_MASTER_VOLUME:

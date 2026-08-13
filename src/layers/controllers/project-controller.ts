@@ -366,6 +366,7 @@ export class ProjectController {
 
     try {
       this.dependencies.sessionStore.getState().replaceProjectState(preparedRuntime.snapshot.session);
+      this.applyTransportSnapshot(preparedRuntime.snapshot.session);
     } catch (cause) {
       publicationError = cause;
       hasPublicationError = true;
@@ -375,6 +376,16 @@ export class ProjectController {
     if (hasPublicationError) {
       throw publicationError;
     }
+  }
+
+  private applyTransportSnapshot(session: ProjectRestoreSnapshot['session']): void {
+    this.dependencies.audioEngine.setTempoMap({
+      changes: session.tempoChanges ?? [{ bpm: session.tempo, quarterNotePosition: 0 }],
+    });
+    this.dependencies.audioEngine.setLoopRange(session.loopRange ?? null);
+    this.dependencies.audioEngine.setLoopEnabled(session.isLoopEnabled ?? false);
+    this.dependencies.audioEngine.setMetronomeVolume(session.metronomeVolume ?? 0.8);
+    this.dependencies.audioEngine.setMetronomeEnabled(session.isMetronomeEnabled ?? false);
   }
 
   private disposeRetiredRuntime(

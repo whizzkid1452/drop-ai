@@ -269,7 +269,9 @@ Web UI의 Region 분할은 현재 시각에 정확히 하나의 Region이 있을
 사용한다. Region 이동은 드래그 중 로컬 미리보기만 갱신하고 포인터를 놓을 때 정확한 ID로 `MOVE_REGION`을 한 번
 실행한다. Track 삭제는 사용자가 확인한 정확한 ID로 `REMOVE_TRACK`을 한 번 실행하고 처리 중 중복 입력을 막는다. Web
 UI의 Mute·Solo는 Session 상태의 반대 값을 정확한 Track ID와 함께 `SET_TRACK_MUTE`·`SET_TRACK_SOLO`로 실행한다.
-Web UI의 Tempo 입력은 `SET_TEMPO`로 Session 메타데이터만 변경한다. Web 파일 가져오기는 Track 생성과 Region 등록을
+Web UI의 Tempo 입력과 Tempo Map 편집은 `SET_TEMPO`·`SET_TIMELINE_MAP`으로 Session과 Tone Transport 예약을 함께
+변경한다. Loop 범위·활성 상태와 Metronome 상태·볼륨도 CommandExecutor를 거쳐 Session과 runtime에 함께 반영한다.
+ProjectDocument v7은 이 Transport 설정을 저장하고 v6 이하는 비활성 기본값으로 이전한다. Web 파일 가져오기는 Track 생성과 Region 등록을
 `executeMany` 한 번으로 실행한다. `ADD_TRACK`은 Track ID만으로 빈 Track을 만들고 `LOAD_REGION`은 `sourceId`로
 오디오 Source를 연결한다. 첫 명령이 실패하면 pending Source를 정리한다. 두 번째 명령이 실패하면 `REMOVE_TRACK`을
 CommandExecutor로 실행한 뒤 pending Source 정리를 시도한다. 보상도 실패하면 Web workflow 전용

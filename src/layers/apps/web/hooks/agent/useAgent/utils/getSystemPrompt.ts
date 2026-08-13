@@ -85,6 +85,13 @@ const COMMAND_REFERENCE = {
     '{"type":"SET_TIMELINE_MAP","tempoChanges":[{"quarterNotePosition":0,"bpm":120}],"meterChanges":[{"quarterNotePosition":0,"beatsPerBar":4,"beatUnit":4}]} - Tempo·Meter Map 전체 변경',
   [AudioCommandType.SET_TIMELINE_MARKERS]:
     '{"type":"SET_TIMELINE_MARKERS","markers":[{"id":"<UUID>","name":"Verse","quarterNotePosition":8}]} - Timeline Marker 전체 변경',
+  [AudioCommandType.SET_LOOP_RANGE]:
+    '{"type":"SET_LOOP_RANGE","startTimeSeconds":2,"endTimeSeconds":8} - 초 단위 Loop 범위 설정',
+  [AudioCommandType.CLEAR_LOOP_RANGE]: '{"type":"CLEAR_LOOP_RANGE"} - Loop 범위 해제',
+  [AudioCommandType.SET_LOOP_ENABLED]:
+    '{"type":"SET_LOOP_ENABLED","isEnabled":<boolean>} - 설정된 Loop 범위 반복 여부 변경',
+  [AudioCommandType.SET_METRONOME]:
+    '{"type":"SET_METRONOME","isEnabled":<boolean>,"volume":<0..1>} - Metronome 상태와 볼륨 변경',
   [AudioCommandType.SET_TRACK_NAME]:
     '{"type":"SET_TRACK_NAME","trackId":"<existing Track UUID>","name":"<1..255 non-blank characters>"} - Track 이름 변경',
   [AudioCommandType.SET_TRACK_VOLUME]:

@@ -1,5 +1,6 @@
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
 import type { PluginParameterValue } from '../shared/types/plugin-state';
+import type { TimelineRange } from '../shared/types/project-document.schema';
 import type { AudioRuntimeFeatureSupport } from '../shared/utils/audio-runtime-capabilities';
 import type {
   ArmLoopRequest,
@@ -67,6 +68,15 @@ export interface RescheduleRegionRequest {
   trackId: string;
   regionId: string;
   startTime: number;
+}
+
+export interface AudioTempoChange {
+  readonly quarterNotePosition: number;
+  readonly bpm: number;
+}
+
+export interface SetAudioTempoMapRequest {
+  readonly changes: readonly AudioTempoChange[];
 }
 
 export interface ReplaceRegionRequest {
@@ -150,6 +160,11 @@ export interface IAudioEngine {
   stop(): void;
   setTime(time: number): void;
   getCurrentTime(): number;
+  setTempoMap(request: SetAudioTempoMapRequest): void;
+  setLoopRange(range: TimelineRange | null): void;
+  setLoopEnabled(isEnabled: boolean): void;
+  setMetronomeEnabled(isEnabled: boolean): void;
+  setMetronomeVolume(volume: number): void;
 
   // Live Loop Control
   setLiveInputDevice(deviceId: string | null): Promise<string | null>;
