@@ -31,6 +31,24 @@ test('Automation 점을 편집하고 Undo·Redo·저장 복원한다', async ({ 
   await page.getByRole('button', { name: '다시 실행' }).click();
   await expect(points).toHaveCount(2);
 
+  const automationMode = track.getByRole('combobox', { name: /Automation mode$/ });
+  await automationMode.selectOption('touch');
+  await expect(automationMode).toHaveValue('touch');
+
+  const writeValue = track.getByRole('slider', { name: /Automation write value$/ });
+  await expect(writeValue).toBeEnabled();
+  const writtenPoint = points.last();
+  const pointLabelBeforeWrite = await writtenPoint.getAttribute('aria-label');
+  await writeValue.press('ArrowRight');
+  await expect(writtenPoint).not.toHaveAttribute('aria-label', pointLabelBeforeWrite ?? '');
+  const pointLabelAfterWrite = await writtenPoint.getAttribute('aria-label');
+
+  await page.getByRole('button', { name: '실행 취소' }).click();
+  await expect(writtenPoint).toHaveAttribute('aria-label', pointLabelBeforeWrite ?? '');
+  await expect(automationMode).toHaveValue('touch');
+  await page.getByRole('button', { name: '다시 실행' }).click();
+  await expect(writtenPoint).toHaveAttribute('aria-label', pointLabelAfterWrite ?? '');
+
   await page.getByTitle(/^Save/).click();
   await expect(page.getByText('Save completed', { exact: true })).toBeVisible();
   await page.reload();
@@ -38,5 +56,8 @@ test('Automation 점을 편집하고 Undo·Redo·저장 복원한다', async ({ 
 
   const restoredTrack = page.getByRole('article', { name: /^Track / }).first();
   await restoredTrack.getByRole('button', { name: /Automation Lane 표시$/ }).click();
-  await expect(restoredTrack.getByLabel(/Automation Lane$/, { exact: true }).locator('[data-point-id]')).toHaveCount(2);
+  const restoredPoints = restoredTrack.getByLabel(/Automation Lane$/, { exact: true }).locator('[data-point-id]');
+  await expect(restoredPoints).toHaveCount(2);
+  await expect(restoredPoints.last()).toHaveAttribute('aria-label', pointLabelAfterWrite ?? '');
+  await expect(restoredTrack.getByRole('combobox', { name: /Automation mode$/ })).toHaveValue('touch');
 });
