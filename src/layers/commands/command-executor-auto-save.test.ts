@@ -40,6 +40,48 @@ describe('CommandExecutor 로컬 자동 저장', () => {
     await expect(projectRepository.listPendingChanges({ dueAtEpochMilliseconds: 1_000 })).resolves.toEqual([]);
   });
 
+  it('Automation write preview는 Session과 Outbox를 변경하지 않는다', async () => {
+    const { app, projectRepository } = createTestApp();
+    const laneId = '33333333-3333-4333-8333-333333333333';
+    await app.commandExecutor.execute({ type: AudioCommandType.ADD_TRACK, trackId: TRACK_ID });
+    await app.commandExecutor.execute({
+      automationLanes: [
+        {
+          id: laneId,
+          isEnabled: true,
+          mode: 'touch',
+          points: [],
+          target: { kind: 'trackVolume' },
+        },
+      ],
+      trackId: TRACK_ID,
+      type: AudioCommandType.SET_AUTOMATION_LANES,
+    });
+    const beforeChanges = await projectRepository.listPendingChanges({ dueAtEpochMilliseconds: 1_000 });
+
+    await app.commandExecutor.execute({
+      laneId,
+      passRange: { endTimeSeconds: 2, startTimeSeconds: 1 },
+      samples: [
+        {
+          id: '44444444-4444-4444-8444-444444444444',
+          interpolation: 'linear',
+          timeSeconds: 1.5,
+          value: 0.5,
+        },
+      ],
+      trackId: TRACK_ID,
+      type: AudioCommandType.PREVIEW_AUTOMATION_WRITE_PASS,
+    });
+
+    await expect(projectRepository.listPendingChanges({ dueAtEpochMilliseconds: 1_000 })).resolves.toEqual(
+      beforeChanges
+    );
+    await expect(projectRepository.load(PROJECT_ID)).resolves.toMatchObject({
+      tracks: [{ automationLanes: [{ points: [] }] }],
+    });
+  });
+
   it('연속 프로젝트 변경은 revision 순서대로 각각 저장한다', async () => {
     const { app, projectRepository } = createTestApp();
     await app.commandExecutor.execute({ type: AudioCommandType.ADD_TRACK, trackId: TRACK_ID });

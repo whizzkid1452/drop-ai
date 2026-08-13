@@ -3,6 +3,7 @@ import { calculateFiniteRegionSourceEndTime } from '../audio-source-range';
 import { calculateFiniteRegionEndTime } from '../region-timeline';
 import {
   ProjectAutomationLaneV12Schema,
+  ProjectAutomationPointSchema,
   ProjectCompSegmentSchema,
   ProjectRoutingGraphSchema,
   ProjectRoutingRouteTargetSchema,
@@ -60,6 +61,9 @@ export const AudioCommandType = {
   SET_TRACK_MUTE: 'SET_TRACK_MUTE',
   SET_TRACK_SOLO: 'SET_TRACK_SOLO',
   SET_AUTOMATION_LANES: 'SET_AUTOMATION_LANES',
+  PREVIEW_AUTOMATION_WRITE_PASS: 'PREVIEW_AUTOMATION_WRITE_PASS',
+  COMMIT_AUTOMATION_WRITE_PASS: 'COMMIT_AUTOMATION_WRITE_PASS',
+  CANCEL_AUTOMATION_WRITE_PREVIEW: 'CANCEL_AUTOMATION_WRITE_PREVIEW',
   INSTALL_PLUGIN: 'INSTALL_PLUGIN',
   REMOVE_PLUGIN: 'REMOVE_PLUGIN',
   MOVE_PLUGIN: 'MOVE_PLUGIN',
@@ -209,6 +213,67 @@ const LoadRegionCommandSchema = z
       path: ['duration'],
     }
   );
+
+const automationWriteSamplesSchema = z
+  .array(ProjectAutomationPointSchema)
+  .min(1, 'Automation write pass requires at least one sample')
+  .max(10_000)
+  .superRefine((samples, context) => {
+    const sampleIds = new Set<string>();
+    samples.forEach((sample, index) => {
+      if (sampleIds.has(sample.id)) {
+        context.addIssue({ code: 'custom', message: 'Duplicate Automation sample ID', path: [index, 'id'] });
+      }
+      sampleIds.add(sample.id);
+      if (index > 0 && sample.timeSeconds <= samples[index - 1].timeSeconds) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Automation sample times must be strictly increasing',
+          path: [index, 'timeSeconds'],
+        });
+      }
+    });
+  });
+const automationWritePassShape = {
+  laneId: z.uuid('Invalid Automation lane ID format'),
+  passRange: ProjectTimelineRangeSchema,
+  samples: automationWriteSamplesSchema,
+  trackId: z.uuid('Invalid Track ID format'),
+};
+
+function validateAutomationWritePassRange(
+  command: {
+    readonly passRange: { readonly endTimeSeconds: number; readonly startTimeSeconds: number };
+    readonly samples: readonly { readonly timeSeconds: number }[];
+  },
+  context: z.RefinementCtx
+): void {
+  command.samples.forEach((sample, index) => {
+    if (
+      sample.timeSeconds < command.passRange.startTimeSeconds ||
+      sample.timeSeconds > command.passRange.endTimeSeconds
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Automation sample time must be inside the write pass range',
+        path: ['samples', index, 'timeSeconds'],
+      });
+    }
+  });
+}
+
+const PreviewAutomationWritePassCommandSchema = z
+  .strictObject({
+    type: z.literal(AudioCommandType.PREVIEW_AUTOMATION_WRITE_PASS),
+    ...automationWritePassShape,
+  })
+  .superRefine(validateAutomationWritePassRange);
+const CommitAutomationWritePassCommandSchema = z
+  .strictObject({
+    type: z.literal(AudioCommandType.COMMIT_AUTOMATION_WRITE_PASS),
+    ...automationWritePassShape,
+  })
+  .superRefine(validateAutomationWritePassRange);
 
 /**
  * Zod Schema for AI-generated Audio Commands
@@ -445,6 +510,13 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
     type: z.literal(AudioCommandType.SET_AUTOMATION_LANES),
     automationLanes: z.array(ProjectAutomationLaneV12Schema).max(128),
     trackId: z.uuid('Invalid track ID format'),
+  }),
+  PreviewAutomationWritePassCommandSchema,
+  CommitAutomationWritePassCommandSchema,
+  z.strictObject({
+    type: z.literal(AudioCommandType.CANCEL_AUTOMATION_WRITE_PREVIEW),
+    laneId: z.uuid('Invalid Automation lane ID format'),
+    trackId: z.uuid('Invalid Track ID format'),
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.INSTALL_PLUGIN),

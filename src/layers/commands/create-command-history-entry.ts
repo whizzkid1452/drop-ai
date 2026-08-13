@@ -536,7 +536,8 @@ export function createCommandHistoryEntry({
       });
     }
 
-    case AudioCommandType.SET_AUTOMATION_LANES: {
+    case AudioCommandType.SET_AUTOMATION_LANES:
+    case AudioCommandType.COMMIT_AUTOMATION_WRITE_PASS: {
       const beforeLanes = beforeSession.tracks.get(command.trackId)?.automationLanes ?? [];
       const afterLanes = afterSession.tracks.get(command.trackId)?.automationLanes ?? [];
       if (JSON.stringify(beforeLanes) === JSON.stringify(afterLanes)) {
@@ -893,6 +894,8 @@ export function createCommandHistoryEntry({
     case AudioCommandType.SPLIT_REGION:
     case AudioCommandType.SET_EDITOR_SELECTION:
     case AudioCommandType.COPY_SELECTED_REGIONS:
+    case AudioCommandType.PREVIEW_AUTOMATION_WRITE_PASS:
+    case AudioCommandType.CANCEL_AUTOMATION_WRITE_PREVIEW:
     case AudioCommandType.EXPORT_AUDIO:
     case AudioCommandType.SAVE_PROJECT:
     case AudioCommandType.LOAD_PROJECT:

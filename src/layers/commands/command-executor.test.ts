@@ -1846,4 +1846,71 @@ describe('CommandExecutor', () => {
     expect(session.getState().tracks.get(TRACK_ID)?.automationLanes).toEqual(automationLanes);
     expect(runtimeSpy).toHaveBeenCalledTimes(3);
   });
+
+  it('여러 write preview 뒤 commit한 gesture를 한 번의 Undo로 복원한다', async () => {
+    const { commandExecutor, commandHistory, controller, session } = createTestContext();
+    await addTrack(commandExecutor);
+    const originalLane = {
+      id: REGION_ID,
+      isEnabled: true,
+      mode: 'touch' as const,
+      points: [
+        {
+          id: SECOND_REGION_ID,
+          interpolation: 'linear' as const,
+          timeSeconds: 0,
+          value: 0.5,
+        },
+      ],
+      target: { kind: 'trackVolume' as const },
+    };
+    controller.automation.setTrackAutomation({ automationLanes: [originalLane], trackId: TRACK_ID });
+    commandHistory.clear();
+    const firstSample = {
+      id: PLUGIN_INSTANCE_ID,
+      interpolation: 'linear' as const,
+      timeSeconds: 1,
+      value: 0.6,
+    };
+    const secondSample = {
+      id: SECOND_PLUGIN_INSTANCE_ID,
+      interpolation: 'linear' as const,
+      timeSeconds: 2,
+      value: 0.8,
+    };
+    const passRange = { endTimeSeconds: 2.5, startTimeSeconds: 0.5 };
+
+    await commandExecutor.execute({
+      laneId: REGION_ID,
+      passRange,
+      samples: [firstSample],
+      trackId: TRACK_ID,
+      type: AudioCommandType.PREVIEW_AUTOMATION_WRITE_PASS,
+    });
+    await commandExecutor.execute({
+      laneId: REGION_ID,
+      passRange,
+      samples: [firstSample, secondSample],
+      trackId: TRACK_ID,
+      type: AudioCommandType.PREVIEW_AUTOMATION_WRITE_PASS,
+    });
+    expect(commandHistory.getSnapshot()).toEqual({ canRedo: false, canUndo: false });
+
+    await commandExecutor.execute({
+      laneId: REGION_ID,
+      passRange,
+      samples: [firstSample, secondSample],
+      trackId: TRACK_ID,
+      type: AudioCommandType.COMMIT_AUTOMATION_WRITE_PASS,
+    });
+    expect(session.getState().tracks.get(TRACK_ID)?.automationLanes?.[0]?.points).toEqual([
+      originalLane.points[0],
+      firstSample,
+      secondSample,
+    ]);
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.automationLanes).toEqual([originalLane]);
+    expect(commandHistory.getSnapshot()).toEqual({ canRedo: true, canUndo: false });
+  });
 });
