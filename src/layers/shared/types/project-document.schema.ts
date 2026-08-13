@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { calculateFiniteRegionSourceEndTime, isRegionSourceRangeWithinDuration } from '../audio-source-range';
 import { MAX_LOOP_OVERDUB_LAYERS } from '../loop-time';
+import { RECORD_MODES } from './multitrack-recording';
 import { calculateFiniteRegionEndTime } from '../region-timeline';
 import { ROUTING_CHANNEL_COUNTS, ROUTING_SEND_TAP_POINTS, ROUTING_TRACK_KINDS } from './routing-state';
 
@@ -13,6 +14,7 @@ export const PROJECT_DOCUMENT_SCHEMA_VERSION_V6 = 6 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V7 = 7 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V8 = 8 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V9 = 9 as const;
+export const PROJECT_DOCUMENT_SCHEMA_VERSION_V10 = 10 as const;
 
 const MAX_NAME_LENGTH = 255;
 const MAX_MIME_TYPE_LENGTH = 255;
@@ -20,6 +22,7 @@ const MAX_PLUGIN_ENTRIES = 128;
 const MAX_LOOP_SLOTS = 16;
 const MAX_TIMELINE_MAP_ENTRIES = 256;
 const MAX_ROUTING_ENTRIES = 512;
+const MAX_RECORDING_ENTRIES = 512;
 const nonBlankNameSchema = z.string().trim().min(1).max(MAX_NAME_LENGTH);
 const pluginTextSchema = z
   .string()
@@ -412,6 +415,79 @@ const ProjectDocumentV9BaseSchema = ProjectDocumentV8BaseSchema.omit({ schemaVer
   }),
 });
 
+export const ProjectTakeSchema = z.strictObject({
+  createdAtEpochMilliseconds: z.number().int().nonnegative(),
+  durationSeconds: z.number().finite().positive(),
+  id: z.uuid('Invalid Take ID format'),
+  sourceId: z.uuid('Invalid Source ID format'),
+  sourceStartTimeSeconds: z.number().finite().nonnegative(),
+  startTimeSeconds: z.number().finite().nonnegative(),
+  takeNumber: z.number().int().positive(),
+});
+
+export const ProjectCompSegmentSchema = z
+  .strictObject({
+    endTimeSeconds: z.number().finite().nonnegative(),
+    id: z.uuid('Invalid Comp Segment ID format'),
+    startTimeSeconds: z.number().finite().nonnegative(),
+    takeId: z.uuid('Invalid Take ID format'),
+  })
+  .refine(segment => segment.endTimeSeconds > segment.startTimeSeconds, {
+    message: 'Comp Segment end time must be greater than start time',
+    path: ['endTimeSeconds'],
+  });
+
+export const ProjectPlaylistSchema = z.strictObject({
+  compSegments: z.array(ProjectCompSegmentSchema).max(MAX_RECORDING_ENTRIES),
+  id: z.uuid('Invalid Playlist ID format'),
+  name: nonBlankNameSchema,
+  takes: z.array(ProjectTakeSchema).max(MAX_RECORDING_ENTRIES),
+});
+
+export const ProjectTrackRecordingSchema = z.strictObject({
+  activePlaylistId: z.uuid('Invalid Playlist ID format').nullable(),
+  playlists: z.array(ProjectPlaylistSchema).max(MAX_RECORDING_ENTRIES),
+  recordMode: z.enum(RECORD_MODES),
+});
+
+export const ProjectTrackV10Schema = ProjectTrackV8Schema.safeExtend({
+  recording: ProjectTrackRecordingSchema,
+});
+
+export const ProjectRecoverableRecordingSourceSchema = z.strictObject({
+  byteLength: z.number().int().nonnegative(),
+  createdAtEpochMilliseconds: z.number().int().nonnegative(),
+  fileName: nonBlankNameSchema,
+  mimeType: z.string().max(MAX_MIME_TYPE_LENGTH),
+  sourceId: z.uuid('Invalid Source ID format'),
+  trackId: z.uuid('Invalid Track ID format'),
+});
+
+export const ProjectPunchRecordingSchema = z
+  .strictObject({
+    isEnabled: z.boolean(),
+    range: ProjectTimelineRangeSchema.nullable(),
+  })
+  .refine(punch => punch.range === null || punch.range.endTimeSeconds > punch.range.startTimeSeconds, {
+    message: 'Punch end time must be greater than start time',
+    path: ['range', 'endTimeSeconds'],
+  })
+  .refine(punch => !punch.isEnabled || punch.range !== null, {
+    message: 'Enabled Punch recording requires a range',
+    path: ['range'],
+  });
+
+export const ProjectRecordingSchema = z.strictObject({
+  punch: ProjectPunchRecordingSchema,
+  recoverableSources: z.array(ProjectRecoverableRecordingSourceSchema).max(MAX_RECORDING_ENTRIES),
+});
+
+const ProjectDocumentV10BaseSchema = ProjectDocumentV9BaseSchema.omit({ schemaVersion: true, tracks: true }).extend({
+  recording: ProjectRecordingSchema,
+  schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V10),
+  tracks: z.array(ProjectTrackV10Schema),
+});
+
 interface IdentifiedDocumentPath {
   id: string;
   path: Array<string | number>;
@@ -432,17 +508,23 @@ type RefinableProjectDocument =
   | z.infer<typeof ProjectDocumentV6BaseSchema>
   | z.infer<typeof ProjectDocumentV7BaseSchema>
   | z.infer<typeof ProjectDocumentV8BaseSchema>
-  | z.infer<typeof ProjectDocumentV9BaseSchema>;
+  | z.infer<typeof ProjectDocumentV9BaseSchema>
+  | z.infer<typeof ProjectDocumentV10BaseSchema>;
 type RefinableProjectTrack =
   | z.infer<typeof ProjectTrackSchema>
   | z.infer<typeof ProjectTrackV2Schema>
   | z.infer<typeof ProjectTrackV3Schema>
   | z.infer<typeof ProjectTrackV4Schema>
-  | z.infer<typeof ProjectTrackV8Schema>;
+  | z.infer<typeof ProjectTrackV8Schema>
+  | z.infer<typeof ProjectTrackV10Schema>;
 
 function isProjectTrackWithLoopSlots(
   track: RefinableProjectTrack
-): track is z.infer<typeof ProjectTrackV3Schema> | z.infer<typeof ProjectTrackV4Schema> {
+): track is
+  | z.infer<typeof ProjectTrackV3Schema>
+  | z.infer<typeof ProjectTrackV4Schema>
+  | z.infer<typeof ProjectTrackV8Schema>
+  | z.infer<typeof ProjectTrackV10Schema> {
   return 'loopSlots' in track;
 }
 
@@ -565,7 +647,8 @@ function validatePluginState(
     | z.infer<typeof ProjectDocumentV6BaseSchema>
     | z.infer<typeof ProjectDocumentV7BaseSchema>
     | z.infer<typeof ProjectDocumentV8BaseSchema>
-    | z.infer<typeof ProjectDocumentV9BaseSchema>,
+    | z.infer<typeof ProjectDocumentV9BaseSchema>
+    | z.infer<typeof ProjectDocumentV10BaseSchema>,
   context: z.RefinementCtx
 ): void {
   const instanceEntries = document.tracks.flatMap((track, trackIndex) =>
@@ -660,6 +743,22 @@ export const ProjectDocumentV9Schema = ProjectDocumentV9BaseSchema.superRefine((
   validateRegionProcessing(document, context);
   validateRoutingGraph(document, context);
 });
+export const ProjectDocumentV10Schema = ProjectDocumentV10BaseSchema.superRefine((document, context) => {
+  validateProjectRelations(document, context);
+  validatePluginState(document, context);
+  validateTimelineMap(document, context);
+  addDuplicateIdIssues({
+    entries: document.timeline.markers.map((marker, index) => ({
+      id: marker.id,
+      path: ['timeline', 'markers', index, 'id'],
+    })),
+    label: 'Timeline marker',
+    context,
+  });
+  validateRegionProcessing(document, context);
+  validateRoutingGraph(document, context);
+  validateRecordingState(document, context);
+});
 
 interface CrossfadeEndpoint {
   readonly crossfadeId: string;
@@ -671,7 +770,10 @@ interface CrossfadeEndpoint {
 }
 
 function validateRegionProcessing(
-  document: z.infer<typeof ProjectDocumentV8BaseSchema> | z.infer<typeof ProjectDocumentV9BaseSchema>,
+  document:
+    | z.infer<typeof ProjectDocumentV8BaseSchema>
+    | z.infer<typeof ProjectDocumentV9BaseSchema>
+    | z.infer<typeof ProjectDocumentV10BaseSchema>,
   context: z.RefinementCtx
 ): void {
   document.tracks.forEach((track, trackIndex) => {
@@ -742,7 +844,10 @@ function validateCrossfadeEndpoints(endpoints: readonly CrossfadeEndpoint[], con
   );
 }
 
-function validateRoutingGraph(document: z.infer<typeof ProjectDocumentV9BaseSchema>, context: z.RefinementCtx): void {
+function validateRoutingGraph(
+  document: z.infer<typeof ProjectDocumentV9BaseSchema> | z.infer<typeof ProjectDocumentV10BaseSchema>,
+  context: z.RefinementCtx
+): void {
   const routes = document.mixer.routing.routes;
   const routeByTrackId = new Map(routes.map(route => [route.trackId, route]));
   const documentTrackIds = new Set(document.tracks.map(track => track.id));
@@ -890,6 +995,127 @@ function validateRoutingGraph(document: z.infer<typeof ProjectDocumentV9BaseSche
   }
 }
 
+function validateRecordingState(
+  document: z.infer<typeof ProjectDocumentV10BaseSchema>,
+  context: z.RefinementCtx
+): void {
+  const trackIds = new Set(document.tracks.map(track => track.id));
+  const sourceIds = new Set(document.audioSources.map(source => source.id));
+
+  addDuplicateIdIssues({
+    entries: document.recording.recoverableSources.map((source, index) => ({
+      id: source.sourceId,
+      path: ['recording', 'recoverableSources', index, 'sourceId'],
+    })),
+    label: 'Recoverable Source',
+    context,
+  });
+  document.recording.recoverableSources.forEach((source, index) => {
+    if (!trackIds.has(source.trackId)) {
+      context.addIssue({
+        code: 'custom',
+        message: `Recoverable Source references a missing Track ID: ${source.trackId}`,
+        path: ['recording', 'recoverableSources', index, 'trackId'],
+      });
+    }
+    if (sourceIds.has(source.sourceId)) {
+      context.addIssue({
+        code: 'custom',
+        message: `Recoverable Source is already committed: ${source.sourceId}`,
+        path: ['recording', 'recoverableSources', index, 'sourceId'],
+      });
+    }
+  });
+
+  document.tracks.forEach((track, trackIndex) => {
+    const playlistById = new Map(track.recording.playlists.map(playlist => [playlist.id, playlist]));
+    addDuplicateIdIssues({
+      entries: track.recording.playlists.map((playlist, playlistIndex) => ({
+        id: playlist.id,
+        path: ['tracks', trackIndex, 'recording', 'playlists', playlistIndex, 'id'],
+      })),
+      label: 'Playlist',
+      context,
+    });
+    if (track.recording.activePlaylistId !== null && !playlistById.has(track.recording.activePlaylistId)) {
+      context.addIssue({
+        code: 'custom',
+        message: `Active Playlist is missing: ${track.recording.activePlaylistId}`,
+        path: ['tracks', trackIndex, 'recording', 'activePlaylistId'],
+      });
+    }
+
+    track.recording.playlists.forEach((playlist, playlistIndex) => {
+      const takeById = new Map(playlist.takes.map(take => [take.id, take]));
+      addDuplicateIdIssues({
+        entries: playlist.takes.map((take, takeIndex) => ({
+          id: take.id,
+          path: ['tracks', trackIndex, 'recording', 'playlists', playlistIndex, 'takes', takeIndex, 'id'],
+        })),
+        label: 'Take',
+        context,
+      });
+      addDuplicateIdIssues({
+        entries: playlist.compSegments.map((segment, segmentIndex) => ({
+          id: segment.id,
+          path: ['tracks', trackIndex, 'recording', 'playlists', playlistIndex, 'compSegments', segmentIndex, 'id'],
+        })),
+        label: 'Comp Segment',
+        context,
+      });
+      playlist.takes.forEach((take, takeIndex) => {
+        if (!sourceIds.has(take.sourceId)) {
+          context.addIssue({
+            code: 'custom',
+            message: `Take references a missing Source ID: ${take.sourceId}`,
+            path: ['tracks', trackIndex, 'recording', 'playlists', playlistIndex, 'takes', takeIndex, 'sourceId'],
+          });
+        }
+      });
+      playlist.compSegments.forEach((segment, segmentIndex) => {
+        const take = takeById.get(segment.takeId);
+        const segmentPath = [
+          'tracks',
+          trackIndex,
+          'recording',
+          'playlists',
+          playlistIndex,
+          'compSegments',
+          segmentIndex,
+        ];
+        if (!take) {
+          context.addIssue({
+            code: 'custom',
+            message: `Comp Segment references a missing Take ID: ${segment.takeId}`,
+            path: [...segmentPath, 'takeId'],
+          });
+          return;
+        }
+        const takeEndTimeSeconds = take.startTimeSeconds + take.durationSeconds;
+        if (segment.startTimeSeconds < take.startTimeSeconds || segment.endTimeSeconds > takeEndTimeSeconds) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Comp Segment must stay within its Take range',
+            path: segmentPath,
+          });
+        }
+      });
+      const orderedSegments = [...playlist.compSegments].sort(
+        (left, right) => left.startTimeSeconds - right.startTimeSeconds
+      );
+      orderedSegments.slice(1).forEach((segment, index) => {
+        if (segment.startTimeSeconds < orderedSegments[index].endTimeSeconds) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Comp Segments must not overlap',
+            path: ['tracks', trackIndex, 'recording', 'playlists', playlistIndex, 'compSegments'],
+          });
+        }
+      });
+    });
+  });
+}
+
 function hasDirectedCycle(nodes: readonly string[], edges: ReadonlyArray<readonly [string, string]>): boolean {
   const outgoing = new Map(nodes.map(node => [node, [] as string[]]));
   const inDegree = new Map(nodes.map(node => [node, 0]));
@@ -926,7 +1152,8 @@ function validateTimelineMap(
     | z.infer<typeof ProjectDocumentV6BaseSchema>
     | z.infer<typeof ProjectDocumentV7BaseSchema>
     | z.infer<typeof ProjectDocumentV8BaseSchema>
-    | z.infer<typeof ProjectDocumentV9BaseSchema>,
+    | z.infer<typeof ProjectDocumentV9BaseSchema>
+    | z.infer<typeof ProjectDocumentV10BaseSchema>,
   context: z.RefinementCtx
 ): void {
   validateTimelineMarkerPositions(document.timeline.tempoChanges, 'tempoChanges', context);
@@ -1000,6 +1227,13 @@ export type ProjectRegionV8 = z.infer<typeof ProjectRegionV8Schema>;
 export type ProjectTrackV8 = z.infer<typeof ProjectTrackV8Schema>;
 export type ProjectDocumentV8 = z.infer<typeof ProjectDocumentV8Schema>;
 export type ProjectDocumentV9 = z.infer<typeof ProjectDocumentV9Schema>;
+export type ProjectTake = z.infer<typeof ProjectTakeSchema>;
+export type ProjectCompSegment = z.infer<typeof ProjectCompSegmentSchema>;
+export type ProjectPlaylist = z.infer<typeof ProjectPlaylistSchema>;
+export type ProjectTrackRecording = z.infer<typeof ProjectTrackRecordingSchema>;
+export type ProjectTrackV10 = z.infer<typeof ProjectTrackV10Schema>;
+export type ProjectRecording = z.infer<typeof ProjectRecordingSchema>;
+export type ProjectDocumentV10 = z.infer<typeof ProjectDocumentV10Schema>;
 export type ProjectDocumentSnapshot =
   | ProjectDocument
   | ProjectDocumentV2
@@ -1009,4 +1243,5 @@ export type ProjectDocumentSnapshot =
   | ProjectDocumentV6
   | ProjectDocumentV7
   | ProjectDocumentV8
-  | ProjectDocumentV9;
+  | ProjectDocumentV9
+  | ProjectDocumentV10;

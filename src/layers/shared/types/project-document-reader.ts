@@ -9,6 +9,7 @@ import {
   PROJECT_DOCUMENT_SCHEMA_VERSION_V7,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V8,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V9,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V10,
   ProjectDocumentSchema,
   ProjectDocumentV2Schema,
   ProjectDocumentV3Schema,
@@ -18,6 +19,7 @@ import {
   ProjectDocumentV7Schema,
   ProjectDocumentV8Schema,
   ProjectDocumentV9Schema,
+  ProjectDocumentV10Schema,
   type ProjectDocument,
   type ProjectDocumentSnapshot,
   type ProjectDocumentV2,
@@ -28,7 +30,9 @@ import {
   type ProjectDocumentV7,
   type ProjectDocumentV8,
   type ProjectDocumentV9,
+  type ProjectDocumentV10,
 } from './project-document.schema';
+import { createDefaultProjectRecordingState, createDefaultTrackRecordingState } from './multitrack-recording';
 import { createDefaultRoutingGraphSnapshot } from './routing-state';
 
 export const ProjectDocumentReadErrorCode = {
@@ -82,6 +86,10 @@ export const PROJECT_DOCUMENT_V9_MIGRATION_INPUT_VERSIONS = [
   ...PROJECT_DOCUMENT_V8_MIGRATION_INPUT_VERSIONS,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V9,
 ] as const;
+export const PROJECT_DOCUMENT_V10_MIGRATION_INPUT_VERSIONS = [
+  ...PROJECT_DOCUMENT_V9_MIGRATION_INPUT_VERSIONS,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V10,
+] as const;
 export const PROJECT_DOCUMENT_SNAPSHOT_SCHEMA_VERSIONS = [
   PROJECT_DOCUMENT_SCHEMA_VERSION,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
@@ -92,6 +100,7 @@ export const PROJECT_DOCUMENT_SNAPSHOT_SCHEMA_VERSIONS = [
   PROJECT_DOCUMENT_SCHEMA_VERSION_V7,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V8,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V9,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V10,
 ] as const;
 
 const ProjectDocumentSchemaVersionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
@@ -413,6 +422,19 @@ function parseProjectDocumentV9(input: unknown, schemaVersion: number): ProjectD
   throw createInvalidDocumentError(schemaVersion, parseFailure);
 }
 
+function parseProjectDocumentV10(input: unknown, schemaVersion: number): ProjectDocumentV10 {
+  const clonedInput = cloneProjectDocumentInput(input, schemaVersion);
+  try {
+    const documentResult = ProjectDocumentV10Schema.safeParse(clonedInput);
+    if (documentResult.success) {
+      return documentResult.data;
+    }
+    throw documentResult.error;
+  } catch (parseFailure) {
+    throw createInvalidDocumentError(schemaVersion, parseFailure);
+  }
+}
+
 function readProjectDocumentSchemaVersion(input: unknown): number {
   const topLevelObject = readTopLevelObject(input);
   const documentTypeProperty = readOwnDataProperty({
@@ -689,6 +711,53 @@ function migrateValidatedProjectDocumentV8ToV9(document: ProjectDocumentV8): Pro
   });
 }
 
+function migrateValidatedProjectDocumentV9ToV10(document: ProjectDocumentV9): ProjectDocumentV10 {
+  return ProjectDocumentV10Schema.parse({
+    ...document,
+    recording: createDefaultProjectRecordingState(),
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V10,
+    timeline: {
+      ...document.timeline,
+      loop: {
+        isEnabled: document.timeline.loop.isEnabled,
+        range: document.timeline.loop.range ? { ...document.timeline.loop.range } : null,
+      },
+      markers: document.timeline.markers.map(marker => ({ ...marker })),
+      metronome: { ...document.timeline.metronome },
+      tempoChanges: document.timeline.tempoChanges.map(change => ({ ...change })),
+      meterChanges: document.timeline.meterChanges.map(change => ({ ...change })),
+    },
+    tracks: document.tracks.map(track => ({
+      ...track,
+      loopSlots: track.loopSlots.map(loopSlot => ({ ...loopSlot, overdubSourceIds: [...loopSlot.overdubSourceIds] })),
+      pluginInstances: track.pluginInstances.map(instance => ({
+        ...instance,
+        parameters: instance.parameters.map(parameter => ({ ...parameter })),
+      })),
+      recording: createDefaultTrackRecordingState(),
+      regions: track.regions.map(region => ({
+        ...region,
+        fadeIn: { ...region.fadeIn },
+        fadeOut: { ...region.fadeOut },
+      })),
+    })),
+    audioSources: document.audioSources.map(source => ({ ...source })),
+    exportRange: document.exportRange ? { ...document.exportRange } : null,
+    mixer: {
+      masterVolume: document.mixer.masterVolume,
+      routing: {
+        routes: document.mixer.routing.routes.map(route => ({
+          ...route,
+          output: { ...route.output },
+          vcaIds: [...route.vcaIds],
+        })),
+        sends: document.mixer.routing.sends.map(send => ({ ...send })),
+      },
+    },
+    project: { ...document.project },
+  });
+}
+
 function parseProjectDocumentJsonInput(json: string): unknown {
   try {
     return JSON.parse(json) as unknown;
@@ -900,6 +969,25 @@ export function readProjectDocumentV9(input: unknown): ProjectDocumentV9 {
   });
 }
 
+export function migrateProjectDocumentV9ToV10(document: ProjectDocumentV9): ProjectDocumentV10 {
+  return migrateValidatedProjectDocumentV9ToV10(readProjectDocumentV9(document));
+}
+
+export function readProjectDocumentV10(input: unknown): ProjectDocumentV10 {
+  const schemaVersion = readProjectDocumentSchemaVersion(input);
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V10) {
+    return parseProjectDocumentV10(input, schemaVersion);
+  }
+  if (PROJECT_DOCUMENT_V9_MIGRATION_INPUT_VERSIONS.some(version => version === schemaVersion)) {
+    return migrateValidatedProjectDocumentV9ToV10(readProjectDocumentV9(input));
+  }
+
+  throw createUnsupportedSchemaVersionError({
+    schemaVersion,
+    supportedSchemaVersions: PROJECT_DOCUMENT_V10_MIGRATION_INPUT_VERSIONS,
+  });
+}
+
 export function readProjectDocumentSnapshot(input: unknown): ProjectDocumentSnapshot {
   const schemaVersion = readProjectDocumentSchemaVersion(input);
   if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION) {
@@ -928,6 +1016,9 @@ export function readProjectDocumentSnapshot(input: unknown): ProjectDocumentSnap
   }
   if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V9) {
     return parseProjectDocumentV9(input, schemaVersion);
+  }
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V10) {
+    return parseProjectDocumentV10(input, schemaVersion);
   }
 
   throw createUnsupportedSchemaVersionError({
@@ -970,4 +1061,8 @@ export function readProjectDocumentJsonV8(json: string): ProjectDocumentV8 {
 
 export function readProjectDocumentJsonV9(json: string): ProjectDocumentV9 {
   return readProjectDocumentV9(parseProjectDocumentJsonInput(json));
+}
+
+export function readProjectDocumentJsonV10(json: string): ProjectDocumentV10 {
+  return readProjectDocumentV10(parseProjectDocumentJsonInput(json));
 }

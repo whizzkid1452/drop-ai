@@ -14,6 +14,13 @@ import type { LoopLengthBars } from '../shared/loop-time';
 import type { LoopSlotRuntimeState } from '../shared/types/loop-state';
 import type { RegionFadeState } from '../shared/types/region-processing';
 import {
+  cloneProjectRecordingState,
+  cloneTrackRecordingState,
+  createDefaultProjectRecordingState,
+  type ProjectRecordingState,
+  type TrackRecordingState,
+} from '../shared/types/multitrack-recording';
+import {
   cloneRoutingGraphSnapshot,
   createDefaultRoutingGraphSnapshot,
   removeTrackFromRoutingGraph,
@@ -93,6 +100,7 @@ export interface TrackState {
   pluginInstances: PluginInstanceState[];
   regions: RegionState[];
   loopSlots?: LoopSlotState[];
+  recording?: TrackRecordingState;
 }
 
 export interface ProjectSessionState {
@@ -107,6 +115,7 @@ export interface ProjectSessionState {
   readonly metronomeVolume?: number;
   readonly masterVolume: number;
   readonly routingGraph?: RoutingGraphSnapshot;
+  readonly recording?: ProjectRecordingState;
   readonly exportStartTime: number | null;
   readonly exportEndTime: number | null;
   readonly tracks: ReadonlyMap<string, TrackState>;
@@ -169,6 +178,7 @@ export interface SessionState {
   metronomeVolume: number;
   masterVolume: number;
   routingGraph: RoutingGraphSnapshot;
+  recording: ProjectRecordingState;
   exportStartTime: number | null;
   exportEndTime: number | null;
   tracks: Map<string, TrackState>;
@@ -256,6 +266,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     metronomeVolume: DEFAULT_METRONOME_VOLUME,
     masterVolume: 1.0,
     routingGraph: createDefaultRoutingGraphSnapshot([]),
+    recording: createDefaultProjectRecordingState(),
     exportStartTime: null,
     exportEndTime: null,
     tracks: new Map(),
@@ -325,6 +336,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
         routingGraph: cloneRoutingGraphSnapshot(
           projectState.routingGraph ?? createDefaultRoutingGraphSnapshot([...projectState.tracks.keys()])
         ),
+        recording: cloneProjectRecordingState(projectState.recording ?? createDefaultProjectRecordingState()),
         exportStartTime: projectState.exportStartTime,
         exportEndTime: projectState.exportEndTime,
         tracks: cloneProjectTracks(projectState.tracks),
@@ -494,6 +506,7 @@ function cloneTrackState(track: TrackState): TrackState {
       status: [...region.status],
     })),
     loopSlots: track.loopSlots?.map(slot => ({ ...slot, overdubSourceIds: [...slot.overdubSourceIds] })),
+    recording: track.recording ? cloneTrackRecordingState(track.recording) : undefined,
   };
 }
 
