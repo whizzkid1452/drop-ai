@@ -15,6 +15,11 @@ import {
   type RoutingGraphSnapshot,
 } from '../shared/types/routing-state';
 import {
+  cloneAutomationLaneState,
+  type AutomationLaneState,
+  type AutomationTarget,
+} from '../shared/types/automation-state';
+import {
   AudioRuntimeFeature,
   CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
   type AudioRuntimeFeatureSupport,
@@ -53,6 +58,7 @@ import type {
   SetAudioTempoMapRequest,
   SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
+  SetAutomationLanesRequest,
   SetLiveInputMonitoringRequest,
   SetTrackRecordArmRequest,
   SetTrackRecordingInputRequest,
@@ -77,6 +83,9 @@ import { createAudibleRegionSegments } from './region-playback-segments';
 import { analyzePcmPeak, reversePcmChannels, stripSilenceFromPcmChannels } from './region-audio-processing';
 import { ToneTransportRuntime } from './transport-runtime/tone-transport-runtime';
 import { AudioRoutingRuntime, type AudioRoutingTrackNodes } from './routing/audio-routing-runtime';
+import { scheduleAutomationLane, type IAutomationAudioTarget } from './automation/automation-param-scheduler';
+import { ToneAutomationRuntime } from './automation/tone-automation-runtime';
+import { createMappedAutomationTarget } from './automation/tone-automation-target';
 
 interface RegionPlayerEntry {
   players: Tone.Player[];
@@ -101,6 +110,8 @@ interface AudioProjectGraphState {
   readonly trackMeterRuntimes: Map<string, IAudioMeterRuntime>;
   readonly channels: Map<string, Tone.Channel>;
   readonly desiredTrackVolumes: Map<string, number>;
+  readonly desiredTrackPans: Map<string, number>;
+  readonly automationLanes: Map<string, AutomationLaneState[]>;
   readonly mutedTrackIds: Set<string>;
   readonly soloedTrackIds: Set<string>;
   readonly players: Map<string, Map<string, RegionPlayerEntry>>;
@@ -125,6 +136,15 @@ interface CreateGraphOutputRequest {
 interface CreatePreparedPluginRuntimesRequest {
   readonly trackId: string;
   readonly pluginInstances: readonly AudioProjectGraphPluginInstance[];
+}
+
+interface OfflineExportTrackRuntime {
+  readonly channel: Tone.Channel;
+  readonly input: Tone.Gain;
+  readonly pluginRuntimes: readonly IAudioPluginRuntime[];
+  readonly postFaderOutput: Tone.Gain;
+  readonly preFaderOutput: Tone.Gain;
+  readonly track: ExportTrack;
 }
 
 interface ValidatePluginTargetIndexRequest extends MoveAudioPluginRequest {
@@ -185,6 +205,8 @@ export class AudioEngine implements IAudioEngine {
   private trackMeterRuntimes: Map<string, IAudioMeterRuntime> = new Map();
   private channels: Map<string, Tone.Channel> = new Map();
   private desiredTrackVolumes: Map<string, number> = new Map();
+  private desiredTrackPans: Map<string, number> = new Map();
+  private automationLanes: Map<string, AutomationLaneState[]> = new Map();
   private mutedTrackIds: Set<string> = new Set();
   private soloedTrackIds: Set<string> = new Set();
   private players: Map<string, Map<string, RegionPlayerEntry>> = new Map();
@@ -197,6 +219,7 @@ export class AudioEngine implements IAudioEngine {
   private readonly meterRuntimeFactory: IAudioMeterRuntimeFactory;
   private readonly featureSupport: AudioRuntimeFeatureSupport;
   private readonly transportRuntime = new ToneTransportRuntime();
+  private readonly automationRuntime: ToneAutomationRuntime;
   private graphRevision = 0;
   private readonly mutedOutputs = new WeakSet<Tone.Gain>();
   private readonly disconnectedOutputs = new WeakSet<Tone.Gain>();
@@ -261,6 +284,11 @@ export class AudioEngine implements IAudioEngine {
     this.output = outputNodes.output;
     this.monitorMono = outputNodes.monitorMono;
     this.masterMeterRuntime = outputNodes.meterRuntime;
+    this.automationRuntime = new ToneAutomationRuntime({
+      listTrackLanes: () =>
+        [...this.automationLanes].map(([trackId, automationLanes]) => ({ automationLanes, trackId })),
+      resolveTarget: request => this.resolveAutomationTarget(this.captureActiveGraph(), request),
+    });
   }
 
   getFeatureSupport(): AudioRuntimeFeatureSupport {
@@ -273,22 +301,26 @@ export class AudioEngine implements IAudioEngine {
     if (Tone.getContext().state !== 'running') {
       await Tone.start();
     }
+    this.automationRuntime.refresh();
     await Tone.getTransport().start();
   }
 
   pause(): void {
     this.ensureRuntimeReady();
     Tone.getTransport().pause();
+    this.automationRuntime.holdAtCurrentPosition();
   }
 
   stop(): void {
     this.ensureRuntimeReady();
     Tone.getTransport().stop();
+    this.automationRuntime.holdAtCurrentPosition();
   }
 
   setTime(time: number): void {
     this.ensureRuntimeReady();
     Tone.getTransport().seconds = time;
+    this.automationRuntime.refresh();
   }
 
   getCurrentTime(): number {
@@ -304,11 +336,13 @@ export class AudioEngine implements IAudioEngine {
   setLoopRange(range: TimelineRange | null): void {
     this.ensureRuntimeReady();
     this.transportRuntime.setLoopRange(range);
+    this.automationRuntime.setLoopRange(range);
   }
 
   setLoopEnabled(isEnabled: boolean): void {
     this.ensureRuntimeReady();
     this.transportRuntime.setLoopEnabled(isEnabled);
+    this.automationRuntime.setLoopEnabled(isEnabled);
   }
 
   setMetronomeEnabled(isEnabled: boolean): void {
@@ -592,8 +626,35 @@ export class AudioEngine implements IAudioEngine {
   setRoutingGraph(graph: RoutingGraphSnapshot): void {
     this.ensureRuntimeReady();
     const activeGraph = this.captureActiveGraph();
-    this.routingRuntime.apply(graph, this.createRoutingTrackNodes(activeGraph), this.output);
-    this.applyGraphAudibility(activeGraph);
+    this.assertAutomationRoutingTargetsResolvable(activeGraph, graph);
+    const previousRoutingGraph = this.routingRuntime.getSnapshot();
+    const trackNodes = this.createRoutingTrackNodes(activeGraph);
+    let didApplyRoutingGraph = false;
+    try {
+      this.routingRuntime.apply(graph, trackNodes, this.output);
+      didApplyRoutingGraph = true;
+      this.applyGraphAudibility(activeGraph);
+      this.automationRuntime.refresh();
+    } catch (cause) {
+      if (!didApplyRoutingGraph) {
+        throw cause;
+      }
+      try {
+        this.routingRuntime.apply(previousRoutingGraph, trackNodes, this.output);
+        this.applyGraphAudibility(activeGraph);
+        this.automationRuntime.refresh();
+      } catch (compensationCause) {
+        throw new AudioEngineError(
+          AudioEngineErrorCode.AUTOMATION_UPDATE_FAILED,
+          ERROR_MESSAGES[AudioEngineErrorCode.AUTOMATION_UPDATE_FAILED],
+          {
+            cause: this.describeError(cause),
+            compensationCause: this.describeError(compensationCause),
+          }
+        );
+      }
+      throw cause;
+    }
     this.graphRevision += 1;
   }
 
@@ -605,6 +666,8 @@ export class AudioEngine implements IAudioEngine {
 
   removeTrack(trackId: string): void {
     this.ensureRuntimeReady();
+    const automationLanes = this.automationLanes.get(trackId) ?? [];
+    this.automationRuntime.clearTargets([{ automationLanes, trackId }]);
     if (this.recordingState.armedTrackIds.includes(trackId)) {
       if (this.activeRecordingRequest) {
         this.recordingRuntime?.cancelRecording();
@@ -673,6 +736,8 @@ export class AudioEngine implements IAudioEngine {
     }
     this.channels.delete(trackId);
     this.desiredTrackVolumes.delete(trackId);
+    this.desiredTrackPans.delete(trackId);
+    this.automationLanes.delete(trackId);
     this.mutedTrackIds.delete(trackId);
     this.soloedTrackIds.delete(trackId);
     this.applyGraphAudibility(this.captureActiveGraph());
@@ -692,13 +757,16 @@ export class AudioEngine implements IAudioEngine {
         .get(affectedTrackId)
         ?.volume.rampTo(Tone.gainToDb(this.getEffectiveTrackVolume(graph, affectedTrackId)), 0.1);
     });
+    this.automationRuntime.refresh();
   }
 
   setTrackPan(trackId: string, pan: number): void {
     this.ensureRuntimeReady();
     const channel = this.getOrInitChannel(trackId);
     this.graphRevision += 1;
+    this.desiredTrackPans.set(trackId, pan);
     channel.pan.rampTo(pan, 0.1);
+    this.automationRuntime.refresh();
   }
 
   setTrackMute(trackId: string, muted: boolean): void {
@@ -712,6 +780,7 @@ export class AudioEngine implements IAudioEngine {
     }
 
     this.applyGraphAudibility(this.captureActiveGraph());
+    this.automationRuntime.refresh();
   }
 
   setTrackSolo(trackId: string, soloed: boolean): void {
@@ -724,6 +793,7 @@ export class AudioEngine implements IAudioEngine {
       this.soloedTrackIds.delete(trackId);
     }
     this.applyGraphAudibility(this.captureActiveGraph());
+    this.automationRuntime.refresh();
   }
 
   getTrackParams(trackId: string): { volume: number; pan: number } | null {
@@ -735,8 +805,39 @@ export class AudioEngine implements IAudioEngine {
 
     return {
       volume: this.desiredTrackVolumes.get(trackId) ?? Tone.dbToGain(channel.volume.value),
-      pan: channel.pan.value,
+      pan: this.desiredTrackPans.get(trackId) ?? channel.pan.value,
     };
+  }
+
+  setAutomationLanes(request: SetAutomationLanesRequest): void {
+    this.ensureRuntimeReady();
+    this.getExistingChannel(request.trackId);
+    const graph = this.captureActiveGraph();
+    const previousLanes = graph.automationLanes.get(request.trackId) ?? [];
+    const nextLanes = request.automationLanes.map(cloneAutomationLaneState);
+    this.automationRuntime.assertTargetsResolvable([{ automationLanes: nextLanes, trackId: request.trackId }]);
+    try {
+      this.automationRuntime.clearTargets([{ automationLanes: previousLanes, trackId: request.trackId }]);
+      graph.automationLanes.set(request.trackId, nextLanes);
+      this.automationRuntime.refresh();
+    } catch (cause) {
+      graph.automationLanes.set(request.trackId, previousLanes);
+      try {
+        this.automationRuntime.refresh();
+      } catch (compensationCause) {
+        throw new AudioEngineError(
+          AudioEngineErrorCode.AUTOMATION_UPDATE_FAILED,
+          ERROR_MESSAGES[AudioEngineErrorCode.AUTOMATION_UPDATE_FAILED],
+          {
+            cause: this.describeError(cause),
+            compensationCause: this.describeError(compensationCause),
+            trackId: request.trackId,
+          }
+        );
+      }
+      throw cause;
+    }
+    this.graphRevision += 1;
   }
 
   installPlugin(request: InstallAudioPluginRequest): void {
@@ -1512,6 +1613,8 @@ export class AudioEngine implements IAudioEngine {
     this.channels.set(trackId, channel);
     this.trackMeterRuntimes.set(trackId, meterRuntime);
     this.desiredTrackVolumes.set(trackId, 1);
+    this.desiredTrackPans.set(trackId, 0);
+    this.automationLanes.set(trackId, []);
     this.players.set(trackId, new Map());
     this.pluginRuntimes.set(trackId, []);
     this.disabledPluginInstanceIds.set(trackId, new Set());
@@ -1531,6 +1634,8 @@ export class AudioEngine implements IAudioEngine {
       this.channels.delete(trackId);
       this.trackMeterRuntimes.delete(trackId);
       this.desiredTrackVolumes.delete(trackId);
+      this.desiredTrackPans.delete(trackId);
+      this.automationLanes.delete(trackId);
       this.players.delete(trackId);
       this.pluginRuntimes.delete(trackId);
       this.disabledPluginInstanceIds.delete(trackId);
@@ -1599,6 +1704,8 @@ export class AudioEngine implements IAudioEngine {
         channel.volume.value = Tone.gainToDb(track.volume);
         channel.pan.value = track.pan;
         graph.desiredTrackVolumes.set(track.id, track.volume);
+        graph.desiredTrackPans.set(track.id, track.pan);
+        graph.automationLanes.set(track.id, (track.automationLanes ?? []).map(cloneAutomationLaneState));
         graph.players.set(track.id, new Map());
         if (track.isMuted) {
           graph.mutedTrackIds.add(track.id);
@@ -1616,6 +1723,7 @@ export class AudioEngine implements IAudioEngine {
       }
 
       graph.routingRuntime.apply(routingGraph, this.createRoutingTrackNodes(graph), graph.output);
+      this.assertAutomationTargetsResolvable(graph);
       this.applyGraphAudibility(graph);
       return graph;
     } catch (error) {
@@ -1686,6 +1794,8 @@ export class AudioEngine implements IAudioEngine {
       trackMeterRuntimes: new Map(),
       channels: new Map(),
       desiredTrackVolumes: new Map(),
+      desiredTrackPans: new Map(),
+      automationLanes: new Map(),
       mutedTrackIds: new Set(),
       soloedTrackIds: new Set(),
       players: new Map(),
@@ -1706,6 +1816,8 @@ export class AudioEngine implements IAudioEngine {
       trackMeterRuntimes: this.trackMeterRuntimes,
       channels: this.channels,
       desiredTrackVolumes: this.desiredTrackVolumes,
+      desiredTrackPans: this.desiredTrackPans,
+      automationLanes: this.automationLanes,
       mutedTrackIds: this.mutedTrackIds,
       soloedTrackIds: this.soloedTrackIds,
       players: this.players,
@@ -1725,6 +1837,8 @@ export class AudioEngine implements IAudioEngine {
     this.trackMeterRuntimes = graph.trackMeterRuntimes;
     this.channels = graph.channels;
     this.desiredTrackVolumes = graph.desiredTrackVolumes;
+    this.desiredTrackPans = graph.desiredTrackPans;
+    this.automationLanes = graph.automationLanes;
     this.mutedTrackIds = graph.mutedTrackIds;
     this.soloedTrackIds = graph.soloedTrackIds;
     this.players = graph.players;
@@ -1808,6 +1922,8 @@ export class AudioEngine implements IAudioEngine {
       if (this.disposeChannelSafely(channel, errorMessage)) {
         graph.channels.delete(trackId);
         graph.desiredTrackVolumes.delete(trackId);
+        graph.desiredTrackPans.delete(trackId);
+        graph.automationLanes.delete(trackId);
         graph.mutedTrackIds.delete(trackId);
         graph.soloedTrackIds.delete(trackId);
       }
@@ -1871,6 +1987,7 @@ export class AudioEngine implements IAudioEngine {
     }
 
     this.useGraph(preparedGraph);
+    this.automationRuntime.refresh();
     return previousGraph;
   }
 
@@ -2359,6 +2476,83 @@ export class AudioEngine implements IAudioEngine {
     return channel;
   }
 
+  private assertAutomationTargetsResolvable(graph: AudioProjectGraphState): void {
+    graph.automationLanes.forEach((automationLanes, trackId) => {
+      automationLanes
+        .filter(lane => lane.isEnabled && lane.points.length > 0)
+        .forEach(lane => this.resolveAutomationTarget(graph, { target: lane.target, trackId }));
+    });
+  }
+
+  private assertAutomationRoutingTargetsResolvable(
+    activeGraph: AudioProjectGraphState,
+    routingGraph: RoutingGraphSnapshot
+  ): void {
+    const sendsById = new Map(routingGraph.sends.map(send => [send.id, send]));
+    activeGraph.automationLanes.forEach((automationLanes, trackId) => {
+      automationLanes
+        .filter(lane => lane.isEnabled && lane.points.length > 0 && lane.target.kind === 'sendGain')
+        .forEach(lane => {
+          if (lane.target.kind !== 'sendGain') {
+            return;
+          }
+          const send = sendsById.get(lane.target.sendId);
+          if (send?.isEnabled && send.sourceTrackId === trackId) {
+            return;
+          }
+          throw this.createAutomationTargetNotFoundError(trackId, lane.target);
+        });
+    });
+  }
+
+  private resolveAutomationTarget(
+    graph: AudioProjectGraphState,
+    { target, trackId }: { readonly target: AutomationTarget; readonly trackId: string }
+  ): IAutomationAudioTarget {
+    const channel = graph.channels.get(trackId);
+    if (!channel) {
+      throw this.createAutomationTargetNotFoundError(trackId, target);
+    }
+    if (target.kind === 'trackVolume') {
+      return createMappedAutomationTarget({
+        baseValue: () => Tone.gainToDb(graph.desiredTrackVolumes.get(trackId) ?? 1),
+        mapValue: value => Tone.gainToDb(value),
+        parameter: channel.volume,
+      });
+    }
+    if (target.kind === 'trackPan') {
+      return createMappedAutomationTarget({
+        baseValue: () => graph.desiredTrackPans.get(trackId) ?? 0,
+        mapValue: value => value * 2 - 1,
+        parameter: channel.pan,
+      });
+    }
+    if (target.kind === 'sendGain') {
+      const sendTarget = graph.routingRuntime.getSendAutomationTarget(target.sendId);
+      if (sendTarget) {
+        return sendTarget;
+      }
+      throw this.createAutomationTargetNotFoundError(trackId, target);
+    }
+
+    const pluginTarget = graph.pluginRuntimes
+      .get(trackId)
+      ?.find(runtime => runtime.instanceId === target.pluginInstanceId)
+      ?.getAutomationTarget?.(target.parameterId);
+    if (pluginTarget) {
+      return pluginTarget;
+    }
+    throw this.createAutomationTargetNotFoundError(trackId, target);
+  }
+
+  private createAutomationTargetNotFoundError(trackId: string, target: AutomationTarget): AudioEngineError {
+    return new AudioEngineError(
+      AudioEngineErrorCode.AUTOMATION_TARGET_NOT_FOUND,
+      ERROR_MESSAGES[AudioEngineErrorCode.AUTOMATION_TARGET_NOT_FOUND],
+      { target, trackId }
+    );
+  }
+
   private getExistingInput(trackId: string): Tone.Gain {
     const input = this.trackInputs.get(trackId);
     if (!input) {
@@ -2697,13 +2891,18 @@ export class AudioEngine implements IAudioEngine {
 
   private async scheduleExport(request: ExportRequest): Promise<void> {
     const scheduledPlayers: Array<{ player: Tone.Player; params: RegionRenderParams }> = [];
+    const output = new Tone.Gain({ gain: request.masterVolume }).toDestination();
+    const trackRuntimes = new Map<string, OfflineExportTrackRuntime>();
+    const audibleTrackIds = new Set(this.getAudibleTracks(request.tracks).map(track => track.id));
 
-    for (const track of this.getAudibleTracks(request.tracks)) {
+    request.tracks.forEach(track => {
       const channel = new Tone.Channel({
-        volume: Tone.gainToDb(track.volume * request.masterVolume),
+        volume: Tone.gainToDb(track.volume),
         pan: track.pan,
-      }).toDestination();
+      });
       const input = new Tone.Gain({ gain: 1 });
+      const preFaderOutput = new Tone.Gain({ gain: 1 });
+      const postFaderOutput = new Tone.Gain({ gain: 1 });
       const pluginRuntimes = this.createPreparedPluginRuntimes({
         trackId: track.id,
         pluginInstances: track.pluginInstances,
@@ -2713,10 +2912,57 @@ export class AudioEngine implements IAudioEngine {
       );
       this.connectPreparedPluginChain({
         input,
-        destination: channel,
+        destination: preFaderOutput,
         runtimes: getEnabledPluginRuntimes(pluginRuntimes, disabledPluginInstanceIds),
         trackId: track.id,
       });
+      preFaderOutput.connect(channel);
+      channel.connect(postFaderOutput);
+      trackRuntimes.set(track.id, { channel, input, pluginRuntimes, postFaderOutput, preFaderOutput, track });
+    });
+
+    const routingRuntime = new AudioRoutingRuntime();
+    const routingGraph =
+      request.routingGraph ?? createDefaultRoutingGraphSnapshot(request.tracks.map(track => track.id));
+    routingRuntime.apply(
+      routingGraph,
+      new Map(
+        [...trackRuntimes].map(([trackId, runtime]) => [
+          trackId,
+          {
+            input: runtime.input,
+            postFaderOutput: runtime.postFaderOutput,
+            preFaderOutput: runtime.preFaderOutput,
+          },
+        ])
+      ),
+      output
+    );
+
+    trackRuntimes.forEach(({ channel, input, pluginRuntimes, track }) => {
+      if (!audibleTrackIds.has(track.id)) {
+        channel.volume.value = Number.NEGATIVE_INFINITY;
+        return;
+      }
+
+      (track.automationLanes ?? [])
+        .filter(lane => lane.isEnabled && lane.points.length > 0)
+        .forEach(lane => {
+          const target = this.resolveExportAutomationTarget({
+            channel,
+            pluginRuntimes,
+            routingRuntime,
+            target: lane.target,
+            track,
+          });
+          scheduleAutomationLane({
+            audioStartTimeSeconds: 0,
+            lane,
+            target,
+            timelineEndTimeSeconds: request.range.endTime,
+            timelineStartTimeSeconds: request.range.startTime,
+          });
+        });
 
       for (const region of track.regions) {
         const segments = createAudibleRegionSegments({ region, regions: track.regions });
@@ -2740,12 +2986,56 @@ export class AudioEngine implements IAudioEngine {
           });
         });
       }
-    }
+    });
 
     await Promise.all(scheduledPlayers.map(({ player, params }) => player.load(params.url)));
     scheduledPlayers.forEach(({ player, params }) => {
       startPlayer({ player, syncMode: false, ...params });
     });
+  }
+
+  private resolveExportAutomationTarget({
+    channel,
+    pluginRuntimes,
+    routingRuntime,
+    target,
+    track,
+  }: {
+    readonly channel: Tone.Channel;
+    readonly pluginRuntimes: readonly IAudioPluginRuntime[];
+    readonly routingRuntime: AudioRoutingRuntime;
+    readonly target: AutomationTarget;
+    readonly track: ExportTrack;
+  }): IAutomationAudioTarget {
+    if (target.kind === 'trackVolume') {
+      return createMappedAutomationTarget({
+        baseValue: () => Tone.gainToDb(track.volume),
+        mapValue: value => Tone.gainToDb(value),
+        parameter: channel.volume,
+      });
+    }
+    if (target.kind === 'trackPan') {
+      return createMappedAutomationTarget({
+        baseValue: () => track.pan,
+        mapValue: value => value * 2 - 1,
+        parameter: channel.pan,
+      });
+    }
+    if (target.kind === 'pluginParameter') {
+      const pluginTarget = pluginRuntimes
+        .find(runtime => runtime.instanceId === target.pluginInstanceId)
+        ?.getAutomationTarget?.(target.parameterId);
+      if (pluginTarget) {
+        return pluginTarget;
+      }
+    }
+    if (target.kind === 'sendGain') {
+      const sendTarget = routingRuntime.getSendAutomationTarget(target.sendId);
+      if (sendTarget) {
+        return sendTarget;
+      }
+    }
+    throw this.createAutomationTargetNotFoundError(track.id, target);
   }
 
   private getAudibleTracks(tracks: ExportTrack[]): ExportTrack[] {

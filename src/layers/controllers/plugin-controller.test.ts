@@ -341,6 +341,32 @@ describe('PluginController', () => {
     expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances).toEqual([]);
   });
 
+  it('Plugin parameter Automation이 남아 있으면 Plugin 제거를 거부한다', () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    controller.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: {},
+    });
+    sessionStore.getState().updateTrack('track-1', {
+      automationLanes: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          isEnabled: true,
+          points: [],
+          target: { kind: 'pluginParameter', parameterId: 'gain', pluginInstanceId: 'plugin-1' },
+        },
+      ],
+    });
+    const removePlugin = vi.spyOn(audioEngine, 'removePlugin');
+
+    expect(() => controller.removePlugin({ trackId: 'track-1', instanceId: 'plugin-1' })).toThrowError(
+      expect.objectContaining({ code: ProjectStateErrorCode.AUTOMATION_TARGET_IN_USE })
+    );
+    expect(removePlugin).not.toHaveBeenCalled();
+  });
+
   it('AudioEngine 제거가 실패하면 Session에 Plugin을 유지한다', () => {
     const { audioEngine, controller, sessionStore } = createTestContext();
     controller.installPlugin({

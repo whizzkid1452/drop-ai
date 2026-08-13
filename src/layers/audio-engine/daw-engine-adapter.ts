@@ -39,6 +39,7 @@ import type {
   SetAudioTempoMapRequest,
   SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
+  SetAutomationLanesRequest,
   SetLiveInputMonitoringRequest,
   SetTrackRecordArmRequest,
   SetTrackRecordingInputRequest,
@@ -328,6 +329,10 @@ export class DawEngineAdapter implements IAudioEngine {
 
   setTrackVolume(trackId: string, volume: number): void {
     this.#engine.setTrackGain(trackId, linearGainToDecibels(volume));
+  }
+
+  setAutomationLanes(request: SetAutomationLanesRequest): void {
+    this.#runtime.setAutomationLanes(request);
   }
 
   setTrackPan(trackId: string, pan: number): void {

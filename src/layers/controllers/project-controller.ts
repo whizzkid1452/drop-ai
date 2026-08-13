@@ -313,6 +313,11 @@ export class ProjectController {
         isEnabled: instance.isEnabled,
         parameterValues: new Map(instance.parameters.map(parameter => [parameter.id, parameter.value] as const)),
       })),
+      automationLanes: (track.automationLanes ?? []).map(lane => ({
+        ...lane,
+        points: lane.points.map(point => ({ ...point })),
+        target: { ...lane.target },
+      })),
       loops: (track.loopSlots ?? []).flatMap(loopSlot => {
         if (loopSlot.sourceId === null) {
           return [];

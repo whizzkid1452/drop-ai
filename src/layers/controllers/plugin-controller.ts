@@ -107,7 +107,18 @@ export class PluginController {
   }
 
   removePlugin(request: RemovePluginRequest): void {
+    const track = this.getTrackOrThrow(request.trackId);
     this.getPluginInstanceOrThrow(request);
+    const targetLane = track.automationLanes?.find(
+      lane => lane.target.kind === 'pluginParameter' && lane.target.pluginInstanceId === request.instanceId
+    );
+    if (targetLane) {
+      throw new ProjectStateError(
+        ProjectStateErrorCode.AUTOMATION_TARGET_IN_USE,
+        `Plugin을 대상으로 하는 Automation lane이 남아 있습니다: ${request.instanceId}`,
+        { automationLaneId: targetLane.id, instanceId: request.instanceId, trackId: request.trackId }
+      );
+    }
     this.audioEngine.removePlugin(request.trackId, request.instanceId);
     this.sessionStore.getState().removePluginInstance(request);
   }

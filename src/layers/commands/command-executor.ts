@@ -354,6 +354,10 @@ export class CommandExecutor {
         this.controller.track.setSolo(validatedCommand.trackId, validatedCommand.soloed);
         return;
 
+      case AudioCommandType.SET_AUTOMATION_LANES:
+        this.controller.automation.setTrackAutomation(validatedCommand);
+        return;
+
       case AudioCommandType.INSTALL_PLUGIN:
         this.controller.plugin.installPlugin({
           trackId: validatedCommand.trackId,
@@ -608,6 +612,7 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.SET_TRACK_PAN:
     case AudioCommandType.SET_TRACK_MUTE:
     case AudioCommandType.SET_TRACK_SOLO:
+    case AudioCommandType.SET_AUTOMATION_LANES:
     case AudioCommandType.INSTALL_PLUGIN:
     case AudioCommandType.REMOVE_PLUGIN:
     case AudioCommandType.MOVE_PLUGIN:

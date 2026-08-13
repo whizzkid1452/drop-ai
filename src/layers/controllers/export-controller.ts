@@ -72,6 +72,11 @@ export class ExportController {
         isEnabled: instance.isEnabled,
         parameterValues: new Map(instance.parameters.map(parameter => [parameter.id, parameter.value])),
       })),
+      automationLanes: (track.automationLanes ?? []).map(lane => ({
+        ...lane,
+        points: lane.points.map(point => ({ ...point })),
+        target: { ...lane.target },
+      })),
       regions: track.regions.flatMap(region => {
         const url = this.resolveRegionSourceUrl(region);
         return region.duration <= 0 ? [] : [this.createExportRegion(region, url)];
@@ -89,6 +94,7 @@ export class ExportController {
       tracks,
       masterVolume: session.masterVolume,
       range,
+      routingGraph: session.routingGraph,
       sampleRate: DEFAULT_EXPORT_SAMPLE_RATE,
     };
   }

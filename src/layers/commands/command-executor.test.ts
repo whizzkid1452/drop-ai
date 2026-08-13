@@ -1810,4 +1810,39 @@ describe('CommandExecutor', () => {
 
     await expect(commandExecutor.execute(invalidCommand)).rejects.toThrow();
   });
+
+  it('Automation lane을 실행하고 Undo와 Redo로 복원한다', async () => {
+    const { audioEngine, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    const automationLanes = [
+      {
+        id: REGION_ID,
+        isEnabled: true,
+        points: [
+          {
+            id: SECOND_REGION_ID,
+            interpolation: 'linear' as const,
+            timeSeconds: 0,
+            value: 0.5,
+          },
+        ],
+        target: { kind: 'trackVolume' as const },
+      },
+    ];
+    const runtimeSpy = vi.spyOn(audioEngine, 'setAutomationLanes');
+
+    await commandExecutor.execute({
+      automationLanes,
+      trackId: TRACK_ID,
+      type: AudioCommandType.SET_AUTOMATION_LANES,
+    });
+    expect(session.getState().tracks.get(TRACK_ID)?.automationLanes).toEqual(automationLanes);
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.automationLanes).toEqual([]);
+
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.automationLanes).toEqual(automationLanes);
+    expect(runtimeSpy).toHaveBeenCalledTimes(3);
+  });
 });

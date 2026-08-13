@@ -19,6 +19,7 @@ import { LiveInputController } from './live-input-controller';
 import { RecordingController } from './recording-controller';
 import { EditorController } from './editor-controller';
 import { RegionProcessingController } from './region-processing-controller';
+import { AutomationController } from './automation-controller';
 
 interface AppControllerDependencies {
   sessionStore: SessionStore;
@@ -48,6 +49,7 @@ export class AppController {
   public readonly recording: RecordingController;
   public readonly editor: EditorController;
   public readonly regionProcessing: RegionProcessingController;
+  public readonly automation: AutomationController;
 
   constructor({
     sessionStore,
@@ -60,6 +62,7 @@ export class AppController {
   }: AppControllerDependencies) {
     this.playback = new PlaybackController(sessionStore, audioEngine);
     this.track = new TrackController({ sessionStore, audioEngine, audioSourceRegistry });
+    this.automation = new AutomationController({ audioEngine, sessionStore });
     this.region = new RegionController({ sessionStore, audioEngine, audioSourceRegistry });
     this.editor = new EditorController({ regionRuntime: this.region, sessionStore });
     this.regionProcessing = new RegionProcessingController({

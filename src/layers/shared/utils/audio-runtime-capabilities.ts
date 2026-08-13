@@ -39,7 +39,7 @@ export interface AudioRuntimeFeatureCapability {
 
 export const CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT: AudioRuntimeFeatureSupport = {
   [AudioRuntimeFeature.ADVANCED_EXPORT]: false,
-  [AudioRuntimeFeature.AUTOMATION]: false,
+  [AudioRuntimeFeature.AUTOMATION]: true,
   [AudioRuntimeFeature.BUILT_IN_PLUGINS]: true,
   [AudioRuntimeFeature.LINEAR_RECORDING]: false,
   [AudioRuntimeFeature.LIVE_INPUT]: true,

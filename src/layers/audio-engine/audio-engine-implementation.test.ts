@@ -28,6 +28,10 @@ interface GainMockState {
   readonly gain: {
     value: number;
     rampTo: (value: number, rampSeconds: number) => void;
+    cancelScheduledValues: (time: number) => void;
+    linearRampToValueAtTime: (value: number, time: number) => void;
+    setValueAtTime: (value: number, time: number) => void;
+    setValueCurveAtTime: (values: number[], time: number, duration: number) => void;
   };
 }
 
@@ -75,6 +79,11 @@ const toneMocks = vi.hoisted(() => ({
   gainConnect: vi.fn(),
   gainConnectFailures: [] as Array<Error | undefined>,
   gainRampTo: vi.fn(),
+  automationCancel: vi.fn(),
+  automationLinearRamp: vi.fn(),
+  automationSetValue: vi.fn(),
+  automationSetValueFailures: [] as Array<Error | undefined>,
+  automationSetValueCurve: vi.fn(),
   gainToDestination: vi.fn(),
   gainValueFailures: [] as Array<Error | undefined>,
   playerConnect: vi.fn(),
@@ -138,8 +147,39 @@ vi.mock('tone', () => {
         this.volume.value = value;
         toneMocks.channelVolumeRampTo(value, duration);
       }),
+      cancelScheduledValues: vi.fn((time: number) => toneMocks.automationCancel('volume', time)),
+      linearRampToValueAtTime: vi.fn((value: number, time: number) => {
+        this.volume.value = value;
+        toneMocks.automationLinearRamp('volume', value, time);
+      }),
+      setValueAtTime: vi.fn((value: number, time: number) => {
+        const failure = toneMocks.automationSetValueFailures.shift();
+        if (failure) {
+          throw failure;
+        }
+        this.volume.value = value;
+        toneMocks.automationSetValue('volume', value, time);
+      }),
+      setValueCurveAtTime: vi.fn((values: number[], time: number, duration: number) =>
+        toneMocks.automationSetValueCurve('volume', values, time, duration)
+      ),
     };
-    pan = { value: 0, rampTo: vi.fn() };
+    pan = {
+      value: 0,
+      rampTo: vi.fn(),
+      cancelScheduledValues: vi.fn((time: number) => toneMocks.automationCancel('pan', time)),
+      linearRampToValueAtTime: vi.fn((value: number, time: number) => {
+        this.pan.value = value;
+        toneMocks.automationLinearRamp('pan', value, time);
+      }),
+      setValueAtTime: vi.fn((value: number, time: number) => {
+        this.pan.value = value;
+        toneMocks.automationSetValue('pan', value, time);
+      }),
+      setValueCurveAtTime: vi.fn((values: number[], time: number, duration: number) =>
+        toneMocks.automationSetValueCurve('pan', values, time, duration)
+      ),
+    };
 
     get mute() {
       return this.volume.value === Number.NEGATIVE_INFINITY;
@@ -221,6 +261,17 @@ vi.mock('tone', () => {
           gainValue = value;
           toneMocks.gainRampTo(value, rampSeconds);
         },
+        cancelScheduledValues: (time: number) => toneMocks.automationCancel('gain', time),
+        linearRampToValueAtTime: (value: number, time: number) => {
+          gainValue = value;
+          toneMocks.automationLinearRamp('gain', value, time);
+        },
+        setValueAtTime: (value: number, time: number) => {
+          gainValue = value;
+          toneMocks.automationSetValue('gain', value, time);
+        },
+        setValueCurveAtTime: (values: number[], time: number, duration: number) =>
+          toneMocks.automationSetValueCurve('gain', values, time, duration),
       };
       toneMocks.gains.push(this);
     }
@@ -402,6 +453,8 @@ vi.mock('tone', () => {
   };
 
   const transport = {
+    clear: vi.fn(),
+    schedule: vi.fn(() => 1),
     pause: () => {
       toneMocks.transportPause();
       toneMocks.transportState = 'paused';
@@ -627,6 +680,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     toneMocks.gainConnectFailures.length = 0;
     toneMocks.gainRampTo.mockClear();
     toneMocks.gainValueFailures.length = 0;
+    toneMocks.automationSetValueFailures.length = 0;
     toneMocks.playerConnectFailures.length = 0;
     toneMocks.tempoWrites.length = 0;
     toneMocks.transportSeconds = 0;
@@ -684,6 +738,252 @@ describe('AudioEngine 실시간 상태 일관성', () => {
 
     engine.setTrackMute('vca-1', true);
     expect(toneMocks.channels[0]?.mute).toBe(true);
+  });
+
+  it('Track volume Automation을 현재 Transport 위치부터 AudioContext 시간에 예약한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addTrack('track-1');
+    toneMocks.transportSeconds = 1;
+    toneMocks.contextTimeSeconds = 10;
+
+    engine.setAutomationLanes({
+      automationLanes: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          isEnabled: true,
+          points: [
+            {
+              id: '22222222-2222-4222-8222-222222222222',
+              interpolation: 'linear',
+              timeSeconds: 0,
+              value: 0,
+            },
+            {
+              id: '33333333-3333-4333-8333-333333333333',
+              interpolation: 'hold',
+              timeSeconds: 2,
+              value: 1,
+            },
+          ],
+          target: { kind: 'trackVolume' },
+        },
+      ],
+      trackId: 'track-1',
+    });
+
+    expect(toneMocks.automationCancel).toHaveBeenCalledWith('volume', 10);
+    expect(toneMocks.automationSetValue).toHaveBeenCalledWith('volume', 0.5, 10);
+    expect(toneMocks.automationLinearRamp).toHaveBeenCalledWith('volume', 1, 11);
+  });
+
+  it('Automation 예약 실패 시 이전 lane을 runtime과 graph에 복원한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addTrack('track-1');
+    const createLane = (value: number) => ({
+      id: '11111111-1111-4111-8111-111111111111',
+      isEnabled: true,
+      points: [
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          interpolation: 'hold' as const,
+          timeSeconds: 0,
+          value,
+        },
+      ],
+      target: { kind: 'trackVolume' as const },
+    });
+    engine.setAutomationLanes({ automationLanes: [createLane(0.25)], trackId: 'track-1' });
+    toneMocks.automationSetValue.mockClear();
+    toneMocks.automationSetValueFailures.push(new Error('automation schedule failed'));
+
+    expect(() => engine.setAutomationLanes({ automationLanes: [createLane(0.75)], trackId: 'track-1' })).toThrowError(
+      'automation schedule failed'
+    );
+
+    expect(toneMocks.automationSetValue).toHaveBeenLastCalledWith('volume', 0.25, 0);
+    toneMocks.automationSetValue.mockClear();
+    await engine.play();
+    expect(toneMocks.automationSetValue).toHaveBeenLastCalledWith('volume', 0.25, 0);
+  });
+
+  it('Send gain Automation을 Send AudioParam에 예약한다', async () => {
+    const engine = new AudioEngine();
+    const trackId = '11111111-1111-4111-8111-111111111111';
+    const busId = '22222222-2222-4222-8222-222222222222';
+    const sendId = '33333333-3333-4333-8333-333333333333';
+    await engine.addTrack(trackId);
+    await engine.addTrack(busId);
+    engine.setRoutingGraph({
+      routes: [
+        {
+          channelCount: 2,
+          folderId: null,
+          kind: 'audio',
+          output: { kind: 'master' },
+          trackId,
+          vcaIds: [],
+        },
+        {
+          channelCount: 2,
+          folderId: null,
+          kind: 'bus',
+          output: { kind: 'master' },
+          trackId: busId,
+          vcaIds: [],
+        },
+      ],
+      sends: [
+        {
+          destinationTrackId: busId,
+          gain: 0.5,
+          id: sendId,
+          isEnabled: true,
+          sourceTrackId: trackId,
+          tapPoint: 'postFader',
+        },
+      ],
+    });
+
+    engine.setAutomationLanes({
+      automationLanes: [
+        {
+          id: '44444444-4444-4444-8444-444444444444',
+          isEnabled: true,
+          points: [
+            {
+              id: '55555555-5555-4555-8555-555555555555',
+              interpolation: 'hold',
+              timeSeconds: 0,
+              value: 0.25,
+            },
+          ],
+          target: { kind: 'sendGain', sendId },
+        },
+      ],
+      trackId,
+    });
+
+    expect(toneMocks.automationSetValue).toHaveBeenCalledWith('gain', 0.25, 0);
+
+    toneMocks.automationSetValue.mockClear();
+    engine.setRoutingGraph({
+      routes: engine.getRoutingGraph().routes,
+      sends: [
+        {
+          destinationTrackId: busId,
+          gain: 0.75,
+          id: sendId,
+          isEnabled: true,
+          sourceTrackId: trackId,
+          tapPoint: 'postFader',
+        },
+      ],
+    });
+    expect(toneMocks.automationSetValue).toHaveBeenLastCalledWith('gain', 0.25, 0);
+
+    expect(() =>
+      engine.setRoutingGraph({
+        routes: engine.getRoutingGraph().routes,
+        sends: [
+          {
+            destinationTrackId: busId,
+            gain: 0.75,
+            id: sendId,
+            isEnabled: false,
+            sourceTrackId: trackId,
+            tapPoint: 'postFader',
+          },
+        ],
+      })
+    ).toThrowError(expect.objectContaining({ code: AudioEngineErrorCode.AUTOMATION_TARGET_NOT_FOUND }));
+    expect(engine.getRoutingGraph().sends[0]?.isEnabled).toBe(true);
+  });
+
+  it('비활성 Automation lane은 현재 runtime에 없는 대상을 예약하지 않는다', async () => {
+    const engine = createSaturationAudioEngine();
+    await engine.addTrack('track-1');
+    engine.installPlugin({
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.saturation',
+      parameterValues: new Map([['drive', 0.5]]),
+      trackId: 'track-1',
+    });
+
+    const automationLanes = [
+      {
+        id: '88888888-8888-4888-8888-888888888888',
+        isEnabled: false,
+        points: [
+          {
+            id: '99999999-9999-4999-8999-999999999999',
+            interpolation: 'hold' as const,
+            timeSeconds: 0,
+            value: 0.5,
+          },
+        ],
+        target: { kind: 'pluginParameter' as const, parameterId: 'drive', pluginInstanceId: 'plugin-1' },
+      },
+    ];
+    expect(() => engine.setAutomationLanes({ automationLanes, trackId: 'track-1' })).not.toThrow();
+
+    await expect(
+      engine.exportProject({
+        masterVolume: 1,
+        range: { endTime: 1, startTime: 0 },
+        sampleRate: 44100,
+        tracks: [
+          {
+            automationLanes,
+            id: 'track-1',
+            isMuted: false,
+            isSoloed: false,
+            pan: 0,
+            pluginInstances: [
+              {
+                instanceId: 'plugin-1',
+                isEnabled: true,
+                manifestId: 'builtin.saturation',
+                parameterValues: new Map([['drive', 0.5]]),
+              },
+            ],
+            regions: [{ ...ORIGINAL_REGION, duration: 1, sourceStartTime: 0, startTime: 0 }],
+            volume: 1,
+          },
+        ],
+      })
+    ).resolves.toBeInstanceOf(Blob);
+  });
+
+  it('Plugin parameter Automation의 정규화 값을 실제 parameter 범위로 변환한다', async () => {
+    const engine = createPluginAudioEngine();
+    await engine.addTrack('track-1');
+    engine.installPlugin({
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: new Map([['gain', 0.5]]),
+      trackId: 'track-1',
+    });
+
+    engine.setAutomationLanes({
+      automationLanes: [
+        {
+          id: '66666666-6666-4666-8666-666666666666',
+          isEnabled: true,
+          points: [
+            {
+              id: '77777777-7777-4777-8777-777777777777',
+              interpolation: 'hold',
+              timeSeconds: 0,
+              value: 0.5,
+            },
+          ],
+          target: { kind: 'pluginParameter', parameterId: 'gain', pluginInstanceId: 'plugin-1' },
+        },
+      ],
+      trackId: 'track-1',
+    });
+
+    expect(toneMocks.automationSetValue).toHaveBeenCalledWith('gain', 1, 0);
   });
 
   it('Monitor dim과 cut은 Master 설정값을 유지하면서 출력 gain만 변경한다', () => {
@@ -2643,14 +2943,146 @@ describe('AudioEngine Export 회귀', () => {
 
     expect(toneMocks.playerLoad).toHaveBeenCalledWith('test.wav');
     expect(toneMocks.playerStart).toHaveBeenCalledWith(0, 2, 3);
-    expect(toneMocks.channelOptions).toContainEqual({ volume: 0.25, pan: -0.25 });
-    const output = toneMocks.outputGains[0];
-    const trackInput = toneMocks.gains.find(gain => gain !== output);
+    expect(toneMocks.channelOptions).toContainEqual({ volume: 0.5, pan: -0.25 });
+    const output = toneMocks.outputGains[1];
+    const trackInput = toneMocks.gains[2];
+    const preFaderOutput = toneMocks.gains[3];
+    const postFaderOutput = toneMocks.gains[4];
     expect(toneMocks.playerInstances[0]?.destination).toBe(trackInput);
-    expect(trackInput?.destination).toBe(toneMocks.channels[0]);
+    expect(trackInput?.destination).toBe(preFaderOutput);
+    expect(preFaderOutput?.destination).toBe(toneMocks.channels[0]);
+    expect(toneMocks.channels[0]?.destination).toBe(postFaderOutput);
+    expect(postFaderOutput?.destination).toBe(output);
+    expect(output?.gain.value).toBe(0.5);
     expect(toneMocks.offline).toHaveBeenCalledWith(expect.any(Function), 3, 2, 44100);
     expect(blob.type).toBe('audio/wav');
     expect(blob.size).toBeGreaterThan(44);
+  });
+
+  it('offline export도 실시간 재생과 같은 Automation 보간 계획을 사용한다', async () => {
+    const engine = new AudioEngine();
+
+    await engine.exportProject({
+      masterVolume: 0.5,
+      range: { endTime: 2, startTime: 1 },
+      sampleRate: 44100,
+      tracks: [
+        {
+          automationLanes: [
+            {
+              id: '11111111-1111-4111-8111-111111111111',
+              isEnabled: true,
+              points: [
+                {
+                  id: '22222222-2222-4222-8222-222222222222',
+                  interpolation: 'linear',
+                  timeSeconds: 0,
+                  value: 0,
+                },
+                {
+                  id: '33333333-3333-4333-8333-333333333333',
+                  interpolation: 'hold',
+                  timeSeconds: 2,
+                  value: 1,
+                },
+              ],
+              target: { kind: 'trackVolume' },
+            },
+          ],
+          id: 'track-1',
+          isMuted: false,
+          isSoloed: false,
+          pan: 0,
+          pluginInstances: [],
+          regions: [{ ...ORIGINAL_REGION, duration: 2, sourceStartTime: 0, startTime: 0 }],
+          volume: 1,
+        },
+      ],
+    });
+
+    expect(toneMocks.automationSetValue).toHaveBeenCalledWith('volume', 0.5, 0);
+    expect(toneMocks.automationLinearRamp).toHaveBeenCalledWith('volume', 1, 1);
+  });
+
+  it('offline export에서 저장된 Send 경로에 Send gain Automation을 예약한다', async () => {
+    const engine = new AudioEngine();
+    const sourceTrackId = '11111111-1111-4111-8111-111111111111';
+    const busTrackId = '22222222-2222-4222-8222-222222222222';
+    const sendId = '33333333-3333-4333-8333-333333333333';
+
+    await engine.exportProject({
+      masterVolume: 1,
+      range: { endTime: 2, startTime: 0 },
+      routingGraph: {
+        routes: [
+          {
+            channelCount: 2,
+            folderId: null,
+            kind: 'audio',
+            output: { kind: 'master' },
+            trackId: sourceTrackId,
+            vcaIds: [],
+          },
+          {
+            channelCount: 2,
+            folderId: null,
+            kind: 'bus',
+            output: { kind: 'master' },
+            trackId: busTrackId,
+            vcaIds: [],
+          },
+        ],
+        sends: [
+          {
+            destinationTrackId: busTrackId,
+            gain: 0.5,
+            id: sendId,
+            isEnabled: true,
+            sourceTrackId,
+            tapPoint: 'postFader',
+          },
+        ],
+      },
+      sampleRate: 44100,
+      tracks: [
+        {
+          automationLanes: [
+            {
+              id: '44444444-4444-4444-8444-444444444444',
+              isEnabled: true,
+              points: [
+                {
+                  id: '55555555-5555-4555-8555-555555555555',
+                  interpolation: 'hold',
+                  timeSeconds: 0,
+                  value: 0.25,
+                },
+              ],
+              target: { kind: 'sendGain', sendId },
+            },
+          ],
+          id: sourceTrackId,
+          isMuted: false,
+          isSoloed: false,
+          pan: 0,
+          pluginInstances: [],
+          regions: [{ ...ORIGINAL_REGION, duration: 2, sourceStartTime: 0, startTime: 0 }],
+          volume: 1,
+        },
+        {
+          automationLanes: [],
+          id: busTrackId,
+          isMuted: false,
+          isSoloed: false,
+          pan: 0,
+          pluginInstances: [],
+          regions: [],
+          volume: 1,
+        },
+      ],
+    });
+
+    expect(toneMocks.automationSetValue).toHaveBeenCalledWith('gain', 0.25, 0);
   });
 
   it('Solo 트랙이 있으면 음소거되지 않은 Solo 트랙만 렌더링한다', async () => {
@@ -2724,10 +3156,12 @@ describe('AudioEngine Export 회귀', () => {
       sampleRate: 44100,
     });
 
-    const trackInput = toneMocks.gains[1];
-    const pluginGain = toneMocks.gains[2];
+    const trackInput = toneMocks.gains[2];
+    const preFaderOutput = toneMocks.gains[3];
+    const pluginGain = toneMocks.gains[5];
     expect(trackInput?.destination).toBe(pluginGain);
-    expect(pluginGain?.destination).toBe(toneMocks.channels[0]);
+    expect(pluginGain?.destination).toBe(preFaderOutput);
+    expect(preFaderOutput?.destination).toBe(toneMocks.channels[0]);
     expect(pluginGain?.gain.value).toBe(0.5);
   });
 
@@ -2767,9 +3201,11 @@ describe('AudioEngine Export 회귀', () => {
       sampleRate: 44100,
     });
 
-    const trackInput = toneMocks.gains[1];
-    const disabledPluginGain = toneMocks.gains[2];
-    expect(trackInput?.destination).toBe(toneMocks.channels[0]);
+    const trackInput = toneMocks.gains[2];
+    const preFaderOutput = toneMocks.gains[3];
+    const disabledPluginGain = toneMocks.gains[5];
+    expect(trackInput?.destination).toBe(preFaderOutput);
+    expect(preFaderOutput?.destination).toBe(toneMocks.channels[0]);
     expect(disabledPluginGain?.destination).toBeUndefined();
   });
 

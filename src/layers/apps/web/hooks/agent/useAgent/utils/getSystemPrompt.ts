@@ -134,6 +134,8 @@ const COMMAND_REFERENCE = {
     '{"type":"SET_TRACK_MUTE","trackId":"<existing Track UUID>","muted":<boolean>} - Track 음소거 변경',
   [AudioCommandType.SET_TRACK_SOLO]:
     '{"type":"SET_TRACK_SOLO","trackId":"<existing Track UUID>","soloed":<boolean>} - Track solo 변경',
+  [AudioCommandType.SET_AUTOMATION_LANES]:
+    '{"type":"SET_AUTOMATION_LANES","trackId":"<existing Track UUID>","automationLanes":[]} - Track Automation lane 전체 교체',
   [AudioCommandType.INSTALL_PLUGIN]:
     '{"type":"INSTALL_PLUGIN","trackId":"<existing Track UUID>","manifestId":"<listed manifest ID>"} - Plugin 설치',
   [AudioCommandType.REMOVE_PLUGIN]:

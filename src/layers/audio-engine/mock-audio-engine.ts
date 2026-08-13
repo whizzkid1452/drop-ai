@@ -46,6 +46,7 @@ import type {
   SetAudioTempoMapRequest,
   SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
+  SetAutomationLanesRequest,
   SetLiveInputMonitoringRequest,
   SetTrackRecordArmRequest,
   SetTrackRecordingInputRequest,
@@ -102,9 +103,26 @@ export class MockAudioEngine implements IAudioEngine {
   private readonly monitorStateListeners = new Set<AudioMonitorStateListener>();
   private readonly liveInputStateListeners = new Set<LiveInputRuntimeListener>();
   private mockAudioRegionPeak = 0.5;
+  private mockAutomationLanes = new Map<string, SetAutomationLanesRequest['automationLanes']>();
 
   getFeatureSupport(): AudioRuntimeFeatureSupport {
     return { ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT, metering: true, tempoLoopMetronome: true };
+  }
+
+  setAutomationLanes(request: SetAutomationLanesRequest): void {
+    if (!this.mockTracks.has(request.trackId)) {
+      throw new AudioEngineError(AudioEngineErrorCode.TRACK_NOT_FOUND, ERROR_MESSAGES.TRACK_NOT_FOUND, {
+        trackId: request.trackId,
+      });
+    }
+    this.mockAutomationLanes.set(
+      request.trackId,
+      request.automationLanes.map(lane => ({
+        ...lane,
+        points: lane.points.map(point => ({ ...point })),
+        target: { ...lane.target },
+      }))
+    );
   }
 
   setMockAudioRegionPeak(peak: number): void {

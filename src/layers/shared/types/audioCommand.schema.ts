@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { calculateFiniteRegionSourceEndTime } from '../audio-source-range';
 import { calculateFiniteRegionEndTime } from '../region-timeline';
 import {
+  ProjectAutomationLaneSchema,
   ProjectCompSegmentSchema,
   ProjectRoutingGraphSchema,
   ProjectRoutingRouteTargetSchema,
@@ -58,6 +59,7 @@ export const AudioCommandType = {
   SET_TRACK_PAN: 'SET_TRACK_PAN',
   SET_TRACK_MUTE: 'SET_TRACK_MUTE',
   SET_TRACK_SOLO: 'SET_TRACK_SOLO',
+  SET_AUTOMATION_LANES: 'SET_AUTOMATION_LANES',
   INSTALL_PLUGIN: 'INSTALL_PLUGIN',
   REMOVE_PLUGIN: 'REMOVE_PLUGIN',
   MOVE_PLUGIN: 'MOVE_PLUGIN',
@@ -438,6 +440,11 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
     type: z.literal(AudioCommandType.SET_TRACK_SOLO),
     trackId: z.uuid('Invalid track ID format'),
     soloed: z.boolean(),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_AUTOMATION_LANES),
+    automationLanes: z.array(ProjectAutomationLaneSchema).max(128),
+    trackId: z.uuid('Invalid track ID format'),
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.INSTALL_PLUGIN),

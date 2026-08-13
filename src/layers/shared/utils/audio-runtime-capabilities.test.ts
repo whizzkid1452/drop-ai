@@ -40,6 +40,12 @@ describe('resolveAudioRuntimeCapabilities', () => {
     expect(capabilities.features[AudioRuntimeFeature.METERING]).toEqual({ blockers: [], status: 'available' });
   });
 
+  it('현재 runtime은 Automation 기능을 사용 가능으로 공개한다', () => {
+    const capabilities = resolveAudioRuntimeCapabilities(fullEnvironment);
+
+    expect(capabilities.features[AudioRuntimeFeature.AUTOMATION]).toEqual({ blockers: [], status: 'available' });
+  });
+
   it('모든 조건이 있으면 세 기능을 각각 사용할 수 있다', () => {
     expect(resolveAudioRuntimeCapabilities(fullEnvironment, currentRuntimeSupport)).toEqual({
       blockers: {
