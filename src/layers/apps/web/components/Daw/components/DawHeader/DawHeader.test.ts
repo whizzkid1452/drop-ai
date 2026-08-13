@@ -71,6 +71,10 @@ vi.mock('./RecordingControl', () => ({
   RecordingControl: componentMocks.recordingControl,
 }));
 
+vi.mock('./RegionEditControls', () => ({
+  RegionEditControls: () => null,
+}));
+
 vi.mock('../LiveInputControls/InputDeviceControl', () => ({
   InputDeviceControl: componentMocks.inputDeviceControl,
 }));
@@ -90,6 +94,7 @@ vi.mock('@/layers/apps/web/components/Auth/AccountControl', () => ({
 vi.mock('../../DawPage.css.ts', () => ({
   header: 'header',
   headerIdentity: 'headerIdentity',
+  editorBar: 'editorBar',
   productName: 'productName',
   workspaceName: 'workspaceName',
   projectBar: 'projectBar',

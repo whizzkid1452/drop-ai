@@ -34,8 +34,12 @@ vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
 }));
 
 vi.mock('./RegionComponent.css.ts', () => ({
+  endTrimHandle: 'endTrimHandle',
   regionContainer: 'regionContainer',
   removeButton: 'removeButton',
+  selectedRegion: 'selectedRegion',
+  startTrimHandle: 'startTrimHandle',
+  trimHandle: 'trimHandle',
 }));
 
 interface Deferred<T> {
@@ -48,7 +52,14 @@ interface RenderRegionOptions {
   gridSettings?: TimelineGridSettings;
   onMove: (newStartTime: number) => Promise<void>;
   onRemove?: () => void;
+  onSelect?: (additive: boolean) => void;
+  onTrim?: (request: {
+    durationSeconds: number;
+    sourceStartTimeSeconds: number;
+    startTimeSeconds: number;
+  }) => Promise<void>;
   region?: RegionState;
+  selected?: boolean;
   waveformRenderData?: {
     duration: number;
     objectUrl: string;
@@ -99,7 +110,10 @@ function renderRegion({
   gridSettings: selectedGridSettings = gridSettings,
   onMove,
   onRemove,
+  onSelect,
+  onTrim,
   region = sourceBackedRegion,
+  selected = false,
   waveformRenderData,
 }: RenderRegionOptions) {
   const host = document.createElement('div');
@@ -115,6 +129,9 @@ function renderRegion({
         gridSettings: selectedGridSettings,
         onMove,
         onRemove,
+        onSelect,
+        onTrim,
+        selected,
         waveformRenderData,
       })
     );
@@ -125,10 +142,12 @@ function renderRegion({
     throw new Error('Region 요소를 찾지 못했습니다.');
   }
 
-  const capturedPointerIds = new Set<number>();
-  regionElement.setPointerCapture = pointerId => capturedPointerIds.add(pointerId);
-  regionElement.hasPointerCapture = pointerId => capturedPointerIds.has(pointerId);
-  regionElement.releasePointerCapture = pointerId => capturedPointerIds.delete(pointerId);
+  [regionElement, ...host.querySelectorAll<HTMLElement>('button')].forEach(element => {
+    const capturedPointerIds = new Set<number>();
+    element.setPointerCapture = pointerId => capturedPointerIds.add(pointerId);
+    element.hasPointerCapture = pointerId => capturedPointerIds.has(pointerId);
+    element.releasePointerCapture = pointerId => capturedPointerIds.delete(pointerId);
+  });
 
   return { host, regionElement, root };
 }
@@ -475,5 +494,68 @@ describe('RegionComponent 드래그 이동', () => {
 
     expect(onMove).not.toHaveBeenCalled();
     expect(regionElement.style.transform).toBe('translateX(200px)');
+  });
+});
+
+describe('RegionComponent 선택과 trim', () => {
+  it('포인터 입력 시 단일 또는 추가 선택을 요청하고 선택 상태를 표시한다', () => {
+    const onSelect = vi.fn();
+    const { regionElement } = renderRegion({
+      onMove: vi.fn().mockResolvedValue(undefined),
+      onSelect,
+      selected: true,
+    });
+
+    dispatchPointer(regionElement, 'pointerdown');
+    dispatchPointer(regionElement, 'pointerup');
+    act(() =>
+      regionElement.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, button: 0, ctrlKey: true, isPrimary: true, pointerId: 2 })
+      )
+    );
+
+    expect(onSelect).toHaveBeenNthCalledWith(1, false);
+    expect(onSelect).toHaveBeenNthCalledWith(2, true);
+    expect(regionElement.dataset.selected).toBe('true');
+  });
+
+  it('왼쪽 trim handle은 Timeline과 Source 시작을 함께 이동하고 길이를 줄인다', async () => {
+    const onMove = vi.fn().mockResolvedValue(undefined);
+    const onTrim = vi.fn().mockResolvedValue(undefined);
+    const { host } = renderRegion({ onMove, onTrim });
+    const handle = host.querySelector('[aria-label="Region 시작 trim"]');
+    if (!handle) {
+      throw new Error('시작 trim handle을 찾지 못했습니다.');
+    }
+
+    dispatchPointer(handle, 'pointerdown', { clientX: 100, pointerId: 3 });
+    dispatchPointer(handle, 'pointerup', { clientX: 150, pointerId: 3 });
+    await act(async () => Promise.resolve());
+
+    expect(onTrim).toHaveBeenCalledWith({
+      durationSeconds: 2.5,
+      sourceStartTimeSeconds: 0.5,
+      startTimeSeconds: 2.5,
+    });
+    expect(onMove).not.toHaveBeenCalled();
+  });
+
+  it('오른쪽 trim handle은 Timeline 시작과 Source 시작을 유지하고 길이만 바꾼다', async () => {
+    const onTrim = vi.fn().mockResolvedValue(undefined);
+    const { host } = renderRegion({ onMove: vi.fn().mockResolvedValue(undefined), onTrim });
+    const handle = host.querySelector('[aria-label="Region 끝 trim"]');
+    if (!handle) {
+      throw new Error('끝 trim handle을 찾지 못했습니다.');
+    }
+
+    dispatchPointer(handle, 'pointerdown', { clientX: 100, pointerId: 4 });
+    dispatchPointer(handle, 'pointerup', { clientX: 150, pointerId: 4 });
+    await act(async () => Promise.resolve());
+
+    expect(onTrim).toHaveBeenCalledWith({
+      durationSeconds: 3.5,
+      sourceStartTimeSeconds: 0,
+      startTimeSeconds: 2,
+    });
   });
 });

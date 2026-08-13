@@ -77,6 +77,17 @@ export const trackTimeline = style({
   backgroundSize: '100% 24px, 100% 100%',
 });
 
+export const rangeSelection = style({
+  position: 'absolute',
+  top: 0,
+  bottom: 0,
+  zIndex: 1,
+  borderLeft: '1px solid #f0cd68',
+  borderRight: '1px solid #f0cd68',
+  background: 'rgba(240, 205, 104, 0.16)',
+  pointerEvents: 'none',
+});
+
 export const actionControls = style({
   display: 'flex',
   alignItems: 'center',

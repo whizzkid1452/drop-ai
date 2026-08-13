@@ -16,6 +16,8 @@ import type { IMidiInput } from '../../../midi-input/i-midi-input';
 import type { AuthSnapshot, IAuthClient } from '../../../auth/i-auth-client';
 import { useLayer } from './layer-context';
 import type { IBillingClient } from '../../../billing/i-billing-client';
+import type { IEditorQuery } from '../../../queries/editor-query';
+import type { EditorRuntimeState } from '../../../shared/types/editor-runtime';
 
 export function useAudioRuntimeCapabilities(): AudioRuntimeCapabilities {
   return useLayer().audioRuntimeCapabilities;
@@ -82,6 +84,17 @@ export function useRecordingRuntimeState(): RecordingRuntimeState {
   const recording = useRecordingQuery();
   const subscribe = useCallback((listener: () => void) => recording.subscribe(listener), [recording]);
   const getSnapshot = useCallback(() => recording.readState(), [recording]);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+export function useEditorQuery(): IEditorQuery {
+  return useLayer().editor;
+}
+
+export function useEditorRuntimeState(): EditorRuntimeState {
+  const editor = useEditorQuery();
+  const subscribe = useCallback((listener: () => void) => editor.subscribe(listener), [editor]);
+  const getSnapshot = useCallback(() => editor.readState(), [editor]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 

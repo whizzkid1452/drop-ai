@@ -261,6 +261,22 @@ export class EditorController {
     this.publish(EMPTY_EDITOR_RUNTIME_STATE);
   }
 
+  removeMissingSelections(): void {
+    const selection = this.#state.selection;
+    const trackIds = selection.trackIds.filter(trackId => this.#sessionStore.getState().tracks.has(trackId));
+    const regions = selection.regions.filter(region => this.hasRegion(region));
+    const range = selection.range
+      ? {
+          ...selection.range,
+          trackIds: selection.range.trackIds.filter(trackId => this.#sessionStore.getState().tracks.has(trackId)),
+        }
+      : null;
+    const nextSelection = { ...selection, range, regions, trackIds };
+    if (!areSelectionsEqual(selection, nextSelection)) {
+      this.publish({ ...this.#state, selection: nextSelection });
+    }
+  }
+
   private validateSelection(request: SetEditorSelectionRequest): EditorSelectionState {
     if (!Number.isFinite(request.editPointSeconds) || request.editPointSeconds < 0) {
       this.throwInvalidSelection('edit point는 0 이상의 유한한 초 단위 값이어야 합니다.');
@@ -423,6 +439,15 @@ export class EditorController {
       });
     }
     return region;
+  }
+
+  private hasRegion(selection: EditorRegionSelection): boolean {
+    return (
+      this.#sessionStore
+        .getState()
+        .tracks.get(selection.trackId)
+        ?.regions.some(region => region.id === selection.regionId) === true
+    );
   }
 
   private throwInvalidSelection(message: string): never {

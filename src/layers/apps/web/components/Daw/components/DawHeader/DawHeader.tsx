@@ -15,6 +15,7 @@ import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordina
 import { MusicalPositionClock } from './MusicalPositionClock';
 import { InputDeviceControl } from '../LiveInputControls/InputDeviceControl';
 import { RecordingControl } from './RecordingControl';
+import { RegionEditControls } from './RegionEditControls';
 
 interface DawHeaderProps {
   trackCount: number;
@@ -55,6 +56,9 @@ export function DawHeader({ coordinateMapper, trackCount }: DawHeaderProps) {
           <TempoMetadataControl />
           <span className={styles.trackCount}>{trackCount} tracks</span>
         </div>
+      </div>
+      <div className={styles.editorBar}>
+        <RegionEditControls />
       </div>
     </header>
   );

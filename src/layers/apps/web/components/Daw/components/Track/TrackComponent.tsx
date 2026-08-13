@@ -1,5 +1,5 @@
 import type WaveSurfer from 'wavesurfer.js';
-import { memo, useState } from 'react';
+import { memo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { TrackToggleResult } from '@/layers/apps/web/hooks/track-mute-solo-commands';
 import type { TrackState } from '@/layers/session/session';
 import { useTrackActions } from '@/layers/apps/web/hooks/useTrackActions';
@@ -8,7 +8,7 @@ import { RegionComponent } from './RegionComponent';
 import * as styles from './Track.css.ts';
 import type { WaveformRenderData } from '@/layers/apps/web/components/Daw/components/TrackList/waveform-render-cache';
 import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
-import type { TimelineGridSettings } from '../../timeline-grid';
+import { snapTimelineSeconds, type TimelineGridSettings } from '../../timeline-grid';
 import { AudioLevelMeter } from '../AudioLevelMeter/AudioLevelMeter';
 import { TrackInputMonitoringControl } from '../LiveInputControls/TrackInputMonitoringControl';
 import { TrackRecordArmControl } from './components/TrackRecordArmControl';
@@ -29,6 +29,11 @@ export const TrackComponent = memo(function TrackComponent({
   onMuteChange,
   onSelect,
   onSoloChange,
+  onRegionSelect,
+  onRangeSelect,
+  onTrimRegion,
+  selectedRegionIds,
+  selectedRange,
   waveformRenderCache,
 }: {
   isSelected: boolean;
@@ -39,11 +44,22 @@ export const TrackComponent = memo(function TrackComponent({
   onMuteChange: (muted: boolean) => Promise<TrackToggleResult>;
   onSelect: () => void;
   onSoloChange: (soloed: boolean) => Promise<TrackToggleResult>;
+  onRegionSelect: (regionId: string, additive: boolean) => void;
+  onRangeSelect: (startTimeSeconds: number, endTimeSeconds: number) => void;
+  onTrimRegion: (
+    regionId: string,
+    request: { durationSeconds: number; sourceStartTimeSeconds: number; startTimeSeconds: number }
+  ) => Promise<void>;
+  selectedRegionIds: ReadonlySet<string>;
+  selectedRange: { endTimeSeconds: number; startTimeSeconds: number } | null;
   waveformRenderCache: ReadonlyMap<string, WaveformRenderData>;
 }) {
   const { moveRegion, removeRegion } = useTrackActions();
   const [isMutePending, setIsMutePending] = useState(false);
   const [isSoloPending, setIsSoloPending] = useState(false);
+  const rangePointerId = useRef<number | null>(null);
+  const rangeStartTime = useRef(0);
+  const [rangePreview, setRangePreview] = useState<{ endTimeSeconds: number; startTimeSeconds: number } | null>(null);
 
   const handleRemoveRegion = (regionId: string) => {
     void removeRegion({ trackId: track.id, regionId });
@@ -78,6 +94,70 @@ export const TrackComponent = memo(function TrackComponent({
       setIsSoloPending(false);
     }
   };
+
+  const resolveTimelineTime = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const timelinePixel = Math.max(0, event.clientX - event.currentTarget.getBoundingClientRect().left);
+    return snapTimelineSeconds({
+      coordinateMapper,
+      division: gridSettings.division,
+      mode: gridSettings.snapMode,
+      seconds: coordinateMapper.pixelsToSeconds(timelinePixel),
+    });
+  };
+
+  const handleRangePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (
+      event.target !== event.currentTarget ||
+      !event.isPrimary ||
+      event.button !== 0 ||
+      rangePointerId.current !== null
+    ) {
+      return;
+    }
+    const startTimeSeconds = resolveTimelineTime(event);
+    rangePointerId.current = event.pointerId;
+    rangeStartTime.current = startTimeSeconds;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setRangePreview({ endTimeSeconds: startTimeSeconds, startTimeSeconds });
+  };
+
+  const handleRangePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (rangePointerId.current !== event.pointerId) {
+      return;
+    }
+    const currentTimeSeconds = resolveTimelineTime(event);
+    setRangePreview({
+      endTimeSeconds: Math.max(rangeStartTime.current, currentTimeSeconds),
+      startTimeSeconds: Math.min(rangeStartTime.current, currentTimeSeconds),
+    });
+  };
+
+  const handleRangePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (rangePointerId.current !== event.pointerId) {
+      return;
+    }
+    const currentTimeSeconds = resolveTimelineTime(event);
+    const startTimeSeconds = Math.min(rangeStartTime.current, currentTimeSeconds);
+    const endTimeSeconds = Math.max(rangeStartTime.current, currentTimeSeconds);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    rangePointerId.current = null;
+    setRangePreview(null);
+    if (endTimeSeconds > startTimeSeconds) {
+      onRangeSelect(startTimeSeconds, endTimeSeconds);
+    }
+  };
+
+  const handleRangePointerCancel = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (rangePointerId.current !== event.pointerId) {
+      return;
+    }
+    rangePointerId.current = null;
+    setRangePreview(null);
+  };
+
+  const displayedRange = rangePreview ?? selectedRange;
 
   return (
     <article
@@ -118,7 +198,27 @@ export const TrackComponent = memo(function TrackComponent({
         </div>
         <AudioLevelMeter label="Track" target={{ kind: 'track', trackId: track.id }} />
       </div>
-      <div className={styles.trackTimeline} aria-label={`${track.name} timeline`}>
+      <div
+        className={styles.trackTimeline}
+        aria-label={`${track.name} timeline`}
+        onPointerCancel={handleRangePointerCancel}
+        onPointerDown={handleRangePointerDown}
+        onPointerMove={handleRangePointerMove}
+        onPointerUp={handleRangePointerUp}
+      >
+        {displayedRange ? (
+          <div
+            className={styles.rangeSelection}
+            data-testid={rangePreview ? 'range-selection-preview' : 'range-selection'}
+            style={{
+              left: coordinateMapper.secondsToPixels(displayedRange.startTimeSeconds),
+              width: coordinateMapper.durationToPixels({
+                durationSeconds: displayedRange.endTimeSeconds - displayedRange.startTimeSeconds,
+                startSeconds: displayedRange.startTimeSeconds,
+              }),
+            }}
+          />
+        ) : null}
         {track.regions.map(region => (
           <RegionComponent
             key={region.id}
@@ -135,6 +235,9 @@ export const TrackComponent = memo(function TrackComponent({
             }
             onMove={newStartTime => handleMoveRegion(region.id, newStartTime)}
             onRemove={() => handleRemoveRegion(region.id)}
+            onSelect={additive => onRegionSelect(region.id, additive)}
+            onTrim={request => onTrimRegion(region.id, request)}
+            selected={selectedRegionIds.has(region.id)}
             waveformRenderData={waveformRenderCache.get(region.sourceId)}
           />
         ))}

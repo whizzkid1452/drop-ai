@@ -1,6 +1,11 @@
 import { memo, useMemo, useRef } from 'react';
 import * as styles from './TimeRuler.css.ts';
-import { useCommandExecutor, usePlaybackClock, useSession } from '@/layers/apps/web/context/layer-hooks';
+import {
+  useCommandExecutor,
+  useEditorRuntimeState,
+  usePlaybackClock,
+  useSession,
+} from '@/layers/apps/web/context/layer-hooks';
 import { useErrorBoundary } from 'react-error-boundary';
 import {
   KeyboardShortcutAction,
@@ -25,6 +30,7 @@ export const TimeRuler = memo(function TimeRuler({ coordinateMapper, gridSetting
   const tracks = useSession(state => state.tracks);
   const commandExecutor = useCommandExecutor();
   const playbackClock = usePlaybackClock();
+  const editorRuntime = useEditorRuntimeState();
 
   const trackArray = Array.from(tracks.values());
 
@@ -53,7 +59,7 @@ export const TimeRuler = memo(function TimeRuler({ coordinateMapper, gridSetting
     });
   }, [coordinateMapper, maxDuration]);
 
-  const handleMouseDown = async (e: React.MouseEvent) => {
+  const handleEditPointChange = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
@@ -61,10 +67,18 @@ export const TimeRuler = memo(function TimeRuler({ coordinateMapper, gridSetting
     const time = resolveEditTime(x, coordinateMapper, gridSettings);
 
     try {
-      await commandExecutor.execute({
-        type: AudioCommandType.SET_CURRENT_TIME,
-        time,
-      });
+      await commandExecutor.executeMany([
+        { type: AudioCommandType.SET_CURRENT_TIME, time },
+        {
+          type: AudioCommandType.SET_EDITOR_SELECTION,
+          editPointSeconds: time,
+          range: editorRuntime.selection.range
+            ? { ...editorRuntime.selection.range, trackIds: [...editorRuntime.selection.range.trackIds] }
+            : null,
+          regions: editorRuntime.selection.regions.map(region => ({ ...region })),
+          trackIds: [...editorRuntime.selection.trackIds],
+        },
+      ]);
     } catch (error) {
       showBoundary(error);
     }
@@ -111,9 +125,11 @@ export const TimeRuler = memo(function TimeRuler({ coordinateMapper, gridSetting
   return (
     <div className={styles.container} ref={containerRef}>
       {ticks}
-      <div
+      <button
+        type="button"
         className={styles.interactionZone}
-        onMouseDown={handleMouseDown}
+        aria-label="Timeline edit point"
+        onClick={handleEditPointChange}
         title={`Click to Set Playhead. ${KEYBOARD_SHORTCUT_LABELS[KeyboardShortcutAction.SEEK_BACKWARD]}/${KEYBOARD_SHORTCUT_LABELS[KeyboardShortcutAction.SEEK_FORWARD]} to seek.`}
       />
     </div>

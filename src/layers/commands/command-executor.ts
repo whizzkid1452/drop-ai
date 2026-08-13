@@ -335,6 +335,7 @@ export class CommandExecutor {
         const trackId = this.resolveTrackId(session, validatedCommand.trackId);
         const regionId = validatedCommand.regionId ?? this.getFirstRegionId(session, trackId);
         this.controller.region.removeRegion(trackId, regionId);
+        this.controller.editor.removeMissingSelections();
         return;
       }
 
@@ -344,6 +345,7 @@ export class CommandExecutor {
           regionId: validatedCommand.regionId,
           splitTime: validatedCommand.splitTime,
         });
+        this.controller.editor.removeMissingSelections();
         return;
 
       case AudioCommandType.MOVE_REGION:

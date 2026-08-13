@@ -117,6 +117,54 @@ test('단일 Track을 녹음하고 저장된 waveform Region을 다시 불러온
   await expect.poll(async () => Number(await restoredTrackMeter.getAttribute('data-peak-dbfs'))).toBeGreaterThan(-60);
 });
 
+test('Region을 선택해 복제하고 Undo·Redo·저장·복원한다', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('input[type="file"]').setInputFiles(ensureFakeAudioInputFixture());
+  await page.waitForURL('**/daw');
+
+  const regions = page.locator('[data-region-id]');
+  await expect(regions).toHaveCount(1);
+  await regions.first().click({ position: { x: 24, y: 36 } });
+  await expect(regions.first()).toHaveAttribute('data-selected', 'true');
+  await expect(page.getByRole('region', { name: 'Region 편집 도구' })).toContainText('1 REGION');
+
+  await page.getByRole('button', { name: 'Region 복제' }).click();
+  await expect(regions).toHaveCount(2);
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+
+  await page.keyboard.press('Control+z');
+  await expect(regions).toHaveCount(1);
+  await expect(page.getByRole('button', { name: '다시 실행' })).toBeEnabled();
+  await page.keyboard.press('Control+Shift+z');
+  await expect(regions).toHaveCount(2);
+
+  const timeline = page.getByLabel(/timeline$/).first();
+  const timelineBox = await timeline.boundingBox();
+  if (!timelineBox) {
+    throw new Error('Track Timeline 위치를 확인하지 못했습니다.');
+  }
+  await page.mouse.move(timelineBox.x + 420, timelineBox.y + 36);
+  await page.mouse.down();
+  await page.mouse.move(timelineBox.x + 520, timelineBox.y + 36);
+  await page.mouse.up();
+  await expect(page.getByTestId('range-selection')).toBeVisible();
+
+  await regions.first().click({ position: { x: 24, y: 36 } });
+  await page.keyboard.press('Control+c');
+  const editPoint = page.getByRole('button', { name: 'Timeline edit point' });
+  await editPoint.click({ position: { x: 500, y: 10 } });
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press('Control+v');
+  await expect(regions).toHaveCount(3);
+  await page.getByTitle(/^Save/).click();
+  await expect(page.getByText('Save completed', { exact: true })).toBeVisible();
+
+  await page.reload();
+  await page.getByRole('button', { name: '불러오기' }).click();
+  await expect(regions).toHaveCount(3);
+  await expect(page.getByRole('region', { name: 'Region 편집 도구' })).toContainText('0 REGION');
+});
+
 test('오디오 입력 API가 없으면 원인 표시와 함께 관련 UI를 비활성화한다', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });

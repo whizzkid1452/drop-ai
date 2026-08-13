@@ -8,6 +8,8 @@ import type { TrackToggleResult } from '@/layers/apps/web/hooks/track-mute-solo-
 import { TrackComponent } from './TrackComponent';
 import { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 
+const { renderRegionComponent } = vi.hoisted(() => ({ renderRegionComponent: vi.fn() }));
+
 vi.mock('@/layers/apps/web/hooks/useTrackActions', () => ({
   useTrackActions: () => ({
     moveRegion: vi.fn(),
@@ -16,7 +18,10 @@ vi.mock('@/layers/apps/web/hooks/useTrackActions', () => ({
 }));
 
 vi.mock('./RegionComponent', () => ({
-  RegionComponent: () => null,
+  RegionComponent: (props: unknown) => {
+    renderRegionComponent(props);
+    return null;
+  },
 }));
 
 vi.mock('../AudioLevelMeter/AudioLevelMeter', () => ({
@@ -36,6 +41,7 @@ vi.mock('./components/TrackRecordArmControl', () => ({
 vi.mock('./Track.css.ts', () => ({
   actionControls: 'actionControls',
   muteButtonActive: 'muteButtonActive',
+  rangeSelection: 'rangeSelection',
   soloButtonActive: 'soloButtonActive',
   trackActionButton: 'trackActionButton',
   trackHeader: 'trackHeader',
@@ -107,6 +113,14 @@ function renderTrack(
     onMuteChange?: (muted: boolean) => Promise<TrackToggleResult>;
     onSelect?: () => void;
     onSoloChange?: (soloed: boolean) => Promise<TrackToggleResult>;
+    onRegionSelect?: (regionId: string, additive: boolean) => void;
+    onRangeSelect?: (startTimeSeconds: number, endTimeSeconds: number) => void;
+    onTrimRegion?: (
+      regionId: string,
+      request: { durationSeconds: number; sourceStartTimeSeconds: number; startTimeSeconds: number }
+    ) => Promise<void>;
+    selectedRegionIds?: ReadonlySet<string>;
+    selectedRange?: { endTimeSeconds: number; startTimeSeconds: number } | null;
     track?: TrackState;
   } = {}
 ): HTMLElement {
@@ -127,6 +141,11 @@ function renderTrack(
         onMuteChange: options.onMuteChange ?? vi.fn().mockResolvedValue('updated'),
         onSelect: options.onSelect ?? vi.fn(),
         onSoloChange: options.onSoloChange ?? vi.fn().mockResolvedValue('updated'),
+        onRegionSelect: options.onRegionSelect ?? vi.fn(),
+        onRangeSelect: options.onRangeSelect ?? vi.fn(),
+        onTrimRegion: options.onTrimRegion ?? vi.fn().mockResolvedValue(undefined),
+        selectedRegionIds: options.selectedRegionIds ?? new Set(),
+        selectedRange: options.selectedRange ?? null,
       })
     );
   });
@@ -139,6 +158,7 @@ afterEach(() => {
     mountedRoots.splice(0).forEach(root => root.unmount());
   });
   document.body.replaceChildren();
+  renderRegionComponent.mockReset();
 });
 
 describe('TrackComponent 제어', () => {
@@ -210,5 +230,73 @@ describe('TrackComponent 제어', () => {
     await act(async () => muteResult.resolve('failed'));
 
     expect(muteButton?.disabled).toBe(false);
+  });
+
+  it('Region 선택 상태와 trim 요청을 Region UI에 연결한다', async () => {
+    const selectedRegion = {
+      duration: 2,
+      endTime: 3,
+      id: '22222222-2222-4222-8222-222222222222',
+      sourceId: '33333333-3333-4333-8333-333333333333',
+      sourceStartTime: 0,
+      startTime: 1,
+      status: [],
+    };
+    const onRegionSelect = vi.fn();
+    const onTrimRegion = vi.fn().mockResolvedValue(undefined);
+    renderTrack({
+      onRegionSelect,
+      onTrimRegion,
+      selectedRegionIds: new Set([selectedRegion.id]),
+      track: { ...track, regions: [selectedRegion] },
+    });
+    const regionProps = renderRegionComponent.mock.calls[0]?.[0] as {
+      onSelect: (additive: boolean) => void;
+      onTrim: (request: {
+        durationSeconds: number;
+        sourceStartTimeSeconds: number;
+        startTimeSeconds: number;
+      }) => Promise<void>;
+      selected: boolean;
+    };
+    const trimRequest = { durationSeconds: 1, sourceStartTimeSeconds: 0.5, startTimeSeconds: 1.5 };
+
+    regionProps.onSelect(true);
+    await regionProps.onTrim(trimRequest);
+
+    expect(regionProps.selected).toBe(true);
+    expect(onRegionSelect).toHaveBeenCalledWith(selectedRegion.id, true);
+    expect(onTrimRegion).toHaveBeenCalledWith(selectedRegion.id, trimRequest);
+  });
+
+  it('빈 Timeline 드래그를 초 단위 Range 선택으로 전달하고 미리보기를 표시한다', () => {
+    const onRangeSelect = vi.fn();
+    const host = renderTrack({ onRangeSelect });
+    const timeline = host.querySelector<HTMLElement>(`[aria-label="${track.name} timeline"]`);
+    if (!timeline) {
+      throw new Error('Track timeline을 찾지 못했습니다.');
+    }
+    const capturedPointers = new Set<number>();
+    timeline.setPointerCapture = pointerId => capturedPointers.add(pointerId);
+    timeline.hasPointerCapture = pointerId => capturedPointers.has(pointerId);
+    timeline.releasePointerCapture = pointerId => capturedPointers.delete(pointerId);
+
+    act(() => {
+      timeline.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 100, isPrimary: true, pointerId: 7 })
+      );
+      timeline.dispatchEvent(
+        new PointerEvent('pointermove', { bubbles: true, button: 0, clientX: 250, isPrimary: true, pointerId: 7 })
+      );
+    });
+    expect(host.querySelector('[data-testid="range-selection-preview"]')).not.toBeNull();
+
+    act(() =>
+      timeline.dispatchEvent(
+        new PointerEvent('pointerup', { bubbles: true, button: 0, clientX: 250, isPrimary: true, pointerId: 7 })
+      )
+    );
+
+    expect(onRangeSelect).toHaveBeenCalledWith(1, 2.5);
   });
 });
