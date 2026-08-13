@@ -11,6 +11,7 @@ import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordina
 import type { TimelineGridSettings } from '../../timeline-grid';
 import { AudioLevelMeter } from '../AudioLevelMeter/AudioLevelMeter';
 import { TrackInputMonitoringControl } from '../LiveInputControls/TrackInputMonitoringControl';
+import { TrackRecordArmControl } from './components/TrackRecordArmControl';
 
 export interface RegionWaveSurferReadyEvent {
   trackId: string;
@@ -90,6 +91,7 @@ export const TrackComponent = memo(function TrackComponent({
       <div className={`${styles.trackHeader} ${isSelected ? styles.trackHeaderSelected : ''}`}>
         <TrackNameControl trackId={track.id} name={track.name} />
         <div className={styles.actionControls}>
+          <TrackRecordArmControl trackId={track.id} trackName={track.name} />
           <button
             type="button"
             className={`${styles.trackActionButton} ${track.isMuted ? styles.muteButtonActive : ''}`}

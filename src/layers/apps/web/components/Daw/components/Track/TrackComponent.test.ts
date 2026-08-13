@@ -28,6 +28,11 @@ vi.mock('../LiveInputControls/TrackInputMonitoringControl', () => ({
     createElement('button', { 'aria-label': `${trackName} 입력 모니터링` }),
 }));
 
+vi.mock('./components/TrackRecordArmControl', () => ({
+  TrackRecordArmControl: ({ trackName }: { trackName: string }) =>
+    createElement('button', { 'aria-label': `${trackName} 녹음 arm` }),
+}));
+
 vi.mock('./Track.css.ts', () => ({
   actionControls: 'actionControls',
   muteButtonActive: 'muteButtonActive',
@@ -143,6 +148,7 @@ describe('TrackComponent 제어', () => {
     expect(host.querySelector(`article[aria-label="Track ${track.name}"]`)).not.toBeNull();
     expect(host.querySelector(`[aria-label="${track.name} timeline"]`)).not.toBeNull();
     expect(host.querySelector(`[aria-label="${track.name} 입력 모니터링"]`)).not.toBeNull();
+    expect(host.querySelector(`[aria-label="${track.name} 녹음 arm"]`)).not.toBeNull();
     expect(host.querySelector('[data-meter-label="Track"]')).not.toBeNull();
   });
 

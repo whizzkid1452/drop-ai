@@ -14,6 +14,7 @@ import { AccountControl } from '@/layers/apps/web/components/Auth/AccountControl
 import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 import { MusicalPositionClock } from './MusicalPositionClock';
 import { InputDeviceControl } from '../LiveInputControls/InputDeviceControl';
+import { RecordingControl } from './RecordingControl';
 
 interface DawHeaderProps {
   trackCount: number;
@@ -45,6 +46,7 @@ export function DawHeader({ coordinateMapper, trackCount }: DawHeaderProps) {
         <div className={styles.transportSection} aria-label="Transport">
           <MusicalPositionClock coordinateMapper={coordinateMapper} />
           <PlaybackControls layout="inline" />
+          <RecordingControl />
         </div>
         <div className={styles.statusSection}>
           <LoopMetronomeControl />

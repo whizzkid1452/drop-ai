@@ -100,6 +100,13 @@ export const soloButtonActive = style({
   color: '#fff5fd',
 });
 
+export const recordButtonActive = style({
+  borderColor: '#651d24',
+  background: 'linear-gradient(180deg, #dd4c58 0%, #9e2631 100%)',
+  boxShadow: 'inset 0 1px 0 #ff8490',
+  color: '#fff5f6',
+});
+
 export const controls = style({
   width: '100%',
   minWidth: 0,
