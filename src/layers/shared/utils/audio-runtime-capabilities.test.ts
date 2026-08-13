@@ -24,7 +24,7 @@ const currentRuntimeSupport: AudioRuntimeFeatureSupport = {
   [AudioRuntimeFeature.LINEAR_RECORDING]: false,
   [AudioRuntimeFeature.LIVE_INPUT]: true,
   [AudioRuntimeFeature.LIVE_LOOP]: true,
-  [AudioRuntimeFeature.METERING]: false,
+  [AudioRuntimeFeature.METERING]: true,
   [AudioRuntimeFeature.MIDI]: false,
   [AudioRuntimeFeature.PROJECT_EXPORT]: true,
   [AudioRuntimeFeature.REGION_PROCESSING]: false,
@@ -34,6 +34,12 @@ const currentRuntimeSupport: AudioRuntimeFeatureSupport = {
 };
 
 describe('resolveAudioRuntimeCapabilities', () => {
+  it('현재 runtime은 Meter 기능을 사용 가능으로 공개한다', () => {
+    const capabilities = resolveAudioRuntimeCapabilities(fullEnvironment);
+
+    expect(capabilities.features[AudioRuntimeFeature.METERING]).toEqual({ blockers: [], status: 'available' });
+  });
+
   it('모든 조건이 있으면 세 기능을 각각 사용할 수 있다', () => {
     expect(resolveAudioRuntimeCapabilities(fullEnvironment, currentRuntimeSupport)).toEqual({
       blockers: {
@@ -53,7 +59,7 @@ describe('resolveAudioRuntimeCapabilities', () => {
         [AudioRuntimeFeature.LINEAR_RECORDING]: { blockers: [], status: 'unsupported' },
         [AudioRuntimeFeature.LIVE_INPUT]: { blockers: [], status: 'available' },
         [AudioRuntimeFeature.LIVE_LOOP]: { blockers: [], status: 'available' },
-        [AudioRuntimeFeature.METERING]: { blockers: [], status: 'unsupported' },
+        [AudioRuntimeFeature.METERING]: { blockers: [], status: 'available' },
         [AudioRuntimeFeature.MIDI]: { blockers: [], status: 'unsupported' },
         [AudioRuntimeFeature.PROJECT_EXPORT]: { blockers: [], status: 'available' },
         [AudioRuntimeFeature.REGION_PROCESSING]: { blockers: [], status: 'unsupported' },
@@ -74,7 +80,7 @@ describe('resolveAudioRuntimeCapabilities', () => {
       blockers: [AudioRuntimeBlocker.GET_USER_MEDIA_API_UNAVAILABLE],
       status: 'blocked',
     });
-    expect(capabilities.features[AudioRuntimeFeature.METERING]).toEqual({ blockers: [], status: 'unsupported' });
+    expect(capabilities.features[AudioRuntimeFeature.METERING]).toEqual({ blockers: [], status: 'available' });
     expect(capabilities.features[AudioRuntimeFeature.TIMELINE_PLAYBACK]).toEqual({
       blockers: [],
       status: 'available',
