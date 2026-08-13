@@ -97,6 +97,9 @@ vi.mock('../../DawPage.css.ts', () => ({
   editorBar: 'editorBar',
   productName: 'productName',
   workspaceName: 'workspaceName',
+  workspaceViewButton: 'workspaceViewButton',
+  workspaceViewButtonActive: 'workspaceViewButtonActive',
+  workspaceViewTabs: 'workspaceViewTabs',
   projectBar: 'projectBar',
   transportBar: 'transportBar',
   runtimeSection: 'runtimeSection',
@@ -142,7 +145,17 @@ describe('DawHeader', () => {
     const root = createRoot(host);
     mountedRoots.push(root);
 
-    act(() => root.render(createElement(DawHeader, { coordinateMapper, trackCount: 2 })));
+    const onViewChange = vi.fn();
+    act(() =>
+      root.render(
+        createElement(DawHeader, {
+          coordinateMapper,
+          currentView: 'editor',
+          onViewChange,
+          trackCount: 2,
+        })
+      )
+    );
 
     expect(componentMocks.audioRuntimeStatus).toHaveBeenCalledTimes(1);
     expect(componentMocks.masterVolumeControl).toHaveBeenCalledTimes(1);
@@ -156,5 +169,9 @@ describe('DawHeader', () => {
     expect(componentMocks.recordingControl).toHaveBeenCalledTimes(1);
     expect(componentMocks.inputDeviceControl).toHaveBeenCalledTimes(1);
     expect(componentMocks.accountControl).toHaveBeenCalledTimes(1);
+
+    const mixerViewButton = host.querySelector<HTMLButtonElement>('[aria-label="Open Mixer"]');
+    act(() => mixerViewButton?.click());
+    expect(onViewChange).toHaveBeenCalledWith('mixer');
   });
 });

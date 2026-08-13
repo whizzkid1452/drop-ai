@@ -85,4 +85,59 @@ describe('AudioRoutingRuntime', () => {
     expect(audioNodes.preFaderOutput.connect).toHaveBeenCalledWith(gainInstances[0]);
     expect(gainInstances[0]?.connect).toHaveBeenCalledWith(busNodes.input);
   });
+
+  it('graph 재적용 시 동일 Route 연결은 재사용하고 바뀐 Route만 교체한다', () => {
+    const runtime = new AudioRoutingRuntime();
+    const audioNodes = createTrackNodes();
+    const busNodes = createTrackNodes();
+    const master = createNode();
+    const trackNodes = new Map([
+      [AUDIO_ID, audioNodes],
+      [BUS_ID, busNodes],
+    ]);
+    const masterGraph = {
+      routes: [
+        {
+          channelCount: 2 as const,
+          folderId: null,
+          kind: 'audio' as const,
+          output: { kind: 'master' as const },
+          trackId: AUDIO_ID,
+          vcaIds: [],
+        },
+        {
+          channelCount: 2 as const,
+          folderId: null,
+          kind: 'bus' as const,
+          output: { kind: 'master' as const },
+          trackId: BUS_ID,
+          vcaIds: [],
+        },
+      ],
+      sends: [],
+    };
+    runtime.apply(masterGraph, trackNodes as never, master as never);
+    vi.mocked(audioNodes.postFaderOutput.connect).mockClear();
+    vi.mocked(audioNodes.postFaderOutput.disconnect).mockClear();
+    vi.mocked(busNodes.postFaderOutput.connect).mockClear();
+    vi.mocked(busNodes.postFaderOutput.disconnect).mockClear();
+
+    runtime.apply(
+      {
+        ...masterGraph,
+        routes: [
+          { ...masterGraph.routes[0], output: { kind: 'track' as const, trackId: BUS_ID } },
+          masterGraph.routes[1],
+        ],
+      },
+      trackNodes as never,
+      master as never
+    );
+
+    expect(audioNodes.postFaderOutput.connect).toHaveBeenCalledOnce();
+    expect(audioNodes.postFaderOutput.connect).toHaveBeenCalledWith(busNodes.input);
+    expect(audioNodes.postFaderOutput.disconnect).toHaveBeenCalledWith(master);
+    expect(busNodes.postFaderOutput.connect).not.toHaveBeenCalled();
+    expect(busNodes.postFaderOutput.disconnect).not.toHaveBeenCalled();
+  });
 });

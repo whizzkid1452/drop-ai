@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo, type CSSProperties } from 'react';
-import { DawHeader } from './components/DawHeader/DawHeader';
+import { DawHeader, type WorkspaceView } from './components/DawHeader/DawHeader';
+import { MixerView } from './components/MixerView/MixerView';
 import { TrackList } from './components/TrackList/TrackList';
 import { Terminal } from './components/Terminals/Terminal';
 import { TrackInfoSidebar } from './components/TrackInfoSidebar/TrackInfoSidebar';
@@ -71,6 +72,7 @@ export function DawPage() {
   const [zoomFocus, setZoomFocus] = useState<TimelineZoomFocus>('mouse');
   const [followPlayhead, setFollowPlayhead] = useState(true);
   const [requestedTrackId, setRequestedTrackId] = useState<string | null>(null);
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('editor');
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(CHAT_PANEL_DEFAULT_WIDTH);
   const mainContentRef = useRef<HTMLDivElement>(null);
@@ -280,58 +282,69 @@ export function DawPage() {
       </div>
 
       <div ref={mainContentRef} className={styles.mainContent} style={timelineWidthStyle}>
-        <DawHeader coordinateMapper={coordinateMapper} trackCount={trackCount} />
-        <div className={styles.timelineHeader}>
-          <div className={styles.trackHeaderRuler}>
-            <span>TRACK CONTROLS</span>
-            <span className={styles.trackCount}>{trackCount}</span>
-          </div>
-          <div className={styles.timelineRuler}>
-            <div className={styles.timelineMeta}>
-              <span>BBT TIMELINE</span>
-              <TimelineGridControls
-                division={gridDivision}
-                isGridVisible={isGridVisible}
-                onDivisionChange={setGridDivision}
-                onGridVisibleChange={setIsGridVisible}
-                onSnapModeChange={setSnapMode}
-                snapMode={snapMode}
-              />
-              <TimelineNavigationControls
-                followPlayhead={followPlayhead}
-                onFitSession={handleFitSession}
-                onFollowPlayheadChange={setFollowPlayhead}
-                onResetZoom={() => applyTimelineZoom(DEFAULT_TIMELINE_PIXELS_PER_QUARTER_NOTE)}
-                onZoomFocusChange={setZoomFocus}
-                onZoomIn={() => applyTimelineZoom(coordinateMapper.pixelsPerQuarterNote * TIMELINE_ZOOM_FACTOR)}
-                onZoomOut={() => applyTimelineZoom(coordinateMapper.pixelsPerQuarterNote / TIMELINE_ZOOM_FACTOR)}
-                zoomFocus={zoomFocus}
-              />
-              <span>{Math.round(pixelsPerQuarterNote)} PX/♩</span>
-            </div>
-            <TempoMeterRuler
-              coordinateMapper={coordinateMapper}
-              gridSettings={gridSettings}
-              timelineContentWidth={timelineContentWidth}
-            />
-            <MarkerRangeRuler
-              coordinateMapper={coordinateMapper}
-              gridSettings={gridSettings}
-              timelineContentWidth={timelineContentWidth}
-            />
-            <TimeRuler coordinateMapper={coordinateMapper} gridSettings={gridSettings} />
-          </div>
-        </div>
-        <TrackList
+        <DawHeader
           coordinateMapper={coordinateMapper}
-          followPlayhead={followPlayhead}
-          gridSettings={gridSettings}
-          isGridVisible={isGridVisible}
-          selectedTrackId={selectedTrackId}
-          timelineContentWidth={timelineContentWidth}
-          timelineViewportRef={mainContentRef}
-          onTrackSelect={setRequestedTrackId}
+          currentView={workspaceView}
+          onViewChange={setWorkspaceView}
+          trackCount={trackCount}
         />
+        {workspaceView === 'editor' ? (
+          <>
+            <div className={styles.timelineHeader}>
+              <div className={styles.trackHeaderRuler}>
+                <span>TRACK CONTROLS</span>
+                <span className={styles.trackCount}>{trackCount}</span>
+              </div>
+              <div className={styles.timelineRuler}>
+                <div className={styles.timelineMeta}>
+                  <span>BBT TIMELINE</span>
+                  <TimelineGridControls
+                    division={gridDivision}
+                    isGridVisible={isGridVisible}
+                    onDivisionChange={setGridDivision}
+                    onGridVisibleChange={setIsGridVisible}
+                    onSnapModeChange={setSnapMode}
+                    snapMode={snapMode}
+                  />
+                  <TimelineNavigationControls
+                    followPlayhead={followPlayhead}
+                    onFitSession={handleFitSession}
+                    onFollowPlayheadChange={setFollowPlayhead}
+                    onResetZoom={() => applyTimelineZoom(DEFAULT_TIMELINE_PIXELS_PER_QUARTER_NOTE)}
+                    onZoomFocusChange={setZoomFocus}
+                    onZoomIn={() => applyTimelineZoom(coordinateMapper.pixelsPerQuarterNote * TIMELINE_ZOOM_FACTOR)}
+                    onZoomOut={() => applyTimelineZoom(coordinateMapper.pixelsPerQuarterNote / TIMELINE_ZOOM_FACTOR)}
+                    zoomFocus={zoomFocus}
+                  />
+                  <span>{Math.round(pixelsPerQuarterNote)} PX/♩</span>
+                </div>
+                <TempoMeterRuler
+                  coordinateMapper={coordinateMapper}
+                  gridSettings={gridSettings}
+                  timelineContentWidth={timelineContentWidth}
+                />
+                <MarkerRangeRuler
+                  coordinateMapper={coordinateMapper}
+                  gridSettings={gridSettings}
+                  timelineContentWidth={timelineContentWidth}
+                />
+                <TimeRuler coordinateMapper={coordinateMapper} gridSettings={gridSettings} />
+              </div>
+            </div>
+            <TrackList
+              coordinateMapper={coordinateMapper}
+              followPlayhead={followPlayhead}
+              gridSettings={gridSettings}
+              isGridVisible={isGridVisible}
+              selectedTrackId={selectedTrackId}
+              timelineContentWidth={timelineContentWidth}
+              timelineViewportRef={mainContentRef}
+              onTrackSelect={setRequestedTrackId}
+            />
+          </>
+        ) : (
+          <MixerView />
+        )}
       </div>
       <div
         className={`${styles.cliPanel} ${!isTerminalOpen ? styles.cliPanelCollapsed : ''} ${isResizing ? styles.cliPanelResizing : ''}`}

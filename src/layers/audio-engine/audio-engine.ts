@@ -6,6 +6,7 @@ import {
   cloneAudioMonitorState,
   DEFAULT_AUDIO_MONITOR_STATE,
   type AudioMonitorState,
+  type AudioMonitorStateListener,
 } from '../shared/types/audio-monitor-state';
 import type { TimelineRange } from '../shared/types/project-document.schema';
 import {
@@ -227,6 +228,7 @@ export class AudioEngine implements IAudioEngine {
   private monitoringTrackId: string | null = null;
   private readonly liveInputStateListeners = new Set<LiveInputRuntimeListener>();
   private readonly recordingStateListeners = new Set<RecordingRuntimeListener>();
+  private readonly monitorStateListeners = new Set<AudioMonitorStateListener>();
   private recordingState: RecordingRuntimeState = {
     armedTrackId: null,
     phase: 'idle',
@@ -514,6 +516,11 @@ export class AudioEngine implements IAudioEngine {
     return cloneAudioMonitorState(this.monitorStates.get(this.output) ?? DEFAULT_AUDIO_MONITOR_STATE);
   }
 
+  subscribeMonitorState(listener: AudioMonitorStateListener): () => void {
+    this.monitorStateListeners.add(listener);
+    return () => this.monitorStateListeners.delete(listener);
+  }
+
   setMonitorState(state: AudioMonitorState): void {
     this.ensureRuntimeReady();
     const previousState = this.getMonitorState();
@@ -528,6 +535,7 @@ export class AudioEngine implements IAudioEngine {
       );
     }
     this.graphRevision += 1;
+    this.monitorStateListeners.forEach(listener => listener(this.getMonitorState()));
   }
 
   getRoutingGraph(): RoutingGraphSnapshot {

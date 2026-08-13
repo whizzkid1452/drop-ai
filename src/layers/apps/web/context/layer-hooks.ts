@@ -18,6 +18,8 @@ import { useLayer } from './layer-context';
 import type { IBillingClient } from '../../../billing/i-billing-client';
 import type { IEditorQuery } from '../../../queries/editor-query';
 import type { EditorRuntimeState } from '../../../shared/types/editor-runtime';
+import type { IAudioMonitorQuery } from '../../../queries/audio-monitor-query';
+import type { AudioMonitorState } from '../../../shared/types/audio-monitor-state';
 
 export function useAudioRuntimeCapabilities(): AudioRuntimeCapabilities {
   return useLayer().audioRuntimeCapabilities;
@@ -95,6 +97,17 @@ export function useEditorRuntimeState(): EditorRuntimeState {
   const editor = useEditorQuery();
   const subscribe = useCallback((listener: () => void) => editor.subscribe(listener), [editor]);
   const getSnapshot = useCallback(() => editor.readState(), [editor]);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+export function useAudioMonitorQuery(): IAudioMonitorQuery {
+  return useLayer().audioMonitor;
+}
+
+export function useAudioMonitorState(): AudioMonitorState {
+  const audioMonitor = useAudioMonitorQuery();
+  const subscribe = useCallback((listener: () => void) => audioMonitor.subscribe(listener), [audioMonitor]);
+  const getSnapshot = useCallback(() => audioMonitor.readState(), [audioMonitor]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 

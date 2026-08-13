@@ -11,6 +11,7 @@ import {
 import type {
   ArmLoopRequest,
   AudioMonitorState,
+  AudioMonitorStateListener,
   ExportRequest,
   IAudioEngine,
   InstallAudioPluginRequest,
@@ -293,6 +294,10 @@ export class DawEngineAdapter implements IAudioEngine {
 
   getMonitorState(): AudioMonitorState {
     return this.#runtime.getMonitorState();
+  }
+
+  subscribeMonitorState(listener: AudioMonitorStateListener): () => void {
+    return this.#runtime.subscribeMonitorState(listener);
   }
 
   setMonitorState(state: AudioMonitorState): void {

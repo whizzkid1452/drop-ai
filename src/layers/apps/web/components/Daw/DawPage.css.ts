@@ -199,6 +199,35 @@ export const workspaceName = style({
   letterSpacing: '0.12em',
 });
 
+export const workspaceViewTabs = style({
+  display: 'flex',
+  alignSelf: 'stretch',
+  gap: '1px',
+  border: '1px solid #111416',
+  background: '#111416',
+});
+
+export const workspaceViewButton = style({
+  minWidth: '58px',
+  padding: '3px 8px',
+  border: 0,
+  background: '#292d2f',
+  color: '#8f9699',
+  cursor: 'pointer',
+  fontSize: '8px',
+  fontWeight: 800,
+  letterSpacing: '0.1em',
+  selectors: {
+    '&:hover': { color: '#efc8e8' },
+    '&:focus-visible': { outline: '1px solid #ff62df', outlineOffset: -1 },
+  },
+});
+
+export const workspaceViewButtonActive = style({
+  background: '#56304e',
+  color: '#ff9aec',
+});
+
 export const projectActions = style({
   display: 'flex',
   alignItems: 'center',

@@ -707,6 +707,19 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     expect(toneMocks.monos[0]?.destination).toBe(toneMocks.destination);
   });
 
+  it('Monitor 상태가 바뀐 뒤 구독자에게 확정된 snapshot을 알린다', () => {
+    const engine = new AudioEngine();
+    const listener = vi.fn();
+    const unsubscribe = engine.subscribeMonitorState(listener);
+
+    engine.setMonitorState({ isCut: true, isDimmed: false, isMono: true });
+    unsubscribe();
+    engine.setMonitorState({ isCut: false, isDimmed: false, isMono: false });
+
+    expect(listener).toHaveBeenCalledOnce();
+    expect(listener).toHaveBeenCalledWith({ isCut: true, isDimmed: false, isMono: true });
+  });
+
   it('프로젝트 graph를 교체해도 runtime Monitor 상태를 유지한다', async () => {
     const engine = new AudioEngine();
     engine.setMonitorState({ isCut: false, isDimmed: true, isMono: true });

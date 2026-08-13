@@ -20,16 +20,40 @@ import { RegionEditControls } from './RegionEditControls';
 interface DawHeaderProps {
   trackCount: number;
   coordinateMapper: TimelineCoordinateMapper;
+  currentView: WorkspaceView;
+  onViewChange: (view: WorkspaceView) => void;
 }
 
-export function DawHeader({ coordinateMapper, trackCount }: DawHeaderProps) {
+export type WorkspaceView = 'editor' | 'mixer';
+
+export function DawHeader({ coordinateMapper, currentView, onViewChange, trackCount }: DawHeaderProps) {
   return (
     <header className={styles.header}>
       <div className={styles.projectBar}>
         <div className={styles.headerIdentity}>
           <span className={styles.productName}>DROP.AI</span>
-          <span className={styles.workspaceName}>EDITOR</span>
+          <span className={styles.workspaceName}>{currentView.toUpperCase()}</span>
         </div>
+        <nav aria-label="Workspace view" className={styles.workspaceViewTabs}>
+          <button
+            aria-label="Open Editor"
+            aria-pressed={currentView === 'editor'}
+            className={`${styles.workspaceViewButton} ${currentView === 'editor' ? styles.workspaceViewButtonActive : ''}`}
+            onClick={() => onViewChange('editor')}
+            type="button"
+          >
+            EDITOR
+          </button>
+          <button
+            aria-label="Open Mixer"
+            aria-pressed={currentView === 'mixer'}
+            className={`${styles.workspaceViewButton} ${currentView === 'mixer' ? styles.workspaceViewButtonActive : ''}`}
+            onClick={() => onViewChange('mixer')}
+            type="button"
+          >
+            MIXER
+          </button>
+        </nav>
         <div className={styles.projectActions}>
           <AddTrackControl />
           <MidiLoopControl />
@@ -57,9 +81,11 @@ export function DawHeader({ coordinateMapper, trackCount }: DawHeaderProps) {
           <span className={styles.trackCount}>{trackCount} tracks</span>
         </div>
       </div>
-      <div className={styles.editorBar}>
-        <RegionEditControls />
-      </div>
+      {currentView === 'editor' ? (
+        <div className={styles.editorBar}>
+          <RegionEditControls />
+        </div>
+      ) : null}
     </header>
   );
 }
