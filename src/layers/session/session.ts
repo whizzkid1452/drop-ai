@@ -156,6 +156,13 @@ interface SetPluginInstanceEnabledRequest extends RemovePluginInstanceRequest {
   readonly isEnabled: boolean;
 }
 
+interface SetPluginInstanceStateRequest extends RemovePluginInstanceRequest {
+  readonly parameters: readonly PluginParameterState[];
+  readonly presetId: string | null;
+  readonly sidechainSourceTrackId: string | null;
+  readonly stateBlob: string | null;
+}
+
 interface UpdateTrackPluginInstancesRequest {
   readonly state: SessionState;
   readonly trackId: string;
@@ -189,6 +196,7 @@ export interface SessionState {
   pluginCatalog: Map<string, PluginCatalogEntry>;
   pluginValidationResults: Map<string, PluginValidationResult>;
   pluginLogs: PluginLogEntry[];
+  favoritePluginManifestIds: Set<string>;
 
   // Actions (Setters)
   /* Agent State */
@@ -239,6 +247,8 @@ export interface SessionState {
   movePluginInstance: (request: MovePluginInstanceRequest) => void;
   setPluginInstanceEnabled: (request: SetPluginInstanceEnabledRequest) => void;
   setPluginParameterValue: (request: SetPluginParameterValueRequest) => void;
+  setPluginInstanceState: (request: SetPluginInstanceStateRequest) => void;
+  setPluginFavorite: (manifestId: string, isFavorite: boolean) => void;
 
   setAgentModelStatus: (status: AgentModelStatus) => void;
   setAgentLoadingProgress: (progress: number, text: string) => void;
@@ -278,6 +288,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     pluginCatalog: new Map(),
     pluginValidationResults: new Map(),
     pluginLogs: [],
+    favoritePluginManifestIds: new Set(),
 
     /* Agent State */
     agentModelStatus: 'loading',
@@ -384,6 +395,14 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
       set(state => {
         const newTracks = new Map(state.tracks);
         newTracks.delete(id);
+        newTracks.forEach((track, trackId) => {
+          const pluginInstances = track.pluginInstances.map(instance =>
+            instance.sidechainSourceTrackId === id ? { ...instance, sidechainSourceTrackId: null } : instance
+          );
+          if (pluginInstances.some((instance, index) => instance !== track.pluginInstances[index])) {
+            newTracks.set(trackId, { ...track, pluginInstances });
+          }
+        });
         return {
           routingGraph: removeTrackFromRoutingGraph(state.routingGraph, id),
           tracks: newTracks,
@@ -466,6 +485,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
               }
               return {
                 ...instance,
+                presetId: null,
                 parameters: instance.parameters.map(parameter =>
                   parameter.id === parameterId ? { ...parameter, value } : parameter
                 ),
@@ -473,6 +493,35 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
             }),
         })
       ),
+    setPluginInstanceState: ({ trackId, instanceId, parameters, presetId, sidechainSourceTrackId, stateBlob }) =>
+      set(state =>
+        updateTrackPluginInstances({
+          state,
+          trackId,
+          updatePluginInstances: pluginInstances =>
+            pluginInstances.map(instance =>
+              instance.id === instanceId
+                ? {
+                    ...instance,
+                    parameters: parameters.map(parameter => ({ ...parameter })),
+                    presetId,
+                    sidechainSourceTrackId,
+                    stateBlob,
+                  }
+                : instance
+            ),
+        })
+      ),
+    setPluginFavorite: (manifestId, isFavorite) =>
+      set(state => {
+        const favoritePluginManifestIds = new Set(state.favoritePluginManifestIds);
+        if (isFavorite) {
+          favoritePluginManifestIds.add(manifestId);
+        } else {
+          favoritePluginManifestIds.delete(manifestId);
+        }
+        return { favoritePluginManifestIds };
+      }),
 
     /* Agent Actions */
     setAgentModelStatus: agentModelStatus => set({ agentModelStatus }),

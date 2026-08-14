@@ -11,6 +11,8 @@ const gainManifest = {
   name: 'Gain',
   version: '1.0.0',
   type: 'effect',
+  category: 'utility',
+  supportsSidechain: true,
   parameters: [
     {
       id: 'gain',
@@ -22,6 +24,7 @@ const gainManifest = {
       step: 0.01,
     },
   ],
+  presets: [{ id: 'half', name: 'Half', parameterValues: { gain: 0.5 } }],
   dsp: {
     workletModulePath: './gain.worklet.js',
     processorName: 'drop-ai-gain',
@@ -29,7 +32,7 @@ const gainManifest = {
   ui: {
     controls: [{ type: 'slider', parameterId: 'gain' }],
   },
-};
+} as const;
 
 function createTestContext() {
   const pluginHost = new PluginHost();
@@ -52,13 +55,92 @@ function createTestContext() {
     pluginInstances: [],
     regions: [],
   });
+  sessionStore.getState().addTrack({
+    id: 'track-2',
+    name: 'Track 2',
+    volume: 1,
+    pan: 0,
+    isMuted: false,
+    isSoloed: false,
+    status: [],
+    pluginInstances: [],
+    regions: [],
+  });
+  sessionStore.getState().replacePluginCatalogState({
+    manifests: [
+      {
+        id: gainManifest.id,
+        name: gainManifest.name,
+        version: gainManifest.version,
+        parameters: gainManifest.parameters,
+        presets: gainManifest.presets,
+        supportsSidechain: true,
+      },
+    ],
+    validationResults: [],
+  });
   const audioEngine = new MockAudioEngine();
   void audioEngine.addTrack('track-1');
+  void audioEngine.addTrack('track-2');
   const controller = new PluginController({ pluginHost, sessionStore, audioEngine });
   return { audioEngine, controller, pluginHost, sessionStore };
 }
 
 describe('PluginController', () => {
+  it('Preset을 runtime과 Session에 한 번에 적용한다', () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    controller.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: {},
+    });
+    const setPluginParameter = vi.spyOn(audioEngine, 'setPluginParameter');
+
+    controller.applyPluginPreset({ trackId: 'track-1', instanceId: 'plugin-1', presetId: 'half' });
+
+    expect(setPluginParameter).toHaveBeenCalledWith({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      parameterId: 'gain',
+      value: 0.5,
+    });
+    expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances[0]).toMatchObject({
+      parameters: [{ id: 'gain', value: 0.5 }],
+      presetId: 'half',
+    });
+  });
+
+  it('Sidechain source를 runtime 성공 뒤 Session에 반영한다', () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    controller.installPlugin({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      manifestId: 'builtin.gain',
+      parameterValues: {},
+    });
+    const setPluginSidechain = vi.spyOn(audioEngine, 'setPluginSidechain');
+
+    controller.setPluginSidechain({ trackId: 'track-1', instanceId: 'plugin-1', sourceTrackId: 'track-2' });
+
+    expect(setPluginSidechain).toHaveBeenCalledWith({
+      trackId: 'track-1',
+      instanceId: 'plugin-1',
+      sourceTrackId: 'track-2',
+    });
+    expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances[0]?.sidechainSourceTrackId).toBe('track-2');
+  });
+
+  it('Favorite은 프로젝트 Plugin instance와 분리된 runtime 상태로 관리한다', () => {
+    const { controller, sessionStore } = createTestContext();
+
+    controller.setPluginFavorite('builtin.gain', true);
+    expect(sessionStore.getState().favoritePluginManifestIds).toEqual(new Set(['builtin.gain']));
+
+    controller.setPluginFavorite('builtin.gain', false);
+    expect(sessionStore.getState().favoritePluginManifestIds).toEqual(new Set());
+  });
+
   it('주입받은 PluginHost에서 전체 manifest를 조회한다', () => {
     const { controller } = createTestContext();
 
@@ -93,6 +175,8 @@ describe('PluginController', () => {
       isEnabled: true,
       targetIndex: 0,
       parameterValues: new Map([['gain', 1]]),
+      sidechainSourceTrackId: null,
+      stateBlob: null,
     });
     expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances).toEqual([
       {

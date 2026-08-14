@@ -46,6 +46,7 @@ import type {
   SetAudioTempoMapRequest,
   SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
+  SetAudioPluginSidechainRequest,
   SetAutomationLanesRequest,
   SetMidiTrackStateRequest,
   SendMidiInputEventRequest,
@@ -74,6 +75,7 @@ interface MockPluginState {
   readonly manifestId: string;
   isEnabled: boolean;
   readonly parameters: Map<string, PluginParameterValue>;
+  sidechainSourceTrackId: string | null;
 }
 
 export class MockAudioEngine implements IAudioEngine {
@@ -545,6 +547,7 @@ export class MockAudioEngine implements IAudioEngine {
         manifestId: request.manifestId,
         isEnabled: request.isEnabled ?? true,
         parameters: new Map(request.parameterValues),
+        sidechainSourceTrackId: request.sidechainSourceTrackId ?? null,
       },
     ];
     this.mockPlugins.set(
@@ -584,6 +587,18 @@ export class MockAudioEngine implements IAudioEngine {
       throw this.createPluginInstanceNotFoundError(request.trackId, request.instanceId);
     }
     plugin.parameters.set(request.parameterId, request.value);
+    this.graphRevision += 1;
+  }
+
+  setPluginSidechain(request: SetAudioPluginSidechainRequest): void {
+    const plugin = this.getTrackPlugins(request.trackId).get(request.instanceId);
+    if (!plugin) {
+      throw this.createPluginInstanceNotFoundError(request.trackId, request.instanceId);
+    }
+    if (request.sourceTrackId !== null) {
+      this.getTrack(request.sourceTrackId);
+    }
+    plugin.sidechainSourceTrackId = request.sourceTrackId;
     this.graphRevision += 1;
   }
 
@@ -689,6 +704,7 @@ export class MockAudioEngine implements IAudioEngine {
           manifestId: instance.manifestId,
           isEnabled: instance.isEnabled,
           parameters: new Map(instance.parameterValues),
+          sidechainSourceTrackId: instance.sidechainSourceTrackId ?? null,
         });
       });
       nextTracks.set(track.id, {

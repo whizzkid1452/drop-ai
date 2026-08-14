@@ -30,6 +30,7 @@ import { MidiRecordingQuery, type IMidiRecordingQuery } from '../queries/midi-re
 import { EditorQuery, type IEditorQuery } from '../queries/editor-query';
 import { AudioMonitorQuery, type IAudioMonitorQuery } from '../queries/audio-monitor-query';
 import { ProjectCatalogQuery, type IProjectCatalogQuery } from '../queries/project-catalog-query';
+import { PluginRuntimeQuery, type IPluginRuntimeQuery } from '../queries/plugin-runtime-query';
 import type { ILocalFirstProjectRepository } from '../project-repository/i-project-repository';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import { IndexedDbProjectRepository } from '../project-repository/indexed-db-project-repository';
@@ -77,6 +78,7 @@ export interface AppInstance {
   editor: IEditorQuery;
   audioMonitor: IAudioMonitorQuery;
   projectCatalog: IProjectCatalogQuery;
+  pluginRuntime: IPluginRuntimeQuery;
 }
 
 interface ProjectSyncDependencies {
@@ -275,6 +277,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   const editor = new EditorQuery(controller.editor);
   const audioMonitor = new AudioMonitorQuery(audioEngine);
   const projectCatalog = new ProjectCatalogQuery(projectRepository, projectSync);
+  const pluginRuntime = new PluginRuntimeQuery(audioEngine);
   const audioRuntimeEnvironment = options.audioRuntimeEnvironment ?? readAudioRuntimeEnvironment();
   const audioRuntimeCapabilities = resolveAudioRuntimeCapabilities(
     audioRuntimeEnvironment,
@@ -301,6 +304,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     audioMonitor,
     playbackClock,
     projectCatalog,
+    pluginRuntime,
   };
 }
 

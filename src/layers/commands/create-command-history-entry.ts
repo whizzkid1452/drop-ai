@@ -215,7 +215,35 @@ function createInstallPluginCommand({
     isEnabled: instance.isEnabled,
     targetIndex,
     parameterValues: Object.fromEntries(instance.parameters.map(parameter => [parameter.id, parameter.value])),
+    presetId: instance.presetId ?? null,
+    sidechainSourceTrackId: instance.sidechainSourceTrackId ?? null,
+    stateBlob: instance.stateBlob ?? null,
   };
+}
+
+function createRestorePluginStateCommand(trackId: string, instance: PluginInstanceState): AudioCommand {
+  return {
+    type: AudioCommandType.RESTORE_PLUGIN_STATE,
+    trackId,
+    instanceId: instance.id,
+    parameterValues: Object.fromEntries(instance.parameters.map(parameter => [parameter.id, parameter.value])),
+    presetId: instance.presetId ?? null,
+    sidechainSourceTrackId: instance.sidechainSourceTrackId ?? null,
+    stateBlob: instance.stateBlob ?? null,
+  };
+}
+
+function arePluginInstanceSettingsEqual(left: PluginInstanceState, right: PluginInstanceState): boolean {
+  return (
+    left.presetId === right.presetId &&
+    left.sidechainSourceTrackId === right.sidechainSourceTrackId &&
+    left.stateBlob === right.stateBlob &&
+    left.parameters.length === right.parameters.length &&
+    left.parameters.every((parameter, index) => {
+      const candidate = right.parameters[index];
+      return candidate?.id === parameter.id && candidate.value === parameter.value;
+    })
+  );
 }
 
 function createExportRangeCommand(session: SessionState): AudioCommand | null {
@@ -749,7 +777,10 @@ export function createCommandHistoryEntry({
       });
     }
 
-    case AudioCommandType.SET_PLUGIN_PARAMETER: {
+    case AudioCommandType.SET_PLUGIN_PARAMETER:
+    case AudioCommandType.APPLY_PLUGIN_PRESET:
+    case AudioCommandType.SET_PLUGIN_SIDECHAIN:
+    case AudioCommandType.RESTORE_PLUGIN_STATE: {
       const beforeInstance = findPluginInstance({
         session: beforeSession,
         trackId: command.trackId,
@@ -760,23 +791,18 @@ export function createCommandHistoryEntry({
         trackId: command.trackId,
         instanceId: command.instanceId,
       });
-      const beforeParameter = beforeInstance?.instance.parameters.find(
-        parameter => parameter.id === command.parameterId
-      );
-      const afterParameter = afterInstance?.instance.parameters.find(parameter => parameter.id === command.parameterId);
       if (
-        !beforeParameter ||
-        !afterParameter ||
-        beforeParameter.value === afterParameter.value ||
-        afterParameter.value !== command.value
+        !beforeInstance ||
+        !afterInstance ||
+        arePluginInstanceSettingsEqual(beforeInstance.instance, afterInstance.instance)
       ) {
         return null;
       }
       return createEntry({
         executeCommand,
         label: command.type,
-        undoCommand: { ...command, value: beforeParameter.value },
-        redoCommand: command,
+        undoCommand: createRestorePluginStateCommand(command.trackId, beforeInstance.instance),
+        redoCommand: createRestorePluginStateCommand(command.trackId, afterInstance.instance),
       });
     }
 
@@ -945,6 +971,7 @@ export function createCommandHistoryEntry({
     case AudioCommandType.MIDI_PANIC:
     case AudioCommandType.START_MIDI_RECORDING:
     case AudioCommandType.CANCEL_MIDI_RECORDING:
+    case AudioCommandType.SET_PLUGIN_FAVORITE:
     case AudioCommandType.EXPORT_AUDIO:
     case AudioCommandType.SAVE_PROJECT:
     case AudioCommandType.LOAD_PROJECT:

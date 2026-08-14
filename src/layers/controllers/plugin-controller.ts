@@ -23,6 +23,9 @@ export interface InstallPluginRequest {
   readonly isEnabled?: boolean;
   readonly targetIndex?: number;
   readonly parameterValues: Readonly<Record<string, PluginParameterValue>>;
+  readonly presetId?: string | null;
+  readonly sidechainSourceTrackId?: string | null;
+  readonly stateBlob?: string | null;
 }
 
 export interface RemovePluginRequest {
@@ -41,6 +44,21 @@ export interface SetPluginEnabledRequest extends RemovePluginRequest {
 
 export interface MovePluginRequest extends RemovePluginRequest {
   readonly targetIndex: number;
+}
+
+export interface ApplyPluginPresetRequest extends RemovePluginRequest {
+  readonly presetId: string;
+}
+
+export interface SetPluginSidechainRequest extends RemovePluginRequest {
+  readonly sourceTrackId: string | null;
+}
+
+export interface RestorePluginStateRequest extends RemovePluginRequest {
+  readonly parameterValues: Readonly<Record<string, PluginParameterValue>>;
+  readonly presetId: string | null;
+  readonly sidechainSourceTrackId: string | null;
+  readonly stateBlob: string | null;
 }
 
 interface ValidatePluginTargetIndexRequest extends MovePluginRequest {
@@ -87,6 +105,23 @@ export class PluginController {
     this.validatePluginTargetIndex({ ...request, targetIndex, maximumIndex: track.pluginInstances.length });
 
     const manifest = this.getManifestOrThrow(request.manifestId);
+    if (request.presetId && !manifest.presets?.some(preset => preset.id === request.presetId)) {
+      throw new ProjectStateError(
+        ProjectStateErrorCode.PLUGIN_PRESET_NOT_FOUND,
+        `Plugin Preset을 찾을 수 없습니다: ${request.presetId}`,
+        { manifestId: manifest.id, presetId: request.presetId }
+      );
+    }
+    if (request.sidechainSourceTrackId) {
+      if (manifest.supportsSidechain !== true || request.sidechainSourceTrackId === request.trackId) {
+        throw new ProjectStateError(
+          ProjectStateErrorCode.PLUGIN_SIDECHAIN_NOT_SUPPORTED,
+          `Plugin sidechain 설정을 적용할 수 없습니다: ${manifest.id}`,
+          { sourceTrackId: request.sidechainSourceTrackId, trackId: request.trackId }
+        );
+      }
+      this.getTrackOrThrow(request.sidechainSourceTrackId);
+    }
     const parameters = this.createParameterStates({ manifest, parameterValues: request.parameterValues });
     const isEnabled = request.isEnabled ?? true;
     const instance: PluginInstanceState = {
@@ -95,9 +130,9 @@ export class PluginController {
       manifestSummary: createPluginManifestSummary(manifest),
       isEnabled,
       parameters,
-      presetId: null,
-      sidechainSourceTrackId: null,
-      stateBlob: null,
+      presetId: request.presetId ?? null,
+      sidechainSourceTrackId: request.sidechainSourceTrackId ?? null,
+      stateBlob: request.stateBlob ?? null,
     };
     this.audioEngine.installPlugin({
       trackId: request.trackId,
@@ -106,6 +141,8 @@ export class PluginController {
       isEnabled,
       targetIndex,
       parameterValues: new Map(parameters.map(parameter => [parameter.id, parameter.value])),
+      sidechainSourceTrackId: request.sidechainSourceTrackId ?? null,
+      stateBlob: request.stateBlob ?? null,
     });
     this.sessionStore.getState().addPluginInstance({ trackId: request.trackId, instance, targetIndex });
   }
@@ -168,6 +205,126 @@ export class PluginController {
     }
     this.audioEngine.setPluginEnabled(request);
     this.sessionStore.getState().setPluginInstanceEnabled(request);
+  }
+
+  applyPluginPreset(request: ApplyPluginPresetRequest): void {
+    const instance = this.getPluginInstanceOrThrow(request);
+    const manifest = this.getManifestOrThrow(instance.manifestSummary.id);
+    const preset = manifest.presets?.find(candidate => candidate.id === request.presetId);
+    if (!preset) {
+      throw new ProjectStateError(
+        ProjectStateErrorCode.PLUGIN_PRESET_NOT_FOUND,
+        `Plugin Preset을 찾을 수 없습니다: ${request.presetId}`,
+        { instanceId: request.instanceId, presetId: request.presetId, trackId: request.trackId }
+      );
+    }
+    const parameterValues = Object.fromEntries(instance.parameters.map(parameter => [parameter.id, parameter.value]));
+    this.restorePluginState({
+      ...request,
+      parameterValues: { ...parameterValues, ...preset.parameterValues },
+      presetId: preset.id,
+      sidechainSourceTrackId: instance.sidechainSourceTrackId ?? null,
+      stateBlob: instance.stateBlob ?? null,
+    });
+  }
+
+  setPluginSidechain(request: SetPluginSidechainRequest): void {
+    const instance = this.getPluginInstanceOrThrow(request);
+    const manifest = this.getManifestOrThrow(instance.manifestSummary.id);
+    if (manifest.supportsSidechain !== true) {
+      throw new ProjectStateError(
+        ProjectStateErrorCode.PLUGIN_SIDECHAIN_NOT_SUPPORTED,
+        `Plugin이 sidechain 입력을 지원하지 않습니다: ${manifest.id}`,
+        { instanceId: request.instanceId, sourceTrackId: request.sourceTrackId, trackId: request.trackId }
+      );
+    }
+    if (request.sourceTrackId !== null) {
+      this.getTrackOrThrow(request.sourceTrackId);
+    }
+    if (request.sourceTrackId === request.trackId) {
+      throw new ProjectStateError(
+        ProjectStateErrorCode.PLUGIN_SIDECHAIN_NOT_SUPPORTED,
+        'Sidechain source는 대상 Track과 달라야 합니다.',
+        { instanceId: request.instanceId, sourceTrackId: request.sourceTrackId, trackId: request.trackId }
+      );
+    }
+    this.restorePluginState({
+      ...request,
+      parameterValues: Object.fromEntries(instance.parameters.map(parameter => [parameter.id, parameter.value])),
+      presetId: instance.presetId ?? null,
+      sidechainSourceTrackId: request.sourceTrackId,
+      stateBlob: instance.stateBlob ?? null,
+    });
+  }
+
+  restorePluginState(request: RestorePluginStateRequest): void {
+    const instance = this.getPluginInstanceOrThrow(request);
+    const manifest = this.getManifestOrThrow(instance.manifestSummary.id);
+    const parameters = this.createParameterStates({ manifest, parameterValues: request.parameterValues });
+    const previousValues = new Map(instance.parameters.map(parameter => [parameter.id, parameter.value]));
+    const changedParameters = parameters.filter(parameter => previousValues.get(parameter.id) !== parameter.value);
+    const appliedParameters: PluginParameterState[] = [];
+    let sidechainChanged = false;
+
+    try {
+      changedParameters.forEach(parameter => {
+        this.audioEngine.setPluginParameter({
+          trackId: request.trackId,
+          instanceId: request.instanceId,
+          parameterId: parameter.id,
+          value: parameter.value,
+        });
+        appliedParameters.push(parameter);
+      });
+      if ((instance.sidechainSourceTrackId ?? null) !== request.sidechainSourceTrackId) {
+        this.audioEngine.setPluginSidechain({
+          trackId: request.trackId,
+          instanceId: request.instanceId,
+          sourceTrackId: request.sidechainSourceTrackId,
+        });
+        sidechainChanged = true;
+      }
+    } catch (cause) {
+      if (sidechainChanged) {
+        this.audioEngine.setPluginSidechain({
+          trackId: request.trackId,
+          instanceId: request.instanceId,
+          sourceTrackId: instance.sidechainSourceTrackId ?? null,
+        });
+      }
+      appliedParameters.reverse().forEach(parameter => {
+        const value = previousValues.get(parameter.id);
+        if (value !== undefined) {
+          this.audioEngine.setPluginParameter({
+            trackId: request.trackId,
+            instanceId: request.instanceId,
+            parameterId: parameter.id,
+            value,
+          });
+        }
+      });
+      throw cause;
+    }
+
+    this.sessionStore.getState().setPluginInstanceState({
+      trackId: request.trackId,
+      instanceId: request.instanceId,
+      parameters,
+      presetId: request.presetId,
+      sidechainSourceTrackId: request.sidechainSourceTrackId,
+      stateBlob: request.stateBlob,
+    });
+  }
+
+  setPluginFavorite(manifestId: string, isFavorite: boolean): void {
+    if (!this.sessionStore.getState().pluginCatalog.has(manifestId)) {
+      throw new ProjectStateError(
+        ProjectStateErrorCode.PLUGIN_MANIFEST_NOT_FOUND,
+        `사용 가능한 Plugin manifest를 찾을 수 없습니다: ${manifestId}`,
+        { manifestId }
+      );
+    }
+    this.sessionStore.getState().setPluginFavorite(manifestId, isFavorite);
   }
 
   private createParameterStates({ manifest, parameterValues }: CreateParameterStatesRequest): PluginParameterState[] {

@@ -163,6 +163,11 @@ const COMMAND_REFERENCE = {
     '{"type":"SET_PLUGIN_ENABLED","trackId":"<existing Track UUID>","instanceId":"<existing Plugin instance UUID>","isEnabled":<boolean>} - Plugin 활성화 상태 변경',
   [AudioCommandType.SET_PLUGIN_PARAMETER]:
     '{"type":"SET_PLUGIN_PARAMETER","trackId":"<existing Track UUID>","instanceId":"<existing Plugin instance UUID>","parameterId":"<listed Parameter ID>","value":<boolean|number|string>} - Plugin Parameter 변경',
+  [AudioCommandType.APPLY_PLUGIN_PRESET]:
+    '{"type":"APPLY_PLUGIN_PRESET","trackId":"<existing Track UUID>","instanceId":"<existing Plugin instance UUID>","presetId":"<listed Preset ID>"} - Plugin Preset 적용',
+  [AudioCommandType.SET_PLUGIN_SIDECHAIN]: 'UI 전용 명령 - Plugin sidechain source Track 변경',
+  [AudioCommandType.RESTORE_PLUGIN_STATE]: 'Undo·Redo 전용 명령 - Plugin 저장 상태 복원',
+  [AudioCommandType.SET_PLUGIN_FAVORITE]: 'UI 전용 runtime 명령 - Plugin 즐겨찾기 변경',
   [AudioCommandType.LOAD_REGION]:
     '{"type":"LOAD_REGION","trackId":"<existing Track UUID>","regionId":"<new UUID optional>","sourceId":"<listed Source UUID>","startTime":<seconds >= 0>,"startOffset":<seconds >= 0 optional>,"duration":<seconds >= 0 optional>} - Region 추가. Agent 복제에서는 duration > 0',
   [AudioCommandType.UNLOAD_REGION]:

@@ -202,6 +202,42 @@ describe('LOAD_REGION 오디오 식별자 계약', () => {
 });
 
 describe('Plugin 명령 계약', () => {
+  it('Preset·sidechain·Favorite 명령을 검증한다', () => {
+    const commands = [
+      {
+        type: AudioCommandType.APPLY_PLUGIN_PRESET,
+        trackId: TRACK_ID,
+        instanceId: PLUGIN_INSTANCE_ID,
+        presetId: 'unity',
+      },
+      {
+        type: AudioCommandType.SET_PLUGIN_SIDECHAIN,
+        trackId: TRACK_ID,
+        instanceId: PLUGIN_INSTANCE_ID,
+        sourceTrackId: SOURCE_ID,
+      },
+      { type: AudioCommandType.SET_PLUGIN_FAVORITE, manifestId: 'builtin.gain', isFavorite: true },
+    ];
+
+    commands.forEach(command => expect(StrictAudioCommandSchema.parse(command)).toEqual(command));
+  });
+
+  it('RESTORE_PLUGIN_STATE의 opaque state 크기와 sidechain UUID를 제한한다', () => {
+    const command = {
+      type: AudioCommandType.RESTORE_PLUGIN_STATE,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      parameterValues: { gain: 1 },
+      presetId: null,
+      sidechainSourceTrackId: null,
+      stateBlob: null,
+    };
+
+    expect(StrictAudioCommandSchema.parse(command)).toEqual(command);
+    expect(StrictAudioCommandSchema.safeParse({ ...command, sidechainSourceTrackId: 'track-2' }).success).toBe(false);
+    expect(StrictAudioCommandSchema.safeParse({ ...command, stateBlob: 'x'.repeat(1_000_001) }).success).toBe(false);
+  });
+
   it('instanceId 생략과 초기 Parameter 값을 허용한다', () => {
     const command = {
       type: AudioCommandType.INSTALL_PLUGIN,

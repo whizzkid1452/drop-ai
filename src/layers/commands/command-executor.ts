@@ -414,6 +414,9 @@ export class CommandExecutor {
           isEnabled: validatedCommand.isEnabled,
           targetIndex: validatedCommand.targetIndex,
           parameterValues: validatedCommand.parameterValues ?? {},
+          presetId: validatedCommand.presetId,
+          sidechainSourceTrackId: validatedCommand.sidechainSourceTrackId,
+          stateBlob: validatedCommand.stateBlob,
         });
         return;
 
@@ -431,6 +434,22 @@ export class CommandExecutor {
 
       case AudioCommandType.SET_PLUGIN_PARAMETER:
         this.controller.plugin.setPluginParameter(validatedCommand);
+        return;
+
+      case AudioCommandType.APPLY_PLUGIN_PRESET:
+        this.controller.plugin.applyPluginPreset(validatedCommand);
+        return;
+
+      case AudioCommandType.SET_PLUGIN_SIDECHAIN:
+        this.controller.plugin.setPluginSidechain(validatedCommand);
+        return;
+
+      case AudioCommandType.RESTORE_PLUGIN_STATE:
+        this.controller.plugin.restorePluginState(validatedCommand);
+        return;
+
+      case AudioCommandType.SET_PLUGIN_FAVORITE:
+        this.controller.plugin.setPluginFavorite(validatedCommand.manifestId, validatedCommand.isFavorite);
         return;
 
       case AudioCommandType.LOAD_REGION: {
@@ -673,6 +692,9 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.MOVE_PLUGIN:
     case AudioCommandType.SET_PLUGIN_ENABLED:
     case AudioCommandType.SET_PLUGIN_PARAMETER:
+    case AudioCommandType.APPLY_PLUGIN_PRESET:
+    case AudioCommandType.SET_PLUGIN_SIDECHAIN:
+    case AudioCommandType.RESTORE_PLUGIN_STATE:
     case AudioCommandType.LOAD_REGION:
     case AudioCommandType.UNLOAD_REGION:
     case AudioCommandType.SPLIT_REGION:
@@ -717,6 +739,7 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.MIDI_PANIC:
     case AudioCommandType.START_MIDI_RECORDING:
     case AudioCommandType.CANCEL_MIDI_RECORDING:
+    case AudioCommandType.SET_PLUGIN_FAVORITE:
     case AudioCommandType.EXPORT_AUDIO:
     case AudioCommandType.SAVE_PROJECT:
     case AudioCommandType.LOAD_PROJECT:

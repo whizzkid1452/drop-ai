@@ -41,6 +41,7 @@ import type {
   SetAudioTempoMapRequest,
   SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
+  SetAudioPluginSidechainRequest,
   SetAutomationLanesRequest,
   SetMidiTrackStateRequest,
   SendMidiInputEventRequest,
@@ -420,6 +421,10 @@ export class DawEngineAdapter implements IAudioEngine {
 
   setPluginParameter(request: SetAudioPluginParameterRequest): void {
     this.#runtime.setPluginParameter(request);
+  }
+
+  setPluginSidechain(request: SetAudioPluginSidechainRequest): void {
+    this.#runtime.setPluginSidechain(request);
   }
 
   async addRegion(trackId: string, regionData: RegionData): Promise<void> {

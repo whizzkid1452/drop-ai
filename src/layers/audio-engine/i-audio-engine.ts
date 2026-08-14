@@ -171,6 +171,12 @@ export interface SetAudioPluginParameterRequest {
   readonly value: PluginParameterValue;
 }
 
+export interface SetAudioPluginSidechainRequest {
+  readonly trackId: string;
+  readonly instanceId: string;
+  readonly sourceTrackId: string | null;
+}
+
 export interface AudioProjectGraphPluginInstance {
   readonly instanceId: string;
   readonly manifestId: string;
@@ -287,6 +293,7 @@ export interface IAudioEngine {
   movePlugin(request: MoveAudioPluginRequest): void;
   setPluginEnabled(request: SetAudioPluginEnabledRequest): void;
   setPluginParameter(request: SetAudioPluginParameterRequest): void;
+  setPluginSidechain(request: SetAudioPluginSidechainRequest): void;
 
   // Region Management
   addRegion(trackId: string, regionData: RegionData): Promise<void>;

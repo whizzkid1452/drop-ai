@@ -549,6 +549,8 @@ import type {
 } from './loop-runtime/loop-runtime-contract';
 import { ToneGainPluginRuntimeFactory } from './plugins/tone-gain-plugin-runtime';
 import { ToneSaturationPluginRuntimeFactory } from './plugins/tone-saturation-plugin-runtime';
+import type { IAudioPluginRuntimeFactory } from './plugins/audio-plugin-runtime';
+import * as Tone from 'tone';
 import type {
   ILinearRecordingAudioRuntime,
   LinearRecordingCapture,
@@ -691,6 +693,34 @@ function createSaturationAudioEngine(): AudioEngine {
       }),
     ],
   });
+}
+
+function createSidechainAudioEngine() {
+  let sidechainInputNode: Tone.Gain | null = null;
+  const factory: IAudioPluginRuntimeFactory = {
+    manifestId: 'test.sidechain',
+    create: request => {
+      const inputNode = new Tone.Gain(1);
+      sidechainInputNode = new Tone.Gain(1);
+      return {
+        inputNode,
+        sidechainInputNode,
+        instanceId: request.instanceId,
+        manifestId: 'test.sidechain',
+        connect: destination => inputNode.connect(destination),
+        disconnect: () => inputNode.disconnect(),
+        dispose: () => {
+          inputNode.dispose();
+          sidechainInputNode?.dispose();
+        },
+        setParameter: () => undefined,
+      };
+    },
+  };
+  return {
+    engine: new AudioEngine({ pluginRuntimeFactories: [factory] }),
+    getSidechainInputNode: () => sidechainInputNode,
+  };
 }
 
 describe('AudioEngine 실시간 상태 일관성', () => {
@@ -1728,6 +1758,35 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     });
 
     expect(toneMocks.gainRampTo).toHaveBeenCalledWith(0.25, 0.01);
+  });
+
+  it('Track post-fader 출력을 Plugin sidechain 입력에 연결하고 해제한다', async () => {
+    const { engine, getSidechainInputNode } = createSidechainAudioEngine();
+    await engine.addTrack('source-track');
+    await engine.addTrack('target-track');
+    engine.installPlugin({
+      trackId: 'target-track',
+      instanceId: 'plugin-1',
+      manifestId: 'test.sidechain',
+      parameterValues: new Map(),
+    });
+
+    engine.setPluginSidechain({
+      trackId: 'target-track',
+      instanceId: 'plugin-1',
+      sourceTrackId: 'source-track',
+    });
+
+    const sidechainInputNode = getSidechainInputNode();
+    expect(sidechainInputNode).not.toBeNull();
+    expect(toneMocks.gains.some(gain => gain.destinations.includes(sidechainInputNode))).toBe(true);
+
+    engine.setPluginSidechain({
+      trackId: 'target-track',
+      instanceId: 'plugin-1',
+      sourceTrackId: null,
+    });
+    expect(engine.readPluginRuntimeStates('target-track')[0]?.status).toBe('active');
   });
 
   it('비활성 Plugin은 체인에서 우회하고 다시 활성화할 수 있다', async () => {

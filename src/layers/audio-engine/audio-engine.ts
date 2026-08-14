@@ -58,6 +58,7 @@ import type {
   SetAudioTempoMapRequest,
   SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
+  SetAudioPluginSidechainRequest,
   SetAutomationLanesRequest,
   SetMidiTrackStateRequest,
   SendMidiInputEventRequest,
@@ -123,6 +124,7 @@ interface AudioProjectGraphState {
   readonly pluginRuntimes: Map<string, IAudioPluginRuntime[]>;
   readonly disabledPluginInstanceIds: Map<string, Set<string>>;
   readonly pluginRuntimeStates: Map<string, PluginRuntimeState[]>;
+  readonly pluginSidechainSourceTrackIds: Map<string, Map<string, string>>;
   readonly routingRuntime: AudioRoutingRuntime;
   readonly midiRuntime: ToneMidiRuntime;
 }
@@ -225,6 +227,7 @@ export class AudioEngine implements IAudioEngine {
   private pluginRuntimes: Map<string, IAudioPluginRuntime[]> = new Map();
   private disabledPluginInstanceIds: Map<string, Set<string>> = new Map();
   private pluginRuntimeStates: Map<string, PluginRuntimeState[]> = new Map();
+  private pluginSidechainSourceTrackIds: Map<string, Map<string, string>> = new Map();
   private routingRuntime = new AudioRoutingRuntime();
   private midiRuntime = new ToneMidiRuntime();
   private readonly pluginRuntimeFactories: ReadonlyMap<string, IAudioPluginRuntimeFactory>;
@@ -734,6 +737,8 @@ export class AudioEngine implements IAudioEngine {
     trackPlayers?.forEach(entry => entry.players.forEach(player => this.disposePlayer(player)));
     this.players.delete(trackId);
 
+    this.disconnectSidechainsForTrack(trackId);
+
     this.routingRuntime.apply(
       removeTrackFromRoutingGraph(this.routingRuntime.getSnapshot(), trackId),
       this.createRoutingTrackNodes(this.captureActiveGraph()),
@@ -746,6 +751,7 @@ export class AudioEngine implements IAudioEngine {
     this.pluginRuntimes.delete(trackId);
     this.disabledPluginInstanceIds.delete(trackId);
     this.pluginRuntimeStates.delete(trackId);
+    this.pluginSidechainSourceTrackIds.delete(trackId);
 
     const meterRuntime = this.trackMeterRuntimes.get(trackId);
     if (meterRuntime) {
@@ -965,6 +971,22 @@ export class AudioEngine implements IAudioEngine {
         targetIndex,
       })
     );
+    this.pluginSidechainSourceTrackIds.set(
+      request.trackId,
+      this.pluginSidechainSourceTrackIds.get(request.trackId) ?? new Map()
+    );
+    if (request.sidechainSourceTrackId) {
+      try {
+        this.setPluginSidechain({
+          trackId: request.trackId,
+          instanceId: request.instanceId,
+          sourceTrackId: request.sidechainSourceTrackId,
+        });
+      } catch (cause) {
+        this.removePlugin(request.trackId, request.instanceId);
+        throw cause;
+      }
+    }
     this.graphRevision += 1;
   }
 
@@ -993,6 +1015,11 @@ export class AudioEngine implements IAudioEngine {
     }
 
     const runtime = currentRuntimes[runtimeIndex];
+    const sidechainSourceTrackId = this.pluginSidechainSourceTrackIds.get(trackId)?.get(instanceId);
+    if (runtime?.sidechainInputNode && sidechainSourceTrackId) {
+      this.postFaderOutputs.get(sidechainSourceTrackId)?.disconnect(runtime.sidechainInputNode);
+    }
+    this.pluginSidechainSourceTrackIds.get(trackId)?.delete(instanceId);
     const nextRuntimes = currentRuntimes.filter((_, index) => index !== runtimeIndex);
     const currentDisabledIds = this.getTrackDisabledPluginInstanceIds(trackId);
     const nextDisabledIds = new Set(currentDisabledIds);
@@ -1088,6 +1115,56 @@ export class AudioEngine implements IAudioEngine {
         }
       );
     }
+    this.graphRevision += 1;
+  }
+
+  setPluginSidechain(request: SetAudioPluginSidechainRequest): void {
+    this.ensureRuntimeReady();
+    if (request.sourceTrackId === request.trackId) {
+      throw this.createPluginSidechainError(request, 'Sidechain source는 대상 Track과 달라야 합니다.');
+    }
+
+    const runtime = this.getTrackPluginRuntimes(request.trackId).find(
+      candidate => candidate.instanceId === request.instanceId
+    );
+    const sidechainInput = runtime?.sidechainInputNode;
+    if (!runtime || !sidechainInput) {
+      throw this.createPluginSidechainError(request, 'Plugin runtime이 sidechain 입력을 제공하지 않습니다.');
+    }
+
+    const sources = this.pluginSidechainSourceTrackIds.get(request.trackId) ?? new Map<string, string>();
+    const previousSourceTrackId = sources.get(request.instanceId) ?? null;
+    if (previousSourceTrackId === request.sourceTrackId) {
+      return;
+    }
+
+    const previousSource = previousSourceTrackId ? this.postFaderOutputs.get(previousSourceTrackId) : undefined;
+    const nextSource = request.sourceTrackId ? this.postFaderOutputs.get(request.sourceTrackId) : undefined;
+    if (request.sourceTrackId && !nextSource) {
+      throw new AudioEngineError(AudioEngineErrorCode.TRACK_NOT_FOUND, ERROR_MESSAGES.TRACK_NOT_FOUND, {
+        trackId: request.sourceTrackId,
+      });
+    }
+
+    try {
+      previousSource?.disconnect(sidechainInput);
+      nextSource?.connect(sidechainInput);
+    } catch (cause) {
+      try {
+        nextSource?.disconnect(sidechainInput);
+        previousSource?.connect(sidechainInput);
+      } catch {
+        // 복구 실패는 원래 sidechain 변경 오류의 세부 정보로만 노출한다.
+      }
+      throw this.createPluginSidechainError(request, this.describeError(cause));
+    }
+
+    if (request.sourceTrackId === null) {
+      sources.delete(request.instanceId);
+    } else {
+      sources.set(request.instanceId, request.sourceTrackId);
+    }
+    this.pluginSidechainSourceTrackIds.set(request.trackId, sources);
     this.graphRevision += 1;
   }
 
@@ -1517,6 +1594,31 @@ export class AudioEngine implements IAudioEngine {
     );
   }
 
+  private createPluginSidechainError(request: SetAudioPluginSidechainRequest, reason: string): AudioEngineError {
+    return new AudioEngineError(
+      AudioEngineErrorCode.PLUGIN_SIDECHAIN_UPDATE_FAILED,
+      ERROR_MESSAGES[AudioEngineErrorCode.PLUGIN_SIDECHAIN_UPDATE_FAILED],
+      { ...request, reason }
+    );
+  }
+
+  private disconnectSidechainsForTrack(trackId: string): void {
+    this.pluginSidechainSourceTrackIds.forEach((sources, targetTrackId) => {
+      const runtimes = this.getTrackPluginRuntimes(targetTrackId);
+      [...sources.entries()].forEach(([instanceId, sourceTrackId]) => {
+        if (targetTrackId !== trackId && sourceTrackId !== trackId) {
+          return;
+        }
+        const runtime = runtimes.find(candidate => candidate.instanceId === instanceId);
+        const source = this.postFaderOutputs.get(sourceTrackId);
+        if (runtime?.sidechainInputNode && source) {
+          source.disconnect(runtime.sidechainInputNode);
+        }
+        sources.delete(instanceId);
+      });
+    });
+  }
+
   private createPluginRuntime(
     factory: IAudioPluginRuntimeFactory,
     request: InstallAudioPluginRequest
@@ -1579,6 +1681,16 @@ export class AudioEngine implements IAudioEngine {
             parameterValues: instance.parameterValues,
             stateBlob: instance.stateBlob,
           });
+          if (instance.sidechainSourceTrackId && !runtime.sidechainInputNode) {
+            this.disposePluginRuntimeSafely(runtime, 'Sidechain 입력이 없는 Plugin runtime 정리에 실패했습니다.');
+            states.push({
+              instanceId: instance.instanceId,
+              latencySamples: 0,
+              reason: 'Plugin runtime이 저장된 sidechain 입력을 제공하지 않습니다.',
+              status: 'failed',
+            });
+            continue;
+          }
           runtimes.push(runtime);
           states.push({
             instanceId: instance.instanceId,
@@ -1757,6 +1869,7 @@ export class AudioEngine implements IAudioEngine {
     this.pluginRuntimes.set(trackId, []);
     this.disabledPluginInstanceIds.set(trackId, new Set());
     this.pluginRuntimeStates.set(trackId, []);
+    this.pluginSidechainSourceTrackIds.set(trackId, new Map());
     const nextRoutingGraph = {
       ...this.routingRuntime.getSnapshot(),
       routes: [
@@ -1779,6 +1892,7 @@ export class AudioEngine implements IAudioEngine {
       this.pluginRuntimes.delete(trackId);
       this.disabledPluginInstanceIds.delete(trackId);
       this.pluginRuntimeStates.delete(trackId);
+      this.pluginSidechainSourceTrackIds.delete(trackId);
       this.disposeMeterRuntimeSafely(meterRuntime, 'Route 연결에 실패한 Track Meter 정리에 실패했습니다.');
       this.disposeTrackInputSafely(input, 'Route 연결에 실패한 Track input 정리에 실패했습니다.');
       this.disposeTrackInputSafely(preFaderOutput, 'Route 연결에 실패한 Track pre-fader 출력 정리에 실패했습니다.');
@@ -1829,6 +1943,7 @@ export class AudioEngine implements IAudioEngine {
         const pluginRuntimes = preparedPlugins.runtimes;
         graph.pluginRuntimes.set(track.id, pluginRuntimes);
         graph.pluginRuntimeStates.set(track.id, preparedPlugins.states);
+        graph.pluginSidechainSourceTrackIds.set(track.id, new Map());
         const disabledPluginInstanceIds = new Set(
           track.pluginInstances.filter(instance => !instance.isEnabled).map(instance => instance.instanceId)
         );
@@ -1866,6 +1981,29 @@ export class AudioEngine implements IAudioEngine {
         const trackPlayers = graph.players.get(track.id);
         entries.forEach(entry => trackPlayers?.set(entry.regionData.id, entry));
       }
+
+      tracks.forEach(track => {
+        track.pluginInstances.forEach(instance => {
+          if (!instance.sidechainSourceTrackId) {
+            return;
+          }
+          const runtime = graph.pluginRuntimes
+            .get(track.id)
+            ?.find(candidate => candidate.instanceId === instance.instanceId);
+          const sidechainInput = runtime?.sidechainInputNode;
+          if (!sidechainInput) {
+            return;
+          }
+          const source = graph.postFaderOutputs.get(instance.sidechainSourceTrackId);
+          if (!source) {
+            throw new AudioEngineError(AudioEngineErrorCode.TRACK_NOT_FOUND, ERROR_MESSAGES.TRACK_NOT_FOUND, {
+              trackId: instance.sidechainSourceTrackId,
+            });
+          }
+          source.connect(sidechainInput);
+          graph.pluginSidechainSourceTrackIds.get(track.id)?.set(instance.instanceId, instance.sidechainSourceTrackId);
+        });
+      });
 
       graph.routingRuntime.apply(routingGraph, this.createRoutingTrackNodes(graph), graph.output);
       this.assertAutomationTargetsResolvable(graph);
@@ -1947,6 +2085,7 @@ export class AudioEngine implements IAudioEngine {
       pluginRuntimes: new Map(),
       disabledPluginInstanceIds: new Map(),
       pluginRuntimeStates: new Map(),
+      pluginSidechainSourceTrackIds: new Map(),
       routingRuntime: new AudioRoutingRuntime(),
       midiRuntime: new ToneMidiRuntime(),
     };
@@ -1971,6 +2110,7 @@ export class AudioEngine implements IAudioEngine {
       pluginRuntimes: this.pluginRuntimes,
       disabledPluginInstanceIds: this.disabledPluginInstanceIds,
       pluginRuntimeStates: this.pluginRuntimeStates,
+      pluginSidechainSourceTrackIds: this.pluginSidechainSourceTrackIds,
       routingRuntime: this.routingRuntime,
       midiRuntime: this.midiRuntime,
     };
@@ -1994,6 +2134,7 @@ export class AudioEngine implements IAudioEngine {
     this.pluginRuntimes = graph.pluginRuntimes;
     this.disabledPluginInstanceIds = graph.disabledPluginInstanceIds;
     this.pluginRuntimeStates = graph.pluginRuntimeStates;
+    this.pluginSidechainSourceTrackIds = graph.pluginSidechainSourceTrackIds;
     this.routingRuntime = graph.routingRuntime;
     this.midiRuntime = graph.midiRuntime;
   }
@@ -2018,6 +2159,21 @@ export class AudioEngine implements IAudioEngine {
   private disposeGraph(graph: AudioProjectGraphState, errorMessage: string): ResourceCleanupResult {
     this.pendingGraphCleanup.add(graph);
     graph.routingRuntime.dispose();
+    graph.pluginSidechainSourceTrackIds.forEach((sources, targetTrackId) => {
+      const runtimes = graph.pluginRuntimes.get(targetTrackId) ?? [];
+      sources.forEach((sourceTrackId, instanceId) => {
+        const runtime = runtimes.find(candidate => candidate.instanceId === instanceId);
+        const source = graph.postFaderOutputs.get(sourceTrackId);
+        if (runtime?.sidechainInputNode && source) {
+          try {
+            source.disconnect(runtime.sidechainInputNode);
+          } catch {
+            // 아래 노드 dispose가 연결 리소스를 최종 정리한다.
+          }
+        }
+      });
+    });
+    graph.pluginSidechainSourceTrackIds.clear();
     const midiCleanupResult = graph.midiRuntime.dispose();
     const isMasterMeterDisposed = this.disposeMeterRuntimeSafely(graph.masterMeterRuntime, errorMessage);
     const isMonitorMonoDisposed = this.disposeMonitorMonoSafely(graph.monitorMono, errorMessage);
