@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { readProjectDocumentV5, readProjectDocumentV9 } from '../shared/types/project-document-reader';
+import {
+  readProjectDocumentV5,
+  readProjectDocumentV9,
+  readProjectDocumentV13,
+} from '../shared/types/project-document-reader';
 import type {
   ProjectDocument,
   ProjectDocumentSnapshot,
@@ -68,6 +72,46 @@ function createSnapshotPeers(baseDocument: ProjectDocumentSnapshot): [ProjectCrd
 }
 
 describe('ProjectCrdtDocument', () => {
+  it('v13 MIDI Note를 ID 기반 collection으로 동기화한다', () => {
+    const baseDocument = readProjectDocumentV13(createProjectDocument());
+    baseDocument.tracks[0].midi = {
+      instrumentId: 'builtin.poly-synth',
+      regions: [
+        {
+          durationSeconds: 2,
+          id: '55555555-5555-4555-8555-555555555555',
+          name: 'Verse',
+          notes: [
+            {
+              channel: 1,
+              durationSeconds: 0.5,
+              id: '66666666-6666-4666-8666-666666666666',
+              pitch: 60,
+              startOffsetSeconds: 0,
+              velocity: 100,
+            },
+          ],
+          startTimeSeconds: 0,
+        },
+      ],
+    };
+    const [firstPeer, secondPeer] = createSnapshotPeers(baseDocument);
+    const nextDocument = structuredClone(baseDocument);
+    const note = nextDocument.tracks[0].midi?.regions[0]?.notes[0];
+    if (!note) {
+      throw new Error('수정할 MIDI Note가 없습니다.');
+    }
+    note.pitch = 64;
+    nextDocument.project.revision = 1;
+
+    const update = firstPeer.applyProjectChange({ baseDocument, nextDocument });
+    secondPeer.applyUpdate(update);
+
+    expect(secondPeer.toProjectDocument().tracks[0]).toMatchObject({
+      midi: { regions: [{ notes: [{ id: note.id, pitch: 64 }] }] },
+    });
+  });
+
   it('v9 Route를 Track ID keyed collection으로 보존한다', () => {
     const baseDocument = readProjectDocumentV9(createProjectDocument());
     const firstPeer = ProjectCrdtDocument.create(baseDocument);

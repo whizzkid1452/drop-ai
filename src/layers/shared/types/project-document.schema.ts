@@ -18,6 +18,7 @@ export const PROJECT_DOCUMENT_SCHEMA_VERSION_V9 = 9 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V10 = 10 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V11 = 11 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V12 = 12 as const;
+export const PROJECT_DOCUMENT_SCHEMA_VERSION_V13 = 13 as const;
 
 const MAX_NAME_LENGTH = 255;
 const MAX_MIME_TYPE_LENGTH = 255;
@@ -28,6 +29,8 @@ const MAX_ROUTING_ENTRIES = 512;
 const MAX_RECORDING_ENTRIES = 512;
 const MAX_AUTOMATION_LANES = 128;
 const MAX_AUTOMATION_POINTS = 10_000;
+const MAX_MIDI_REGIONS = 4_096;
+const MAX_MIDI_NOTES = 100_000;
 const nonBlankNameSchema = z.string().trim().min(1).max(MAX_NAME_LENGTH);
 const pluginTextSchema = z
   .string()
@@ -35,6 +38,11 @@ const pluginTextSchema = z
   .max(MAX_NAME_LENGTH)
   .refine(value => value.trim() === value, 'Plugin text must not have surrounding whitespace');
 const normalizedAudioValueSchema = z.number().min(0).max(1);
+const midiInstrumentIdSchema = z
+  .string()
+  .min(1)
+  .max(MAX_NAME_LENGTH)
+  .regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/iu, 'Invalid MIDI instrument ID format');
 
 export const ProjectAudioSourceSchema = z.strictObject({
   id: z.uuid('Invalid Source ID format'),
@@ -540,6 +548,51 @@ const ProjectDocumentV12BaseSchema = ProjectDocumentV11BaseSchema.omit({ schemaV
   tracks: z.array(ProjectTrackV12Schema),
 });
 
+export const ProjectMidiNoteSchema = z.strictObject({
+  channel: z.number().int().min(1).max(16),
+  durationSeconds: z.number().finite().positive(),
+  id: z.uuid('Invalid MIDI Note ID format'),
+  pitch: z.number().int().min(0).max(127),
+  startOffsetSeconds: z.number().finite().nonnegative(),
+  velocity: z.number().int().min(1).max(127),
+});
+
+export const ProjectMidiRegionSchema = z
+  .strictObject({
+    durationSeconds: z.number().finite().positive(),
+    id: z.uuid('Invalid MIDI Region ID format'),
+    name: nonBlankNameSchema,
+    notes: z.array(ProjectMidiNoteSchema).max(MAX_MIDI_NOTES),
+    startTimeSeconds: z.number().finite().nonnegative(),
+  })
+  .superRefine((region, context) => {
+    region.notes.forEach((note, noteIndex) => {
+      const noteEndOffsetSeconds = note.startOffsetSeconds + note.durationSeconds;
+      if (Number.isFinite(noteEndOffsetSeconds) && noteEndOffsetSeconds <= region.durationSeconds) {
+        return;
+      }
+      context.addIssue({
+        code: 'custom',
+        message: 'MIDI Note must stay inside its Region',
+        path: ['notes', noteIndex, 'durationSeconds'],
+      });
+    });
+  });
+
+export const ProjectMidiTrackSchema = z.strictObject({
+  instrumentId: midiInstrumentIdSchema,
+  regions: z.array(ProjectMidiRegionSchema).max(MAX_MIDI_REGIONS),
+});
+
+export const ProjectTrackV13Schema = ProjectTrackV12Schema.safeExtend({
+  midi: ProjectMidiTrackSchema.nullable(),
+});
+
+const ProjectDocumentV13BaseSchema = ProjectDocumentV12BaseSchema.omit({ schemaVersion: true, tracks: true }).extend({
+  schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V13),
+  tracks: z.array(ProjectTrackV13Schema),
+});
+
 interface IdentifiedDocumentPath {
   id: string;
   path: Array<string | number>;
@@ -563,7 +616,8 @@ type RefinableProjectDocument =
   | z.infer<typeof ProjectDocumentV9BaseSchema>
   | z.infer<typeof ProjectDocumentV10BaseSchema>
   | z.infer<typeof ProjectDocumentV11BaseSchema>
-  | z.infer<typeof ProjectDocumentV12BaseSchema>;
+  | z.infer<typeof ProjectDocumentV12BaseSchema>
+  | z.infer<typeof ProjectDocumentV13BaseSchema>;
 type RefinableProjectTrack =
   | z.infer<typeof ProjectTrackSchema>
   | z.infer<typeof ProjectTrackV2Schema>
@@ -572,7 +626,8 @@ type RefinableProjectTrack =
   | z.infer<typeof ProjectTrackV8Schema>
   | z.infer<typeof ProjectTrackV10Schema>
   | z.infer<typeof ProjectTrackV11Schema>
-  | z.infer<typeof ProjectTrackV12Schema>;
+  | z.infer<typeof ProjectTrackV12Schema>
+  | z.infer<typeof ProjectTrackV13Schema>;
 
 function isProjectTrackWithLoopSlots(
   track: RefinableProjectTrack
@@ -582,7 +637,8 @@ function isProjectTrackWithLoopSlots(
   | z.infer<typeof ProjectTrackV8Schema>
   | z.infer<typeof ProjectTrackV10Schema>
   | z.infer<typeof ProjectTrackV11Schema>
-  | z.infer<typeof ProjectTrackV12Schema> {
+  | z.infer<typeof ProjectTrackV12Schema>
+  | z.infer<typeof ProjectTrackV13Schema> {
   return 'loopSlots' in track;
 }
 
@@ -708,7 +764,8 @@ function validatePluginState(
     | z.infer<typeof ProjectDocumentV9BaseSchema>
     | z.infer<typeof ProjectDocumentV10BaseSchema>
     | z.infer<typeof ProjectDocumentV11BaseSchema>
-    | z.infer<typeof ProjectDocumentV12BaseSchema>,
+    | z.infer<typeof ProjectDocumentV12BaseSchema>
+    | z.infer<typeof ProjectDocumentV13BaseSchema>,
   context: z.RefinementCtx
 ): void {
   const instanceEntries = document.tracks.flatMap((track, trackIndex) =>
@@ -854,6 +911,44 @@ export const ProjectDocumentV12Schema = ProjectDocumentV12BaseSchema.superRefine
   validateAutomationState(document, context);
 });
 
+export const ProjectDocumentV13Schema = ProjectDocumentV13BaseSchema.superRefine((document, context) => {
+  validateProjectRelations(document, context);
+  validatePluginState(document, context);
+  validateTimelineMap(document, context);
+  addDuplicateIdIssues({
+    entries: document.timeline.markers.map((marker, index) => ({
+      id: marker.id,
+      path: ['timeline', 'markers', index, 'id'],
+    })),
+    label: 'Timeline marker',
+    context,
+  });
+  validateRegionProcessing(document, context);
+  validateRoutingGraph(document, context);
+  validateRecordingState(document, context);
+  validateAutomationState(document, context);
+  validateMidiState(document, context);
+});
+
+function validateMidiState(document: z.infer<typeof ProjectDocumentV13BaseSchema>, context: z.RefinementCtx): void {
+  const midiRegionEntries = document.tracks.flatMap((track, trackIndex) =>
+    (track.midi?.regions ?? []).map((region, regionIndex) => ({
+      id: region.id,
+      path: ['tracks', trackIndex, 'midi', 'regions', regionIndex, 'id'],
+    }))
+  );
+  const midiNoteEntries = document.tracks.flatMap((track, trackIndex) =>
+    (track.midi?.regions ?? []).flatMap((region, regionIndex) =>
+      region.notes.map((note, noteIndex) => ({
+        id: note.id,
+        path: ['tracks', trackIndex, 'midi', 'regions', regionIndex, 'notes', noteIndex, 'id'],
+      }))
+    )
+  );
+  addDuplicateIdIssues({ entries: midiRegionEntries, label: 'MIDI Region', context });
+  addDuplicateIdIssues({ entries: midiNoteEntries, label: 'MIDI Note', context });
+}
+
 interface CrossfadeEndpoint {
   readonly crossfadeId: string;
   readonly direction: 'in' | 'out';
@@ -869,7 +964,8 @@ function validateRegionProcessing(
     | z.infer<typeof ProjectDocumentV9BaseSchema>
     | z.infer<typeof ProjectDocumentV10BaseSchema>
     | z.infer<typeof ProjectDocumentV11BaseSchema>
-    | z.infer<typeof ProjectDocumentV12BaseSchema>,
+    | z.infer<typeof ProjectDocumentV12BaseSchema>
+    | z.infer<typeof ProjectDocumentV13BaseSchema>,
   context: z.RefinementCtx
 ): void {
   document.tracks.forEach((track, trackIndex) => {
@@ -945,7 +1041,8 @@ function validateRoutingGraph(
     | z.infer<typeof ProjectDocumentV9BaseSchema>
     | z.infer<typeof ProjectDocumentV10BaseSchema>
     | z.infer<typeof ProjectDocumentV11BaseSchema>
-    | z.infer<typeof ProjectDocumentV12BaseSchema>,
+    | z.infer<typeof ProjectDocumentV12BaseSchema>
+    | z.infer<typeof ProjectDocumentV13BaseSchema>,
   context: z.RefinementCtx
 ): void {
   const routes = document.mixer.routing.routes;
@@ -1099,7 +1196,8 @@ function validateRecordingState(
   document:
     | z.infer<typeof ProjectDocumentV10BaseSchema>
     | z.infer<typeof ProjectDocumentV11BaseSchema>
-    | z.infer<typeof ProjectDocumentV12BaseSchema>,
+    | z.infer<typeof ProjectDocumentV12BaseSchema>
+    | z.infer<typeof ProjectDocumentV13BaseSchema>,
   context: z.RefinementCtx
 ): void {
   const trackIds = new Set(document.tracks.map(track => track.id));
@@ -1220,7 +1318,10 @@ function validateRecordingState(
 }
 
 function validateAutomationState(
-  document: z.infer<typeof ProjectDocumentV11BaseSchema> | z.infer<typeof ProjectDocumentV12BaseSchema>,
+  document:
+    | z.infer<typeof ProjectDocumentV11BaseSchema>
+    | z.infer<typeof ProjectDocumentV12BaseSchema>
+    | z.infer<typeof ProjectDocumentV13BaseSchema>,
   context: z.RefinementCtx
 ): void {
   const sendsById = new Map(document.mixer.routing.sends.map(send => [send.id, send]));
@@ -1334,7 +1435,8 @@ function validateTimelineMap(
     | z.infer<typeof ProjectDocumentV9BaseSchema>
     | z.infer<typeof ProjectDocumentV10BaseSchema>
     | z.infer<typeof ProjectDocumentV11BaseSchema>
-    | z.infer<typeof ProjectDocumentV12BaseSchema>,
+    | z.infer<typeof ProjectDocumentV12BaseSchema>
+    | z.infer<typeof ProjectDocumentV13BaseSchema>,
   context: z.RefinementCtx
 ): void {
   validateTimelineMarkerPositions(document.timeline.tempoChanges, 'tempoChanges', context);
@@ -1423,6 +1525,11 @@ export type ProjectDocumentV11 = z.infer<typeof ProjectDocumentV11Schema>;
 export type ProjectAutomationLaneV12 = z.infer<typeof ProjectAutomationLaneV12Schema>;
 export type ProjectTrackV12 = z.infer<typeof ProjectTrackV12Schema>;
 export type ProjectDocumentV12 = z.infer<typeof ProjectDocumentV12Schema>;
+export type ProjectMidiNote = z.infer<typeof ProjectMidiNoteSchema>;
+export type ProjectMidiRegion = z.infer<typeof ProjectMidiRegionSchema>;
+export type ProjectMidiTrack = z.infer<typeof ProjectMidiTrackSchema>;
+export type ProjectTrackV13 = z.infer<typeof ProjectTrackV13Schema>;
+export type ProjectDocumentV13 = z.infer<typeof ProjectDocumentV13Schema>;
 export type ProjectDocumentSnapshot =
   | ProjectDocument
   | ProjectDocumentV2
@@ -1435,4 +1542,5 @@ export type ProjectDocumentSnapshot =
   | ProjectDocumentV9
   | ProjectDocumentV10
   | ProjectDocumentV11
-  | ProjectDocumentV12;
+  | ProjectDocumentV12
+  | ProjectDocumentV13;

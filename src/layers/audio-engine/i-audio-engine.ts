@@ -1,5 +1,6 @@
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
 import type { AutomationLaneState } from '../shared/types/automation-state';
+import type { MidiTrackState } from '../shared/types/midi-state';
 import type { RegionProcessingState } from '../shared/types/region-processing';
 import type {
   AnalyzeAudioRegionPeakRequest,
@@ -44,6 +45,7 @@ export type {
 } from './loop-runtime/loop-runtime-contract';
 export type { MeterChannelFrame, MeterFrame, MeterTarget } from '../shared/types/meter-frame';
 export type { RoutingGraphSnapshot } from '../shared/types/routing-state';
+export type { MidiNoteState, MidiRegionState, MidiTrackState } from '../shared/types/midi-state';
 export type { AudioMonitorState, AudioMonitorStateListener } from '../shared/types/audio-monitor-state';
 export type { LiveAudioInputDevice, LiveInputRuntimeListener, LiveInputRuntimeState } from '../shared/types/live-input';
 export type {
@@ -176,6 +178,7 @@ export interface AudioProjectGraphTrack {
   readonly isSoloed: boolean;
   readonly pluginInstances: readonly AudioProjectGraphPluginInstance[];
   readonly automationLanes?: readonly AutomationLaneState[];
+  readonly midi?: MidiTrackState | null;
   readonly loops?: readonly AudioProjectGraphLoop[];
   readonly regions: readonly RegionData[];
 }
