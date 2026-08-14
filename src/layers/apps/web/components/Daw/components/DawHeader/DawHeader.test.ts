@@ -35,6 +35,10 @@ vi.mock('../ExportButton/ExportButton', () => ({
   ExportButton: () => null,
 }));
 
+vi.mock('../SessionLifecycleControl/SessionLifecycleControl', () => ({
+  SessionLifecycleControl: () => null,
+}));
+
 vi.mock('../SaveProjectButton/SaveProjectButton', () => ({
   SaveProjectButton: componentMocks.saveProjectButton,
 }));
