@@ -13,12 +13,14 @@ import type { MidiRecordedTake } from '../shared/types/midi-recording';
 import { createCommandHistoryEntry } from './create-command-history-entry';
 import { assertLiveOperationAllowed } from './live-operation-guard';
 import type { CleanupUnusedSourcesResult } from '../controllers/media-source-controller';
+import type { RenderJobResult } from '../shared/types/render-job';
 
 export type CommandExecutionResult =
   | Blob
   | CleanupUnusedSourcesResult
   | MidiRecordedTake
   | MultiTrackRecordingResult
+  | RenderJobResult
   | void;
 export type CommandBatchExecutionResult = readonly CommandExecutionResult[];
 
@@ -63,6 +65,10 @@ export class CommandExecutor {
 
   async execute(command: AudioCommand): Promise<CommandExecutionResult> {
     const validatedCommand = AudioCommandSchema.parse(command);
+    if (validatedCommand.type === AudioCommandType.CANCEL_RENDER_JOB) {
+      this.controller.export.cancelRenderJob(validatedCommand.jobId);
+      return;
+    }
     return this.enqueue(() => this.executeAndPersist(validatedCommand));
   }
 
@@ -592,6 +598,17 @@ export class CommandExecutor {
       case AudioCommandType.CLEANUP_UNUSED_SOURCES:
         return this.controller.mediaSource.cleanupUnusedSources();
 
+      case AudioCommandType.SET_EXPORT_SETTINGS:
+        this.controller.export.setExportSettings(validatedCommand.settings);
+        return;
+
+      case AudioCommandType.START_RENDER_JOB:
+        return this.controller.export.startRenderJob();
+
+      case AudioCommandType.CANCEL_RENDER_JOB:
+        this.controller.export.cancelRenderJob(validatedCommand.jobId);
+        return;
+
       case AudioCommandType.SET_EXPORT_RANGE:
         this.controller.export.setExportRange(validatedCommand.startTime, validatedCommand.endTime);
         return;
@@ -762,6 +779,7 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.CLEANUP_UNUSED_SOURCES:
     case AudioCommandType.SET_EXPORT_RANGE:
     case AudioCommandType.CLEAR_EXPORT_RANGE:
+    case AudioCommandType.SET_EXPORT_SETTINGS:
     case AudioCommandType.STOP_RECORDING:
       return true;
 
@@ -791,6 +809,8 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.AUDITION_SOURCE:
     case AudioCommandType.STOP_SOURCE_AUDITION:
     case AudioCommandType.EXPORT_AUDIO:
+    case AudioCommandType.START_RENDER_JOB:
+    case AudioCommandType.CANCEL_RENDER_JOB:
     case AudioCommandType.SAVE_PROJECT:
     case AudioCommandType.LOAD_PROJECT:
       return false;

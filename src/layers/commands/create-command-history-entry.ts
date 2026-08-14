@@ -11,6 +11,7 @@ import type {
   EditorTrackRegionSnapshot,
   ReplaceEditorTrackRegionsRequest,
 } from '../shared/types/editor-runtime';
+import { ValidatedProjectExportSettingsSchema } from '../shared/types/project-document.schema';
 
 interface CreateCommandHistoryEntryOptions {
   readonly afterSession: SessionState;
@@ -946,6 +947,24 @@ export function createCommandHistoryEntry({
       return createEntry({ executeCommand, label: command.type, undoCommand, redoCommand });
     }
 
+    case AudioCommandType.SET_EXPORT_SETTINGS: {
+      if (JSON.stringify(beforeSession.exportSettings) === JSON.stringify(afterSession.exportSettings)) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        undoCommand: {
+          settings: ValidatedProjectExportSettingsSchema.parse(beforeSession.exportSettings),
+          type: AudioCommandType.SET_EXPORT_SETTINGS,
+        },
+        redoCommand: {
+          settings: ValidatedProjectExportSettingsSchema.parse(afterSession.exportSettings),
+          type: AudioCommandType.SET_EXPORT_SETTINGS,
+        },
+      });
+    }
+
     case AudioCommandType.UNDO:
     case AudioCommandType.REDO:
     case AudioCommandType.REMOVE_TRACK:
@@ -982,6 +1001,8 @@ export function createCommandHistoryEntry({
     case AudioCommandType.STOP_SOURCE_AUDITION:
     case AudioCommandType.CLEANUP_UNUSED_SOURCES:
     case AudioCommandType.EXPORT_AUDIO:
+    case AudioCommandType.START_RENDER_JOB:
+    case AudioCommandType.CANCEL_RENDER_JOB:
     case AudioCommandType.SAVE_PROJECT:
     case AudioCommandType.LOAD_PROJECT:
       return null;

@@ -57,6 +57,7 @@ const conflictCommands: readonly AudioCommand[] = [
     value: 0.5,
   },
   { type: AudioCommandType.EXPORT_AUDIO },
+  { type: AudioCommandType.START_RENDER_JOB },
   { type: AudioCommandType.LOAD_PROJECT, projectId: PROJECT_ID },
 ];
 

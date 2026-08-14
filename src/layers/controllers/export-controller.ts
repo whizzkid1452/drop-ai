@@ -4,10 +4,14 @@ import {
   type ExportRegion,
   type ExportRequest,
   type IAudioEngine,
+  type StartRenderJobRequest,
 } from '../audio-engine/i-audio-engine';
 import { AudioEngineError, AudioEngineErrorCode, ERROR_MESSAGES } from '../audio-engine/errors';
 import type { IAudioSourceResolver } from '../audio-source-registry/i-audio-source-registry';
 import { type RegionState, type SessionStore } from '../session/session';
+import { ValidatedProjectExportSettingsSchema } from '../shared/types/project-document.schema';
+import type { ProjectExportState } from '../shared/types/export-state';
+import type { RenderJobResult, RenderJobState, RenderJobStateListener } from '../shared/types/render-job';
 import { ProjectStateError, ProjectStateErrorCode } from './project-state-error';
 
 interface ExportControllerDependencies {
@@ -58,9 +62,45 @@ export class ExportController {
     return this.audioEngine.exportProject(this.createExportRequest({ startTime, endTime }));
   }
 
+  setExportSettings(settings: ProjectExportState): void {
+    const validatedSettings = ValidatedProjectExportSettingsSchema.parse(settings);
+    this.sessionStore.getState().setExportSettings(validatedSettings);
+  }
+
+  async startRenderJob(): Promise<RenderJobResult> {
+    const request = this.createRenderJobRequest();
+    return this.audioEngine.startRenderJob(request);
+  }
+
+  cancelRenderJob(jobId: string): void {
+    this.audioEngine.cancelRenderJob(jobId);
+  }
+
+  getRenderJobState(): RenderJobState {
+    return this.audioEngine.getRenderJobState();
+  }
+
+  subscribeRenderJobState(listener: RenderJobStateListener): () => void {
+    return this.audioEngine.subscribeRenderJobState(listener);
+  }
+
   private createExportRequest(range: ExportRange): ExportRequest {
     const session = this.sessionStore.getState();
-    const tracks = Array.from(session.tracks.values()).map(track => ({
+    const tracks = this.createExportTracks();
+
+    this.assertExportable(tracks, range);
+
+    return {
+      tracks,
+      masterVolume: session.masterVolume,
+      range,
+      routingGraph: session.routingGraph,
+      sampleRate: DEFAULT_EXPORT_SAMPLE_RATE,
+    };
+  }
+
+  private createExportTracks() {
+    return Array.from(this.sessionStore.getState().tracks.values()).map(track => ({
       id: track.id,
       volume: track.volume,
       pan: track.pan,
@@ -82,20 +122,47 @@ export class ExportController {
         return region.duration <= 0 ? [] : [this.createExportRegion(region, url)];
       }),
     }));
+  }
 
+  private assertExportable(tracks: ReturnType<ExportController['createExportTracks']>, range: ExportRange): void {
     if (tracks.length === 0 || tracks.every(track => track.regions.length === 0)) {
       throw new AudioEngineError(AudioEngineErrorCode.EXPORT_NO_TRACKS, ERROR_MESSAGES.EXPORT_NO_TRACKS);
     }
     if (range.startTime < 0 || range.endTime <= range.startTime) {
       throw new AudioEngineError(AudioEngineErrorCode.EXPORT_ZERO_DURATION, ERROR_MESSAGES.EXPORT_ZERO_DURATION);
     }
+  }
 
+  private createRenderJobRequest(): StartRenderJobRequest {
+    const session = this.sessionStore.getState();
+    const tracks = this.createExportTracks();
+    const preset = session.exportSettings.presets.find(
+      candidate => candidate.id === session.exportSettings.activePresetId
+    );
+    if (!preset) {
+      throw new ProjectStateError(ProjectStateErrorCode.INVALID_EXPORT_RANGE, '활성 Export preset을 찾을 수 없습니다.');
+    }
+    const ranges =
+      session.exportSettings.ranges.length > 0
+        ? session.exportSettings.ranges
+        : [
+            {
+              endTimeSeconds: this.resolveExportRange().endTime,
+              id: crypto.randomUUID(),
+              name: 'Mix',
+              startTimeSeconds: this.resolveExportRange().startTime,
+            },
+          ];
+    ranges.forEach(range =>
+      this.assertExportable(tracks, { endTime: range.endTimeSeconds, startTime: range.startTimeSeconds })
+    );
     return {
-      tracks,
+      jobId: crypto.randomUUID(),
       masterVolume: session.masterVolume,
-      range,
+      preset,
+      ranges,
       routingGraph: session.routingGraph,
-      sampleRate: DEFAULT_EXPORT_SAMPLE_RATE,
+      tracks,
     };
   }
 

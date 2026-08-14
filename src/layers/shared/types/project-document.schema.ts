@@ -1194,34 +1194,46 @@ function validateProjectDocumentV16State(
 
 export const ProjectDocumentV16Schema = ProjectDocumentV16BaseSchema.superRefine(validateProjectDocumentV16State);
 
-export const ProjectDocumentV17Schema = ProjectDocumentV17BaseSchema.superRefine((document, context) => {
-  validateProjectDocumentV16State(document as unknown as z.infer<typeof ProjectDocumentV16BaseSchema>, context);
-  const presetEntries = document.exportSettings.presets.map((preset, index) => ({
+function validateProjectExportSettings(
+  exportSettings: z.infer<typeof ProjectExportSettingsSchema>,
+  context: z.RefinementCtx,
+  pathPrefix: Array<string | number> = []
+): void {
+  const presetEntries = exportSettings.presets.map((preset, index) => ({
     id: preset.id,
-    path: ['exportSettings', 'presets', index, 'id'],
+    path: [...pathPrefix, 'presets', index, 'id'],
   }));
-  const rangeEntries = document.exportSettings.ranges.map((range, index) => ({
+  const rangeEntries = exportSettings.ranges.map((range, index) => ({
     id: range.id,
-    path: ['exportSettings', 'ranges', index, 'id'],
+    path: [...pathPrefix, 'ranges', index, 'id'],
   }));
   addDuplicateIdIssues({ entries: presetEntries, label: 'Export Preset', context });
   addDuplicateIdIssues({ entries: rangeEntries, label: 'Export Range', context });
-  if (!document.exportSettings.presets.some(preset => preset.id === document.exportSettings.activePresetId)) {
+  if (!exportSettings.presets.some(preset => preset.id === exportSettings.activePresetId)) {
     context.addIssue({
       code: 'custom',
       message: 'Active Export Preset must exist',
-      path: ['exportSettings', 'activePresetId'],
+      path: [...pathPrefix, 'activePresetId'],
     });
   }
-  document.exportSettings.presets.forEach((preset, index) => {
+  exportSettings.presets.forEach((preset, index) => {
     if (preset.sampleFormat === 'float32' && preset.dither !== 'none') {
       context.addIssue({
         code: 'custom',
         message: '32-bit float Export must not use dither',
-        path: ['exportSettings', 'presets', index, 'dither'],
+        path: [...pathPrefix, 'presets', index, 'dither'],
       });
     }
   });
+}
+
+export const ValidatedProjectExportSettingsSchema = ProjectExportSettingsSchema.superRefine((settings, context) => {
+  validateProjectExportSettings(settings, context);
+});
+
+export const ProjectDocumentV17Schema = ProjectDocumentV17BaseSchema.superRefine((document, context) => {
+  validateProjectDocumentV16State(document as unknown as z.infer<typeof ProjectDocumentV16BaseSchema>, context);
+  validateProjectExportSettings(document.exportSettings, context, ['exportSettings']);
 });
 
 function validateAudioSourceManagement(

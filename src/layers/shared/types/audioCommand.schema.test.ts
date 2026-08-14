@@ -597,6 +597,61 @@ describe('SET_EXPORT_RANGE 계약', () => {
   });
 });
 
+describe('RenderJob 명령 계약', () => {
+  it('유효한 Export 설정과 RenderJob 시작·취소 명령을 허용한다', () => {
+    expect(
+      StrictAudioCommandSchema.safeParse({
+        settings: {
+          activePresetId: 'preset-1',
+          presets: [
+            {
+              channelMode: 'stereo',
+              dither: 'none',
+              exportMode: 'mix',
+              format: 'wav',
+              id: 'preset-1',
+              name: 'WAV',
+              normalization: { mode: 'none' },
+              sampleFormat: 'float32',
+              sampleRate: 48_000,
+            },
+          ],
+          ranges: [],
+        },
+        type: AudioCommandType.SET_EXPORT_SETTINGS,
+      }).success
+    ).toBe(true);
+    expect(StrictAudioCommandSchema.safeParse({ type: AudioCommandType.START_RENDER_JOB }).success).toBe(true);
+    expect(
+      StrictAudioCommandSchema.safeParse({
+        jobId: '11111111-1111-4111-8111-111111111111',
+        type: AudioCommandType.CANCEL_RENDER_JOB,
+      }).success
+    ).toBe(true);
+  });
+
+  it('존재하지 않는 active preset과 float32 dither 조합을 거부한다', () => {
+    const basePreset = {
+      channelMode: 'stereo' as const,
+      dither: 'tpdf' as const,
+      exportMode: 'mix' as const,
+      format: 'wav' as const,
+      id: 'preset-1',
+      name: 'WAV',
+      normalization: { mode: 'none' as const },
+      sampleFormat: 'float32' as const,
+      sampleRate: 48_000,
+    };
+
+    expect(
+      StrictAudioCommandSchema.safeParse({
+        settings: { activePresetId: 'missing', presets: [basePreset], ranges: [] },
+        type: AudioCommandType.SET_EXPORT_SETTINGS,
+      }).success
+    ).toBe(false);
+  });
+});
+
 describe('Agent AudioCommand 묶음 파싱', () => {
   it('SAVE_PROJECT 응답을 공통 명령으로 보존한다', () => {
     expect(

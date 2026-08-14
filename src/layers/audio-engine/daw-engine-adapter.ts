@@ -50,9 +50,11 @@ import type {
   SetTrackRecordArmRequest,
   SetTrackRecordingInputRequest,
   StartLinearRecordingRequest,
+  StartRenderJobRequest,
   StopAllLoopsRequest,
   TriggerLoopRequest,
 } from './i-audio-engine';
+import type { RenderJobResult, RenderJobState, RenderJobStateListener } from '../shared/types/render-job';
 import type { TimelineRange } from '../shared/types/project-document.schema';
 import { createDefaultRegionProcessingState } from '../shared/types/region-processing';
 import { UnsupportedAudioFeatureError } from './errors';
@@ -485,6 +487,22 @@ export class DawEngineAdapter implements IAudioEngine {
 
   exportProject(request: ExportRequest): Promise<Blob> {
     return this.#runtime.exportProject(request);
+  }
+
+  startRenderJob(request: StartRenderJobRequest): Promise<RenderJobResult> {
+    return this.#runtime.startRenderJob(request);
+  }
+
+  cancelRenderJob(jobId: string): void {
+    this.#runtime.cancelRenderJob(jobId);
+  }
+
+  getRenderJobState(): RenderJobState {
+    return this.#runtime.getRenderJobState();
+  }
+
+  subscribeRenderJobState(listener: RenderJobStateListener): () => void {
+    return this.#runtime.subscribeRenderJobState(listener);
   }
 
   analyzeAudioRegionPeak(request: AnalyzeAudioRegionPeakRequest): Promise<number> {

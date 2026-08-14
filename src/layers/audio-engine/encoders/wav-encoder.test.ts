@@ -53,4 +53,57 @@ describe('encodeAudioBufferToWav', () => {
       32767, 16384, -32768, -16384, 32767, -32768,
     ]);
   });
+
+  it.each([
+    { audioFormat: 1, bitsPerSample: 16, bytesPerSample: 2, sampleFormat: 'pcm16' as const },
+    { audioFormat: 1, bitsPerSample: 24, bytesPerSample: 3, sampleFormat: 'pcm24' as const },
+    { audioFormat: 3, bitsPerSample: 32, bytesPerSample: 4, sampleFormat: 'float32' as const },
+  ])('$sampleFormat WAV header와 sample 크기를 기록한다', async options => {
+    const audioBuffer = {
+      length: 2,
+      numberOfChannels: 1,
+      sampleRate: 48_000,
+      getChannelData: () => new Float32Array([1, -1]),
+    } as unknown as AudioBuffer;
+
+    const wav = await encodeAudioBufferToWav(audioBuffer, { sampleFormat: options.sampleFormat }).arrayBuffer();
+    const view = new DataView(wav);
+
+    expect(view.getUint16(20, true)).toBe(options.audioFormat);
+    expect(view.getUint16(34, true)).toBe(options.bitsPerSample);
+    expect(view.getUint32(40, true)).toBe(2 * options.bytesPerSample);
+  });
+
+  it('stereo 입력을 mono 평균으로 downmix한다', async () => {
+    const channels = [new Float32Array([1]), new Float32Array([-0.5])];
+    const audioBuffer = {
+      length: 1,
+      numberOfChannels: 2,
+      sampleRate: 8_000,
+      getChannelData: (channelIndex: number) => channels[channelIndex],
+    } as unknown as AudioBuffer;
+
+    const wav = await encodeAudioBufferToWav(audioBuffer, { channelMode: 'mono', dither: 'none' }).arrayBuffer();
+    const view = new DataView(wav);
+
+    expect(view.getUint16(22, true)).toBe(1);
+    expect(view.getInt16(44, true)).toBeCloseTo(0.25 * 0x7fff, -1);
+  });
+
+  it('고정 난수 TPDF dither를 PCM 양자화 전에 적용한다', async () => {
+    const audioBuffer = {
+      length: 1,
+      numberOfChannels: 1,
+      sampleRate: 8_000,
+      getChannelData: () => new Float32Array([0]),
+    } as unknown as AudioBuffer;
+
+    const wav = await encodeAudioBufferToWav(audioBuffer, {
+      dither: 'tpdf',
+      random: () => 1,
+      sampleFormat: 'pcm16',
+    }).arrayBuffer();
+
+    expect(new DataView(wav).getInt16(44, true)).toBe(1);
+  });
 });

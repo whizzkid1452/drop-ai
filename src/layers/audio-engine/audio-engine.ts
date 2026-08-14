@@ -26,6 +26,7 @@ import {
 } from '../shared/utils/audio-runtime-capabilities';
 import { startPlayer } from './config/player-config';
 import { encodeAudioBufferToWav } from './encoders/wav-encoder';
+import { analyzeRenderedPcm, calculateNormalizationGainDb } from './analysis/render-analysis';
 import { AudioEngineError, AudioEngineErrorCode, ERROR_MESSAGES, UnsupportedAudioFeatureError } from './errors';
 import type {
   AudioProjectGraphPluginInstance,
@@ -67,6 +68,7 @@ import type {
   SetTrackRecordArmRequest,
   SetTrackRecordingInputRequest,
   StartLinearRecordingRequest,
+  StartRenderJobRequest,
   StopAllLoopsRequest,
   TriggerLoopRequest,
 } from './i-audio-engine';
@@ -100,6 +102,14 @@ import { createMappedAutomationTarget } from './automation/tone-automation-targe
 import { ToneMidiRuntime } from './midi/tone-midi-runtime';
 import { BUILTIN_MIDI_INSTRUMENT_ID } from '../shared/types/midi-state';
 import type { PluginRuntimeState } from '../shared/types/plugin-state';
+import { createDefaultExportPreset, type ExportPresetState, type ExportRangeState } from '../shared/types/export-state';
+import {
+  createIdleRenderJobState,
+  type RenderJobFile,
+  type RenderJobResult,
+  type RenderJobState,
+  type RenderJobStateListener,
+} from '../shared/types/render-job';
 
 interface RegionPlayerEntry {
   players: Tone.Player[];
@@ -178,6 +188,13 @@ interface ConnectPreparedPluginChainRequest {
   readonly destination: Tone.ToneAudioNode;
   readonly runtimes: readonly IAudioPluginRuntime[];
   readonly trackId: string;
+}
+
+interface RenderJobOutput {
+  readonly fileName: string;
+  readonly range: ExportRangeState;
+  readonly request: ExportRequest;
+  readonly trackId: string | null;
 }
 
 interface ReplacePluginChainConnectionsRequest {
@@ -287,6 +304,10 @@ export class AudioEngine implements IAudioEngine {
     recordStartTimeSeconds: null,
   };
   private activeRecordingRequest: StartLinearRecordingRequest | null = null;
+  private renderJobState: RenderJobState = createIdleRenderJobState();
+  private readonly renderJobStateListeners = new Set<RenderJobStateListener>();
+  private cancelledRenderJobId: string | null = null;
+  private activeRenderJobId: string | null = null;
 
   listAvailablePluginManifestIds(): readonly string[] {
     return [...this.pluginRuntimeFactories.keys()];
@@ -1488,26 +1509,9 @@ export class AudioEngine implements IAudioEngine {
   }
 
   async exportProject(request: ExportRequest): Promise<Blob> {
-    const duration = request.range.endTime - request.range.startTime;
-    if (duration <= 0) {
-      throw new AudioEngineError(AudioEngineErrorCode.EXPORT_ZERO_DURATION, ERROR_MESSAGES.EXPORT_ZERO_DURATION);
-    }
-    if (request.tracks.length === 0) {
-      throw new AudioEngineError(AudioEngineErrorCode.EXPORT_NO_TRACKS, ERROR_MESSAGES.EXPORT_NO_TRACKS);
-    }
-
     try {
-      const renderedBuffer = await Tone.Offline(
-        async () => this.scheduleExport(request),
-        duration,
-        2,
-        request.sampleRate
-      );
-      const audioBuffer = renderedBuffer.get();
-      if (!audioBuffer) {
-        throw new AudioEngineError(AudioEngineErrorCode.RENDER_FAILED, ERROR_MESSAGES.RENDER_FAILED);
-      }
-      return encodeAudioBufferToWav(audioBuffer);
+      const audioBuffer = await this.renderExportAudioBuffer(request);
+      return this.analyzeNormalizeAndEncode(audioBuffer, request.preset ?? createDefaultExportPreset()).blob;
     } catch (error) {
       if (error instanceof AudioEngineError) {
         throw error;
@@ -1516,6 +1520,201 @@ export class AudioEngine implements IAudioEngine {
         cause: this.describeError(error),
       });
     }
+  }
+
+  async startRenderJob(request: StartRenderJobRequest): Promise<RenderJobResult> {
+    if (this.activeRenderJobId !== null) {
+      throw new AudioEngineError(AudioEngineErrorCode.RENDER_JOB_ACTIVE, ERROR_MESSAGES.RENDER_JOB_ACTIVE, {
+        activeJobId: this.renderJobState.jobId,
+      });
+    }
+    const outputs = this.createRenderJobOutputs(request);
+    this.activeRenderJobId = request.jobId;
+    this.cancelledRenderJobId = null;
+    this.updateRenderJobState({
+      completedFileCount: 0,
+      errorMessage: null,
+      jobId: request.jobId,
+      outputFileCount: outputs.length,
+      progress: 0,
+      stage: 'preparing',
+      status: 'running',
+    });
+
+    const files: RenderJobFile[] = [];
+    try {
+      for (const output of outputs) {
+        this.assertRenderJobNotCancelled(request.jobId);
+        this.updateRenderJobState({ ...this.renderJobState, stage: 'rendering' });
+        const audioBuffer = await this.renderExportAudioBuffer(output.request);
+        this.assertRenderJobNotCancelled(request.jobId);
+        this.updateRenderJobState({ ...this.renderJobState, stage: 'analyzing' });
+        const renderedFile = this.analyzeNormalizeAndEncode(audioBuffer, request.preset);
+        this.assertRenderJobNotCancelled(request.jobId);
+        files.push({
+          ...renderedFile,
+          fileName: output.fileName,
+          rangeId: output.range.id,
+          trackId: output.trackId,
+        });
+        this.updateRenderJobState({
+          ...this.renderJobState,
+          completedFileCount: files.length,
+          progress: files.length / outputs.length,
+          stage: 'encoding',
+        });
+      }
+      this.updateRenderJobState({ ...this.renderJobState, progress: 1, stage: 'encoding', status: 'completed' });
+      return { files, jobId: request.jobId };
+    } catch (cause) {
+      if (this.cancelledRenderJobId === request.jobId) {
+        this.updateRenderJobState({ ...this.renderJobState, errorMessage: null, status: 'cancelled' });
+        throw new AudioEngineError(AudioEngineErrorCode.RENDER_JOB_CANCELLED, ERROR_MESSAGES.RENDER_JOB_CANCELLED, {
+          jobId: request.jobId,
+        });
+      }
+      const errorMessage = this.describeError(cause);
+      this.updateRenderJobState({ ...this.renderJobState, errorMessage, status: 'failed' });
+      throw cause;
+    } finally {
+      if (this.activeRenderJobId === request.jobId) {
+        this.activeRenderJobId = null;
+      }
+    }
+  }
+
+  cancelRenderJob(jobId: string): void {
+    if (this.renderJobState.status !== 'running' || this.renderJobState.jobId !== jobId) {
+      return;
+    }
+    this.cancelledRenderJobId = jobId;
+    this.updateRenderJobState({ ...this.renderJobState, status: 'cancelled' });
+  }
+
+  getRenderJobState(): RenderJobState {
+    return { ...this.renderJobState };
+  }
+
+  subscribeRenderJobState(listener: RenderJobStateListener): () => void {
+    this.renderJobStateListeners.add(listener);
+    return () => this.renderJobStateListeners.delete(listener);
+  }
+
+  private async renderExportAudioBuffer(request: ExportRequest): Promise<AudioBuffer> {
+    const duration = request.range.endTime - request.range.startTime;
+    if (duration <= 0) {
+      throw new AudioEngineError(AudioEngineErrorCode.EXPORT_ZERO_DURATION, ERROR_MESSAGES.EXPORT_ZERO_DURATION);
+    }
+    if (request.tracks.length === 0) {
+      throw new AudioEngineError(AudioEngineErrorCode.EXPORT_NO_TRACKS, ERROR_MESSAGES.EXPORT_NO_TRACKS);
+    }
+    const renderedBuffer = await Tone.Offline(
+      async () => this.scheduleExport(request),
+      duration,
+      2,
+      request.sampleRate
+    );
+    const audioBuffer = renderedBuffer.get();
+    if (!audioBuffer) {
+      throw new AudioEngineError(AudioEngineErrorCode.RENDER_FAILED, ERROR_MESSAGES.RENDER_FAILED);
+    }
+    return audioBuffer;
+  }
+
+  private analyzeNormalizeAndEncode(
+    audioBuffer: AudioBuffer,
+    preset: ExportPresetState
+  ): Pick<RenderJobFile, 'analysis' | 'blob'> {
+    const channels = Array.from({ length: audioBuffer.numberOfChannels }, (_, channelIndex) =>
+      audioBuffer.getChannelData(channelIndex)
+    );
+    const initialAnalysis = analyzeRenderedPcm({ channels, sampleRate: audioBuffer.sampleRate });
+    const normalizationGainDb = calculateNormalizationGainDb({
+      analysis: initialAnalysis,
+      normalization: preset.normalization,
+    });
+    if (normalizationGainDb !== 0) {
+      const gain = 10 ** (normalizationGainDb / 20);
+      channels.forEach(channel => {
+        for (let index = 0; index < channel.length; index += 1) {
+          channel[index] = (channel[index] ?? 0) * gain;
+        }
+      });
+    }
+    const normalizedAnalysis =
+      normalizationGainDb === 0
+        ? initialAnalysis
+        : analyzeRenderedPcm({ channels, sampleRate: audioBuffer.sampleRate });
+    const analysis = { ...normalizedAnalysis, normalizationGainDb };
+    return {
+      analysis,
+      blob: encodeAudioBufferToWav(audioBuffer, {
+        channelMode: preset.channelMode,
+        dither: preset.sampleFormat === 'float32' ? 'none' : preset.dither,
+        sampleFormat: preset.sampleFormat,
+      }),
+    };
+  }
+
+  private createRenderJobOutputs(request: StartRenderJobRequest): RenderJobOutput[] {
+    const ranges = request.ranges.filter(range => range.endTimeSeconds > range.startTimeSeconds);
+    const createRequest = (
+      range: ExportRangeState,
+      tracks: ExportTrack[],
+      routingGraph?: RoutingGraphSnapshot
+    ): ExportRequest => ({
+      masterVolume: request.masterVolume,
+      preset: request.preset,
+      range: { endTime: range.endTimeSeconds, startTime: range.startTimeSeconds },
+      ...(routingGraph ? { routingGraph } : {}),
+      sampleRate: request.preset.sampleRate,
+      tracks,
+    });
+    const outputs: RenderJobOutput[] = [];
+    ranges.forEach(range => {
+      if (request.preset.exportMode === 'mix') {
+        outputs.push({
+          fileName: `${this.toSafeFileName(range.name)}.wav`,
+          range,
+          request: createRequest(range, [...request.tracks], request.routingGraph),
+          trackId: null,
+        });
+        return;
+      }
+      request.tracks.forEach(track => {
+        outputs.push({
+          fileName: `${this.toSafeFileName(range.name)}-${this.toSafeFileName(track.id)}.wav`,
+          range,
+          request: createRequest(range, [{ ...track, isMuted: false, isSoloed: false }]),
+          trackId: track.id,
+        });
+      });
+    });
+    if (outputs.length === 0) {
+      throw new AudioEngineError(AudioEngineErrorCode.EXPORT_ZERO_DURATION, ERROR_MESSAGES.EXPORT_ZERO_DURATION);
+    }
+    return outputs;
+  }
+
+  private toSafeFileName(value: string): string {
+    const printableValue = [...value.trim()]
+      .map(character => (character.charCodeAt(0) < 32 ? '-' : character))
+      .join('');
+    const safeValue = printableValue.replace(/[<>:"/\\|?*]/g, '-');
+    return safeValue || 'export';
+  }
+
+  private assertRenderJobNotCancelled(jobId: string): void {
+    if (this.cancelledRenderJobId === jobId) {
+      throw new AudioEngineError(AudioEngineErrorCode.RENDER_JOB_CANCELLED, ERROR_MESSAGES.RENDER_JOB_CANCELLED, {
+        jobId,
+      });
+    }
+  }
+
+  private updateRenderJobState(state: RenderJobState): void {
+    this.renderJobState = { ...state };
+    this.renderJobStateListeners.forEach(listener => listener({ ...this.renderJobState }));
   }
 
   async analyzeAudioRegionPeak(request: AnalyzeAudioRegionPeakRequest): Promise<number> {

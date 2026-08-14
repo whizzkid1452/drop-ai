@@ -11,6 +11,7 @@ import {
   ProjectTempoChangeSchema,
   ProjectTimelineMarkerSchema,
   ProjectTimelineRangeSchema,
+  ValidatedProjectExportSettingsSchema,
 } from './project-document.schema';
 import { RECORD_MODES } from './multitrack-recording';
 import { ROUTING_CHANNEL_COUNTS, ROUTING_SEND_TAP_POINTS, ROUTING_TRACK_KINDS } from './routing-state';
@@ -116,6 +117,9 @@ export const AudioCommandType = {
   SET_EXPORT_RANGE: 'SET_EXPORT_RANGE',
   CLEAR_EXPORT_RANGE: 'CLEAR_EXPORT_RANGE',
   EXPORT_AUDIO: 'EXPORT_AUDIO',
+  SET_EXPORT_SETTINGS: 'SET_EXPORT_SETTINGS',
+  START_RENDER_JOB: 'START_RENDER_JOB',
+  CANCEL_RENDER_JOB: 'CANCEL_RENDER_JOB',
   SAVE_PROJECT: 'SAVE_PROJECT',
   LOAD_PROJECT: 'LOAD_PROJECT',
 } as const;
@@ -771,6 +775,15 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
   }),
   z.strictObject({ type: z.literal(AudioCommandType.STOP_SOURCE_AUDITION) }),
   z.strictObject({ type: z.literal(AudioCommandType.CLEANUP_UNUSED_SOURCES) }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_EXPORT_SETTINGS),
+    settings: ValidatedProjectExportSettingsSchema,
+  }),
+  z.strictObject({ type: z.literal(AudioCommandType.START_RENDER_JOB) }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.CANCEL_RENDER_JOB),
+    jobId: z.uuid('Invalid Render Job ID format'),
+  }),
   z.strictObject({
     type: z.literal(AudioCommandType.SET_CURRENT_TIME),
     time: z.number().min(0, 'Time must be >= 0'),

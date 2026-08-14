@@ -226,6 +226,11 @@ const COMMAND_REFERENCE = {
   [AudioCommandType.CLEAR_EXPORT_RANGE]: '{"type":"CLEAR_EXPORT_RANGE"} - 내보내기 범위 해제',
   [AudioCommandType.EXPORT_AUDIO]:
     '{"type":"EXPORT_AUDIO","filename":"<optional filename>"} - 현재 선택 범위 또는 전체를 WAV로 내보내기',
+  [AudioCommandType.SET_EXPORT_SETTINGS]:
+    '{"type":"SET_EXPORT_SETTINGS","settings":<validated export settings>} - Export preset과 다중 range 저장',
+  [AudioCommandType.START_RENDER_JOB]: '{"type":"START_RENDER_JOB"} - 저장된 Export preset과 range로 RenderJob 시작',
+  [AudioCommandType.CANCEL_RENDER_JOB]:
+    '{"type":"CANCEL_RENDER_JOB","jobId":"<Render Job UUID>"} - 실행 중인 RenderJob 취소',
   [AudioCommandType.SAVE_PROJECT]: '{"type":"SAVE_PROJECT"} - 현재 프로젝트와 오디오 원본 저장',
   [AudioCommandType.LOAD_PROJECT]:
     '{"type":"LOAD_PROJECT","projectId":"<user-provided Project UUID>"} - 저장된 프로젝트 불러오기',

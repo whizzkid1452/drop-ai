@@ -24,6 +24,8 @@ import type { IMidiRecordingQuery } from '../../../queries/midi-recording-query'
 import type { MidiRecordingRuntimeState } from '../../../shared/types/midi-recording';
 import type { IPluginRuntimeQuery } from '../../../queries/plugin-runtime-query';
 import type { IMediaSourceQuery } from '../../../queries/media-source-query';
+import type { IRenderJobQuery } from '../../../queries/render-job-query';
+import type { RenderJobState } from '../../../shared/types/render-job';
 
 export function useAudioRuntimeCapabilities(): AudioRuntimeCapabilities {
   return useLayer().audioRuntimeCapabilities;
@@ -136,6 +138,17 @@ export function usePluginRuntimeQuery(): IPluginRuntimeQuery {
 
 export function useMediaSourceQuery(): IMediaSourceQuery {
   return useLayer().mediaSource;
+}
+
+export function useRenderJobQuery(): IRenderJobQuery {
+  return useLayer().renderJob;
+}
+
+export function useRenderJobState(): RenderJobState {
+  const renderJob = useRenderJobQuery();
+  const subscribe = useCallback((listener: () => void) => renderJob.subscribe(listener), [renderJob]);
+  const getSnapshot = useCallback(() => renderJob.readState(), [renderJob]);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 export function useSession<T>(selector: (state: SessionState) => T): T {

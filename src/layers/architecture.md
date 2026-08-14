@@ -2,7 +2,8 @@
 
 1. AudioEngine은 Controllers에서만 접근한다.
 2. AudioCommand로 표현되는 작업은 CommandExecutor에서 Zod 검증 후 실행한다.
-3. 검증된 명령은 CommandExecutor의 단일 대기열에서 접수 순서대로 하나씩 실행한다.
+3. 검증된 명령은 CommandExecutor의 단일 대기열에서 접수 순서대로 하나씩 실행한다. 실행 중인 비동기 작업을 중단하는
+   `CANCEL_RENDER_JOB` 신호만 대기열을 거치지 않는다.
 4. CommandExecutor는 실행 시점의 Session을 읽고 Controllers에 작업을 위임한다.
 5. Apps는 Session을 구독해 화면을 갱신한다.
 6. Tone.js와 Web Audio API는 AudioEngine에서만 접근한다.
@@ -14,19 +15,21 @@
 Controller나 AudioEngine 객체를 노출하지 않는다. `PlaybackClockQuery`는 `PlaybackController.getCurrentTime()`만,
 `MeterQuery`는 `MeterController.readMeterFrame()`만 노출한다. `LiveInputQuery`는 입력 장치 목록과 현재 선택·monitoring
 상태만 노출한다. `RecordingQuery`는 Track arm과 녹음 진행 상태만 노출한다. Meter 표본, 입력 장치, 권한, monitoring,
-Track arm, 활성 녹음 상태는 runtime 값이며 `ProjectDocument`에 저장하지 않는다.
+Track arm, 활성 녹음 상태는 runtime 값이며 `ProjectDocument`에 저장하지 않는다. `RenderJobQuery`는 진행률·단계·취소·오류
+상태만 노출하며 완성된 Blob은 명령 결과로만 Apps에 전달한다.
 
 `executeMany`는 묶음 전체를 먼저 검증하고, 다른 명령이 끼어들지 않게 순서대로 실행한다. 실행 중 첫 오류가 나면
 남은 명령은 실행하지 않는다. 이미 완료된 변경은 되돌리지 않으므로 묶음 실행은 원자적 트랜잭션이 아니다.
 실패 오류는 0부터 시작하는 실패 위치, 실패 명령, 앞선 실행 결과와 원인을 보존한다. 실패한 실행 뒤에 대기 중인
 요청은 계속 실행한다.
-`EXPORT_AUDIO`, `SAVE_PROJECT`, `LOAD_PROJECT`는 현재 완료될 때까지 대기열을 점유한다. 별도 작업 모델을 도입하기
-전의 알려진 제한이다.
+`EXPORT_AUDIO`, `SAVE_PROJECT`, `LOAD_PROJECT`, `START_RENDER_JOB`은 완료될 때까지 대기열을 점유한다.
+`CANCEL_RENDER_JOB`은 실행 중인 offline render가 끝날 때까지 기다리지 않고 취소 상태를 기록한다. Web Audio의
+offline render 자체는 중단 API가 없으므로 완료된 버퍼는 폐기하고 파일 결과를 반환하지 않는다.
 
 `CommandHistory`는 현재 앱 실행 중에만 유지하는 최대 100개의 역명령 기록이다. `CommandExecutor`가 성공한 편집의 실행 전후
 Session을 비교해 Undo·Redo 명령을 만들고, `UNDO`와 `REDO`도 같은 대기열에서 실행한다. Undo·Redo가 실패하면 해당 기록을
 반대쪽 스택으로 옮기지 않는다. 새 편집은 Redo 기록을 제거한다. 지원 범위는 Track 추가, Region 추가·삭제·이동, tempo,
-Master Volume, Track name·volume·pan·mute·solo, Export 범위 설정·해제, Plugin 설치·제거·처리 순서·활성화 상태·Parameter 변경이다. Plugin 기록은 같은
+Master Volume, Track name·volume·pan·mute·solo, Export 범위·preset 설정, Plugin 설치·제거·처리 순서·활성화 상태·Parameter 변경이다. Plugin 기록은 같은
 인스턴스 ID, manifest ID, 설치 위치, 활성화 상태, Parameter 값을 사용해 상태를 복원한다. 제거 Undo도 원래 설치 위치를 복원한다.
 재생·playhead·저장·내보내기는 기록하지 않는다. Track 삭제와 Region
 분할은 손실 없는 복원 명령이 아직 없으므로 Session 변경이 확인되면 기존 기록을 제거한다. 프로젝트 불러오기도 다른
