@@ -21,15 +21,20 @@ const currentRuntimeSupport: AudioRuntimeFeatureSupport = {
   [AudioRuntimeFeature.ADVANCED_EXPORT]: false,
   [AudioRuntimeFeature.AUTOMATION]: false,
   [AudioRuntimeFeature.BUILT_IN_PLUGINS]: true,
+  [AudioRuntimeFeature.CLIP_CUE]: false,
+  [AudioRuntimeFeature.EDITOR]: true,
   [AudioRuntimeFeature.LINEAR_RECORDING]: false,
   [AudioRuntimeFeature.LIVE_INPUT]: true,
   [AudioRuntimeFeature.LIVE_LOOP]: true,
+  [AudioRuntimeFeature.MEDIA_SOURCE]: true,
   [AudioRuntimeFeature.METERING]: true,
   [AudioRuntimeFeature.MIDI]: false,
   [AudioRuntimeFeature.PROJECT_EXPORT]: true,
   [AudioRuntimeFeature.REGION_PROCESSING]: true,
   [AudioRuntimeFeature.ROUTING]: false,
+  [AudioRuntimeFeature.SESSION_LIFECYCLE]: true,
   [AudioRuntimeFeature.TEMPO_LOOP_METRONOME]: false,
+  [AudioRuntimeFeature.TIMELINE_NAVIGATION]: true,
   [AudioRuntimeFeature.TIMELINE_PLAYBACK]: true,
 };
 
@@ -44,6 +49,18 @@ describe('resolveAudioRuntimeCapabilities', () => {
     const capabilities = resolveAudioRuntimeCapabilities(fullEnvironment);
 
     expect(capabilities.features[AudioRuntimeFeature.AUTOMATION]).toEqual({ blockers: [], status: 'available' });
+  });
+
+  it('현재 runtime은 Routing·MIDI·선형 녹음·Tempo Map을 사용 가능으로 공개한다', () => {
+    const capabilities = resolveAudioRuntimeCapabilities(fullEnvironment);
+
+    expect(capabilities.features[AudioRuntimeFeature.ROUTING]).toEqual({ blockers: [], status: 'available' });
+    expect(capabilities.features[AudioRuntimeFeature.MIDI]).toEqual({ blockers: [], status: 'available' });
+    expect(capabilities.features[AudioRuntimeFeature.LINEAR_RECORDING]).toEqual({ blockers: [], status: 'available' });
+    expect(capabilities.features[AudioRuntimeFeature.TEMPO_LOOP_METRONOME]).toEqual({
+      blockers: [],
+      status: 'available',
+    });
   });
 
   it('모든 조건이 있으면 세 기능을 각각 사용할 수 있다', () => {
@@ -62,15 +79,20 @@ describe('resolveAudioRuntimeCapabilities', () => {
         [AudioRuntimeFeature.ADVANCED_EXPORT]: { blockers: [], status: 'unsupported' },
         [AudioRuntimeFeature.AUTOMATION]: { blockers: [], status: 'unsupported' },
         [AudioRuntimeFeature.BUILT_IN_PLUGINS]: { blockers: [], status: 'available' },
+        [AudioRuntimeFeature.CLIP_CUE]: { blockers: [], status: 'unsupported' },
+        [AudioRuntimeFeature.EDITOR]: { blockers: [], status: 'available' },
         [AudioRuntimeFeature.LINEAR_RECORDING]: { blockers: [], status: 'unsupported' },
         [AudioRuntimeFeature.LIVE_INPUT]: { blockers: [], status: 'available' },
         [AudioRuntimeFeature.LIVE_LOOP]: { blockers: [], status: 'available' },
+        [AudioRuntimeFeature.MEDIA_SOURCE]: { blockers: [], status: 'available' },
         [AudioRuntimeFeature.METERING]: { blockers: [], status: 'available' },
         [AudioRuntimeFeature.MIDI]: { blockers: [], status: 'unsupported' },
         [AudioRuntimeFeature.PROJECT_EXPORT]: { blockers: [], status: 'available' },
         [AudioRuntimeFeature.REGION_PROCESSING]: { blockers: [], status: 'available' },
         [AudioRuntimeFeature.ROUTING]: { blockers: [], status: 'unsupported' },
+        [AudioRuntimeFeature.SESSION_LIFECYCLE]: { blockers: [], status: 'available' },
         [AudioRuntimeFeature.TEMPO_LOOP_METRONOME]: { blockers: [], status: 'unsupported' },
+        [AudioRuntimeFeature.TIMELINE_NAVIGATION]: { blockers: [], status: 'available' },
         [AudioRuntimeFeature.TIMELINE_PLAYBACK]: { blockers: [], status: 'available' },
       },
     });

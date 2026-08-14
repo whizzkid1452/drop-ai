@@ -118,6 +118,11 @@ export const unsupported = style({
   color: '#e58d8d',
 });
 
+export const internal = style({
+  backgroundColor: 'rgba(143, 150, 153, 0.18)',
+  color: '#8f9699',
+});
+
 export const diagnosticsPanel = style({
   borderTop: '1px solid #343a3d',
   marginTop: '12px',

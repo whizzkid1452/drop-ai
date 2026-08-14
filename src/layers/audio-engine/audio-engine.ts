@@ -339,11 +339,13 @@ export class AudioEngine implements IAudioEngine {
     this.meterRuntimeFactory = meterRuntimeFactory;
     this.featureSupport = {
       ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
+      [AudioRuntimeFeature.CLIP_CUE]: loopRuntime !== undefined,
       [AudioRuntimeFeature.LIVE_INPUT]: loopRuntime !== undefined,
       [AudioRuntimeFeature.LIVE_LOOP]: loopRuntime !== undefined,
       [AudioRuntimeFeature.METERING]: true,
       [AudioRuntimeFeature.MIDI]: true,
       [AudioRuntimeFeature.LINEAR_RECORDING]: recordingRuntime !== undefined,
+      [AudioRuntimeFeature.ROUTING]: true,
       [AudioRuntimeFeature.TEMPO_LOOP_METRONOME]: true,
     };
     this.pluginRuntimeFactories = createPluginRuntimeFactoryMap(pluginRuntimeFactories);

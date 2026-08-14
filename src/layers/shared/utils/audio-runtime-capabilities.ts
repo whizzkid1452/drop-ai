@@ -14,21 +14,26 @@ export const AudioRuntimeFeature = {
   ADVANCED_EXPORT: 'advancedExport',
   AUTOMATION: 'automation',
   BUILT_IN_PLUGINS: 'builtInPlugins',
+  CLIP_CUE: 'clipCue',
+  EDITOR: 'editor',
   LINEAR_RECORDING: 'linearRecording',
   LIVE_INPUT: 'liveInput',
   LIVE_LOOP: 'liveLoop',
+  MEDIA_SOURCE: 'mediaSource',
   METERING: 'metering',
   MIDI: 'midi',
   PROJECT_EXPORT: 'projectExport',
   REGION_PROCESSING: 'regionProcessing',
   ROUTING: 'routing',
+  SESSION_LIFECYCLE: 'sessionLifecycle',
   TEMPO_LOOP_METRONOME: 'tempoLoopMetronome',
+  TIMELINE_NAVIGATION: 'timelineNavigation',
   TIMELINE_PLAYBACK: 'timelinePlayback',
 } as const;
 
 export type AudioRuntimeFeature = (typeof AudioRuntimeFeature)[keyof typeof AudioRuntimeFeature];
 
-export type AudioRuntimeFeatureStatus = 'available' | 'blocked' | 'unsupported';
+export type AudioRuntimeFeatureStatus = 'available' | 'blocked' | 'internal' | 'unsupported';
 
 export type AudioRuntimeFeatureSupport = Readonly<Record<AudioRuntimeFeature, boolean>>;
 
@@ -41,15 +46,20 @@ export const CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT: AudioRuntimeFeatureSupport =
   [AudioRuntimeFeature.ADVANCED_EXPORT]: false,
   [AudioRuntimeFeature.AUTOMATION]: true,
   [AudioRuntimeFeature.BUILT_IN_PLUGINS]: true,
-  [AudioRuntimeFeature.LINEAR_RECORDING]: false,
+  [AudioRuntimeFeature.CLIP_CUE]: true,
+  [AudioRuntimeFeature.EDITOR]: true,
+  [AudioRuntimeFeature.LINEAR_RECORDING]: true,
   [AudioRuntimeFeature.LIVE_INPUT]: true,
   [AudioRuntimeFeature.LIVE_LOOP]: true,
+  [AudioRuntimeFeature.MEDIA_SOURCE]: true,
   [AudioRuntimeFeature.METERING]: true,
-  [AudioRuntimeFeature.MIDI]: false,
+  [AudioRuntimeFeature.MIDI]: true,
   [AudioRuntimeFeature.PROJECT_EXPORT]: true,
   [AudioRuntimeFeature.REGION_PROCESSING]: true,
-  [AudioRuntimeFeature.ROUTING]: false,
-  [AudioRuntimeFeature.TEMPO_LOOP_METRONOME]: false,
+  [AudioRuntimeFeature.ROUTING]: true,
+  [AudioRuntimeFeature.SESSION_LIFECYCLE]: true,
+  [AudioRuntimeFeature.TEMPO_LOOP_METRONOME]: true,
+  [AudioRuntimeFeature.TIMELINE_NAVIGATION]: true,
   [AudioRuntimeFeature.TIMELINE_PLAYBACK]: true,
 };
 
@@ -83,15 +93,20 @@ const featureEnvironmentRequirements: Readonly<
   [AudioRuntimeFeature.ADVANCED_EXPORT]: [],
   [AudioRuntimeFeature.AUTOMATION]: [],
   [AudioRuntimeFeature.BUILT_IN_PLUGINS]: [],
+  [AudioRuntimeFeature.CLIP_CUE]: ['liveInput', 'audioWorklet'],
+  [AudioRuntimeFeature.EDITOR]: [],
   [AudioRuntimeFeature.LINEAR_RECORDING]: ['liveInput', 'audioWorklet'],
   [AudioRuntimeFeature.LIVE_INPUT]: ['liveInput'],
   [AudioRuntimeFeature.LIVE_LOOP]: ['liveInput', 'audioWorklet'],
+  [AudioRuntimeFeature.MEDIA_SOURCE]: [],
   [AudioRuntimeFeature.METERING]: [],
   [AudioRuntimeFeature.MIDI]: [],
   [AudioRuntimeFeature.PROJECT_EXPORT]: [],
   [AudioRuntimeFeature.REGION_PROCESSING]: [],
   [AudioRuntimeFeature.ROUTING]: [],
+  [AudioRuntimeFeature.SESSION_LIFECYCLE]: [],
   [AudioRuntimeFeature.TEMPO_LOOP_METRONOME]: [],
+  [AudioRuntimeFeature.TIMELINE_NAVIGATION]: [],
   [AudioRuntimeFeature.TIMELINE_PLAYBACK]: [],
 };
 
