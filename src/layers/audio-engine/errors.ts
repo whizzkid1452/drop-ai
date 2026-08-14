@@ -45,6 +45,8 @@ export enum AudioEngineErrorCode {
   EXPORT_ZERO_DURATION = 'EXPORT_ZERO_DURATION',
   EXPORT_NO_TRACKS = 'EXPORT_NO_TRACKS',
   RENDER_FAILED = 'RENDER_FAILED',
+  RENDER_JOB_ACTIVE = 'RENDER_JOB_ACTIVE',
+  RENDER_JOB_CANCELLED = 'RENDER_JOB_CANCELLED',
   CONTEXT_ERROR = 'CONTEXT_ERROR',
 }
 
@@ -78,6 +80,8 @@ export const ERROR_MESSAGES: Record<AudioEngineErrorCode, string> = {
   [AudioEngineErrorCode.EXPORT_ZERO_DURATION]: '내보낼 오디오의 길이가 0입니다.',
   [AudioEngineErrorCode.EXPORT_NO_TRACKS]: '내보낼 트랙이 없습니다.',
   [AudioEngineErrorCode.RENDER_FAILED]: '오디오 렌더링에 실패했습니다.',
+  [AudioEngineErrorCode.RENDER_JOB_ACTIVE]: '다른 내보내기 작업이 실행 중입니다.',
+  [AudioEngineErrorCode.RENDER_JOB_CANCELLED]: '내보내기 작업이 취소되었습니다.',
   [AudioEngineErrorCode.CONTEXT_ERROR]: '오디오 컨텍스트 오류가 발생했습니다.',
 };
 

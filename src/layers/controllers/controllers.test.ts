@@ -1556,6 +1556,87 @@ describe('Controllers - Phase 3 검증', () => {
   });
 
   describe('ExportController', () => {
+    it('검증된 Export preset과 다중 range를 Session에 저장한다', () => {
+      controller.export.setExportSettings({
+        activePresetId: 'preset-24',
+        presets: [
+          {
+            channelMode: 'mono',
+            dither: 'tpdf',
+            exportMode: 'mix',
+            format: 'wav',
+            id: 'preset-24',
+            name: 'WAV 24-bit',
+            normalization: { mode: 'lufs', targetLufs: -14 },
+            sampleFormat: 'pcm24',
+            sampleRate: 48_000,
+          },
+        ],
+        ranges: [
+          {
+            endTimeSeconds: 8,
+            id: '11111111-1111-4111-8111-111111111111',
+            name: 'Verse',
+            startTimeSeconds: 2,
+          },
+        ],
+      });
+
+      expect(session.getState().exportSettings).toMatchObject({
+        activePresetId: 'preset-24',
+        ranges: [{ name: 'Verse' }],
+      });
+    });
+
+    it('저장된 preset과 range로 RenderJob을 시작한다', async () => {
+      await controller.track.addTrack('track-1');
+      stageSource(audioSourceRegistry);
+      await controller.region.addRegion('track-1', {
+        duration: 10,
+        id: SOURCE_REGION_ID,
+        sourceId: SOURCE_ID,
+        sourceStartTime: 0,
+        startTime: 0,
+      });
+      controller.export.setExportSettings({
+        activePresetId: 'preset-24',
+        presets: [
+          {
+            channelMode: 'stereo',
+            dither: 'none',
+            exportMode: 'stems',
+            format: 'wav',
+            id: 'preset-24',
+            name: 'Stems',
+            normalization: { mode: 'none' },
+            sampleFormat: 'float32',
+            sampleRate: 48_000,
+          },
+        ],
+        ranges: [
+          {
+            endTimeSeconds: 8,
+            id: '11111111-1111-4111-8111-111111111111',
+            name: 'Verse',
+            startTimeSeconds: 2,
+          },
+        ],
+      });
+      const renderSpy = vi.spyOn(engine, 'startRenderJob');
+
+      const result = await controller.export.startRenderJob();
+
+      expect(result.files).toHaveLength(1);
+      expect(renderSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          jobId: expect.any(String),
+          preset: expect.objectContaining({ sampleFormat: 'float32', sampleRate: 48_000 }),
+          ranges: [expect.objectContaining({ name: 'Verse', startTimeSeconds: 2, endTimeSeconds: 8 })],
+          tracks: [expect.objectContaining({ id: 'track-1' })],
+        })
+      );
+    });
+
     it('setExportRange 호출 가능', () => {
       expect(() => controller.export.setExportRange(2, 8)).not.toThrow();
     });

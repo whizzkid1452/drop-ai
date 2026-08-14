@@ -3115,6 +3115,105 @@ describe('AudioEngine Export 회귀', () => {
     toneMocks.tempoWrites.length = 0;
   });
 
+  it('다중 range를 순서대로 WAV 파일로 만들고 RenderJob 진행 상태를 알린다', async () => {
+    const engine = new AudioEngine();
+    const states: string[] = [];
+    engine.subscribeRenderJobState(state => states.push(`${state.status}:${state.completedFileCount}`));
+
+    const result = await engine.startRenderJob({
+      jobId: 'render-job-1',
+      masterVolume: 1,
+      preset: {
+        channelMode: 'stereo',
+        dither: 'none',
+        exportMode: 'mix',
+        format: 'wav',
+        id: 'preset-1',
+        name: '24-bit',
+        normalization: { mode: 'none' },
+        sampleFormat: 'pcm24',
+        sampleRate: 48_000,
+      },
+      ranges: [
+        { endTimeSeconds: 1, id: 'range-1', name: 'Intro', startTimeSeconds: 0 },
+        { endTimeSeconds: 2, id: 'range-2', name: 'Verse', startTimeSeconds: 1 },
+      ],
+      tracks: [
+        {
+          id: 'track-1',
+          isMuted: false,
+          isSoloed: false,
+          pan: 0,
+          pluginInstances: [],
+          regions: [{ ...ORIGINAL_REGION, duration: 2, sourceStartTime: 0, startTime: 0 }],
+          volume: 1,
+        },
+      ],
+    });
+
+    expect(result.files.map(file => file.fileName)).toEqual(['Intro.wav', 'Verse.wav']);
+    expect(toneMocks.offline).toHaveBeenCalledTimes(2);
+    expect(toneMocks.offline).toHaveBeenCalledWith(expect.any(Function), 1, 2, 48_000);
+    expect(new DataView(await result.files[0]!.blob.arrayBuffer()).getUint16(34, true)).toBe(24);
+    expect(engine.getRenderJobState()).toMatchObject({ completedFileCount: 2, progress: 1, status: 'completed' });
+    expect(states).toContain('running:1');
+    expect(states.at(-1)).toBe('completed:2');
+  });
+
+  it('실행 중인 RenderJob을 취소하면 렌더 결과 파일을 반환하지 않는다', async () => {
+    const engine = new AudioEngine();
+    let releaseOffline: (() => void) | undefined;
+    const waitForRelease = new Promise<void>(resolve => {
+      releaseOffline = resolve;
+    });
+    toneMocks.offline.mockImplementationOnce(async (callback: () => Promise<void> | void) => {
+      await callback();
+      await waitForRelease;
+      return {
+        get: () => ({
+          getChannelData: () => new Float32Array([0.5]),
+          length: 1,
+          numberOfChannels: 2,
+          sampleRate: 44_100,
+        }),
+      };
+    });
+    const renderPromise = engine.startRenderJob({
+      jobId: 'render-job-cancel',
+      masterVolume: 1,
+      preset: {
+        channelMode: 'stereo',
+        dither: 'none',
+        exportMode: 'mix',
+        format: 'wav',
+        id: 'preset-1',
+        name: 'WAV',
+        normalization: { mode: 'none' },
+        sampleFormat: 'pcm16',
+        sampleRate: 44_100,
+      },
+      ranges: [{ endTimeSeconds: 1, id: 'range-1', name: 'Mix', startTimeSeconds: 0 }],
+      tracks: [
+        {
+          id: 'track-1',
+          isMuted: false,
+          isSoloed: false,
+          pan: 0,
+          pluginInstances: [],
+          regions: [{ ...ORIGINAL_REGION, duration: 1, sourceStartTime: 0, startTime: 0 }],
+          volume: 1,
+        },
+      ],
+    });
+    await vi.waitFor(() => expect(engine.getRenderJobState().stage).toBe('rendering'));
+
+    engine.cancelRenderJob('render-job-cancel');
+    releaseOffline?.();
+
+    await expect(renderPromise).rejects.toMatchObject({ code: AudioEngineErrorCode.RENDER_JOB_CANCELLED });
+    expect(engine.getRenderJobState()).toMatchObject({ completedFileCount: 0, status: 'cancelled' });
+  });
+
   it('선택 범위를 오프라인 렌더링하고 PCM WAV를 반환한다', async () => {
     const engine = new AudioEngine();
 

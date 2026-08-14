@@ -2102,6 +2102,95 @@ describe('CommandExecutor', () => {
     expect(result.type).toBe('audio/wav');
   });
 
+  it('SET_EXPORT_SETTINGS를 저장하고 한 번의 Undo로 이전 설정을 복원한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    const previousSettings = session.getState().exportSettings;
+
+    await commandExecutor.execute({
+      settings: {
+        activePresetId: 'preset-24',
+        presets: [
+          {
+            channelMode: 'stereo',
+            dither: 'none',
+            exportMode: 'mix',
+            format: 'wav',
+            id: 'preset-24',
+            name: 'WAV 24-bit',
+            normalization: { mode: 'peak', targetDbfs: -1 },
+            sampleFormat: 'pcm24',
+            sampleRate: 48_000,
+          },
+        ],
+        ranges: [
+          {
+            endTimeSeconds: 4,
+            id: '99999999-9999-4999-8999-999999999999',
+            name: 'Mix',
+            startTimeSeconds: 0,
+          },
+        ],
+      },
+      type: AudioCommandType.SET_EXPORT_SETTINGS,
+    });
+    expect(session.getState().exportSettings.activePresetId).toBe('preset-24');
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+
+    expect(session.getState().exportSettings).toEqual(previousSettings);
+  });
+
+  it('START_RENDER_JOB 결과로 분석값이 포함된 파일 목록을 반환한다', async () => {
+    const { audioSourceRegistry, commandExecutor } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
+
+    const result = await commandExecutor.execute({ type: AudioCommandType.START_RENDER_JOB });
+
+    expect(result).toMatchObject({
+      files: [expect.objectContaining({ analysis: expect.objectContaining({ integratedLufs: -14 }) })],
+      jobId: expect.any(String),
+    });
+  });
+
+  it('CANCEL_RENDER_JOB을 AudioEngine에 전달한다', async () => {
+    const { audioEngine, commandExecutor } = createTestContext();
+    const cancelSpy = vi.spyOn(audioEngine, 'cancelRenderJob');
+
+    await commandExecutor.execute({
+      jobId: '99999999-9999-4999-8999-999999999999',
+      type: AudioCommandType.CANCEL_RENDER_JOB,
+    });
+
+    expect(cancelSpy).toHaveBeenCalledWith('99999999-9999-4999-8999-999999999999');
+  });
+
+  it('CANCEL_RENDER_JOB은 실행 중인 RenderJob의 명령 대기열을 기다리지 않는다', async () => {
+    const { audioEngine, audioSourceRegistry, commandExecutor } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
+    let resolveRender: ((result: Awaited<ReturnType<typeof audioEngine.startRenderJob>>) => void) | undefined;
+    vi.spyOn(audioEngine, 'startRenderJob').mockImplementation(
+      () =>
+        new Promise(resolve => {
+          resolveRender = resolve;
+        })
+    );
+    const cancelSpy = vi.spyOn(audioEngine, 'cancelRenderJob');
+    const renderPromise = commandExecutor.execute({ type: AudioCommandType.START_RENDER_JOB });
+    await vi.waitFor(() => expect(audioEngine.startRenderJob).toHaveBeenCalled());
+    const renderRequest = vi.mocked(audioEngine.startRenderJob).mock.calls[0]?.[0];
+    if (!renderRequest) {
+      throw new Error('RenderJob 요청을 찾을 수 없습니다.');
+    }
+
+    await commandExecutor.execute({ jobId: renderRequest.jobId, type: AudioCommandType.CANCEL_RENDER_JOB });
+
+    expect(cancelSpy).toHaveBeenCalledWith(renderRequest.jobId);
+    resolveRender?.({ files: [], jobId: renderRequest.jobId });
+    await renderPromise;
+  });
+
   it('기본 대상 Track이 없으면 명령을 거부한다', async () => {
     const { commandExecutor } = createTestContext();
 

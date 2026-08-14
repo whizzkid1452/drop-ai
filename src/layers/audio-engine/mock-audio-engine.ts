@@ -55,6 +55,7 @@ import type {
   SetTrackRecordArmRequest,
   SetTrackRecordingInputRequest,
   StartLinearRecordingRequest,
+  StartRenderJobRequest,
   StopAllLoopsRequest,
   TriggerLoopRequest,
 } from './i-audio-engine';
@@ -64,6 +65,12 @@ import {
   type AudioRuntimeFeatureSupport,
 } from '../shared/utils/audio-runtime-capabilities';
 import { BUILTIN_MIDI_INSTRUMENT_ID, cloneMidiTrackState, type MidiTrackState } from '../shared/types/midi-state';
+import {
+  createIdleRenderJobState,
+  type RenderJobResult,
+  type RenderJobState,
+  type RenderJobStateListener,
+} from '../shared/types/render-job';
 
 interface MockTrackState {
   muted: boolean;
@@ -112,6 +119,8 @@ export class MockAudioEngine implements IAudioEngine {
   private mockAuditionBlob: Blob | null = null;
   private mockAutomationLanes = new Map<string, SetAutomationLanesRequest['automationLanes']>();
   private mockMidiTracks = new Map<string, MidiTrackState>();
+  private mockRenderJobState: RenderJobState = createIdleRenderJobState();
+  private readonly renderJobStateListeners = new Set<RenderJobStateListener>();
 
   listAvailablePluginManifestIds(): readonly string[] {
     return ['builtin.gain', 'builtin.saturation'];
@@ -789,6 +798,65 @@ export class MockAudioEngine implements IAudioEngine {
   async exportProject(request: ExportRequest): Promise<Blob> {
     console.log('[MockAudioEngine] Exporting project', request);
     return new Blob(['mock-audio-data'], { type: 'audio/wav' });
+  }
+
+  async startRenderJob(request: StartRenderJobRequest): Promise<RenderJobResult> {
+    const fileCount =
+      request.preset.exportMode === 'stems' ? request.ranges.length * request.tracks.length : request.ranges.length;
+    this.updateMockRenderJobState({
+      completedFileCount: 0,
+      errorMessage: null,
+      jobId: request.jobId,
+      outputFileCount: fileCount,
+      progress: 0,
+      stage: 'rendering',
+      status: 'running',
+    });
+    const files = request.ranges.flatMap(range => {
+      const tracks = request.preset.exportMode === 'stems' ? request.tracks : [null];
+      return tracks.map(track => ({
+        analysis: {
+          integratedLufs: -14,
+          loudnessRangeLu: 0,
+          normalizationGainDb: 0,
+          samplePeakDbfs: -1,
+          truePeakDbtp: -1,
+        },
+        blob: new Blob(['mock-audio-data'], { type: 'audio/wav' }),
+        fileName: `${range.name}${track ? `-${track.id}` : ''}.wav`,
+        rangeId: range.id,
+        trackId: track?.id ?? null,
+      }));
+    });
+    this.updateMockRenderJobState({
+      ...this.mockRenderJobState,
+      completedFileCount: files.length,
+      progress: 1,
+      stage: 'encoding',
+      status: 'completed',
+    });
+    return { files, jobId: request.jobId };
+  }
+
+  cancelRenderJob(jobId: string): void {
+    if (this.mockRenderJobState.jobId !== jobId || this.mockRenderJobState.status !== 'running') {
+      return;
+    }
+    this.updateMockRenderJobState({ ...this.mockRenderJobState, status: 'cancelled' });
+  }
+
+  getRenderJobState(): RenderJobState {
+    return { ...this.mockRenderJobState };
+  }
+
+  subscribeRenderJobState(listener: RenderJobStateListener): () => void {
+    this.renderJobStateListeners.add(listener);
+    return () => this.renderJobStateListeners.delete(listener);
+  }
+
+  private updateMockRenderJobState(state: RenderJobState): void {
+    this.mockRenderJobState = { ...state };
+    this.renderJobStateListeners.forEach(listener => listener({ ...state }));
   }
 
   private initializeTrack(trackId: string): void {

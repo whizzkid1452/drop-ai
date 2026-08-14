@@ -15,6 +15,8 @@ import type { RoutingGraphSnapshot } from '../shared/types/routing-state';
 import type { AudioMonitorState, AudioMonitorStateListener } from '../shared/types/audio-monitor-state';
 import type { LiveAudioInputDevice, LiveInputRuntimeListener, LiveInputRuntimeState } from '../shared/types/live-input';
 import type { AudioRuntimeFeatureSupport } from '../shared/utils/audio-runtime-capabilities';
+import type { ExportPresetState, ExportRangeState } from '../shared/types/export-state';
+import type { RenderJobResult, RenderJobState, RenderJobStateListener } from '../shared/types/render-job';
 import type {
   MultiTrackRecordingResult,
   RecordingRuntimeListener,
@@ -107,6 +109,16 @@ export interface ExportRequest {
   range: ExportRange;
   routingGraph?: RoutingGraphSnapshot;
   sampleRate: number;
+  preset?: ExportPresetState;
+}
+
+export interface StartRenderJobRequest {
+  readonly jobId: string;
+  readonly masterVolume: number;
+  readonly preset: ExportPresetState;
+  readonly ranges: readonly ExportRangeState[];
+  readonly routingGraph?: RoutingGraphSnapshot;
+  readonly tracks: readonly ExportTrack[];
 }
 
 export interface RescheduleRegionRequest {
@@ -308,6 +320,10 @@ export interface IAudioEngine {
 
   // Export
   exportProject(request: ExportRequest): Promise<Blob>;
+  startRenderJob(request: StartRenderJobRequest): Promise<RenderJobResult>;
+  cancelRenderJob(jobId: string): void;
+  getRenderJobState(): RenderJobState;
+  subscribeRenderJobState(listener: RenderJobStateListener): () => void;
   analyzeAudioRegionPeak(request: AnalyzeAudioRegionPeakRequest): Promise<number>;
   renderDerivedAudioRegion(request: RenderDerivedAudioRegionRequest): Promise<RenderedDerivedAudioRegion>;
   auditionAudioSource(request: AuditionAudioSourceRequest): Promise<void>;

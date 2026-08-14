@@ -14,6 +14,7 @@ interface AssertLiveOperationAllowedOptions {
 
 const LIVE_OPERATION_CONFLICT_COMMAND_TYPES = new Set<AudioCommand['type']>([
   AudioCommandType.EXPORT_AUDIO,
+  AudioCommandType.START_RENDER_JOB,
   AudioCommandType.INSTALL_PLUGIN,
   AudioCommandType.LOAD_PROJECT,
   AudioCommandType.MOVE_PLUGIN,
