@@ -43,6 +43,7 @@ import type {
   SetAudioPluginParameterRequest,
   SetAutomationLanesRequest,
   SetMidiTrackStateRequest,
+  SendMidiInputEventRequest,
   SetLiveInputMonitoringRequest,
   SetTrackRecordArmRequest,
   SetTrackRecordingInputRequest,
@@ -360,6 +361,10 @@ export class DawEngineAdapter implements IAudioEngine {
       track.playlist.getMidiRegions().forEach(region => track.playlist.removeMidiRegion(region.id));
       request.midi.regions.forEach(region => track.playlist.addMidiRegion(createDawMidiRegion(region)));
     });
+  }
+
+  sendMidiInputEvent(request: SendMidiInputEventRequest): void {
+    this.#runtime.sendMidiInputEvent(request);
   }
 
   midiPanic(): void {

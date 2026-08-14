@@ -48,6 +48,7 @@ import type {
   SetAudioPluginParameterRequest,
   SetAutomationLanesRequest,
   SetMidiTrackStateRequest,
+  SendMidiInputEventRequest,
   SetLiveInputMonitoringRequest,
   SetTrackRecordArmRequest,
   SetTrackRecordingInputRequest,
@@ -131,6 +132,10 @@ export class MockAudioEngine implements IAudioEngine {
     }
     this.mockMidiTracks.set(request.trackId, cloneMidiTrackState(request.midi));
     this.graphRevision += 1;
+  }
+
+  sendMidiInputEvent(request: SendMidiInputEventRequest): void {
+    this.getTrack(request.trackId);
   }
 
   midiPanic(): void {}

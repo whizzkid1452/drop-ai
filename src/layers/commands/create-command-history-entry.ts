@@ -587,7 +587,11 @@ export function createCommandHistoryEntry({
       });
     }
 
-    case AudioCommandType.SET_MIDI_TRACK_STATE: {
+    case AudioCommandType.SET_MIDI_TRACK_STATE:
+    case AudioCommandType.SET_MIDI_RECORD_MODE:
+    case AudioCommandType.STOP_MIDI_RECORDING:
+    case AudioCommandType.QUANTIZE_MIDI_NOTES:
+    case AudioCommandType.TRANSPOSE_MIDI_NOTES: {
       const beforeMidi = beforeSession.tracks.get(command.trackId)?.midi;
       const afterMidi = afterSession.tracks.get(command.trackId)?.midi;
       if (!beforeMidi || !afterMidi || areMidiTrackStatesEqual(beforeMidi, afterMidi)) {
@@ -939,6 +943,8 @@ export function createCommandHistoryEntry({
     case AudioCommandType.PREVIEW_AUTOMATION_WRITE_PASS:
     case AudioCommandType.CANCEL_AUTOMATION_WRITE_PREVIEW:
     case AudioCommandType.MIDI_PANIC:
+    case AudioCommandType.START_MIDI_RECORDING:
+    case AudioCommandType.CANCEL_MIDI_RECORDING:
     case AudioCommandType.EXPORT_AUDIO:
     case AudioCommandType.SAVE_PROJECT:
     case AudioCommandType.LOAD_PROJECT:

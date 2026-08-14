@@ -37,6 +37,9 @@ export function MidiLoopControl() {
 
   useEffect(() => {
     return midiInput.subscribe(event => {
+      if (event.type !== 'noteOn') {
+        return;
+      }
       if (!isLiveLoopAvailable) {
         return;
       }

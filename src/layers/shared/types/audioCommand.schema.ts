@@ -14,6 +14,7 @@ import {
 } from './project-document.schema';
 import { RECORD_MODES } from './multitrack-recording';
 import { ROUTING_CHANNEL_COUNTS, ROUTING_SEND_TAP_POINTS, ROUTING_TRACK_KINDS } from './routing-state';
+import { MIDI_RECORD_MODES } from './midi-state';
 
 export const AudioCommandType = {
   UNDO: 'UNDO',
@@ -64,6 +65,12 @@ export const AudioCommandType = {
   SET_TRACK_SOLO: 'SET_TRACK_SOLO',
   SET_AUTOMATION_LANES: 'SET_AUTOMATION_LANES',
   SET_MIDI_TRACK_STATE: 'SET_MIDI_TRACK_STATE',
+  SET_MIDI_RECORD_MODE: 'SET_MIDI_RECORD_MODE',
+  START_MIDI_RECORDING: 'START_MIDI_RECORDING',
+  STOP_MIDI_RECORDING: 'STOP_MIDI_RECORDING',
+  CANCEL_MIDI_RECORDING: 'CANCEL_MIDI_RECORDING',
+  QUANTIZE_MIDI_NOTES: 'QUANTIZE_MIDI_NOTES',
+  TRANSPOSE_MIDI_NOTES: 'TRANSPOSE_MIDI_NOTES',
   MIDI_PANIC: 'MIDI_PANIC',
   PREVIEW_AUTOMATION_WRITE_PASS: 'PREVIEW_AUTOMATION_WRITE_PASS',
   COMMIT_AUTOMATION_WRITE_PASS: 'COMMIT_AUTOMATION_WRITE_PASS',
@@ -522,6 +529,39 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal(AudioCommandType.SET_MIDI_TRACK_STATE),
     midi: ProjectMidiTrackV14Schema,
+    trackId: z.uuid('Invalid MIDI Track ID format'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_MIDI_RECORD_MODE),
+    recordMode: z.enum(MIDI_RECORD_MODES),
+    trackId: z.uuid('Invalid MIDI Track ID format'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.START_MIDI_RECORDING),
+    inputChannel: z.number().int().min(1).max(16).nullable(),
+    inputId: z.string().trim().min(1).nullable(),
+    trackId: z.uuid('Invalid MIDI Track ID format'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.STOP_MIDI_RECORDING),
+    trackId: z.uuid('Invalid MIDI Track ID format'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.CANCEL_MIDI_RECORDING),
+    trackId: z.uuid('Invalid MIDI Track ID format'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.QUANTIZE_MIDI_NOTES),
+    noteIds: z.array(z.uuid('Invalid MIDI Note ID format')).min(1),
+    regionId: z.uuid('Invalid MIDI Region ID format'),
+    stepSeconds: z.number().finite().positive(),
+    trackId: z.uuid('Invalid MIDI Track ID format'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.TRANSPOSE_MIDI_NOTES),
+    noteIds: z.array(z.uuid('Invalid MIDI Note ID format')).min(1),
+    regionId: z.uuid('Invalid MIDI Region ID format'),
+    semitones: z.number().int().min(-127).max(127),
     trackId: z.uuid('Invalid MIDI Track ID format'),
   }),
   z.strictObject({ type: z.literal(AudioCommandType.MIDI_PANIC) }),

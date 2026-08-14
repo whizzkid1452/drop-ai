@@ -111,12 +111,21 @@ describe('DawEngineAdapter', () => {
       ],
     };
     const panic = vi.spyOn(runtime, 'midiPanic');
+    const sendMidiInputEvent = vi.spyOn(runtime, 'sendMidiInputEvent');
 
     await engine.addMidiTrack('midi-track-1');
     engine.setMidiTrackState({ midi, trackId: 'midi-track-1' });
+    engine.sendMidiInputEvent({
+      event: { channel: 1, inputId: 'keyboard-1', note: 60, type: 'noteOn', velocity: 100 },
+      trackId: 'midi-track-1',
+    });
     engine.midiPanic();
 
     expect(runtime.getMockMidiTrackState('midi-track-1')).toEqual(midi);
+    expect(sendMidiInputEvent).toHaveBeenCalledWith({
+      event: { channel: 1, inputId: 'keyboard-1', note: 60, type: 'noteOn', velocity: 100 },
+      trackId: 'midi-track-1',
+    });
     expect(panic).toHaveBeenCalledTimes(1);
   });
 

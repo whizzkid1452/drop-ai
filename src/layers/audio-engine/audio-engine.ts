@@ -60,6 +60,7 @@ import type {
   SetAudioPluginParameterRequest,
   SetAutomationLanesRequest,
   SetMidiTrackStateRequest,
+  SendMidiInputEventRequest,
   SetLiveInputMonitoringRequest,
   SetTrackRecordArmRequest,
   SetTrackRecordingInputRequest,
@@ -871,6 +872,11 @@ export class AudioEngine implements IAudioEngine {
       trackId: request.trackId,
     });
     this.graphRevision += 1;
+  }
+
+  sendMidiInputEvent(request: SendMidiInputEventRequest): void {
+    this.ensureRuntimeReady();
+    this.midiRuntime.sendInputEvent(request);
   }
 
   midiPanic(): void {

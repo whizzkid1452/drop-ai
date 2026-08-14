@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCliTestApp, type AppInstance } from '@/layers/apps/create-app';
 import { LayerProvider } from '@/layers/apps/web/context/layer-provider';
-import type { IMidiInput, MidiNoteOnEvent, MidiNoteOnListener } from '@/layers/midi-input/i-midi-input';
+import type { IMidiInput, MidiInputListener, MidiNoteOnEvent } from '@/layers/midi-input/i-midi-input';
 import { AudioCommandType } from '@/layers/shared/types/audioCommand.schema';
 import { AudioRuntimeFeature } from '@/layers/shared/utils/audio-runtime-capabilities';
 import { MidiLoopControl } from './MidiLoopControl';
@@ -27,13 +27,13 @@ class FakeMidiInput implements IMidiInput {
     .fn()
     .mockResolvedValue([{ id: 'input-1', manufacturer: '테스트', name: '패드', state: 'connected' as const }]);
   readonly disconnect = vi.fn();
-  readonly #listeners = new Set<MidiNoteOnListener>();
+  readonly #listeners = new Set<MidiInputListener>();
 
   emit(event: MidiNoteOnEvent): void {
     this.#listeners.forEach(listener => listener(event));
   }
 
-  subscribe(listener: MidiNoteOnListener): () => void {
+  subscribe(listener: MidiInputListener): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
   }
@@ -100,7 +100,7 @@ describe('MidiLoopControl', () => {
       throw new Error('MIDI 연결 버튼이 없습니다.');
     }
     await act(async () => connectButton.click());
-    act(() => midiInput.emit({ channel: 1, inputId: 'input-1', note: 36, velocity: 100 }));
+    act(() => midiInput.emit({ channel: 1, inputId: 'input-1', note: 36, type: 'noteOn', velocity: 100 }));
 
     const firstLoopSlot = app.session.getState().tracks.get(TRACK_ID)?.loopSlots?.[0];
     expect(execute).toHaveBeenCalledWith({

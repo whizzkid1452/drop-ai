@@ -21,6 +21,7 @@ import { EditorController } from './editor-controller';
 import { RegionProcessingController } from './region-processing-controller';
 import { AutomationController } from './automation-controller';
 import { MidiController } from './midi-controller';
+import type { IMidiInput } from '../midi-input/i-midi-input';
 
 interface AppControllerDependencies {
   sessionStore: SessionStore;
@@ -30,6 +31,7 @@ interface AppControllerDependencies {
   projectRepository: ILocalFirstProjectRepository;
   projectSync?: IProjectSyncService;
   pluginHost: IPluginHost;
+  midiInput?: IMidiInput;
 }
 
 /**
@@ -61,11 +63,12 @@ export class AppController {
     projectRepository,
     projectSync,
     pluginHost,
+    midiInput,
   }: AppControllerDependencies) {
     this.playback = new PlaybackController(sessionStore, audioEngine);
     this.track = new TrackController({ sessionStore, audioEngine, audioSourceRegistry });
     this.automation = new AutomationController({ audioEngine, sessionStore });
-    this.midi = new MidiController({ audioEngine, sessionStore });
+    this.midi = new MidiController({ audioEngine, midiInput, sessionStore });
     this.region = new RegionController({ sessionStore, audioEngine, audioSourceRegistry });
     this.editor = new EditorController({ regionRuntime: this.region, sessionStore });
     this.regionProcessing = new RegionProcessingController({

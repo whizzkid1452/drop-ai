@@ -9,10 +9,11 @@ import {
 import type { ICommandHistory } from './command-history';
 import type { MultiTrackRecordingResult } from '../shared/types/linear-recording';
 import type { EditorRuntimeState } from '../shared/types/editor-runtime';
+import type { MidiRecordedTake } from '../shared/types/midi-recording';
 import { createCommandHistoryEntry } from './create-command-history-entry';
 import { assertLiveOperationAllowed } from './live-operation-guard';
 
-export type CommandExecutionResult = Blob | MultiTrackRecordingResult | void;
+export type CommandExecutionResult = Blob | MidiRecordedTake | MultiTrackRecordingResult | void;
 export type CommandBatchExecutionResult = readonly CommandExecutionResult[];
 
 interface CommandBatchExecutionErrorOptions {
@@ -366,6 +367,29 @@ export class CommandExecutor {
         this.controller.midi.setTrackState(validatedCommand);
         return;
 
+      case AudioCommandType.SET_MIDI_RECORD_MODE:
+        this.controller.midi.setRecordMode(validatedCommand.trackId, validatedCommand.recordMode);
+        return;
+
+      case AudioCommandType.START_MIDI_RECORDING:
+        await this.controller.midi.startRecording(validatedCommand);
+        return;
+
+      case AudioCommandType.STOP_MIDI_RECORDING:
+        return this.controller.midi.stopRecording(validatedCommand.trackId);
+
+      case AudioCommandType.CANCEL_MIDI_RECORDING:
+        this.controller.midi.cancelRecording(validatedCommand.trackId);
+        return;
+
+      case AudioCommandType.QUANTIZE_MIDI_NOTES:
+        this.controller.midi.quantizeNotes(validatedCommand);
+        return;
+
+      case AudioCommandType.TRANSPOSE_MIDI_NOTES:
+        this.controller.midi.transposeNotes(validatedCommand);
+        return;
+
       case AudioCommandType.MIDI_PANIC:
         this.controller.midi.panic();
         return;
@@ -639,6 +663,10 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.SET_TRACK_SOLO:
     case AudioCommandType.SET_AUTOMATION_LANES:
     case AudioCommandType.SET_MIDI_TRACK_STATE:
+    case AudioCommandType.SET_MIDI_RECORD_MODE:
+    case AudioCommandType.STOP_MIDI_RECORDING:
+    case AudioCommandType.QUANTIZE_MIDI_NOTES:
+    case AudioCommandType.TRANSPOSE_MIDI_NOTES:
     case AudioCommandType.COMMIT_AUTOMATION_WRITE_PASS:
     case AudioCommandType.INSTALL_PLUGIN:
     case AudioCommandType.REMOVE_PLUGIN:
@@ -687,6 +715,8 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.PREVIEW_AUTOMATION_WRITE_PASS:
     case AudioCommandType.CANCEL_AUTOMATION_WRITE_PREVIEW:
     case AudioCommandType.MIDI_PANIC:
+    case AudioCommandType.START_MIDI_RECORDING:
+    case AudioCommandType.CANCEL_MIDI_RECORDING:
     case AudioCommandType.EXPORT_AUDIO:
     case AudioCommandType.SAVE_PROJECT:
     case AudioCommandType.LOAD_PROJECT:

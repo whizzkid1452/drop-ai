@@ -26,6 +26,7 @@ import { PlaybackClockQuery, type IPlaybackClockQuery } from '../queries/playbac
 import { MeterQuery, type IMeterQuery } from '../queries/meter-query';
 import { LiveInputQuery, type ILiveInputQuery } from '../queries/live-input-query';
 import { RecordingQuery, type IRecordingQuery } from '../queries/recording-query';
+import { MidiRecordingQuery, type IMidiRecordingQuery } from '../queries/midi-recording-query';
 import { EditorQuery, type IEditorQuery } from '../queries/editor-query';
 import { AudioMonitorQuery, type IAudioMonitorQuery } from '../queries/audio-monitor-query';
 import { ProjectCatalogQuery, type IProjectCatalogQuery } from '../queries/project-catalog-query';
@@ -72,6 +73,7 @@ export interface AppInstance {
   meter: IMeterQuery;
   liveInput: ILiveInputQuery;
   recording: IRecordingQuery;
+  midiRecording: IMidiRecordingQuery;
   editor: IEditorQuery;
   audioMonitor: IAudioMonitorQuery;
   projectCatalog: IProjectCatalogQuery;
@@ -237,6 +239,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     pluginManifests: options.initialPluginManifests ?? [gainPluginManifest, saturationPluginManifest],
   });
   const audioSourceCapabilities = createAudioSourceCapabilities(audioSourceRegistry);
+  const midiInput = options.midiInput ?? new BrowserMidiInput();
   const controller = new AppController({
     sessionStore: session,
     audioEngine,
@@ -245,6 +248,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     projectRepository,
     projectSync: controllerProjectSync,
     pluginHost,
+    midiInput,
   });
   const projectSync =
     options.projectSync ??
@@ -262,6 +266,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   const meter = new MeterQuery(controller.meter);
   const liveInput = new LiveInputQuery(controller.liveInput);
   const recording = new RecordingQuery(controller.recording);
+  const midiRecording = new MidiRecordingQuery(controller.midi);
   const editor = new EditorQuery(controller.editor);
   const audioMonitor = new AudioMonitorQuery(audioEngine);
   const projectCatalog = new ProjectCatalogQuery(projectRepository, projectSync);
@@ -270,7 +275,6 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     audioRuntimeEnvironment,
     audioEngine.getFeatureSupport()
   );
-  const midiInput = options.midiInput ?? new BrowserMidiInput();
   const authClient = options.authClient ?? new UnavailableAuthClient();
   const billingClient = options.billingClient ?? new UnavailableBillingClient();
   projectSync.activateProject(initialProjectMetadata.id);
@@ -287,6 +291,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     meter,
     liveInput,
     recording,
+    midiRecording,
     editor,
     audioMonitor,
     playbackClock,

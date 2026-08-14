@@ -1,6 +1,7 @@
 import * as Tone from 'tone';
 import { COMPLETE_RESOURCE_CLEANUP, type ResourceCleanupResult } from '../../shared/types/resource-cleanup';
 import { BUILTIN_MIDI_INSTRUMENT_ID, cloneMidiTrackState, type MidiTrackState } from '../../shared/types/midi-state';
+import type { MidiInputEvent } from '../../midi-input/i-midi-input';
 
 interface MidiTrackRuntimeEntry {
   readonly eventIds: readonly number[];
@@ -11,6 +12,11 @@ interface MidiTrackRuntimeEntry {
 export interface SetToneMidiTrackStateRequest {
   readonly destination: Tone.ToneAudioNode;
   readonly midi: MidiTrackState;
+  readonly trackId: string;
+}
+
+interface SendToneMidiInputEventRequest {
+  readonly event: MidiInputEvent;
   readonly trackId: string;
 }
 
@@ -39,6 +45,20 @@ export class ToneMidiRuntime {
 
   panic(): void {
     this.entries.forEach(entry => entry.synth.releaseAll());
+  }
+
+  sendInputEvent({ event, trackId }: SendToneMidiInputEventRequest): void {
+    const entry = this.entries.get(trackId);
+    if (!entry) {
+      throw new RangeError(`MIDI Track runtime을 찾을 수 없습니다: ${trackId}`);
+    }
+    if (event.type === 'noteOn') {
+      entry.synth.triggerAttack(Tone.Frequency(event.note, 'midi').toFrequency(), undefined, event.velocity / 127);
+      return;
+    }
+    if (event.type === 'noteOff') {
+      entry.synth.triggerRelease(Tone.Frequency(event.note, 'midi').toFrequency());
+    }
   }
 
   dispose(): ResourceCleanupResult {

@@ -1,6 +1,7 @@
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
 import type { AutomationLaneState } from '../shared/types/automation-state';
 import type { MidiTrackState } from '../shared/types/midi-state';
+import type { MidiInputEvent } from '../midi-input/i-midi-input';
 import type { RegionProcessingState } from '../shared/types/region-processing';
 import type {
   AnalyzeAudioRegionPeakRequest,
@@ -117,6 +118,11 @@ export interface SetAutomationLanesRequest {
 
 export interface SetMidiTrackStateRequest {
   readonly midi: MidiTrackState;
+  readonly trackId: string;
+}
+
+export interface SendMidiInputEventRequest {
+  readonly event: MidiInputEvent;
   readonly trackId: string;
 }
 
@@ -266,6 +272,7 @@ export interface IAudioEngine {
   getTrackParams(trackId: string): { volume: number; pan: number } | null;
   setAutomationLanes(request: SetAutomationLanesRequest): void;
   setMidiTrackState(request: SetMidiTrackStateRequest): void;
+  sendMidiInputEvent(request: SendMidiInputEventRequest): void;
   midiPanic(): void;
 
   // Plugin Management

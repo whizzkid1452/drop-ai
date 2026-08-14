@@ -4,6 +4,7 @@ import { AudioSourceRegistry } from '../audio-source-registry/audio-source-regis
 import type { IAudioSourceRegistry } from '../audio-source-registry/i-audio-source-registry';
 import type { IAudioSourceRepository } from '../audio-source-repository/i-audio-source-repository';
 import { AppController } from '../controllers/app-controller';
+import type { IMidiInput, MidiInputEvent, MidiInputListener } from '../midi-input/i-midi-input';
 import { createSessionStore } from '../session/session';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import { PluginHost } from '../plugin-host/plugin-host';
@@ -29,6 +30,23 @@ const INITIAL_PROJECT_METADATA = {
   revision: 0,
 };
 
+function createTestMidiInput(): { readonly emit: (event: MidiInputEvent) => void; readonly midiInput: IMidiInput } {
+  let listener: MidiInputListener | null = null;
+  return {
+    emit: event => listener?.(event),
+    midiInput: {
+      connect: vi.fn().mockResolvedValue([]),
+      disconnect: vi.fn(),
+      subscribe: vi.fn(nextListener => {
+        listener = nextListener;
+        return () => {
+          listener = null;
+        };
+      }),
+    },
+  };
+}
+
 function createTestContext() {
   const session = createSessionStore({ initialProjectMetadata: INITIAL_PROJECT_METADATA });
   const audioSourceRegistry = new AudioSourceRegistry({
@@ -43,6 +61,7 @@ function createTestContext() {
   const projectRepository = new InMemoryProjectRepository();
   const commandHistory = new CommandHistory();
   const audioEngine = new MockAudioEngine();
+  const testMidiInput = createTestMidiInput();
   const pluginHost = new PluginHost();
   const registeredManifest = pluginHost.registerManifest(gainPluginManifest);
   session.getState().replacePluginCatalogState({
@@ -56,6 +75,7 @@ function createTestContext() {
     audioSourceRepository,
     projectRepository,
     pluginHost,
+    midiInput: testMidiInput.midiInput,
   });
   const commandExecutor = new CommandExecutor(session, controller, commandHistory);
 
@@ -68,6 +88,7 @@ function createTestContext() {
     controller,
     projectRepository,
     session,
+    emitMidiInput: testMidiInput.emit,
   };
 }
 
@@ -1166,6 +1187,83 @@ describe('CommandExecutor', () => {
 
     expect(panic).toHaveBeenCalledTimes(1);
     expect(session.getState().project.revision).toBe(beforeRevision);
+  });
+
+  it('MIDI 입력을 녹음하고 Stop 결과를 한 번의 Undo로 제거한다', async () => {
+    const { audioEngine, commandExecutor, emitMidiInput, session } = createTestContext();
+    await commandExecutor.execute({ trackId: TRACK_ID, type: AudioCommandType.ADD_MIDI_TRACK });
+    audioEngine.setTime(1);
+    await commandExecutor.execute({
+      inputChannel: null,
+      inputId: null,
+      trackId: TRACK_ID,
+      type: AudioCommandType.START_MIDI_RECORDING,
+    });
+    audioEngine.setTime(1.25);
+    emitMidiInput({ channel: 1, inputId: 'input-1', note: 60, type: 'noteOn', velocity: 100 });
+    audioEngine.setTime(1.75);
+    emitMidiInput({ channel: 1, inputId: 'input-1', note: 60, type: 'noteOff', velocity: 0 });
+    audioEngine.setTime(2);
+
+    const result = await commandExecutor.execute({ trackId: TRACK_ID, type: AudioCommandType.STOP_MIDI_RECORDING });
+
+    expect(result).toMatchObject({ capturedEventCount: 2, trackId: TRACK_ID });
+    expect(session.getState().tracks.get(TRACK_ID)?.midi?.regions).toMatchObject([
+      { notes: [{ pitch: 60, startOffsetSeconds: 0.25 }], startTimeSeconds: 1 },
+    ]);
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.midi?.regions).toEqual([]);
+  });
+
+  it('MIDI Note quantize와 transpose를 각각 Undo할 수 있다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    const midi = {
+      instrumentId: 'builtin.poly-synth',
+      recordMode: 'replace' as const,
+      regions: [
+        {
+          controlLanes: [],
+          durationSeconds: 2,
+          id: REGION_ID,
+          name: 'Edit',
+          notes: [
+            {
+              channel: 1,
+              durationSeconds: 0.5,
+              id: SECOND_REGION_ID,
+              pitch: 60,
+              startOffsetSeconds: 0.37,
+              velocity: 100,
+            },
+          ],
+          startTimeSeconds: 0,
+        },
+      ],
+    };
+    await commandExecutor.execute({ trackId: TRACK_ID, type: AudioCommandType.ADD_MIDI_TRACK });
+    await commandExecutor.execute({ midi, trackId: TRACK_ID, type: AudioCommandType.SET_MIDI_TRACK_STATE });
+
+    await commandExecutor.execute({
+      noteIds: [SECOND_REGION_ID],
+      regionId: REGION_ID,
+      stepSeconds: 0.25,
+      trackId: TRACK_ID,
+      type: AudioCommandType.QUANTIZE_MIDI_NOTES,
+    });
+    expect(session.getState().tracks.get(TRACK_ID)?.midi?.regions[0]?.notes[0]?.startOffsetSeconds).toBe(0.25);
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.midi?.regions[0]?.notes[0]?.startOffsetSeconds).toBe(0.37);
+
+    await commandExecutor.execute({
+      noteIds: [SECOND_REGION_ID],
+      regionId: REGION_ID,
+      semitones: 12,
+      trackId: TRACK_ID,
+      type: AudioCommandType.TRANSPOSE_MIDI_NOTES,
+    });
+    expect(session.getState().tracks.get(TRACK_ID)?.midi?.regions[0]?.notes[0]?.pitch).toBe(72);
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.midi?.regions[0]?.notes[0]?.pitch).toBe(60);
   });
 
   it('SET_PLUGIN_ENABLED 명령을 실행하고 Undo와 Redo로 복원한다', async () => {

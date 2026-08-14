@@ -15,7 +15,9 @@ const toneMocks = vi.hoisted(() => ({
     toneMocks.eventCallbacks.set(eventId, callback);
     return eventId;
   }),
+  triggerAttack: vi.fn(),
   triggerAttackRelease: vi.fn(),
+  triggerRelease: vi.fn(),
 }));
 
 vi.mock('tone', () => {
@@ -42,6 +44,16 @@ vi.mock('tone', () => {
 
     triggerAttackRelease(frequency: number, duration: number, time: number, velocity: number) {
       toneMocks.triggerAttackRelease(frequency, duration, time, velocity);
+      return this;
+    }
+
+    triggerAttack(frequency: number, time?: number, velocity?: number) {
+      toneMocks.triggerAttack(frequency, time, velocity);
+      return this;
+    }
+
+    triggerRelease(frequency: number, time?: number) {
+      toneMocks.triggerRelease(frequency, time);
       return this;
     }
   }
@@ -137,6 +149,27 @@ describe('ToneMidiRuntime', () => {
     expect(toneMocks.releaseAll).toHaveBeenCalledTimes(1);
     expect(toneMocks.disconnect).toHaveBeenCalledTimes(1);
     expect(toneMocks.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('실시간 Note On과 Note Off를 Track Instrument에 전달한다', () => {
+    const runtime = new ToneMidiRuntime();
+    runtime.setTrackState({
+      destination: {} as never,
+      midi: { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, recordMode: 'replace', regions: [] },
+      trackId: 'track-1',
+    });
+
+    runtime.sendInputEvent({
+      event: { channel: 1, inputId: 'input-1', note: 69, type: 'noteOn', velocity: 64 },
+      trackId: 'track-1',
+    });
+    runtime.sendInputEvent({
+      event: { channel: 1, inputId: 'input-1', note: 69, type: 'noteOff', velocity: 0 },
+      trackId: 'track-1',
+    });
+
+    expect(toneMocks.triggerAttack).toHaveBeenCalledWith(440, undefined, 64 / 127);
+    expect(toneMocks.triggerRelease).toHaveBeenCalledWith(440, undefined);
   });
 
   it('panic에서 모든 Track의 sounding note를 해제한다', () => {

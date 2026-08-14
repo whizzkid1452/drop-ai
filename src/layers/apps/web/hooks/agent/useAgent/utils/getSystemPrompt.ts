@@ -139,6 +139,13 @@ const COMMAND_REFERENCE = {
   [AudioCommandType.SET_AUTOMATION_LANES]:
     '{"type":"SET_AUTOMATION_LANES","trackId":"<existing Track UUID>","automationLanes":[]} - Track Automation lane 전체 교체',
   [AudioCommandType.SET_MIDI_TRACK_STATE]: 'UI 전용 편집 명령 - MIDI Track의 Instrument·Region·Note 상태 전체 교체',
+  [AudioCommandType.SET_MIDI_RECORD_MODE]:
+    '{"type":"SET_MIDI_RECORD_MODE","trackId":"<existing MIDI Track UUID>","recordMode":"replace|overdub"} - MIDI 녹음 모드 변경',
+  [AudioCommandType.START_MIDI_RECORDING]: 'UI 전용 runtime 명령 - 선택한 MIDI Track의 실시간 입력 녹음 시작',
+  [AudioCommandType.STOP_MIDI_RECORDING]: 'UI 전용 편집 명령 - 진행 중인 MIDI 녹음을 종료하고 Region으로 확정',
+  [AudioCommandType.CANCEL_MIDI_RECORDING]: 'UI 전용 runtime 명령 - 진행 중인 MIDI 녹음을 저장하지 않고 취소',
+  [AudioCommandType.QUANTIZE_MIDI_NOTES]: 'UI 전용 편집 명령 - 선택한 MIDI Note 시작 시각을 지정한 간격에 맞춤',
+  [AudioCommandType.TRANSPOSE_MIDI_NOTES]: 'UI 전용 편집 명령 - 선택한 MIDI Note 음높이를 반음 단위로 이동',
   [AudioCommandType.MIDI_PANIC]: '{"type":"MIDI_PANIC"} - 재생 중인 모든 MIDI Note 즉시 해제',
   [AudioCommandType.PREVIEW_AUTOMATION_WRITE_PASS]:
     'UI 전용 runtime 명령 - Automation write pass sample을 저장하지 않고 미리 듣기',
