@@ -37,6 +37,7 @@ class LiveAudioInputStub implements ILiveAudioInput {
     this.connections.push(connection);
     return connection;
   });
+  readonly listDevices = vi.fn(async () => [{ deviceId: 'default-input', label: 'Default Input' }]);
 }
 
 class LivePcmCaptureStub implements ILivePcmCapture {
@@ -67,6 +68,10 @@ class LoopPlaybackAdapterStub implements ILoopPlaybackAdapter {
   readonly setMonitoring = vi.fn();
   readonly prepare = vi.fn(async () => undefined);
   readonly decodeAudioData = vi.fn(async () => ({}) as AudioBuffer);
+  inputMeterFrame = {
+    capturedAtSeconds: 2,
+    channels: [{ isClipHeld: false, peakDbfs: -9, rmsDbfs: -15 }],
+  };
 
   createAudioBuffer(): AudioBuffer {
     return {} as AudioBuffer;
@@ -88,6 +93,10 @@ class LoopPlaybackAdapterStub implements ILoopPlaybackAdapter {
 
   getTransportTimeSeconds(): number {
     return this.transportTimeSeconds;
+  }
+
+  readInputMeterFrame() {
+    return this.inputMeterFrame;
   }
 }
 
@@ -154,14 +163,38 @@ describe('QuantizedLoopRuntime', () => {
   });
 
   it('새 입력 장치를 먼저 연 뒤 기존 연결을 닫는다', async () => {
-    const { liveAudioInput, runtime } = createRuntime();
+    const { liveAudioInput, playback, runtime } = createRuntime();
     await runtime.setInputDevice('input-a');
     const firstConnection = liveAudioInput.connections[0];
 
     await runtime.setInputDevice('input-b');
 
     expect(liveAudioInput.open).toHaveBeenLastCalledWith({ deviceId: 'input-b' });
+    expect(playback.setMonitoring).toHaveBeenLastCalledWith({
+      destination: null,
+      stream: liveAudioInput.connections[1].stream,
+    });
     expect(firstConnection.close).toHaveBeenCalledOnce();
+  });
+
+  it('입력 MeterFrame을 playback adapter에서 읽는다', () => {
+    const { playback, runtime } = createRuntime();
+
+    expect(runtime.readInputMeterFrame()).toEqual(playback.inputMeterFrame);
+  });
+
+  it('새 입력 meter 연결이 실패하면 새 stream을 닫고 기존 연결을 유지한다', async () => {
+    const { liveAudioInput, playback, runtime } = createRuntime();
+    await runtime.setInputDevice('input-a');
+    const firstConnection = liveAudioInput.connections[0];
+    playback.setMonitoring.mockImplementationOnce(() => {
+      throw new Error('meter 연결 실패');
+    });
+
+    await expect(runtime.setInputDevice('input-b')).rejects.toThrow('meter 연결 실패');
+
+    expect(liveAudioInput.connections[1].close).toHaveBeenCalledOnce();
+    expect(firstConnection.close).not.toHaveBeenCalled();
   });
 
   it('재생과 정지를 각각 다음 정량화 경계에 예약한다', async () => {

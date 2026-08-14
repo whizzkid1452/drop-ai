@@ -10,6 +10,8 @@ import type {
   TriggerLoopRequest,
 } from './loop-runtime-contract';
 import { COMPLETE_RESOURCE_CLEANUP } from '../../shared/types/resource-cleanup';
+import type { MeterFrame } from '../../shared/types/meter-frame';
+import type { LiveAudioInputDevice } from '../../shared/types/live-input';
 
 const RUNTIME_UNAVAILABLE_MESSAGE = '이 AudioEngine에는 루프 오디오 런타임이 구성되지 않았습니다.';
 
@@ -45,6 +47,10 @@ export class UnavailableLoopAudioRuntime implements ILoopAudioRuntime {
     throwRuntimeUnavailable();
   }
 
+  async listInputDevices(): Promise<readonly LiveAudioInputDevice[]> {
+    return throwRuntimeUnavailable();
+  }
+
   async prepareReplacement(requests: readonly LoadLoopRuntimeRequest[]): Promise<IPreparedLoopRuntimeReplacement> {
     if (requests.length > 0) {
       throwRuntimeUnavailable();
@@ -55,6 +61,10 @@ export class UnavailableLoopAudioRuntime implements ILoopAudioRuntime {
       activate: () => ({ dispose: () => COMPLETE_RESOURCE_CLEANUP }),
       discard: () => COMPLETE_RESOURCE_CLEANUP,
     };
+  }
+
+  readInputMeterFrame(): MeterFrame {
+    return throwRuntimeUnavailable();
   }
 
   async setInputDevice(_deviceId: string | null): Promise<string | null> {

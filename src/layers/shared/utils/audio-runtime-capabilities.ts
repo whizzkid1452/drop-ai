@@ -44,7 +44,7 @@ export const CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT: AudioRuntimeFeatureSupport =
   [AudioRuntimeFeature.LINEAR_RECORDING]: false,
   [AudioRuntimeFeature.LIVE_INPUT]: true,
   [AudioRuntimeFeature.LIVE_LOOP]: true,
-  [AudioRuntimeFeature.METERING]: false,
+  [AudioRuntimeFeature.METERING]: true,
   [AudioRuntimeFeature.MIDI]: false,
   [AudioRuntimeFeature.PROJECT_EXPORT]: true,
   [AudioRuntimeFeature.REGION_PROCESSING]: false,

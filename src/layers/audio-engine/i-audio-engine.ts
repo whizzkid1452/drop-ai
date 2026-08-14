@@ -2,6 +2,7 @@ import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
 import type { PluginParameterValue } from '../shared/types/plugin-state';
 import type { TimelineRange } from '../shared/types/project-document.schema';
 import type { MeterFrame, MeterTarget } from '../shared/types/meter-frame';
+import type { LiveAudioInputDevice, LiveInputRuntimeListener, LiveInputRuntimeState } from '../shared/types/live-input';
 import type { AudioRuntimeFeatureSupport } from '../shared/utils/audio-runtime-capabilities';
 import type {
   ArmLoopRequest,
@@ -25,6 +26,7 @@ export type {
   TriggerLoopRequest,
 } from './loop-runtime/loop-runtime-contract';
 export type { MeterChannelFrame, MeterFrame, MeterTarget } from '../shared/types/meter-frame';
+export type { LiveAudioInputDevice, LiveInputRuntimeListener, LiveInputRuntimeState } from '../shared/types/live-input';
 
 export interface RegionData {
   id: string;
@@ -172,6 +174,9 @@ export interface IAudioEngine {
   readMeterFrame(target: MeterTarget): MeterFrame;
 
   // Live Loop Control
+  getLiveInputState(): LiveInputRuntimeState;
+  listLiveInputDevices(): Promise<readonly LiveAudioInputDevice[]>;
+  subscribeLiveInputState(listener: LiveInputRuntimeListener): () => void;
   setLiveInputDevice(deviceId: string | null): Promise<string | null>;
   setLiveInputMonitoring(request: SetLiveInputMonitoringRequest): Promise<void>;
   armLoop(request: ArmLoopRequest): Promise<void>;

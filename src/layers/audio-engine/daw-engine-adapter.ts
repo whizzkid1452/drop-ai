@@ -15,6 +15,9 @@ import type {
   InstallAudioPluginRequest,
   IPreparedAudioProjectGraph,
   LoadLoopRequest,
+  LiveAudioInputDevice,
+  LiveInputRuntimeListener,
+  LiveInputRuntimeState,
   LoopRuntimeListener,
   LoopSlotAddress,
   MeterFrame,
@@ -192,6 +195,18 @@ export class DawEngineAdapter implements IAudioEngine {
 
   readMeterFrame(target: MeterTarget): MeterFrame {
     return this.#runtime.readMeterFrame(target);
+  }
+
+  getLiveInputState(): LiveInputRuntimeState {
+    return this.#runtime.getLiveInputState();
+  }
+
+  listLiveInputDevices(): Promise<readonly LiveAudioInputDevice[]> {
+    return this.#runtime.listLiveInputDevices();
+  }
+
+  subscribeLiveInputState(listener: LiveInputRuntimeListener): () => void {
+    return this.#runtime.subscribeLiveInputState(listener);
   }
 
   setLiveInputDevice(deviceId: string | null): Promise<string | null> {

@@ -18,6 +18,9 @@ import type {
   IAudioEngine,
   InstallAudioPluginRequest,
   LoadLoopRequest,
+  LiveAudioInputDevice,
+  LiveInputRuntimeListener,
+  LiveInputRuntimeState,
   LoopRuntimeListener,
   LoopSlotAddress,
   MeterFrame,
@@ -43,6 +46,8 @@ import type {
   LoadLoopRuntimeRequest,
 } from './loop-runtime/loop-runtime-contract';
 import { UnavailableLoopAudioRuntime } from './loop-runtime/unavailable-loop-audio-runtime';
+import type { IAudioMeterRuntime } from './metering/audio-meter-runtime';
+import { ToneMeterRuntimeFactory, type IAudioMeterRuntimeFactory } from './metering/tone-meter-runtime-factory';
 import type { IAudioPluginRuntime, IAudioPluginRuntimeFactory } from './plugins/audio-plugin-runtime';
 import { AudioPluginRuntimeError } from './plugins/errors';
 import { RegionRenderer, type RegionRenderParams } from './renderers/region-renderer';
@@ -61,7 +66,9 @@ interface CreateRegionEntriesRequest {
 
 interface AudioProjectGraphState {
   readonly output: Tone.Gain;
+  readonly masterMeterRuntime: IAudioMeterRuntime;
   readonly trackInputs: Map<string, Tone.Gain>;
+  readonly trackMeterRuntimes: Map<string, IAudioMeterRuntime>;
   readonly channels: Map<string, Tone.Channel>;
   readonly desiredTrackVolumes: Map<string, number>;
   readonly mutedTrackIds: Set<string>;
@@ -73,6 +80,7 @@ interface AudioProjectGraphState {
 
 interface AudioEngineOptions {
   readonly loopRuntime?: ILoopAudioRuntime;
+  readonly meterRuntimeFactory?: IAudioMeterRuntimeFactory;
   readonly pluginRuntimeFactories?: readonly IAudioPluginRuntimeFactory[];
 }
 
@@ -136,7 +144,9 @@ type PreparedGraphState = 'activated' | 'discarded' | 'prepared';
 
 export class AudioEngine implements IAudioEngine {
   private output: Tone.Gain;
+  private masterMeterRuntime: IAudioMeterRuntime;
   private trackInputs: Map<string, Tone.Gain> = new Map();
+  private trackMeterRuntimes: Map<string, IAudioMeterRuntime> = new Map();
   private channels: Map<string, Tone.Channel> = new Map();
   private desiredTrackVolumes: Map<string, number> = new Map();
   private mutedTrackIds: Set<string> = new Set();
@@ -146,6 +156,7 @@ export class AudioEngine implements IAudioEngine {
   private disabledPluginInstanceIds: Map<string, Set<string>> = new Map();
   private readonly pluginRuntimeFactories: ReadonlyMap<string, IAudioPluginRuntimeFactory>;
   private readonly loopRuntime: ILoopAudioRuntime;
+  private readonly meterRuntimeFactory: IAudioMeterRuntimeFactory;
   private readonly featureSupport: AudioRuntimeFeatureSupport;
   private readonly transportRuntime = new ToneTransportRuntime();
   private graphRevision = 0;
@@ -162,28 +173,37 @@ export class AudioEngine implements IAudioEngine {
   private readonly disposedPlayers = new WeakSet<Tone.Player>();
   private readonly disconnectedPluginRuntimes = new WeakSet<IAudioPluginRuntime>();
   private readonly disposedPluginRuntimes = new WeakSet<IAudioPluginRuntime>();
+  private readonly disposedMeterRuntimes = new WeakSet<IAudioMeterRuntime>();
   private readonly pendingGraphCleanup = new Set<AudioProjectGraphState>();
   private readonly pendingChannelCleanup = new Set<Tone.Channel>();
   private readonly pendingOutputCleanup = new Set<Tone.Gain>();
   private readonly pendingTrackInputCleanup = new Set<Tone.Gain>();
   private readonly pendingPlayerCleanup = new Set<Tone.Player>();
   private readonly pendingPluginRuntimeCleanup = new Set<IAudioPluginRuntime>();
+  private readonly pendingMeterRuntimeCleanup = new Set<IAudioMeterRuntime>();
   private readonly pendingOutputStateRecovery = new Map<Tone.Gain, boolean>();
   private readonly unmutedOutputGains = new WeakMap<Tone.Gain, number>();
   private readonly pendingPluginChainRecovery = new Map<string, PluginChainRecoveryState>();
   private pendingTransportRecovery: TransportSnapshot | null = null;
+  private liveInputDeviceId: string | null = null;
+  private monitoringTrackId: string | null = null;
+  private readonly liveInputStateListeners = new Set<LiveInputRuntimeListener>();
 
   constructor(options: AudioEngineOptions = {}) {
-    const { loopRuntime, pluginRuntimeFactories = [] } = options;
+    const { loopRuntime, meterRuntimeFactory = new ToneMeterRuntimeFactory(), pluginRuntimeFactories = [] } = options;
     this.loopRuntime = loopRuntime ?? new UnavailableLoopAudioRuntime();
+    this.meterRuntimeFactory = meterRuntimeFactory;
     this.featureSupport = {
       ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
       [AudioRuntimeFeature.LIVE_INPUT]: loopRuntime !== undefined,
       [AudioRuntimeFeature.LIVE_LOOP]: loopRuntime !== undefined,
+      [AudioRuntimeFeature.METERING]: true,
       [AudioRuntimeFeature.TEMPO_LOOP_METRONOME]: true,
     };
     this.pluginRuntimeFactories = createPluginRuntimeFactoryMap(pluginRuntimeFactories);
-    this.output = this.createGraphOutput({ initialGain: 1, unmutedGain: 1 });
+    const outputNodes = this.createGraphOutputNodes({ initialGain: 1, unmutedGain: 1 });
+    this.output = outputNodes.output;
+    this.masterMeterRuntime = outputNodes.meterRuntime;
   }
 
   getFeatureSupport(): AudioRuntimeFeatureSupport {
@@ -245,17 +265,56 @@ export class AudioEngine implements IAudioEngine {
   }
 
   readMeterFrame(target: MeterTarget): MeterFrame {
-    void target;
-    throw new UnsupportedAudioFeatureError({ feature: AudioRuntimeFeature.METERING, method: 'readMeterFrame' });
+    this.ensureRuntimeReady();
+    if (target.kind === 'input') {
+      if (!this.featureSupport.liveInput) {
+        throw new UnsupportedAudioFeatureError({ feature: AudioRuntimeFeature.LIVE_INPUT, method: 'readMeterFrame' });
+      }
+      return this.loopRuntime.readInputMeterFrame();
+    }
+    if (target.kind === 'master') {
+      return this.masterMeterRuntime.read();
+    }
+
+    const meterRuntime = this.trackMeterRuntimes.get(target.trackId);
+    if (!meterRuntime) {
+      throw new AudioEngineError(AudioEngineErrorCode.TRACK_NOT_FOUND, ERROR_MESSAGES.TRACK_NOT_FOUND, {
+        trackId: target.trackId,
+      });
+    }
+    return meterRuntime.read();
   }
 
-  setLiveInputDevice(deviceId: string | null): Promise<string | null> {
-    return this.loopRuntime.setInputDevice(deviceId);
+  getLiveInputState(): LiveInputRuntimeState {
+    return { deviceId: this.liveInputDeviceId, monitoringTrackId: this.monitoringTrackId };
   }
 
-  setLiveInputMonitoring(request: SetLiveInputMonitoringRequest): Promise<void> {
+  listLiveInputDevices(): Promise<readonly LiveAudioInputDevice[]> {
+    return this.loopRuntime.listInputDevices();
+  }
+
+  subscribeLiveInputState(listener: LiveInputRuntimeListener): () => void {
+    this.liveInputStateListeners.add(listener);
+    return () => this.liveInputStateListeners.delete(listener);
+  }
+
+  async setLiveInputDevice(deviceId: string | null): Promise<string | null> {
+    const resolvedDeviceId = await this.loopRuntime.setInputDevice(deviceId);
+    const previousState = this.getLiveInputState();
+    this.liveInputDeviceId = resolvedDeviceId;
+    this.notifyLiveInputStateChange(previousState);
+    return resolvedDeviceId;
+  }
+
+  async setLiveInputMonitoring(request: SetLiveInputMonitoringRequest): Promise<void> {
+    if (!request.enabled && this.monitoringTrackId !== request.trackId) {
+      return;
+    }
     const destination = request.enabled ? this.getExistingInput(request.trackId).input : null;
-    return this.loopRuntime.setMonitoring({ destination, enabled: request.enabled });
+    await this.loopRuntime.setMonitoring({ destination, enabled: request.enabled });
+    const previousState = this.getLiveInputState();
+    this.monitoringTrackId = request.enabled ? request.trackId : null;
+    this.notifyLiveInputStateChange(previousState);
   }
 
   armLoop(request: ArmLoopRequest): Promise<void> {
@@ -312,6 +371,11 @@ export class AudioEngine implements IAudioEngine {
   removeTrack(trackId: string): void {
     this.ensureRuntimeReady();
     this.loopRuntime.clearTrack(trackId);
+    const previousLiveInputState = this.getLiveInputState();
+    if (this.monitoringTrackId === trackId) {
+      this.monitoringTrackId = null;
+    }
+    this.notifyLiveInputStateChange(previousLiveInputState);
     const hadTrack = this.trackInputs.has(trackId) || this.channels.has(trackId) || this.players.has(trackId);
     if (hadTrack) {
       this.graphRevision += 1;
@@ -325,6 +389,12 @@ export class AudioEngine implements IAudioEngine {
       ?.forEach(runtime => this.disposePluginRuntimeSafely(runtime, '제거한 Track의 Plugin 정리에 실패했습니다.'));
     this.pluginRuntimes.delete(trackId);
     this.disabledPluginInstanceIds.delete(trackId);
+
+    const meterRuntime = this.trackMeterRuntimes.get(trackId);
+    if (meterRuntime) {
+      this.disposeMeterRuntimeSafely(meterRuntime, '제거한 Track의 Meter 정리에 실패했습니다.');
+    }
+    this.trackMeterRuntimes.delete(trackId);
 
     const input = this.trackInputs.get(trackId);
     if (input) {
@@ -741,6 +811,9 @@ export class AudioEngine implements IAudioEngine {
           throw cause;
         }
         const retiredLoops = preparedLoops.activate();
+        const previousLiveInputState = this.getLiveInputState();
+        this.monitoringTrackId = null;
+        this.notifyLiveInputStateChange(previousLiveInputState);
         this.graphRevision += 1;
         state = 'activated';
         retiredGraph = this.createRetiredGraph(previousGraph, retiredLoops);
@@ -971,11 +1044,16 @@ export class AudioEngine implements IAudioEngine {
       volume: 0,
       pan: 0,
     });
+    let meterRuntime: IAudioMeterRuntime | null = null;
 
     try {
       input.connect(channel);
+      meterRuntime = this.meterRuntimeFactory.create(channel);
       channel.connect(this.output);
     } catch (cause) {
+      if (meterRuntime) {
+        this.disposeMeterRuntimeSafely(meterRuntime, '연결에 실패한 Track Meter 정리에 실패했습니다.');
+      }
       this.disposeTrackInputSafely(input, '연결에 실패한 Track input 정리에 실패했습니다.');
       this.disposeChannelSafely(channel, '연결에 실패한 Track Channel 정리에 실패했습니다.');
       throw new AudioEngineError(AudioEngineErrorCode.TRACK_INIT_FAILED, ERROR_MESSAGES.TRACK_INIT_FAILED, {
@@ -986,6 +1064,7 @@ export class AudioEngine implements IAudioEngine {
 
     this.trackInputs.set(trackId, input);
     this.channels.set(trackId, channel);
+    this.trackMeterRuntimes.set(trackId, meterRuntime);
     this.desiredTrackVolumes.set(trackId, 1);
     this.players.set(trackId, new Map());
     this.pluginRuntimes.set(trackId, []);
@@ -1033,6 +1112,8 @@ export class AudioEngine implements IAudioEngine {
           runtimes: getEnabledPluginRuntimes(pluginRuntimes, disabledPluginInstanceIds),
           trackId: track.id,
         });
+        const meterRuntime = this.meterRuntimeFactory.create(channel);
+        graph.trackMeterRuntimes.set(track.id, meterRuntime);
         channel.connect(graph.output);
         channel.volume.value = Tone.gainToDb(track.volume);
         channel.pan.value = track.pan;
@@ -1105,9 +1186,12 @@ export class AudioEngine implements IAudioEngine {
   }
 
   private createEmptyGraph(masterVolume: number): AudioProjectGraphState {
+    const outputNodes = this.createGraphOutputNodes({ initialGain: 0, unmutedGain: masterVolume });
     return {
-      output: this.createGraphOutput({ initialGain: 0, unmutedGain: masterVolume }),
+      output: outputNodes.output,
+      masterMeterRuntime: outputNodes.meterRuntime,
       trackInputs: new Map(),
+      trackMeterRuntimes: new Map(),
       channels: new Map(),
       desiredTrackVolumes: new Map(),
       mutedTrackIds: new Set(),
@@ -1121,7 +1205,9 @@ export class AudioEngine implements IAudioEngine {
   private captureActiveGraph(): AudioProjectGraphState {
     return {
       output: this.output,
+      masterMeterRuntime: this.masterMeterRuntime,
       trackInputs: this.trackInputs,
+      trackMeterRuntimes: this.trackMeterRuntimes,
       channels: this.channels,
       desiredTrackVolumes: this.desiredTrackVolumes,
       mutedTrackIds: this.mutedTrackIds,
@@ -1134,7 +1220,9 @@ export class AudioEngine implements IAudioEngine {
 
   private useGraph(graph: AudioProjectGraphState): void {
     this.output = graph.output;
+    this.masterMeterRuntime = graph.masterMeterRuntime;
     this.trackInputs = graph.trackInputs;
+    this.trackMeterRuntimes = graph.trackMeterRuntimes;
     this.channels = graph.channels;
     this.desiredTrackVolumes = graph.desiredTrackVolumes;
     this.mutedTrackIds = graph.mutedTrackIds;
@@ -1163,7 +1251,14 @@ export class AudioEngine implements IAudioEngine {
 
   private disposeGraph(graph: AudioProjectGraphState, errorMessage: string): ResourceCleanupResult {
     this.pendingGraphCleanup.add(graph);
+    const isMasterMeterDisposed = this.disposeMeterRuntimeSafely(graph.masterMeterRuntime, errorMessage);
     const isOutputDisposed = this.disposeOutput(graph.output, errorMessage);
+
+    graph.trackMeterRuntimes.forEach((runtime, trackId) => {
+      if (this.disposeMeterRuntimeSafely(runtime, errorMessage)) {
+        graph.trackMeterRuntimes.delete(trackId);
+      }
+    });
 
     graph.players.forEach((trackPlayers, trackId) => {
       trackPlayers.forEach((entry, regionId) => {
@@ -1213,7 +1308,9 @@ export class AudioEngine implements IAudioEngine {
       failedPlayerCount +
       failedPluginRuntimeCount +
       graph.trackInputs.size +
+      graph.trackMeterRuntimes.size +
       graph.channels.size +
+      (isMasterMeterDisposed ? 0 : 1) +
       (isOutputDisposed ? 0 : 1);
     if (failedResourceCount > 0) {
       return { isComplete: false, failedResourceCount };
@@ -1255,6 +1352,18 @@ export class AudioEngine implements IAudioEngine {
 
     this.useGraph(preparedGraph);
     return previousGraph;
+  }
+
+  private notifyLiveInputStateChange(previousState: LiveInputRuntimeState): void {
+    const currentState = this.getLiveInputState();
+    if (
+      currentState.deviceId === previousState.deviceId &&
+      currentState.monitoringTrackId === previousState.monitoringTrackId
+    ) {
+      return;
+    }
+
+    this.liveInputStateListeners.forEach(listener => listener(currentState));
   }
 
   private rollbackGraphActivation({
@@ -1303,7 +1412,10 @@ export class AudioEngine implements IAudioEngine {
     }
   }
 
-  private createGraphOutput({ initialGain, unmutedGain }: CreateGraphOutputRequest): Tone.Gain {
+  private createGraphOutputNodes({ initialGain, unmutedGain }: CreateGraphOutputRequest): {
+    readonly meterRuntime: IAudioMeterRuntime;
+    readonly output: Tone.Gain;
+  } {
     const output = new Tone.Gain({ gain: initialGain });
     this.unmutedOutputGains.set(output, unmutedGain);
     if (initialGain === 0) {
@@ -1312,7 +1424,8 @@ export class AudioEngine implements IAudioEngine {
 
     try {
       output.toDestination();
-      return output;
+      const meterRuntime = this.meterRuntimeFactory.create(output);
+      return { meterRuntime, output };
     } catch (cause) {
       this.pendingOutputCleanup.add(output);
       this.disposeOutput(output, '연결에 실패한 프로젝트 출력 정리에 실패했습니다.');
@@ -1443,6 +1556,22 @@ export class AudioEngine implements IAudioEngine {
     return isComplete;
   }
 
+  private disposeMeterRuntimeSafely(runtime: IAudioMeterRuntime, errorMessage: string): boolean {
+    this.pendingMeterRuntimeCleanup.add(runtime);
+    if (!this.disposedMeterRuntimes.has(runtime)) {
+      const isDisposed = this.tryCleanupStep(() => runtime.dispose(), errorMessage);
+      if (isDisposed) {
+        this.disposedMeterRuntimes.add(runtime);
+      }
+    }
+
+    const isComplete = this.disposedMeterRuntimes.has(runtime);
+    if (isComplete) {
+      this.pendingMeterRuntimeCleanup.delete(runtime);
+    }
+    return isComplete;
+  }
+
   private applyGraphAudibility(graph: AudioProjectGraphState): void {
     graph.channels.forEach((channel, trackId) => {
       const shouldMute = this.isTrackMutedInGraph(graph, trackId);
@@ -1477,6 +1606,9 @@ export class AudioEngine implements IAudioEngine {
     );
     [...this.pendingPluginRuntimeCleanup].forEach(runtime =>
       this.disposePluginRuntimeSafely(runtime, '대기 중인 Plugin runtime 정리에 실패했습니다.')
+    );
+    [...this.pendingMeterRuntimeCleanup].forEach(runtime =>
+      this.disposeMeterRuntimeSafely(runtime, '대기 중인 Meter runtime 정리에 실패했습니다.')
     );
     [...this.pendingGraphCleanup].forEach(graph =>
       this.disposeGraph(graph, '대기 중인 프로젝트 그래프 정리에 실패했습니다.')

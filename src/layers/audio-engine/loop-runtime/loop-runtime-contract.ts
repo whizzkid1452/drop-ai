@@ -1,6 +1,8 @@
 import type { LoopLengthBars } from '../../shared/loop-time';
 import type { ResourceCleanupResult } from '../../shared/types/resource-cleanup';
 import type { LoopSlotRuntimeState } from '../../shared/types/loop-state';
+import type { MeterFrame } from '../../shared/types/meter-frame';
+import type { LiveAudioInputDevice } from '../../shared/types/live-input';
 
 export type LoopRuntimeState = LoopSlotRuntimeState;
 export type LoopCaptureMode = 'initial' | 'overdub';
@@ -77,7 +79,9 @@ export interface ILoopAudioRuntime {
   clear(address: LoopSlotAddress): void;
   clearTrack(trackId: string): void;
   load(request: LoadLoopRuntimeRequest): Promise<void>;
+  listInputDevices(): Promise<readonly LiveAudioInputDevice[]>;
   prepareReplacement(requests: readonly LoadLoopRuntimeRequest[]): Promise<IPreparedLoopRuntimeReplacement>;
+  readInputMeterFrame(): MeterFrame;
   setInputDevice(deviceId: string | null): Promise<string | null>;
   setMonitoring(request: SetLiveInputMonitoringRuntimeRequest): Promise<void>;
   stop(request: TriggerLoopRequest): void;

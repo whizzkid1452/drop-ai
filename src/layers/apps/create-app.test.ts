@@ -6,6 +6,7 @@ import { CommandExecutor } from '../commands/command-executor';
 import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { PlaybackClockQuery } from '../queries/playback-clock-query';
 import { MeterQuery } from '../queries/meter-query';
+import { LiveInputQuery } from '../queries/live-input-query';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import type { IProjectSyncService } from '../project-sync/i-project-sync';
 import { AudioCommandType } from '../shared/types/audioCommand.schema';
@@ -497,6 +498,17 @@ describe('createApp', () => {
     expect(app.meter).toBeInstanceOf(MeterQuery);
     expect(app.meter.read({ kind: 'master' })).toMatchObject({ capturedAtSeconds: 2 });
     expect('audioEngine' in app).toBe(false);
+  });
+
+  it('입력 장치와 monitoring 상태를 읽기 전용 LiveInputQuery로 조립한다', async () => {
+    const audioEngine = new MockAudioEngine();
+    audioEngine.setMockLiveInputDevices([{ deviceId: 'mic-1', label: 'Mic' }]);
+
+    const app = createTestApp({ audioEngine });
+
+    expect(app.liveInput).toBeInstanceOf(LiveInputQuery);
+    await expect(app.liveInput.listDevices()).resolves.toEqual([{ deviceId: 'mic-1', label: 'Mic' }]);
+    expect(app.liveInput.readState()).toEqual({ deviceId: null, monitoringTrackId: null });
   });
 
   it('CLI 테스트용 AudioEngine도 Composition Root에서 조립한다', async () => {

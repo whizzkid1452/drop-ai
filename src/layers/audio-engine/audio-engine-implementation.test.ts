@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface ChannelMockState {
   destination?: unknown;
+  destinations: unknown[];
   mute: boolean;
   solo: boolean;
   volume: {
@@ -20,6 +21,7 @@ interface PlayerMockState {
 interface GainMockState {
   disposed: boolean;
   destination?: unknown;
+  destinations: unknown[];
   readonly gain: {
     value: number;
     rampTo: (value: number, rampSeconds: number) => void;
@@ -33,7 +35,13 @@ interface DistortionMockState {
   oversample: 'none' | '2x' | '4x';
 }
 
+interface AnalyserMockState {
+  disposed: boolean;
+  values: Float32Array | Float32Array[];
+}
+
 const toneMocks = vi.hoisted(() => ({
+  analysers: [] as AnalyserMockState[],
   channelOptions: [] as Array<{ volume: number; pan: number }>,
   channels: [] as ChannelMockState[],
   distortions: [] as DistortionMockState[],
@@ -74,6 +82,7 @@ const toneMocks = vi.hoisted(() => ({
   transportSeconds: 0,
   transportSecondsFailures: [] as Array<Error | undefined>,
   transportState: 'stopped' as 'paused' | 'started' | 'stopped',
+  contextTimeSeconds: 0,
 }));
 
 vi.mock('tone', () => {
@@ -89,8 +98,28 @@ vi.mock('tone', () => {
     };
   });
 
+  class Analyser implements AnalyserMockState {
+    disposed = false;
+    values: Float32Array | Float32Array[] = [new Float32Array(4), new Float32Array(4)];
+
+    constructor(options: unknown) {
+      void options;
+      toneMocks.analysers.push(this);
+    }
+
+    dispose() {
+      this.disposed = true;
+      return this;
+    }
+
+    getValue() {
+      return this.values;
+    }
+  }
+
   class Channel implements ChannelMockState {
     destination?: unknown;
+    destinations: unknown[] = [];
     private soloed = false;
     private unmutedVolume = 0;
     volume = {
@@ -138,6 +167,10 @@ vi.mock('tone', () => {
 
     connect(destination: unknown) {
       this.destination = destination;
+      this.destinations.push(destination);
+      if (destination instanceof Analyser) {
+        return this;
+      }
       toneMocks.channelConnect();
       const failure = toneMocks.channelConnectFailures.shift();
       if (failure) {
@@ -158,6 +191,7 @@ vi.mock('tone', () => {
   class Gain implements GainMockState {
     disposed = false;
     destination?: unknown;
+    destinations: unknown[] = [];
     readonly gain: GainMockState['gain'];
 
     constructor(options?: number | { gain?: number }) {
@@ -189,6 +223,10 @@ vi.mock('tone', () => {
 
     connect(destination: unknown) {
       this.destination = destination;
+      this.destinations.push(destination);
+      if (destination instanceof Analyser) {
+        return this;
+      }
       toneMocks.gainConnect();
       const failure = toneMocks.gainConnectFailures.shift();
       if (failure) {
@@ -350,6 +388,7 @@ vi.mock('tone', () => {
   };
 
   return {
+    Analyser,
     Channel,
     Distortion,
     Gain,
@@ -359,6 +398,7 @@ vi.mock('tone', () => {
     gainToDb: (value: number) => (value === 0 ? Number.NEGATIVE_INFINITY : value),
     getContext: () => ({ state: 'running' }),
     getTransport: () => transport,
+    now: () => toneMocks.contextTimeSeconds,
     Offline: toneMocks.offline,
     start: vi.fn(),
   };
@@ -417,6 +457,10 @@ class LoopRuntimeStub implements ILoopAudioRuntime {
     void _request;
   }
 
+  async listInputDevices() {
+    return [{ deviceId: 'input-1', label: 'Input 1' }];
+  }
+
   async prepareReplacement(requests: readonly LoadLoopRuntimeRequest[]) {
     this.prepareReplacementRequests.push([...requests]);
     return {
@@ -429,13 +473,17 @@ class LoopRuntimeStub implements ILoopAudioRuntime {
     };
   }
 
-  async setInputDevice(deviceId: string | null): Promise<string | null> {
-    return deviceId;
+  readInputMeterFrame() {
+    return {
+      capturedAtSeconds: 4,
+      channels: [{ isClipHeld: false, peakDbfs: -3, rmsDbfs: -9 }],
+    };
   }
 
-  async setMonitoring(_request: SetLiveInputMonitoringRuntimeRequest): Promise<void> {
+  readonly setInputDevice = vi.fn(async (deviceId: string | null): Promise<string | null> => deviceId);
+  readonly setMonitoring = vi.fn(async (_request: SetLiveInputMonitoringRuntimeRequest): Promise<void> => {
     void _request;
-  }
+  });
 
   stop(_request: TriggerLoopRequest): void {
     void _request;
@@ -486,6 +534,7 @@ function createSaturationAudioEngine(): AudioEngine {
 describe('AudioEngine 실시간 상태 일관성', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    toneMocks.analysers.length = 0;
     toneMocks.channelOptions.length = 0;
     toneMocks.channels.length = 0;
     toneMocks.distortions.length = 0;
@@ -504,6 +553,7 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     toneMocks.transportSeconds = 0;
     toneMocks.transportSecondsFailures.length = 0;
     toneMocks.transportState = 'stopped';
+    toneMocks.contextTimeSeconds = 0;
   });
 
   afterEach(() => {
@@ -527,6 +577,75 @@ describe('AudioEngine 실시간 상태 일관성', () => {
 
     expect(toneMocks.gainRampTo).toHaveBeenCalledWith(0.4, 0.1);
     expect(toneMocks.outputGains[0]?.gain.value).toBe(0.4);
+  });
+
+  it('Master와 Track의 post-fader node에 Meter를 연결하고 dBFS frame을 읽는다', async () => {
+    const engine = new AudioEngine();
+    toneMocks.contextTimeSeconds = 2.5;
+    toneMocks.analysers[0].values = [new Float32Array([0.5]), new Float32Array([0.25])];
+
+    await engine.addTrack('track-1');
+    toneMocks.analysers[1].values = [new Float32Array([1]), new Float32Array([0])];
+
+    expect(toneMocks.outputGains[0].destinations).toContain(toneMocks.analysers[0]);
+    expect(toneMocks.channels[0].destinations).toContain(toneMocks.analysers[1]);
+    expect(engine.readMeterFrame({ kind: 'master' })).toMatchObject({
+      capturedAtSeconds: 2.5,
+      channels: [{ peakDbfs: expect.closeTo(-6.0206, 4) }, { peakDbfs: expect.closeTo(-12.0412, 4) }],
+    });
+    expect(engine.readMeterFrame({ kind: 'track', trackId: 'track-1' })).toMatchObject({
+      channels: [{ isClipHeld: true, peakDbfs: 0 }, { peakDbfs: -Infinity }],
+    });
+  });
+
+  it('Track 제거 시 해당 Meter runtime도 정리한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addTrack('track-1');
+    const trackAnalyser = toneMocks.analysers[1];
+
+    engine.removeTrack('track-1');
+
+    expect(trackAnalyser.disposed).toBe(true);
+    expect(() => engine.readMeterFrame({ kind: 'track', trackId: 'track-1' })).toThrowError(
+      expect.objectContaining({ code: AudioEngineErrorCode.TRACK_NOT_FOUND })
+    );
+  });
+
+  it('입력 Meter는 구성된 Loop runtime에서 읽는다', () => {
+    const loopRuntime = new LoopRuntimeStub();
+    const engine = new AudioEngine({ loopRuntime });
+
+    expect(engine.readMeterFrame({ kind: 'input' })).toEqual({
+      capturedAtSeconds: 4,
+      channels: [{ isClipHeld: false, peakDbfs: -3, rmsDbfs: -9 }],
+    });
+  });
+
+  it('선택한 입력 장치와 monitoring Track을 runtime 상태로 유지한다', async () => {
+    const loopRuntime = new LoopRuntimeStub();
+    const engine = new AudioEngine({ loopRuntime });
+    const listener = vi.fn();
+    const unsubscribe = engine.subscribeLiveInputState(listener);
+    await engine.addTrack('track-1');
+    await engine.addTrack('track-2');
+
+    await expect(engine.listLiveInputDevices()).resolves.toEqual([{ deviceId: 'input-1', label: 'Input 1' }]);
+    await engine.setLiveInputDevice('input-1');
+    await engine.setLiveInputMonitoring({ enabled: true, trackId: 'track-1' });
+    await engine.setLiveInputMonitoring({ enabled: false, trackId: 'track-2' });
+
+    expect(engine.getLiveInputState()).toEqual({ deviceId: 'input-1', monitoringTrackId: 'track-1' });
+    expect(loopRuntime.setMonitoring).toHaveBeenCalledOnce();
+
+    await engine.setLiveInputMonitoring({ enabled: false, trackId: 'track-1' });
+    expect(engine.getLiveInputState()).toEqual({ deviceId: 'input-1', monitoringTrackId: null });
+    expect(listener).toHaveBeenNthCalledWith(1, { deviceId: 'input-1', monitoringTrackId: null });
+    expect(listener).toHaveBeenNthCalledWith(2, { deviceId: 'input-1', monitoringTrackId: 'track-1' });
+    expect(listener).toHaveBeenNthCalledWith(3, { deviceId: 'input-1', monitoringTrackId: null });
+
+    unsubscribe();
+    await engine.setLiveInputDevice(null);
+    expect(listener).toHaveBeenCalledTimes(3);
   });
 
   it('mute 중 볼륨 변경은 음소거를 유지하고 unmute 전에 목표 볼륨을 적용한다', async () => {
@@ -1367,6 +1486,18 @@ describe('AudioEngine 실시간 상태 일관성', () => {
 
     retired.dispose();
     expect(loopRuntime.disposeRetired).toHaveBeenCalledOnce();
+  });
+
+  it('프로젝트 그래프를 교체하면 이전 Track의 monitoring 상태를 제거한다', async () => {
+    const loopRuntime = new LoopRuntimeStub();
+    const engine = new AudioEngine({ loopRuntime });
+    await engine.addTrack('current-track');
+    await engine.setLiveInputMonitoring({ enabled: true, trackId: 'current-track' });
+    const replacement = await engine.prepareProjectGraph({ tracks: [] });
+
+    replacement.activate();
+
+    expect(engine.getLiveInputState().monitoringTrackId).toBeNull();
   });
 
   it('프로젝트 그래프를 준비할 때 Plugin을 저장 순서대로 연결한다', async () => {
