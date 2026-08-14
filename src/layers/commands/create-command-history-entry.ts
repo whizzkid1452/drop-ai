@@ -2,6 +2,7 @@ import type { RegionState, SessionState, TrackState } from '../session/session';
 import type { PluginInstanceState } from '../shared/types/plugin-state';
 import type { TimelineMeterChange, TimelineTempoChange } from '../shared/timeline-coordinate-mapper';
 import type { TimelineMarker } from '../shared/timeline-marker';
+import type { MidiTrackState } from '../shared/types/midi-state';
 import { AudioCommandType, type AudioCommand } from '../shared/types/audioCommand.schema';
 import { cloneRoutingGraphSnapshot } from '../shared/types/routing-state';
 import type { CommandHistoryEntry } from './command-history';
@@ -95,6 +96,20 @@ function areTimelineMarkersEqual(left: readonly TimelineMarker[], right: readonl
       );
     })
   );
+}
+
+function areMidiTrackStatesEqual(left: MidiTrackState, right: MidiTrackState): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function cloneMidiTrackForCommand(midi: MidiTrackState) {
+  return {
+    instrumentId: midi.instrumentId,
+    regions: midi.regions.map(region => ({
+      ...region,
+      notes: region.notes.map(note => ({ ...note })),
+    })),
+  };
 }
 
 function findRegion(session: SessionState, regionId: string, trackId?: string): LocatedRegion | null {
@@ -287,6 +302,17 @@ export function createCommandHistoryEntry({
         label: command.type,
         undoCommand: { type: AudioCommandType.REMOVE_TRACK, trackId: command.trackId },
         redoCommand: command,
+      });
+
+    case AudioCommandType.ADD_MIDI_TRACK:
+      if (beforeSession.tracks.has(command.trackId) || !afterSession.tracks.get(command.trackId)?.midi) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        redoCommand: command,
+        undoCommand: { trackId: command.trackId, type: AudioCommandType.REMOVE_TRACK },
       });
 
     case AudioCommandType.SET_TRACK_NAME: {
@@ -563,6 +589,28 @@ export function createCommandHistoryEntry({
           })),
           trackId: command.trackId,
           type: AudioCommandType.SET_AUTOMATION_LANES,
+        },
+      });
+    }
+
+    case AudioCommandType.SET_MIDI_TRACK_STATE: {
+      const beforeMidi = beforeSession.tracks.get(command.trackId)?.midi;
+      const afterMidi = afterSession.tracks.get(command.trackId)?.midi;
+      if (!beforeMidi || !afterMidi || areMidiTrackStatesEqual(beforeMidi, afterMidi)) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        redoCommand: {
+          midi: cloneMidiTrackForCommand(afterMidi),
+          trackId: command.trackId,
+          type: AudioCommandType.SET_MIDI_TRACK_STATE,
+        },
+        undoCommand: {
+          midi: cloneMidiTrackForCommand(beforeMidi),
+          trackId: command.trackId,
+          type: AudioCommandType.SET_MIDI_TRACK_STATE,
         },
       });
     }
@@ -896,6 +944,7 @@ export function createCommandHistoryEntry({
     case AudioCommandType.COPY_SELECTED_REGIONS:
     case AudioCommandType.PREVIEW_AUTOMATION_WRITE_PASS:
     case AudioCommandType.CANCEL_AUTOMATION_WRITE_PREVIEW:
+    case AudioCommandType.MIDI_PANIC:
     case AudioCommandType.EXPORT_AUDIO:
     case AudioCommandType.SAVE_PROJECT:
     case AudioCommandType.LOAD_PROJECT:

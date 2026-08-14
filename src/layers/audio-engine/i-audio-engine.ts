@@ -115,6 +115,11 @@ export interface SetAutomationLanesRequest {
   readonly trackId: string;
 }
 
+export interface SetMidiTrackStateRequest {
+  readonly midi: MidiTrackState;
+  readonly trackId: string;
+}
+
 export interface AudioTempoChange {
   readonly quarterNotePosition: number;
   readonly bpm: number;
@@ -252,6 +257,7 @@ export interface IAudioEngine {
 
   // Track Management
   addTrack(trackId: string): Promise<void>;
+  addMidiTrack(trackId: string): Promise<void>;
   removeTrack(trackId: string): void;
   setTrackVolume(trackId: string, volume: number): void;
   setTrackPan(trackId: string, pan: number): void;
@@ -259,6 +265,8 @@ export interface IAudioEngine {
   setTrackSolo(trackId: string, soloed: boolean): void;
   getTrackParams(trackId: string): { volume: number; pan: number } | null;
   setAutomationLanes(request: SetAutomationLanesRequest): void;
+  setMidiTrackState(request: SetMidiTrackStateRequest): void;
+  midiPanic(): void;
 
   // Plugin Management
   installPlugin(request: InstallAudioPluginRequest): void;

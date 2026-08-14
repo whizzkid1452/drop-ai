@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DAW_AUDIO_PROVIDER_SUPPORT, DawAudioProviderBridge, DawEngineAdapter } from './daw-engine-adapter';
 import { AudioEngineErrorCode, UnsupportedAudioFeatureError } from './errors';
 import { MockAudioEngine } from './mock-audio-engine';
@@ -11,6 +11,7 @@ describe('DawEngineAdapter', () => {
     expect(DAW_AUDIO_PROVIDER_SUPPORT.start).toBe('runtime-delegated');
     expect(DAW_AUDIO_PROVIDER_SUPPORT.connectIO).toBe('adapter-handled');
     expect(DAW_AUDIO_PROVIDER_SUPPORT.getMeterData).toBe('unsupported');
+    expect(DAW_AUDIO_PROVIDER_SUPPORT.scheduleMidiRegion).toBe('adapter-handled');
   });
 
   it('미지원 Provider 메서드를 기능 식별자가 있는 오류로 거부한다', () => {
@@ -81,6 +82,40 @@ describe('DawEngineAdapter', () => {
       metronomeVolume: 0.5,
       tempoChanges: changes,
     });
+  });
+
+  it('MIDI Track과 Region 상태를 DAW domain과 제품 runtime에 함께 반영한다', async () => {
+    const runtime = new MockAudioEngine();
+    const engine = new DawEngineAdapter({ runtime });
+    const midi = {
+      instrumentId: 'builtin.poly-synth',
+      regions: [
+        {
+          durationSeconds: 2,
+          id: '11111111-1111-4111-8111-111111111111',
+          name: 'Verse',
+          notes: [
+            {
+              channel: 1,
+              durationSeconds: 0.5,
+              id: '22222222-2222-4222-8222-222222222222',
+              pitch: 60,
+              startOffsetSeconds: 0.25,
+              velocity: 100,
+            },
+          ],
+          startTimeSeconds: 1,
+        },
+      ],
+    };
+    const panic = vi.spyOn(runtime, 'midiPanic');
+
+    await engine.addMidiTrack('midi-track-1');
+    engine.setMidiTrackState({ midi, trackId: 'midi-track-1' });
+    engine.midiPanic();
+
+    expect(runtime.getMockMidiTrackState('midi-track-1')).toEqual(midi);
+    expect(panic).toHaveBeenCalledTimes(1);
   });
 
   it('Region 추가를 DAW playlist signal을 통해 runtime에 예약한다', async () => {
