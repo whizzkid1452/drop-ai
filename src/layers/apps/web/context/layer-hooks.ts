@@ -20,6 +20,8 @@ import type { IEditorQuery } from '../../../queries/editor-query';
 import type { EditorRuntimeState } from '../../../shared/types/editor-runtime';
 import type { IAudioMonitorQuery } from '../../../queries/audio-monitor-query';
 import type { AudioMonitorState } from '../../../shared/types/audio-monitor-state';
+import type { IMidiRecordingQuery } from '../../../queries/midi-recording-query';
+import type { MidiRecordingRuntimeState } from '../../../shared/types/midi-recording';
 
 export function useAudioRuntimeCapabilities(): AudioRuntimeCapabilities {
   return useLayer().audioRuntimeCapabilities;
@@ -52,6 +54,17 @@ export function useCommandExecutor(): CommandExecutor {
 
 export function useMidiInput(): IMidiInput {
   return useLayer().midiInput;
+}
+
+export function useMidiRecordingQuery(): IMidiRecordingQuery {
+  return useLayer().midiRecording;
+}
+
+export function useMidiRecordingRuntimeState(): MidiRecordingRuntimeState {
+  const midiRecording = useMidiRecordingQuery();
+  const subscribe = useCallback((listener: () => void) => midiRecording.subscribe(listener), [midiRecording]);
+  const getSnapshot = useCallback(() => midiRecording.readState(), [midiRecording]);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 export function useCommandHistory(): CommandHistorySnapshot {

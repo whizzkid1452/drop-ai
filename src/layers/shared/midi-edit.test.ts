@@ -58,7 +58,7 @@ describe('MIDI note 편집', () => {
     expect(midi.regions[0]?.notes[0]?.startOffsetSeconds).toBe(0.37);
   });
 
-  it('Region 끝을 넘는 quantize 결과를 Note 길이만큼 앞에서 제한한다', () => {
+  it('Region 끝을 넘는 quantize 결과를 Region 안의 마지막 grid로 제한한다', () => {
     const midi = createMidi();
     const secondNote = midi.regions[0]?.notes[1];
     const firstNote = midi.regions[0]?.notes[0];
@@ -83,7 +83,7 @@ describe('MIDI note 편집', () => {
       stepSeconds: 1,
     });
 
-    expect(result.regions[0]?.notes[1]?.startOffsetSeconds).toBe(1.5);
+    expect(result.regions[0]?.notes[1]?.startOffsetSeconds).toBe(1);
   });
 
   it('선택 Note만 반음 단위로 이동한다', () => {

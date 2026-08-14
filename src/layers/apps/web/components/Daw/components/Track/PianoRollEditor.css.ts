@@ -67,6 +67,28 @@ export const inspectorInput = style({
   fontSize: '8px',
 });
 
+export const controlLaneEditor = style({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+  paddingTop: '4px',
+  borderTop: '1px solid #343a3d',
+});
+
+export const controlLaneActions = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '4px',
+  flexWrap: 'wrap',
+});
+
+export const controlPoint = style({
+  display: 'grid',
+  gridTemplateColumns: 'minmax(70px, 1fr) minmax(70px, 1fr) auto',
+  alignItems: 'end',
+  gap: '4px',
+});
+
 export const error = style({ color: '#ff9d9d' });
 
 export const roll = style({
