@@ -5,7 +5,7 @@
  * onsets and transient events in audio data.  The algorithm:
  *
  *   1. Slide a Hann window across the signal (window size 1024, hop 512).
- *   2. Compute the magnitude spectrum via a real-valued DFT.
+ *   2. Compute the magnitude spectrum via a real-valued FFT.
  *   3. For each frame, compute spectral flux — the sum of positive
  *      differences between the current and previous magnitude spectrum.
  *   4. Peak-pick: choose frames whose spectral flux exceeds a local
@@ -15,6 +15,8 @@
  * This is intentionally a pure-TypeScript implementation that runs without
  * Web Audio API so it can be used in headless / test environments.
  */
+
+import { computeRealFftMagnitudes } from "./real-fft";
 
 const DEFAULT_WINDOW_SIZE = 1024;
 const DEFAULT_HOP_SIZE = 512;
@@ -52,7 +54,7 @@ export function detectTransients(
   const numFrames = Math.floor((samples.length - windowSize) / hopSize) + 1;
   const fluxValues: number[] = new Array(numFrames);
 
-  let prevMagnitudes: number[] = new Array(halfWindow + 1).fill(0);
+  let previousMagnitudes: ArrayLike<number> = new Float64Array(halfWindow + 1);
 
   for (let frame = 0; frame < numFrames; frame++) {
     const offset = frame * hopSize;
@@ -63,19 +65,18 @@ export function detectTransients(
       windowed[i] = samples[offset + i] * hann[i];
     }
 
-    // Compute magnitude spectrum via real DFT (only positive frequencies)
-    const magnitudes = realDFTMagnitudes(windowed, halfWindow);
+    const magnitudes = computeRealFftMagnitudes(windowed);
 
     // Spectral flux: sum of positive differences
     let flux = 0;
     for (let k = 0; k <= halfWindow; k++) {
-      const diff = magnitudes[k] - prevMagnitudes[k];
+      const diff = magnitudes[k] - previousMagnitudes[k];
       if (diff > 0) {
         flux += diff;
       }
     }
     fluxValues[frame] = flux;
-    prevMagnitudes = magnitudes;
+    previousMagnitudes = magnitudes;
   }
 
   // Adaptive peak picking using a median-based threshold
@@ -101,29 +102,4 @@ export function detectTransients(
   }
 
   return transients;
-}
-
-/**
- * Compute magnitude spectrum for real-valued input via a naive DFT.
- *
- * Only computes bins 0..N/2 (positive frequencies).  This is O(N * N/2)
- * which is acceptable for small window sizes (1024).
- */
-function realDFTMagnitudes(input: Float32Array, halfN: number): number[] {
-  const N = input.length;
-  const mags: number[] = new Array(halfN + 1);
-
-  for (let k = 0; k <= halfN; k++) {
-    let re = 0;
-    let im = 0;
-    const freqFactor = (2 * Math.PI * k) / N;
-    for (let n = 0; n < N; n++) {
-      const angle = freqFactor * n;
-      re += input[n] * Math.cos(angle);
-      im -= input[n] * Math.sin(angle);
-    }
-    mags[k] = Math.sqrt(re * re + im * im);
-  }
-
-  return mags;
 }
