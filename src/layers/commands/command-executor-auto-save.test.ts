@@ -67,7 +67,7 @@ describe('CommandExecutor 로컬 자동 저장', () => {
     await app.commandExecutor.execute({ type: AudioCommandType.SET_TIMELINE_MARKERS, markers: [marker] });
 
     await expect(projectRepository.load(PROJECT_ID)).resolves.toMatchObject({
-      schemaVersion: 9,
+      schemaVersion: 10,
       timeline: { markers: [marker] },
     });
   });
