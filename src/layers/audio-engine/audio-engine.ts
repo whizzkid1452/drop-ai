@@ -111,6 +111,14 @@ import {
   type RenderJobState,
   type RenderJobStateListener,
 } from '../shared/types/render-job';
+import type { AudioEngineRuntimeHealth, RuntimeAudioContextState } from '../shared/types/runtime-diagnostics';
+
+function normalizeAudioContextState(state: string): RuntimeAudioContextState {
+  if (state === 'closed' || state === 'interrupted' || state === 'running' || state === 'suspended') {
+    return state;
+  }
+  return 'unavailable';
+}
 
 interface RegionPlayerEntry {
   players: Tone.Player[];
@@ -351,6 +359,28 @@ export class AudioEngine implements IAudioEngine {
 
   getFeatureSupport(): AudioRuntimeFeatureSupport {
     return this.featureSupport;
+  }
+
+  getRuntimeHealth(): AudioEngineRuntimeHealth {
+    return {
+      audioContextState: normalizeAudioContextState(Tone.getContext().state),
+      pendingCleanupResourceCount:
+        this.pendingGraphCleanup.size +
+        this.pendingChannelCleanup.size +
+        this.pendingOutputCleanup.size +
+        this.pendingTrackInputCleanup.size +
+        this.pendingPlayerCleanup.size +
+        this.pendingPluginRuntimeCleanup.size +
+        this.pendingMeterRuntimeCleanup.size,
+    };
+  }
+
+  async resumeRuntime(): Promise<AudioEngineRuntimeHealth> {
+    if (Tone.getContext().state !== 'running') {
+      await Tone.start();
+    }
+    this.retryPendingCleanup();
+    return this.getRuntimeHealth();
   }
 
   async play(): Promise<void> {

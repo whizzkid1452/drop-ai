@@ -1,4 +1,5 @@
 import type WaveSurfer from 'wavesurfer.js';
+import { RUNTIME_DIAGNOSTIC_BUDGETS } from '@/layers/shared/types/runtime-diagnostics';
 
 const MAX_RENDERED_CHANNELS = 2;
 
@@ -73,4 +74,11 @@ export function pruneWaveformRenderCache({ cache, activeSourceIds }: PruneWavefo
       cache.delete(sourceId);
     }
   });
+  while (cache.size > RUNTIME_DIAGNOSTIC_BUDGETS.maximumWaveformCacheEntries) {
+    const oldestSourceId = cache.keys().next().value;
+    if (oldestSourceId === undefined) {
+      return;
+    }
+    cache.delete(oldestSourceId);
+  }
 }
