@@ -7,6 +7,7 @@ import type {
   ScheduledPcmCapture,
   StartPcmCaptureRequest,
 } from './live-pcm-capture';
+import { RUNTIME_DIAGNOSTIC_BUDGETS } from '../../shared/types/runtime-diagnostics';
 
 const PCM_CAPTURE_PROCESSOR_NAME = 'loop-pcm-capture';
 const PCM_CAPTURE_WORKLET_URL = '/loop-pcm-capture-worklet.js';
@@ -37,6 +38,10 @@ interface CreateCaptureSessionRequest extends StartPcmCaptureRequest {
   readonly initialMessage: Readonly<Record<string, number | string>>;
 }
 
+interface AudioWorkletPcmCaptureOptions {
+  readonly maximumCapturedBytes?: number;
+}
+
 function loadCaptureModule(workletRuntime: PcmCaptureWorkletRuntime): Promise<void> {
   const currentLoad = moduleLoads.get(workletRuntime);
   if (currentLoad) {
@@ -60,6 +65,14 @@ function concatenateChunks(chunks: readonly Float32Array[]): Float32Array {
 }
 
 export class AudioWorkletPcmCapture implements ILivePcmCapture {
+  readonly #maximumCapturedBytes: number;
+
+  constructor({
+    maximumCapturedBytes = RUNTIME_DIAGNOSTIC_BUDGETS.maximumPcmCaptureBytes,
+  }: AudioWorkletPcmCaptureOptions = {}) {
+    this.#maximumCapturedBytes = maximumCapturedBytes;
+  }
+
   async schedule(request: SchedulePcmCaptureRequest): Promise<ScheduledPcmCapture> {
     const capacityFrames = Math.max(1, Math.round(request.durationSeconds * request.audioContext.sampleRate));
     const startFrame = Math.round(request.startTimeSeconds * request.audioContext.sampleRate);
@@ -97,6 +110,7 @@ export class AudioWorkletPcmCapture implements ILivePcmCapture {
     silentGain.connect(request.audioContext.destination);
 
     let channelChunks: Float32Array[][] | null = null;
+    let capturedByteLength = 0;
     let isSettled = false;
     let resolveCompletion: ((capturedPcm: CapturedPcm) => void) | undefined;
     let rejectCompletion: ((error: Error) => void) | undefined;
@@ -148,6 +162,11 @@ export class AudioWorkletPcmCapture implements ILivePcmCapture {
         if (event.data.channels.length === 0) {
           throw new Error('캡처된 PCM 채널이 없습니다.');
         }
+        const nextChunkByteLength = event.data.channels.reduce((sum, channel) => sum + channel.byteLength, 0);
+        if (capturedByteLength + nextChunkByteLength > this.#maximumCapturedBytes) {
+          throw new RangeError('PCM 캡처가 메모리 안전 한도를 초과했습니다. 녹음을 나누어 진행해 주세요.');
+        }
+        capturedByteLength += nextChunkByteLength;
         channelChunks ??= event.data.channels.map(() => []);
         if (channelChunks.length !== event.data.channels.length) {
           throw new Error('캡처 중 PCM 채널 수가 변경되었습니다.');

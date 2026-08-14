@@ -61,6 +61,21 @@ describe('DawEngineAdapter', () => {
     expect(runtime.getCurrentTime()).toBe(3.5);
   });
 
+  it('중단된 runtime 재개와 정리 상태 조회를 제품 runtime에 위임한다', async () => {
+    const runtime = new MockAudioEngine();
+    runtime.setMockRuntimeHealth({ audioContextState: 'suspended', pendingCleanupResourceCount: 1 });
+    const engine = new DawEngineAdapter({ runtime });
+
+    expect(engine.getRuntimeHealth()).toEqual({
+      audioContextState: 'suspended',
+      pendingCleanupResourceCount: 1,
+    });
+    await expect(engine.resumeRuntime()).resolves.toEqual({
+      audioContextState: 'running',
+      pendingCleanupResourceCount: 1,
+    });
+  });
+
   it('Tempo Map·Loop·Metronome을 제품 runtime에 위임한다', () => {
     const runtime = new MockAudioEngine();
     const engine = new DawEngineAdapter({ runtime });

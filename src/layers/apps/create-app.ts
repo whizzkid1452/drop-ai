@@ -35,6 +35,7 @@ import { ProjectCatalogQuery, type IProjectCatalogQuery } from '../queries/proje
 import { PluginRuntimeQuery, type IPluginRuntimeQuery } from '../queries/plugin-runtime-query';
 import { createBrowserCanPlayType, MediaSourceQuery, type IMediaSourceQuery } from '../queries/media-source-query';
 import { RenderJobQuery, type IRenderJobQuery } from '../queries/render-job-query';
+import { RuntimeDiagnosticsQuery, type IRuntimeDiagnosticsQuery } from '../queries/runtime-diagnostics-query';
 import type { ILocalFirstProjectRepository } from '../project-repository/i-project-repository';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import { IndexedDbProjectRepository } from '../project-repository/indexed-db-project-repository';
@@ -85,6 +86,7 @@ export interface AppInstance {
   pluginRuntime: IPluginRuntimeQuery;
   mediaSource: IMediaSourceQuery;
   renderJob: IRenderJobQuery;
+  runtimeDiagnostics: IRuntimeDiagnosticsQuery;
   readonly sessionRecovery?: ISessionRecoveryQuery;
 }
 
@@ -295,6 +297,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     canPlayType: createBrowserCanPlayType(),
   });
   const renderJob = new RenderJobQuery(audioEngine);
+  const runtimeDiagnostics = new RuntimeDiagnosticsQuery({ audioEngine });
   const audioRuntimeEnvironment = options.audioRuntimeEnvironment ?? readAudioRuntimeEnvironment();
   const audioRuntimeCapabilities = resolveAudioRuntimeCapabilities(
     audioRuntimeEnvironment,
@@ -324,6 +327,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     pluginRuntime,
     mediaSource,
     renderJob,
+    runtimeDiagnostics,
     sessionRecovery,
   };
 }

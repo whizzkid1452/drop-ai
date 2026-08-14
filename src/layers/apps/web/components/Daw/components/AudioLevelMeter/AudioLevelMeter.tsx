@@ -9,8 +9,7 @@ import {
   type MeterDisplay,
 } from './audio-level-meter-display';
 import * as styles from './AudioLevelMeter.css.ts';
-
-const METER_REFRESH_INTERVAL_MS = 50;
+import { RUNTIME_DIAGNOSTIC_BUDGETS } from '@/layers/shared/types/runtime-diagnostics';
 
 export function AudioLevelMeter({ label, target }: { readonly label: string; readonly target: MeterTarget }) {
   const meterQuery = useMeterQuery();
@@ -30,7 +29,7 @@ export function AudioLevelMeter({ label, target }: { readonly label: string; rea
     };
 
     readMeter();
-    const intervalId = window.setInterval(readMeter, METER_REFRESH_INTERVAL_MS);
+    const intervalId = window.setInterval(readMeter, RUNTIME_DIAGNOSTIC_BUDGETS.meterRefreshIntervalMilliseconds);
     return () => window.clearInterval(intervalId);
   }, [meterQuery, targetKind, targetTrackId]);
 

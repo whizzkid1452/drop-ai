@@ -6,6 +6,7 @@ import {
   storeWaveformRenderData,
   type WaveformRenderCache,
 } from './waveform-render-cache';
+import { RUNTIME_DIAGNOSTIC_BUDGETS } from '@/layers/shared/types/runtime-diagnostics';
 
 const sourceId = '41e673bf-5467-4d36-a716-2d80a76ac82f';
 
@@ -37,6 +38,22 @@ describe('Waveform render cache', () => {
       objectUrl: 'blob:source',
       peaks: [firstChannel, secondChannel],
     });
+  });
+
+  it('활성 Source가 많아도 waveform cache 예산을 넘지 않는다', () => {
+    const entryCount = RUNTIME_DIAGNOSTIC_BUDGETS.maximumWaveformCacheEntries + 1;
+    const cache: WaveformRenderCache = new Map(
+      Array.from({ length: entryCount }, (_, index) => [
+        `source-${index}`,
+        { duration: 1, objectUrl: `blob:${index}`, peaks: [new Float32Array([0])] },
+      ])
+    );
+    const activeSourceIds = new Set(cache.keys());
+
+    pruneWaveformRenderCache({ cache, activeSourceIds });
+
+    expect(cache.size).toBe(RUNTIME_DIAGNOSTIC_BUDGETS.maximumWaveformCacheEntries);
+    expect(cache.has('source-0')).toBe(false);
   });
 
   it('does not return data when the object URL no longer identifies the same runtime source', () => {

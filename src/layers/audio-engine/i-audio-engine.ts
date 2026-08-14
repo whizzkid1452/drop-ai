@@ -1,4 +1,5 @@
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
+import type { AudioEngineRuntimeHealth } from '../shared/types/runtime-diagnostics';
 import type { AutomationLaneState } from '../shared/types/automation-state';
 import type { MidiTrackState } from '../shared/types/midi-state';
 import type { MidiInputEvent } from '../midi-input/i-midi-input';
@@ -243,6 +244,8 @@ export interface IPreparedAudioProjectGraph {
 
 export interface IAudioEngine {
   getFeatureSupport(): AudioRuntimeFeatureSupport;
+  getRuntimeHealth(): AudioEngineRuntimeHealth;
+  resumeRuntime(): Promise<AudioEngineRuntimeHealth>;
 
   // Transport Control
   play(): Promise<void>;

@@ -27,6 +27,8 @@ import type { IMediaSourceQuery } from '../../../queries/media-source-query';
 import type { IRenderJobQuery } from '../../../queries/render-job-query';
 import type { RenderJobState } from '../../../shared/types/render-job';
 import type { ISessionRecoveryQuery, SessionRecoveryCheckpoint } from '../../../queries/session-recovery-query';
+import type { IRuntimeDiagnosticsQuery } from '../../../queries/runtime-diagnostics-query';
+import type { RuntimeDiagnosticsState } from '../../../shared/types/runtime-diagnostics';
 
 export function useAudioRuntimeCapabilities(): AudioRuntimeCapabilities {
   return useLayer().audioRuntimeCapabilities;
@@ -160,6 +162,15 @@ export function useRenderJobState(): RenderJobState {
   const subscribe = useCallback((listener: () => void) => renderJob.subscribe(listener), [renderJob]);
   const getSnapshot = useCallback(() => renderJob.readState(), [renderJob]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+export function useRuntimeDiagnosticsQuery(): IRuntimeDiagnosticsQuery {
+  return useLayer().runtimeDiagnostics;
+}
+
+export function useRuntimeDiagnosticsState(): RuntimeDiagnosticsState {
+  const runtimeDiagnostics = useRuntimeDiagnosticsQuery();
+  return useSyncExternalStore(runtimeDiagnostics.subscribe, runtimeDiagnostics.readState, runtimeDiagnostics.readState);
 }
 
 export function useSession<T>(selector: (state: SessionState) => T): T {

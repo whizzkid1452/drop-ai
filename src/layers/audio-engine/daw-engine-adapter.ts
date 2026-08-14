@@ -201,6 +201,14 @@ export class DawEngineAdapter implements IAudioEngine {
     return this.#runtime.getFeatureSupport();
   }
 
+  getRuntimeHealth() {
+    return this.#runtime.getRuntimeHealth();
+  }
+
+  resumeRuntime() {
+    return this.#runtime.resumeRuntime();
+  }
+
   listAvailablePluginManifestIds(): readonly string[] {
     return this.#runtime.listAvailablePluginManifestIds();
   }

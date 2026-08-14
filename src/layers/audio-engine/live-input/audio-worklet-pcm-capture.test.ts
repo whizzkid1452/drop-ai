@@ -198,4 +198,27 @@ describe('AudioWorkletPcmCapture', () => {
       outputChannelCount: [1],
     });
   });
+
+  it('장시간 캡처가 메모리 예산을 넘으면 연결을 정리하고 명시적으로 거부한다', async () => {
+    const source = { connect: vi.fn(), disconnect: vi.fn() };
+    const silentGain = { connect: vi.fn(), disconnect: vi.fn(), gain: { value: 1 } };
+    const audioContext = {
+      createGain: () => silentGain,
+      createMediaStreamSource: () => source,
+      destination: {},
+      sampleRate: 48_000,
+    } as unknown as AudioContext;
+    const session = await new AudioWorkletPcmCapture({ maximumCapturedBytes: 12 }).start({
+      audioContext,
+      onStarted: vi.fn(),
+      startTimeSeconds: 0,
+      stream: {} as MediaStream,
+      workletRuntime: createWorkletRuntime(),
+    });
+
+    AudioWorkletNodeStub.instance?.emit({ channels: [new Float32Array(4)], type: 'chunk' });
+
+    await expect(session.stop()).rejects.toThrow('메모리 안전 한도');
+    expect(source.disconnect).toHaveBeenCalledOnce();
+  });
 });

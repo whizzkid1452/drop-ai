@@ -72,6 +72,7 @@ import {
   type RenderJobState,
   type RenderJobStateListener,
 } from '../shared/types/render-job';
+import type { AudioEngineRuntimeHealth } from '../shared/types/runtime-diagnostics';
 
 interface MockTrackState {
   muted: boolean;
@@ -122,6 +123,10 @@ export class MockAudioEngine implements IAudioEngine {
   private mockMidiTracks = new Map<string, MidiTrackState>();
   private mockRenderJobState: RenderJobState = createIdleRenderJobState();
   private readonly renderJobStateListeners = new Set<RenderJobStateListener>();
+  private mockRuntimeHealth: AudioEngineRuntimeHealth = {
+    audioContextState: 'running',
+    pendingCleanupResourceCount: 0,
+  };
 
   listAvailablePluginManifestIds(): readonly string[] {
     return ['builtin.gain', 'builtin.saturation'];
@@ -138,6 +143,19 @@ export class MockAudioEngine implements IAudioEngine {
 
   getFeatureSupport(): AudioRuntimeFeatureSupport {
     return { ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT, metering: true, midi: true, tempoLoopMetronome: true };
+  }
+
+  getRuntimeHealth(): AudioEngineRuntimeHealth {
+    return { ...this.mockRuntimeHealth };
+  }
+
+  async resumeRuntime(): Promise<AudioEngineRuntimeHealth> {
+    this.mockRuntimeHealth = { ...this.mockRuntimeHealth, audioContextState: 'running' };
+    return this.getRuntimeHealth();
+  }
+
+  setMockRuntimeHealth(health: AudioEngineRuntimeHealth): void {
+    this.mockRuntimeHealth = { ...health };
   }
 
   async addMidiTrack(trackId: string): Promise<void> {
