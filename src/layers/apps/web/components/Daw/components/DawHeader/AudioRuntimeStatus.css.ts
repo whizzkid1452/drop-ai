@@ -1,4 +1,4 @@
-import { style } from '@vanilla-extract/css';
+import { globalStyle, style } from '@vanilla-extract/css';
 
 export const details = style({
   position: 'relative',
@@ -117,3 +117,24 @@ export const unsupported = style({
   backgroundColor: 'rgba(180, 75, 75, 0.18)',
   color: '#e58d8d',
 });
+
+export const diagnosticsPanel = style({
+  borderTop: '1px solid #343a3d',
+  marginTop: '12px',
+  paddingTop: '10px',
+});
+export const diagnosticsList = style({ display: 'grid', gap: '5px', margin: '8px 0' });
+globalStyle(`${diagnosticsList} > div`, { display: 'flex', justifyContent: 'space-between' });
+globalStyle(`${diagnosticsList} dt, ${diagnosticsList} dd`, { margin: 0 });
+globalStyle(`${diagnosticsList} dd[data-status='running'], ${diagnosticsList} dd[data-status='available']`, {
+  color: '#8edda8',
+});
+globalStyle(`${diagnosticsList} dd[data-status='warning'], ${diagnosticsList} dd[data-status='suspended']`, {
+  color: '#e3bf72',
+});
+globalStyle(`${diagnosticsList} dd[data-status='critical'], ${diagnosticsList} dd[data-status='interrupted']`, {
+  color: '#e58d8d',
+});
+globalStyle(`${diagnosticsList} dd[data-status='unavailable']`, { color: '#8f9699' });
+export const diagnosticsError = style({ color: '#e58d8d', fontSize: '10px', margin: '6px 0 0' });
+export const diagnosticsWarning = style({ color: '#e3bf72', fontSize: '10px', margin: '6px 0 0' });

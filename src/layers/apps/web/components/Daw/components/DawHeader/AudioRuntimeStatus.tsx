@@ -1,5 +1,10 @@
-import { useId } from 'react';
-import { useAudioRuntimeCapabilities } from '@/layers/apps/web/context/layer-hooks';
+import { useEffect, useId, useState } from 'react';
+import {
+  useAudioRuntimeCapabilities,
+  useCommandExecutor,
+  useRuntimeDiagnosticsQuery,
+  useRuntimeDiagnosticsState,
+} from '@/layers/apps/web/context/layer-hooks';
 import {
   audioRuntimeBlockerLabels,
   audioRuntimeFeatureLabels,
@@ -7,6 +12,8 @@ import {
   describeAudioRuntimeFeatureCapability,
 } from '@/layers/apps/web/utils/audio-runtime-capability-labels';
 import type { AudioRuntimeCapabilities } from '@/layers/shared/utils/audio-runtime-capabilities';
+import { RUNTIME_DIAGNOSTIC_BUDGETS } from '@/layers/shared/types/runtime-diagnostics';
+import { AudioCommandType } from '@/layers/shared/types/audioCommand.schema';
 import * as styles from './AudioRuntimeStatus.css';
 
 type AudioRuntimeLevel = 'full' | 'limited' | 'standard';
@@ -67,8 +74,20 @@ function resolveStatusDescription(level: AudioRuntimeLevel, capabilities: AudioR
   return `확인 필요: ${collectBlockerLabels(capabilities).join(', ')}`;
 }
 
+function formatStorageUsage(usageRatio: number | null): string {
+  return usageRatio === null ? '조회 불가' : `${(usageRatio * 100).toFixed(1)}%`;
+}
+
+function formatRuntimeRatio(ratio: number | null): string {
+  return ratio === null ? '측정 미지원' : `${(ratio * 100).toFixed(1)}%`;
+}
+
 export function AudioRuntimeStatus() {
   const capabilities = useAudioRuntimeCapabilities();
+  const commandExecutor = useCommandExecutor();
+  const runtimeDiagnostics = useRuntimeDiagnosticsQuery();
+  const runtimeDiagnosticsState = useRuntimeDiagnosticsState();
+  const [resumeError, setResumeError] = useState<string | null>(null);
   const level = resolveAudioRuntimeLevel(capabilities);
   const descriptionId = useId();
   const panelId = useId();
@@ -79,6 +98,27 @@ export function AudioRuntimeStatus() {
       AudioRuntimeCapabilities['features'][keyof AudioRuntimeCapabilities['features']],
     ]
   >;
+
+  useEffect(() => {
+    const refresh = () => void runtimeDiagnostics.refresh();
+    refresh();
+    document.addEventListener('visibilitychange', refresh);
+    const intervalId = window.setInterval(refresh, RUNTIME_DIAGNOSTIC_BUDGETS.diagnosticsRefreshIntervalMilliseconds);
+    return () => {
+      document.removeEventListener('visibilitychange', refresh);
+      window.clearInterval(intervalId);
+    };
+  }, [runtimeDiagnostics]);
+
+  const resumeAudioRuntime = async () => {
+    setResumeError(null);
+    try {
+      await commandExecutor.execute({ type: AudioCommandType.RESUME_AUDIO_RUNTIME });
+      await runtimeDiagnostics.refresh();
+    } catch (error) {
+      setResumeError(error instanceof Error ? error.message : String(error));
+    }
+  };
 
   return (
     <details className={styles.details}>
@@ -110,6 +150,82 @@ export function AudioRuntimeStatus() {
             </li>
           ))}
         </ul>
+        <section aria-label="Runtime 안정성 진단" className={styles.diagnosticsPanel}>
+          <strong>Runtime 안정성 진단</strong>
+          <dl className={styles.diagnosticsList}>
+            <div data-diagnostic="audio-context">
+              <dt>AudioContext</dt>
+              <dd data-status={runtimeDiagnosticsState.audioContextState}>
+                {runtimeDiagnosticsState.audioContextState}
+              </dd>
+            </div>
+            <div data-diagnostic="storage">
+              <dt>저장소</dt>
+              <dd data-status={runtimeDiagnosticsState.storage.status}>
+                {formatStorageUsage(runtimeDiagnosticsState.storage.usageRatio)}
+              </dd>
+            </div>
+            <div data-diagnostic="visibility">
+              <dt>탭 상태</dt>
+              <dd>{runtimeDiagnosticsState.visibilityState}</dd>
+            </div>
+            <div data-diagnostic="cleanup">
+              <dt>정리 대기</dt>
+              <dd data-status={runtimeDiagnosticsState.pendingCleanupResourceCount === 0 ? 'available' : 'warning'}>
+                {runtimeDiagnosticsState.pendingCleanupResourceCount}
+              </dd>
+            </div>
+            <div data-diagnostic="dsp-load">
+              <dt>DSP load</dt>
+              <dd
+                data-status={
+                  runtimeDiagnosticsState.dspLoadRatio === null
+                    ? 'unavailable'
+                    : runtimeDiagnosticsState.dspLoadRatio <= RUNTIME_DIAGNOSTIC_BUDGETS.maximumDspLoadRatio
+                      ? 'available'
+                      : 'warning'
+                }
+              >
+                {formatRuntimeRatio(runtimeDiagnosticsState.dspLoadRatio)}
+              </dd>
+            </div>
+            <div data-diagnostic="offline-render">
+              <dt>최근 offline render</dt>
+              <dd
+                data-status={
+                  runtimeDiagnosticsState.lastOfflineRenderRealtimeRatio === null
+                    ? 'unavailable'
+                    : runtimeDiagnosticsState.lastOfflineRenderRealtimeRatio <=
+                        RUNTIME_DIAGNOSTIC_BUDGETS.maximumOfflineRenderRealtimeRatio
+                      ? 'available'
+                      : 'warning'
+                }
+              >
+                {formatRuntimeRatio(runtimeDiagnosticsState.lastOfflineRenderRealtimeRatio)} realtime
+              </dd>
+            </div>
+          </dl>
+          {runtimeDiagnosticsState.audioContextState !== 'running' ? (
+            <button onClick={() => void resumeAudioRuntime()} type="button">
+              오디오 재개
+            </button>
+          ) : null}
+          {runtimeDiagnosticsState.storage.status === 'critical' ? (
+            <p className={styles.diagnosticsWarning} role="alert">
+              저장소 사용량이 95% 이상입니다. 녹음 전에 미사용 Source를 정리해 주세요.
+            </p>
+          ) : null}
+          {runtimeDiagnosticsState.pendingCleanupResourceCount > 0 ? (
+            <p className={styles.diagnosticsWarning}>
+              정리에 실패한 오디오 리소스가 있습니다. 오디오 재개로 정리를 다시 시도할 수 있습니다.
+            </p>
+          ) : null}
+          {resumeError ? (
+            <p className={styles.diagnosticsError} role="alert">
+              {resumeError}
+            </p>
+          ) : null}
+        </section>
       </div>
     </details>
   );

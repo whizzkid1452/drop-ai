@@ -9,21 +9,43 @@ import {
   resolveAudioRuntimeCapabilities,
   type AudioRuntimeCapabilities,
 } from '@/layers/shared/utils/audio-runtime-capabilities';
+import type { RuntimeDiagnosticsState } from '@/layers/shared/types/runtime-diagnostics';
 import { AudioRuntimeStatus } from './AudioRuntimeStatus';
 
-const layerMocks = vi.hoisted((): { capabilities: AudioRuntimeCapabilities } => ({
-  capabilities: {
-    blockers: { audioWorklet: [], liveInput: [], sharedMemory: [], wasm: [] },
-    features: {} as AudioRuntimeCapabilities['features'],
-    meetsAudioWorkletPreconditions: true,
-    meetsLiveInputPreconditions: true,
-    meetsSharedMemoryPreconditions: true,
-    meetsWasmPreconditions: true,
-  },
-}));
+const layerMocks = vi.hoisted(
+  (): {
+    capabilities: AudioRuntimeCapabilities;
+    diagnostics: RuntimeDiagnosticsState;
+    execute: ReturnType<typeof vi.fn>;
+    refresh: ReturnType<typeof vi.fn>;
+  } => ({
+    capabilities: {
+      blockers: { audioWorklet: [], liveInput: [], sharedMemory: [], wasm: [] },
+      features: {} as AudioRuntimeCapabilities['features'],
+      meetsAudioWorkletPreconditions: true,
+      meetsLiveInputPreconditions: true,
+      meetsSharedMemoryPreconditions: true,
+      meetsWasmPreconditions: true,
+    },
+    diagnostics: {
+      audioContextState: 'running',
+      checkedAt: null,
+      dspLoadRatio: null,
+      lastOfflineRenderRealtimeRatio: null,
+      pendingCleanupResourceCount: 0,
+      storage: { quotaBytes: 1_000, status: 'available', usageBytes: 100, usageRatio: 0.1 },
+      visibilityState: 'visible',
+    },
+    execute: vi.fn(),
+    refresh: vi.fn(),
+  })
+);
 
 vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
   useAudioRuntimeCapabilities: () => layerMocks.capabilities,
+  useCommandExecutor: () => ({ execute: layerMocks.execute }),
+  useRuntimeDiagnosticsQuery: () => ({ refresh: layerMocks.refresh }),
+  useRuntimeDiagnosticsState: () => layerMocks.diagnostics,
 }));
 
 vi.mock('./AudioRuntimeStatus.css.ts', () => ({
@@ -35,6 +57,10 @@ vi.mock('./AudioRuntimeStatus.css.ts', () => ({
   capabilityRow: 'capabilityRow',
   capabilityStatus: 'capabilityStatus',
   details: 'details',
+  diagnosticsError: 'diagnosticsError',
+  diagnosticsList: 'diagnosticsList',
+  diagnosticsPanel: 'diagnosticsPanel',
+  diagnosticsWarning: 'diagnosticsWarning',
   full: 'full',
   limited: 'limited',
   standard: 'standard',
@@ -86,6 +112,19 @@ afterEach(() => {
   });
   document.body.replaceChildren();
   layerMocks.capabilities = createFullCapabilities();
+  layerMocks.diagnostics = {
+    audioContextState: 'running',
+    checkedAt: null,
+    dspLoadRatio: null,
+    lastOfflineRenderRealtimeRatio: null,
+    pendingCleanupResourceCount: 0,
+    storage: { quotaBytes: 1_000, status: 'available', usageBytes: 100, usageRatio: 0.1 },
+    visibilityState: 'visible',
+  };
+  layerMocks.execute.mockReset();
+  layerMocks.refresh.mockReset();
+  layerMocks.execute.mockResolvedValue(undefined);
+  layerMocks.refresh.mockResolvedValue(layerMocks.diagnostics);
 });
 
 describe('AudioRuntimeStatus', () => {
@@ -187,5 +226,27 @@ describe('AudioRuntimeStatus', () => {
 
     expect(status.dataset.level).toBe('limited');
     expect(status.title).toContain('미디어 장치 API');
+  });
+
+  it('중단된 AudioContext와 저장소 경고를 표시하고 재개 명령을 실행한다', async () => {
+    layerMocks.diagnostics = {
+      audioContextState: 'suspended',
+      checkedAt: '2026-08-14T00:00:00.000Z',
+      dspLoadRatio: null,
+      lastOfflineRenderRealtimeRatio: 0.4,
+      pendingCleanupResourceCount: 1,
+      storage: { quotaBytes: 1_000, status: 'warning', usageBytes: 850, usageRatio: 0.85 },
+      visibilityState: 'hidden',
+    };
+    renderStatus();
+
+    expect(document.querySelector('[data-diagnostic="storage"]')?.textContent).toContain('85.0%');
+    expect(document.querySelector('[data-diagnostic="dsp-load"]')?.textContent).toContain('측정 미지원');
+    expect(document.querySelector('[data-diagnostic="offline-render"]')?.textContent).toContain('40.0%');
+    const resumeButton = [...document.querySelectorAll('button')].find(button => button.textContent === '오디오 재개');
+    await act(async () => resumeButton?.click());
+
+    expect(layerMocks.execute).toHaveBeenCalledWith({ type: 'RESUME_AUDIO_RUNTIME' });
+    expect(layerMocks.refresh).toHaveBeenCalled();
   });
 });

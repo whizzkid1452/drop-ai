@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
 import type { LoopSlotState } from '@/layers/session/session';
@@ -24,6 +24,19 @@ export function CueControl() {
   const [performanceName, setPerformanceName] = useState('Cue performance');
   const [isBusy, setIsBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      dialogRef.current?.querySelector<HTMLElement>('button, input, select')?.focus();
+    }
+  }, [isOpen]);
+
+  const closeDialog = () => {
+    setIsOpen(false);
+    queueMicrotask(() => triggerRef.current?.focus());
+  };
 
   const run = async (operation: () => Promise<unknown>) => {
     if (isBusy) {
@@ -47,20 +60,31 @@ export function CueControl() {
 
   return (
     <>
-      <button className={styles.trigger} onClick={() => setIsOpen(true)} type="button">
+      <button className={styles.trigger} onClick={() => setIsOpen(true)} ref={triggerRef} type="button">
         Cue
         {cueRecording.isRecording ? <span aria-label="Cue recording" className={styles.recordingDot} /> : null}
       </button>
       {isOpen
         ? createPortal(
             <div className={styles.backdrop} role="presentation">
-              <section aria-label="Cue Grid" aria-modal="true" className={styles.dialog} role="dialog">
+              <section
+                aria-label="Cue Grid"
+                aria-modal="true"
+                className={styles.dialog}
+                onKeyDown={event => {
+                  if (event.key === 'Escape') {
+                    closeDialog();
+                  }
+                }}
+                ref={dialogRef}
+                role="dialog"
+              >
                 <header className={styles.header}>
                   <div>
                     <h2>Cue Grid</h2>
                     <p>Clip을 연주하고 Timeline arrangement로 변환합니다.</p>
                   </div>
-                  <button aria-label="Close Cue Grid" onClick={() => setIsOpen(false)} type="button">
+                  <button aria-label="Close Cue Grid" onClick={closeDialog} type="button">
                     ×
                   </button>
                 </header>
