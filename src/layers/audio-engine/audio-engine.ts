@@ -677,7 +677,7 @@ export class AudioEngine implements IAudioEngine {
     await this.addTrack(trackId);
     try {
       this.setMidiTrackState({
-        midi: { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, regions: [] },
+        midi: { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, recordMode: 'replace', regions: [] },
         trackId,
       });
     } catch (cause) {

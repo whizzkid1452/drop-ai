@@ -50,8 +50,10 @@ describe('getMaxDuration', () => {
       ...createTrack('midi-track', []),
       midi: {
         instrumentId: 'builtin.poly-synth',
+        recordMode: 'replace',
         regions: [
           {
+            controlLanes: [],
             durationSeconds: 3,
             id: '11111111-1111-4111-8111-111111111111',
             name: 'MIDI Region',

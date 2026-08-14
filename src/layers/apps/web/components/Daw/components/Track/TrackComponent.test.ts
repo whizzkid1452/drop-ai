@@ -215,8 +215,10 @@ describe('TrackComponent 제어', () => {
       ...track,
       midi: {
         instrumentId: 'builtin.poly-synth',
+        recordMode: 'replace',
         regions: [
           {
+            controlLanes: [],
             durationSeconds: 2,
             id: '44444444-4444-4444-8444-444444444444',
             name: 'Verse',

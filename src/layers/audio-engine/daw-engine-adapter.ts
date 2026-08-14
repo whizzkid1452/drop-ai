@@ -520,6 +520,7 @@ export class DawAudioProviderBridge {
       if (track.type === TrackType.MIDI) {
         this.#midiStates.set(track.id, {
           instrumentId: BUILTIN_MIDI_INSTRUMENT_ID,
+          recordMode: 'replace',
           regions: track.playlist.getMidiRegions().map(createProductMidiRegion),
         });
       }
@@ -723,7 +724,11 @@ export class DawAudioProviderBridge {
     if (this.#isSuppressed) {
       return;
     }
-    this.#midiStates.set(trackId, { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, regions: [] });
+    this.#midiStates.set(trackId, {
+      instrumentId: BUILTIN_MIDI_INSTRUMENT_ID,
+      recordMode: 'replace',
+      regions: [],
+    });
     this.#pendingTracks.set(trackId, this.#runtime.addMidiTrack(trackId));
   }
 
@@ -753,6 +758,7 @@ export class DawAudioProviderBridge {
       regions: [
         ...current.regions.filter(candidate => candidate.id !== region.id),
         {
+          controlLanes: [],
           durationSeconds: framesToSeconds(region.length),
           id: region.id,
           name: region.name,
@@ -943,6 +949,7 @@ function createDawMidiRegion(regionState: MidiRegionState): MidiRegion {
 
 function createProductMidiRegion(region: MidiRegion): MidiRegionState {
   return {
+    controlLanes: [],
     durationSeconds: framesToSeconds(region.length),
     id: region.id,
     name: region.name,

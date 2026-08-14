@@ -25,7 +25,7 @@ import { TimelineGrid } from '../TimelineGrid/TimelineGrid';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import type { AutomationLaneState } from '@/layers/shared/types/automation-state';
 import { AudioRuntimeFeature } from '@/layers/shared/utils/audio-runtime-capabilities';
-import type { MidiTrackState } from '@/layers/shared/types/midi-state';
+import { cloneMidiTrackState, type MidiTrackState } from '@/layers/shared/types/midi-state';
 import { writeStandardMidiFile } from '@/layers/midi-file/midi-file-codec';
 
 interface TrackListProps {
@@ -222,13 +222,7 @@ export function TrackList({
   const handleMidiChange = useCallback(
     async (trackId: string, midi: MidiTrackState) => {
       await commandExecutor.execute({
-        midi: {
-          instrumentId: midi.instrumentId,
-          regions: midi.regions.map(region => ({
-            ...region,
-            notes: region.notes.map(note => ({ ...note })),
-          })),
-        },
+        midi: cloneMidiTrackState(midi),
         trackId,
         type: AudioCommandType.SET_MIDI_TRACK_STATE,
       });

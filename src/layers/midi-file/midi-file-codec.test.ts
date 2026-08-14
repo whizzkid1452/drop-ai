@@ -4,8 +4,10 @@ import { parseStandardMidiFile, writeStandardMidiFile } from './midi-file-codec'
 
 const midi: MidiTrackState = {
   instrumentId: BUILTIN_MIDI_INSTRUMENT_ID,
+  recordMode: 'replace',
   regions: [
     {
+      controlLanes: [],
       durationSeconds: 2,
       id: '11111111-1111-4111-8111-111111111111',
       name: 'Verse',

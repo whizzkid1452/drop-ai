@@ -27,8 +27,10 @@ describe('ProjectDocument v13 mapper', () => {
             loopSlots: [],
             midi: {
               instrumentId: 'builtin.poly-synth',
+              recordMode: 'replace',
               regions: [
                 {
+                  controlLanes: [],
                   durationSeconds: 2,
                   id: '33333333-3333-4333-8333-333333333333',
                   name: 'Verse',

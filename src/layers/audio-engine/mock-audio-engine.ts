@@ -114,7 +114,11 @@ export class MockAudioEngine implements IAudioEngine {
 
   async addMidiTrack(trackId: string): Promise<void> {
     await this.addTrack(trackId);
-    this.mockMidiTracks.set(trackId, { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, regions: [] });
+    this.mockMidiTracks.set(trackId, {
+      instrumentId: BUILTIN_MIDI_INSTRUMENT_ID,
+      recordMode: 'replace',
+      regions: [],
+    });
   }
 
   setMidiTrackState(request: SetMidiTrackStateRequest): void {

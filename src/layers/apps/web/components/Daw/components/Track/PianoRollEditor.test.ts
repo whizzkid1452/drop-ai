@@ -10,8 +10,10 @@ const REGION_ID = '11111111-1111-4111-8111-111111111111';
 const NOTE_ID = '22222222-2222-4222-8222-222222222222';
 const midi: MidiTrackState = {
   instrumentId: 'builtin.poly-synth',
+  recordMode: 'replace',
   regions: [
     {
+      controlLanes: [],
       durationSeconds: 4,
       id: REGION_ID,
       name: 'Verse',

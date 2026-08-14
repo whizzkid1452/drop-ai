@@ -742,8 +742,10 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     engine.setMidiTrackState({
       midi: {
         instrumentId: 'builtin.poly-synth',
+        recordMode: 'replace',
         regions: [
           {
+            controlLanes: [],
             durationSeconds: 2,
             id: '11111111-1111-4111-8111-111111111111',
             name: 'Verse',

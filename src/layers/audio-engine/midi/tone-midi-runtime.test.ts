@@ -69,8 +69,10 @@ describe('ToneMidiRuntime', () => {
       destination: {} as never,
       midi: {
         instrumentId: BUILTIN_MIDI_INSTRUMENT_ID,
+        recordMode: 'replace',
         regions: [
           {
+            controlLanes: [],
             durationSeconds: 2,
             id: '11111111-1111-4111-8111-111111111111',
             name: 'Verse',
@@ -100,7 +102,7 @@ describe('ToneMidiRuntime', () => {
     const runtime = new ToneMidiRuntime();
     const request = {
       destination: {} as never,
-      midi: { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, regions: [] },
+      midi: { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, recordMode: 'replace' as const, regions: [] },
       trackId: 'track-1',
     };
     runtime.setTrackState({
@@ -109,6 +111,7 @@ describe('ToneMidiRuntime', () => {
         ...request.midi,
         regions: [
           {
+            controlLanes: [],
             durationSeconds: 1,
             id: '11111111-1111-4111-8111-111111111111',
             name: 'One',
@@ -140,12 +143,12 @@ describe('ToneMidiRuntime', () => {
     const runtime = new ToneMidiRuntime();
     runtime.setTrackState({
       destination: {} as never,
-      midi: { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, regions: [] },
+      midi: { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, recordMode: 'replace', regions: [] },
       trackId: 'track-1',
     });
     runtime.setTrackState({
       destination: {} as never,
-      midi: { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, regions: [] },
+      midi: { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, recordMode: 'replace', regions: [] },
       trackId: 'track-2',
     });
 
