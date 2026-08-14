@@ -17,6 +17,7 @@ import { TimelineController } from './timeline-controller';
 import { MeterController } from './meter-controller';
 import { LiveInputController } from './live-input-controller';
 import { RecordingController } from './recording-controller';
+import { EditorController } from './editor-controller';
 
 interface AppControllerDependencies {
   sessionStore: SessionStore;
@@ -44,6 +45,7 @@ export class AppController {
   public readonly meter: MeterController;
   public readonly liveInput: LiveInputController;
   public readonly recording: RecordingController;
+  public readonly editor: EditorController;
 
   constructor({
     sessionStore,
@@ -55,6 +57,7 @@ export class AppController {
     pluginHost,
   }: AppControllerDependencies) {
     this.playback = new PlaybackController(sessionStore, audioEngine);
+    this.editor = new EditorController(sessionStore);
     this.track = new TrackController({ sessionStore, audioEngine, audioSourceRegistry });
     this.region = new RegionController({ sessionStore, audioEngine, audioSourceRegistry });
     this.export = new ExportController({ sessionStore, audioEngine, audioSourceResolver: audioSourceRegistry });
