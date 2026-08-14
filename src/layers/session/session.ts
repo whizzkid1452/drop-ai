@@ -1,7 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 import type { RegionStatus, TrackStatus } from '@/types/statusTypes';
 import type { AgentModelStatus, AgentRunStatus, AgentStatus, Message } from '@/types/agent';
-import type { ProjectMetadata } from '../shared/types/project-document.schema';
+import type { ProjectMetadata, TimelineRange } from '../shared/types/project-document.schema';
 import type {
   PluginCatalogEntry,
   PluginInstanceState,
@@ -16,6 +16,7 @@ import type { TimelineMeterChange, TimelineTempoChange } from '../shared/timelin
 import type { TimelineMarker } from '../shared/timeline-marker';
 
 export const DEFAULT_LOOP_SLOT_COUNT = 4;
+export const DEFAULT_METRONOME_VOLUME = 0.8;
 
 export interface LoopSlotState {
   readonly id: string;
@@ -88,6 +89,10 @@ export interface ProjectSessionState {
   readonly tempoChanges?: readonly TimelineTempoChange[];
   readonly meterChanges?: readonly TimelineMeterChange[];
   readonly timelineMarkers?: readonly TimelineMarker[];
+  readonly loopRange?: TimelineRange | null;
+  readonly isLoopEnabled?: boolean;
+  readonly isMetronomeEnabled?: boolean;
+  readonly metronomeVolume?: number;
   readonly masterVolume: number;
   readonly exportStartTime: number | null;
   readonly exportEndTime: number | null;
@@ -145,6 +150,10 @@ export interface SessionState {
   tempoChanges: TimelineTempoChange[];
   meterChanges: TimelineMeterChange[];
   timelineMarkers: TimelineMarker[];
+  loopRange: TimelineRange | null;
+  isLoopEnabled: boolean;
+  isMetronomeEnabled: boolean;
+  metronomeVolume: number;
   masterVolume: number;
   exportStartTime: number | null;
   exportEndTime: number | null;
@@ -176,6 +185,10 @@ export interface SessionState {
     meterChanges: readonly TimelineMeterChange[];
   }) => void;
   setTimelineMarkers: (markers: readonly TimelineMarker[]) => void;
+  setLoopRange: (range: TimelineRange | null) => void;
+  setLoopEnabled: (isEnabled: boolean) => void;
+  setMetronomeEnabled: (isEnabled: boolean) => void;
+  setMetronomeVolume: (volume: number) => void;
   setMasterVolume: (volume: number) => void;
   setExportRange: (startTime: number | null, endTime: number | null) => void;
   replaceProjectMetadata: (project: ProjectMetadata) => void;
@@ -219,6 +232,10 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     tempoChanges: [{ quarterNotePosition: 0, bpm: 120 }],
     meterChanges: [{ quarterNotePosition: 0, beatsPerBar: 4, beatUnit: 4 }],
     timelineMarkers: [],
+    loopRange: null,
+    isLoopEnabled: false,
+    isMetronomeEnabled: false,
+    metronomeVolume: DEFAULT_METRONOME_VOLUME,
     masterVolume: 1.0,
     exportStartTime: null,
     exportEndTime: null,
@@ -255,6 +272,14 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
         meterChanges: meterChanges.map(change => ({ ...change })),
       }),
     setTimelineMarkers: timelineMarkers => set({ timelineMarkers: timelineMarkers.map(marker => ({ ...marker })) }),
+    setLoopRange: loopRange =>
+      set(state => ({
+        loopRange: loopRange ? { ...loopRange } : null,
+        isLoopEnabled: loopRange === null ? false : state.isLoopEnabled,
+      })),
+    setLoopEnabled: isLoopEnabled => set(state => ({ isLoopEnabled: isLoopEnabled && state.loopRange !== null })),
+    setMetronomeEnabled: isMetronomeEnabled => set({ isMetronomeEnabled }),
+    setMetronomeVolume: metronomeVolume => set({ metronomeVolume }),
     setMasterVolume: volume => set({ masterVolume: volume }),
     setExportRange: (startTime, endTime) => set({ exportStartTime: startTime, exportEndTime: endTime }),
     replaceProjectMetadata: project => set({ project: { ...project } }),
@@ -269,6 +294,10 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
           ? projectState.meterChanges.map(change => ({ ...change }))
           : [{ quarterNotePosition: 0, beatsPerBar: 4, beatUnit: 4 }],
         timelineMarkers: projectState.timelineMarkers?.map(marker => ({ ...marker })) ?? [],
+        loopRange: projectState.loopRange ? { ...projectState.loopRange } : null,
+        isLoopEnabled: projectState.isLoopEnabled === true && projectState.loopRange !== null,
+        isMetronomeEnabled: projectState.isMetronomeEnabled ?? false,
+        metronomeVolume: projectState.metronomeVolume ?? DEFAULT_METRONOME_VOLUME,
         masterVolume: projectState.masterVolume,
         exportStartTime: projectState.exportStartTime,
         exportEndTime: projectState.exportEndTime,

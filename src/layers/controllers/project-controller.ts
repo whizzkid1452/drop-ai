@@ -13,8 +13,8 @@ import type {
   IRetiredAudioSourceRegistry,
 } from '../audio-source-registry/i-audio-source-registry';
 import {
-  createProjectDocumentV6FromSession,
-  createProjectRestoreSnapshotFromDocumentV6,
+  createProjectDocumentV7FromSession,
+  createProjectRestoreSnapshotFromDocumentV7,
   type ProjectRestoreSnapshot,
 } from '../project-document-mapper/project-document-mapper';
 import type { ILocalFirstProjectRepository, IProjectRepository } from '../project-repository/i-project-repository';
@@ -23,7 +23,7 @@ import type { SessionState, SessionStore } from '../session/session';
 import type {
   ProjectAudioSource,
   ProjectDocumentSnapshot,
-  ProjectDocumentV6,
+  ProjectDocumentV7,
 } from '../shared/types/project-document.schema';
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
 import { ProjectLoadError, ProjectLoadErrorCode } from './project-load-error';
@@ -70,6 +70,10 @@ interface ProjectSessionVersion {
   readonly tempoChanges: SessionState['tempoChanges'];
   readonly meterChanges: SessionState['meterChanges'];
   readonly timelineMarkers: SessionState['timelineMarkers'];
+  readonly loopRange: SessionState['loopRange'];
+  readonly isLoopEnabled: boolean;
+  readonly isMetronomeEnabled: boolean;
+  readonly metronomeVolume: number;
   readonly tracks: SessionState['tracks'];
 }
 
@@ -88,7 +92,7 @@ export class ProjectController {
   private async saveProjectOnce(): Promise<void> {
     const registrations = this.dependencies.audioSourceRegistry.listCommittedRegistrations();
     const sessionState = this.dependencies.sessionStore.getState();
-    const document = createProjectDocumentV6FromSession({
+    const document = createProjectDocumentV7FromSession({
       session: sessionState,
       audioSources: registrations.map(registration => registration.metadata),
       pluginCatalog: [...sessionState.pluginCatalog.values()],
@@ -243,7 +247,7 @@ export class ProjectController {
     readonly expectedProjectId: string;
   }): ProjectRestoreSnapshot {
     const sessionState = this.dependencies.sessionStore.getState();
-    const snapshot = createProjectRestoreSnapshotFromDocumentV6({
+    const snapshot = createProjectRestoreSnapshotFromDocumentV7({
       document,
       pluginCatalog: [...sessionState.pluginCatalog.values()],
     });
@@ -459,6 +463,10 @@ export class ProjectController {
       tempoChanges: session.tempoChanges,
       meterChanges: session.meterChanges,
       timelineMarkers: session.timelineMarkers,
+      loopRange: session.loopRange,
+      isLoopEnabled: session.isLoopEnabled,
+      isMetronomeEnabled: session.isMetronomeEnabled,
+      metronomeVolume: session.metronomeVolume,
       tracks: session.tracks,
     };
   }
@@ -475,6 +483,10 @@ export class ProjectController {
       current.tempoChanges === expected.tempoChanges &&
       current.meterChanges === expected.meterChanges &&
       current.timelineMarkers === expected.timelineMarkers &&
+      current.loopRange === expected.loopRange &&
+      current.isLoopEnabled === expected.isLoopEnabled &&
+      current.isMetronomeEnabled === expected.isMetronomeEnabled &&
+      current.metronomeVolume === expected.metronomeVolume &&
       current.tracks === expected.tracks
     );
   }
@@ -522,7 +534,7 @@ export class ProjectController {
     }
   }
 
-  private async saveDocument(document: ProjectDocumentV6): Promise<ProjectDocumentSnapshot> {
+  private async saveDocument(document: ProjectDocumentV7): Promise<ProjectDocumentSnapshot> {
     const storedDocument = await this.dependencies.projectRepository.load(document.project.id);
     if (!storedDocument) {
       return this.dependencies.projectRepository.create(document);
