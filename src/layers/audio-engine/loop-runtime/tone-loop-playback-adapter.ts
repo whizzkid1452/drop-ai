@@ -79,6 +79,10 @@ export class ToneLoopPlaybackAdapter implements ILoopPlaybackAdapter {
     return audioBuffer;
   }
 
+  createAudioWorkletNode(name: string, options: AudioWorkletNodeOptions): AudioWorkletNode {
+    return Tone.getContext().createAudioWorkletNode(name, options);
+  }
+
   createPlayer(request: CreateLoopPlayerRequest): ILoopPlayer {
     return new ToneLoopPlayer(request);
   }
@@ -97,6 +101,10 @@ export class ToneLoopPlaybackAdapter implements ILoopPlaybackAdapter {
 
   getTransportTimeSeconds(): number {
     return Tone.getTransport().seconds;
+  }
+
+  loadAudioWorkletModule(url: string): Promise<void> {
+    return Tone.getContext().addAudioWorkletModule(url);
   }
 
   async prepare(): Promise<void> {

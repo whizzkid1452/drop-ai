@@ -91,6 +91,10 @@ class LoopPlaybackAdapterStub implements ILoopPlaybackAdapter {
     return {} as AudioBuffer;
   }
 
+  createAudioWorkletNode(): AudioWorkletNode {
+    return {} as AudioWorkletNode;
+  }
+
   createPlayer(): ILoopPlayer {
     const player = new LoopPlayerStub();
     this.players.push(player);
@@ -108,6 +112,8 @@ class LoopPlaybackAdapterStub implements ILoopPlaybackAdapter {
   getTransportTimeSeconds(): number {
     return this.transportTimeSeconds;
   }
+
+  async loadAudioWorkletModule(): Promise<void> {}
 
   readInputMeterFrame() {
     return this.inputMeterFrame;

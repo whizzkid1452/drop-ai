@@ -1,3 +1,6 @@
+import type { MeterFrame } from '../../shared/types/meter-frame';
+import type { PcmCaptureWorkletRuntime } from '../live-input/live-pcm-capture';
+
 export interface CreateLoopAudioBufferRequest {
   readonly channels: readonly Float32Array[];
   readonly sampleRate: number;
@@ -19,7 +22,7 @@ export interface ILoopPlayer {
   stopAt(contextTimeSeconds: number): void;
 }
 
-export interface ILoopPlaybackAdapter {
+export interface ILoopPlaybackAdapter extends PcmCaptureWorkletRuntime {
   createAudioBuffer(request: CreateLoopAudioBufferRequest): AudioBuffer;
   createPlayer(request: CreateLoopPlayerRequest): ILoopPlayer;
   getAudioContext(): AudioContext;
@@ -29,4 +32,3 @@ export interface ILoopPlaybackAdapter {
   readInputMeterFrame(): MeterFrame;
   setMonitoring(request: SetLoopMonitoringRequest): void;
 }
-import type { MeterFrame } from '../../shared/types/meter-frame';

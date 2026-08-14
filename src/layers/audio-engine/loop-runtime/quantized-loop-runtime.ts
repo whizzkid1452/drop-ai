@@ -92,6 +92,7 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime, ILinearRecording
       onStarted: request.onStarted,
       startTimeSeconds: this.#playback.getContextTimeSeconds() + request.startDelaySeconds,
       stream: connection.stream,
+      workletRuntime: this.#playback,
     });
   }
 
@@ -165,6 +166,7 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime, ILinearRecording
       },
       startTimeSeconds,
       stream: connection.stream,
+      workletRuntime: this.#playback,
     });
 
     const pendingCapture = {

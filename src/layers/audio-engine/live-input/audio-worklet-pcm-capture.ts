@@ -2,6 +2,7 @@ import type {
   ActivePcmCapture,
   CapturedPcm,
   ILivePcmCapture,
+  PcmCaptureWorkletRuntime,
   SchedulePcmCaptureRequest,
   ScheduledPcmCapture,
   StartPcmCaptureRequest,
@@ -9,7 +10,7 @@ import type {
 
 const PCM_CAPTURE_PROCESSOR_NAME = 'loop-pcm-capture';
 const PCM_CAPTURE_WORKLET_URL = '/loop-pcm-capture-worklet.js';
-const moduleLoads = new WeakMap<AudioContext, Promise<void>>();
+const moduleLoads = new WeakMap<PcmCaptureWorkletRuntime, Promise<void>>();
 
 interface PcmCaptureStartedMessage {
   readonly type: 'started';
@@ -36,14 +37,14 @@ interface CreateCaptureSessionRequest extends StartPcmCaptureRequest {
   readonly initialMessage: Readonly<Record<string, number | string>>;
 }
 
-function loadCaptureModule(audioContext: AudioContext): Promise<void> {
-  const currentLoad = moduleLoads.get(audioContext);
+function loadCaptureModule(workletRuntime: PcmCaptureWorkletRuntime): Promise<void> {
+  const currentLoad = moduleLoads.get(workletRuntime);
   if (currentLoad) {
     return currentLoad;
   }
 
-  const nextLoad = audioContext.audioWorklet.addModule(PCM_CAPTURE_WORKLET_URL);
-  moduleLoads.set(audioContext, nextLoad);
+  const nextLoad = workletRuntime.loadAudioWorkletModule(PCM_CAPTURE_WORKLET_URL);
+  moduleLoads.set(workletRuntime, nextLoad);
   return nextLoad;
 }
 
@@ -81,10 +82,10 @@ export class AudioWorkletPcmCapture implements ILivePcmCapture {
   }
 
   private async createCaptureSession(request: CreateCaptureSessionRequest): Promise<CaptureSession> {
-    await loadCaptureModule(request.audioContext);
+    await loadCaptureModule(request.workletRuntime);
 
     const source = request.audioContext.createMediaStreamSource(request.stream);
-    const worklet = new AudioWorkletNode(request.audioContext, PCM_CAPTURE_PROCESSOR_NAME, {
+    const worklet = request.workletRuntime.createAudioWorkletNode(PCM_CAPTURE_PROCESSOR_NAME, {
       numberOfInputs: 1,
       numberOfOutputs: 1,
       outputChannelCount: [1],
