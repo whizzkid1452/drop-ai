@@ -6,6 +6,7 @@ import { UndoRedoControls } from '../UndoRedoControls/UndoRedoControls';
 import { PlaybackControls } from '../PlaybackControls/PlaybackControls';
 import { AudioRuntimeStatus } from './AudioRuntimeStatus';
 import { MasterVolumeControl } from './MasterVolumeControl';
+import { LoopMetronomeControl } from './LoopMetronomeControl';
 import { TempoMetadataControl } from './TempoMetadataControl';
 import { AddTrackControl } from '../AddTrackControl/AddTrackControl';
 import { MidiLoopControl } from './MidiLoopControl';
@@ -45,6 +46,7 @@ export function DawHeader({ coordinateMapper, trackCount }: DawHeaderProps) {
           <PlaybackControls layout="inline" />
         </div>
         <div className={styles.statusSection}>
+          <LoopMetronomeControl />
           <MasterVolumeControl />
           <TempoMetadataControl />
           <span className={styles.trackCount}>{trackCount} tracks</span>

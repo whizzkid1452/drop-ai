@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import * as styles from './TempoMetadataControl.css.ts';
 import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
-import { executeTempoMetadataChange, parseTempoInput } from '@/layers/apps/web/hooks/tempo-metadata-command';
+import { executeTempoChange, parseTempoInput } from '@/layers/apps/web/hooks/tempo-metadata-command';
 
 const TEMPO_HINT_ID = 'tempo-metadata-hint';
 
@@ -33,7 +33,7 @@ export function TempoMetadataControl() {
     }
 
     setIsPending(true);
-    const result = await executeTempoMetadataChange({
+    const result = await executeTempoChange({
       tempo,
       executeCommand: command => commandExecutor.execute(command),
       notifyFailure: message => window.alert(message),
@@ -49,7 +49,7 @@ export function TempoMetadataControl() {
       className={styles.form}
       onSubmit={event => void handleSubmit(event)}
       noValidate
-      title="현재는 프로젝트 정보만 바꾸며 오디오 속도는 바뀌지 않습니다."
+      title="Tempo Map 변경을 오디오 scheduler와 프로젝트 문서에 함께 반영합니다."
     >
       <label className={styles.label} htmlFor="tempo-metadata-input">
         Tempo
@@ -72,7 +72,7 @@ export function TempoMetadataControl() {
         {isPending ? '적용 중…' : '적용'}
       </button>
       <span id={TEMPO_HINT_ID} className={styles.hint}>
-        오디오 속도 미변경
+        오디오 scheduler에 반영
       </span>
     </form>
   );

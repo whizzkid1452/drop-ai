@@ -4,13 +4,13 @@ interface TempoOptions {
   tempo: number;
 }
 
-interface ExecuteTempoMetadataChangeOptions extends TempoOptions {
+interface ExecuteTempoChangeOptions extends TempoOptions {
   executeCommand: (command: AudioCommand) => Promise<unknown>;
   notifyFailure: (message: string) => void;
 }
 
 type SetTempoCommand = Extract<AudioCommand, { type: typeof AudioCommandType.SET_TEMPO }>;
-export type TempoMetadataChangeResult = 'updated' | 'failed';
+export type TempoChangeResult = 'updated' | 'failed';
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -32,11 +32,11 @@ export function createSetTempoCommand({ tempo }: TempoOptions): SetTempoCommand 
   };
 }
 
-export async function executeTempoMetadataChange({
+export async function executeTempoChange({
   tempo,
   executeCommand,
   notifyFailure,
-}: ExecuteTempoMetadataChangeOptions): Promise<TempoMetadataChangeResult> {
+}: ExecuteTempoChangeOptions): Promise<TempoChangeResult> {
   try {
     await executeCommand(createSetTempoCommand({ tempo }));
     return 'updated';

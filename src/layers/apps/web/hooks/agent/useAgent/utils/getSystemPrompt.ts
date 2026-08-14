@@ -79,7 +79,8 @@ const COMMAND_REFERENCE = {
   [AudioCommandType.PLAY]: '{"type":"PLAY"} - 재생',
   [AudioCommandType.PAUSE]: '{"type":"PAUSE"} - 현재 위치에서 일시정지',
   [AudioCommandType.STOP]: '{"type":"STOP"} - 정지하고 0초로 이동',
-  [AudioCommandType.SET_TEMPO]: '{"type":"SET_TEMPO","tempo":<number greater than 0>} - 프로젝트 tempo 메타데이터 변경',
+  [AudioCommandType.SET_TEMPO]:
+    '{"type":"SET_TEMPO","tempo":<number greater than 0>} - 프로젝트 Tempo Map과 재생 scheduler 변경',
   [AudioCommandType.SET_MASTER_VOLUME]: '{"type":"SET_MASTER_VOLUME","volume":<0..1>} - 전체 출력 볼륨 변경',
   [AudioCommandType.SET_TIMELINE_MAP]:
     '{"type":"SET_TIMELINE_MAP","tempoChanges":[{"quarterNotePosition":0,"bpm":120}],"meterChanges":[{"quarterNotePosition":0,"beatsPerBar":4,"beatUnit":4}]} - Tempo·Meter Map 전체 변경',

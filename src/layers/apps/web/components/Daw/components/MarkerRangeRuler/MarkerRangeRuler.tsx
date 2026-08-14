@@ -1,5 +1,11 @@
 import { useRef, useState, type PointerEvent } from 'react';
-import { useCommandExecutor, usePlaybackClock, useSession } from '@/layers/apps/web/context/layer-hooks';
+import {
+  useAudioRuntimeCapabilities,
+  useCommandExecutor,
+  usePlaybackClock,
+  useSession,
+} from '@/layers/apps/web/context/layer-hooks';
+import { describeAudioRuntimeFeatureCapability } from '@/layers/apps/web/utils/audio-runtime-capability-labels';
 import {
   KeyboardShortcutAction,
   KEYBOARD_SHORTCUT_LABELS,
@@ -38,15 +44,22 @@ export function MarkerRangeRuler({ coordinateMapper, gridSettings, timelineConte
   const timelineMarkers = useSession(state => state.timelineMarkers);
   const exportStartTime = useSession(state => state.exportStartTime);
   const exportEndTime = useSession(state => state.exportEndTime);
+  const loopRange = useSession(state => state.loopRange);
+  const isLoopEnabled = useSession(state => state.isLoopEnabled);
+  const loopCapability = useAudioRuntimeCapabilities().features.tempoLoopMetronome;
   const commandExecutor = useCommandExecutor();
   const playbackClock = usePlaybackClock();
   const markerLaneRef = useRef<HTMLDivElement>(null);
+  const loopLaneRef = useRef<HTMLDivElement>(null);
   const rangeLaneRef = useRef<HTMLDivElement>(null);
   const markerDragRef = useRef<MarkerDrag | null>(null);
+  const loopDragRef = useRef<RangeDrag | null>(null);
   const rangeDragRef = useRef<RangeDrag | null>(null);
   const [markerDragPreview, setMarkerDragPreview] = useState<MarkerDrag | null>(null);
+  const [loopDragPreview, setLoopDragPreview] = useState<RangeDrag | null>(null);
   const [rangeDragPreview, setRangeDragPreview] = useState<RangeDrag | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isLoopAvailable = loopCapability.status === 'available';
 
   const executeMarkers = async (markers: readonly TimelineMarker[]) => {
     try {
@@ -63,10 +76,17 @@ export function MarkerRangeRuler({ coordinateMapper, gridSettings, timelineConte
   const executeRangeCommand = async (
     command:
       | { readonly type: typeof AudioCommandType.CLEAR_EXPORT_RANGE }
+      | { readonly type: typeof AudioCommandType.CLEAR_LOOP_RANGE }
       | {
           readonly type: typeof AudioCommandType.SET_EXPORT_RANGE;
           readonly startTime: number;
           readonly endTime: number;
+        }
+      | {
+          readonly type: typeof AudioCommandType.SET_LOOP_RANGE;
+          readonly startTimeSeconds: number;
+          readonly endTimeSeconds: number;
+          readonly isEnabled: boolean;
         }
   ) => {
     try {
@@ -150,6 +170,52 @@ export function MarkerRangeRuler({ coordinateMapper, gridSettings, timelineConte
     setRangeDragPreview(drag);
   };
 
+  const handleLoopPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (!isLoopAvailable) {
+      return;
+    }
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const seconds = resolveSnappedSeconds(event.clientX, event.currentTarget);
+    const drag = { anchorSeconds: seconds, startSeconds: seconds, endSeconds: seconds };
+    loopDragRef.current = drag;
+    setLoopDragPreview(drag);
+  };
+
+  const handleLoopPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = loopDragRef.current;
+    if (!drag) {
+      return;
+    }
+    const seconds = resolveSnappedSeconds(event.clientX, event.currentTarget);
+    const nextDrag = {
+      anchorSeconds: drag.anchorSeconds,
+      startSeconds: Math.min(drag.anchorSeconds, seconds),
+      endSeconds: Math.max(drag.anchorSeconds, seconds),
+    };
+    loopDragRef.current = nextDrag;
+    setLoopDragPreview(nextDrag);
+  };
+
+  const handleLoopPointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = loopDragRef.current;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    loopDragRef.current = null;
+    setLoopDragPreview(null);
+    if (!drag || drag.startSeconds === drag.endSeconds) {
+      return;
+    }
+    void executeRangeCommand({
+      type: AudioCommandType.SET_LOOP_RANGE,
+      startTimeSeconds: drag.startSeconds,
+      endTimeSeconds: drag.endSeconds,
+      isEnabled: true,
+    });
+  };
+
+  const handleClearLoopRange = () => {
+    void executeRangeCommand({ type: AudioCommandType.CLEAR_LOOP_RANGE });
+  };
+
   const handleRangePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     const drag = rangeDragRef.current;
     if (!drag) {
@@ -190,6 +256,15 @@ export function MarkerRangeRuler({ coordinateMapper, gridSettings, timelineConte
     rangeDragPreview ??
     (exportStartTime !== null && exportEndTime !== null
       ? { anchorSeconds: exportStartTime, startSeconds: exportStartTime, endSeconds: exportEndTime }
+      : null);
+  const visibleLoopRange =
+    loopDragPreview ??
+    (loopRange
+      ? {
+          anchorSeconds: loopRange.startTimeSeconds,
+          startSeconds: loopRange.startTimeSeconds,
+          endSeconds: loopRange.endTimeSeconds,
+        }
       : null);
 
   return (
@@ -244,6 +319,43 @@ export function MarkerRangeRuler({ coordinateMapper, gridSettings, timelineConte
       </div>
 
       <div
+        aria-disabled={!isLoopAvailable}
+        aria-label="Loop Range"
+        className={`${styles.lane} ${styles.rangeLane}`}
+        ref={loopLaneRef}
+        title={isLoopAvailable ? 'Drag to select Loop Range.' : describeAudioRuntimeFeatureCapability(loopCapability)}
+        onPointerDown={handleLoopPointerDown}
+        onPointerMove={handleLoopPointerMove}
+        onPointerUp={handleLoopPointerUp}
+      >
+        {visibleLoopRange ? (
+          <div
+            className={`${styles.loopRange} ${isLoopEnabled ? styles.loopRangeEnabled : ''}`}
+            data-testid="loop-range"
+            style={{
+              left: `${coordinateMapper.secondsToPixels(visibleLoopRange.startSeconds)}px`,
+              width: `${coordinateMapper.durationToPixels({
+                startSeconds: visibleLoopRange.startSeconds,
+                durationSeconds: visibleLoopRange.endSeconds - visibleLoopRange.startSeconds,
+              })}px`,
+            }}
+          >
+            <span className={styles.loopRangeLabel}>{isLoopEnabled ? 'LOOP ON' : 'LOOP'}</span>
+          </div>
+        ) : null}
+        <button
+          aria-label="Loop 범위 지우기"
+          className={styles.clearButton}
+          disabled={!isLoopAvailable || loopRange === null}
+          type="button"
+          onPointerDown={event => event.stopPropagation()}
+          onClick={handleClearLoopRange}
+        >
+          Clear
+        </button>
+      </div>
+
+      <div
         aria-label="Export Range"
         className={`${styles.lane} ${styles.rangeLane}`}
         ref={rangeLaneRef}
@@ -269,6 +381,7 @@ export function MarkerRangeRuler({ coordinateMapper, gridSettings, timelineConte
           </div>
         ) : null}
         <button
+          aria-label="Export 범위 지우기"
           className={styles.clearButton}
           disabled={exportStartTime === null && exportEndTime === null}
           type="button"

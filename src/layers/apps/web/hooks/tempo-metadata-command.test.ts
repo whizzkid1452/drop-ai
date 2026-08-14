@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
-import { createSetTempoCommand, executeTempoMetadataChange, parseTempoInput } from './tempo-metadata-command';
+import { createSetTempoCommand, executeTempoChange, parseTempoInput } from './tempo-metadata-command';
 
-describe('Tempo 메타데이터 UI 명령 변환', () => {
+describe('Tempo UI 명령 변환', () => {
   it('0보다 큰 유한 숫자만 입력값으로 허용한다', () => {
     expect(parseTempoInput('128.5')).toBe(128.5);
     expect(parseTempoInput('')).toBeNull();
@@ -21,7 +21,7 @@ describe('Tempo 메타데이터 UI 명령 변환', () => {
   it('SET_TEMPO 명령을 정확히 한 번 실행한다', async () => {
     const executeCommand = vi.fn<(command: AudioCommand) => Promise<unknown>>().mockResolvedValue(undefined);
 
-    const result = await executeTempoMetadataChange({
+    const result = await executeTempoChange({
       tempo: 128.5,
       executeCommand,
       notifyFailure: vi.fn(),
@@ -35,7 +35,7 @@ describe('Tempo 메타데이터 UI 명령 변환', () => {
   it('실행 실패 원인을 사용자 메시지로 전달한다', async () => {
     const notifyFailure = vi.fn();
 
-    const result = await executeTempoMetadataChange({
+    const result = await executeTempoChange({
       tempo: 128.5,
       executeCommand: vi.fn().mockRejectedValue(new Error('저장 오류')),
       notifyFailure,
