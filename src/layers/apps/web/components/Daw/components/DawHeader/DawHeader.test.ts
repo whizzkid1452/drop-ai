@@ -25,6 +25,7 @@ const componentMocks = vi.hoisted(() => ({
   recordingControl: vi.fn(() => null),
   inputDeviceControl: vi.fn(() => null),
   accountControl: vi.fn(() => null),
+  cueControl: vi.fn(() => null),
 }));
 
 vi.mock('./AudioRuntimeStatus', () => ({
@@ -37,6 +38,10 @@ vi.mock('../ExportButton/ExportButton', () => ({
 
 vi.mock('../SessionLifecycleControl/SessionLifecycleControl', () => ({
   SessionLifecycleControl: () => null,
+}));
+
+vi.mock('../CueControl/CueControl', () => ({
+  CueControl: componentMocks.cueControl,
 }));
 
 vi.mock('../SaveProjectButton/SaveProjectButton', () => ({
@@ -140,6 +145,7 @@ afterEach(() => {
   componentMocks.recordingControl.mockClear();
   componentMocks.inputDeviceControl.mockClear();
   componentMocks.accountControl.mockClear();
+  componentMocks.cueControl.mockClear();
 });
 
 describe('DawHeader', () => {
@@ -173,6 +179,7 @@ describe('DawHeader', () => {
     expect(componentMocks.recordingControl).toHaveBeenCalledTimes(1);
     expect(componentMocks.inputDeviceControl).toHaveBeenCalledTimes(1);
     expect(componentMocks.accountControl).toHaveBeenCalledTimes(1);
+    expect(componentMocks.cueControl).toHaveBeenCalledTimes(1);
 
     const mixerViewButton = host.querySelector<HTMLButtonElement>('[aria-label="Open Mixer"]');
     act(() => mixerViewButton?.click());
