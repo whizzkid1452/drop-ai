@@ -144,7 +144,7 @@ export class MockAudioEngine implements IAudioEngine {
   }
 
   getFeatureSupport(): AudioRuntimeFeatureSupport {
-    return { ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT, metering: true, midi: true, tempoLoopMetronome: true };
+    return { ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT };
   }
 
   getRuntimeHealth(): AudioEngineRuntimeHealth {

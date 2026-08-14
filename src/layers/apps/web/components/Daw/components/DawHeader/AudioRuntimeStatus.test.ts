@@ -67,6 +67,7 @@ vi.mock('./AudioRuntimeStatus.css.ts', () => ({
   status: 'status',
   summary: 'summary',
   unsupported: 'unsupported',
+  internal: 'internal',
   visuallyHidden: 'visually-hidden',
 }));
 
