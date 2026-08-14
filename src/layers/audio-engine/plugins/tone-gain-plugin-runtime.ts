@@ -6,6 +6,8 @@ import type {
   IAudioPluginRuntimeFactory,
 } from './audio-plugin-runtime';
 import { AudioPluginRuntimeError, AudioPluginRuntimeErrorCode } from './errors';
+import { createMappedAutomationTarget } from '../automation/tone-automation-target';
+import type { IAutomationAudioTarget } from '../automation/automation-param-scheduler';
 
 const GAIN_RAMP_SECONDS = 0.01;
 
@@ -50,11 +52,13 @@ class ToneGainPluginRuntime implements IAudioPluginRuntime {
   readonly instanceId: string;
   readonly manifestId: string;
   private readonly options: ToneGainPluginRuntimeFactoryOptions;
+  private baseValue: number;
 
   constructor({ instanceId, options, initialValue }: ToneGainPluginRuntimeOptions) {
     this.instanceId = instanceId;
     this.manifestId = options.manifestId;
     this.options = options;
+    this.baseValue = initialValue;
     this.inputNode = new Tone.Gain({ gain: initialValue });
   }
 
@@ -75,7 +79,20 @@ class ToneGainPluginRuntime implements IAudioPluginRuntime {
       throw createParameterNotFoundError(parameterId, this.options.manifestId);
     }
     assertValidGainValue(value, this.options);
+    this.baseValue = value;
     this.inputNode.gain.rampTo(value, GAIN_RAMP_SECONDS);
+  }
+
+  getAutomationTarget(parameterId: string): IAutomationAudioTarget | null {
+    if (parameterId !== this.options.parameterId) {
+      return null;
+    }
+    return createMappedAutomationTarget({
+      baseValue: () => this.baseValue,
+      mapValue: normalizedValue =>
+        this.options.minValue + normalizedValue * (this.options.maxValue - this.options.minValue),
+      parameter: this.inputNode.gain,
+    });
   }
 }
 

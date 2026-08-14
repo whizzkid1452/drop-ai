@@ -1632,6 +1632,7 @@ describe('Controllers - Phase 3 검증', () => {
       expect(exportSpy).toHaveBeenCalledWith({
         tracks: [
           {
+            automationLanes: [],
             id: 'track-1',
             volume: 1,
             pan: 0,
@@ -1659,6 +1660,19 @@ describe('Controllers - Phase 3 검증', () => {
         ],
         masterVolume: 1,
         range: { startTime: 2, endTime: 8 },
+        routingGraph: {
+          routes: [
+            {
+              channelCount: 2,
+              folderId: null,
+              kind: 'audio',
+              output: { kind: 'master' },
+              trackId: 'track-1',
+              vcaIds: [],
+            },
+          ],
+          sends: [],
+        },
         sampleRate: 44100,
       });
     });

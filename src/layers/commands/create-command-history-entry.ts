@@ -536,6 +536,36 @@ export function createCommandHistoryEntry({
       });
     }
 
+    case AudioCommandType.SET_AUTOMATION_LANES: {
+      const beforeLanes = beforeSession.tracks.get(command.trackId)?.automationLanes ?? [];
+      const afterLanes = afterSession.tracks.get(command.trackId)?.automationLanes ?? [];
+      if (JSON.stringify(beforeLanes) === JSON.stringify(afterLanes)) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        undoCommand: {
+          automationLanes: beforeLanes.map(lane => ({
+            ...lane,
+            points: lane.points.map(point => ({ ...point })),
+            target: { ...lane.target },
+          })),
+          trackId: command.trackId,
+          type: AudioCommandType.SET_AUTOMATION_LANES,
+        },
+        redoCommand: {
+          automationLanes: afterLanes.map(lane => ({
+            ...lane,
+            points: lane.points.map(point => ({ ...point })),
+            target: { ...lane.target },
+          })),
+          trackId: command.trackId,
+          type: AudioCommandType.SET_AUTOMATION_LANES,
+        },
+      });
+    }
+
     case AudioCommandType.SET_TRACK_MUTE: {
       const beforeTrack = beforeSession.tracks.get(command.trackId);
       const afterTrack = afterSession.tracks.get(command.trackId);

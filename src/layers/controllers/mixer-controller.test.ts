@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { createSessionStore } from '../session/session';
 import { MixerController } from './mixer-controller';
+import { ProjectStateErrorCode } from './project-state-error';
 
 const INITIAL_PROJECT_METADATA = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -109,5 +110,50 @@ describe('MixerController', () => {
       })
     ).toThrow('순환');
     expect(setRoutingGraph).not.toHaveBeenCalled();
+  });
+
+  it('Send gain Automation이 남아 있으면 Send 제거를 거부한다', async () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    const sendId = '44444444-4444-4444-8444-444444444444';
+    await audioEngine.addTrack(TRACK_ID);
+    await audioEngine.addTrack(BUS_ID);
+    sessionStore.getState().addTrack(createTrack(TRACK_ID));
+    sessionStore.getState().addTrack(createTrack(BUS_ID));
+    controller.setTrackRouting({ channelCount: 2, kind: 'bus', output: { kind: 'master' }, trackId: BUS_ID });
+    controller.addSend({
+      destinationTrackId: BUS_ID,
+      gain: 0.5,
+      id: sendId,
+      isEnabled: true,
+      sourceTrackId: TRACK_ID,
+      tapPoint: 'postFader',
+    });
+    sessionStore.getState().updateTrack(TRACK_ID, {
+      automationLanes: [
+        {
+          id: '55555555-5555-4555-8555-555555555555',
+          isEnabled: true,
+          points: [
+            {
+              id: '66666666-6666-4666-8666-666666666666',
+              interpolation: 'hold',
+              timeSeconds: 0,
+              value: 0.5,
+            },
+          ],
+          target: { kind: 'sendGain', sendId },
+        },
+      ],
+    });
+    const setRoutingGraph = vi.spyOn(audioEngine, 'setRoutingGraph');
+
+    expect(() => controller.removeSend(sendId)).toThrowError(
+      expect.objectContaining({ code: ProjectStateErrorCode.AUTOMATION_TARGET_IN_USE })
+    );
+    expect(setRoutingGraph).not.toHaveBeenCalled();
+
+    expect(() =>
+      controller.updateSend({ gain: 0.5, id: sendId, isEnabled: false, tapPoint: 'postFader' })
+    ).toThrowError(expect.objectContaining({ code: ProjectStateErrorCode.AUTOMATION_TARGET_IN_USE }));
   });
 });

@@ -1,6 +1,8 @@
 import * as Tone from 'tone';
 import { assertValidRoutingGraphSnapshot, cloneRoutingGraphSnapshot } from '../../shared/types/routing-state';
 import type { RoutingGraphSnapshot, RoutingRouteState } from '../../shared/types/routing-state';
+import { createMappedAutomationTarget } from '../automation/tone-automation-target';
+import type { IAutomationAudioTarget } from '../automation/automation-param-scheduler';
 
 export interface AudioRoutingTrackNodes {
   readonly input: Tone.Gain;
@@ -31,6 +33,17 @@ export class AudioRoutingRuntime {
 
   getSnapshot(): RoutingGraphSnapshot {
     return cloneRoutingGraphSnapshot(this.graph);
+  }
+
+  getSendAutomationTarget(sendId: string): IAutomationAudioTarget | null {
+    const connection = this.sendConnections.find(candidate => candidate.sendId === sendId);
+    if (!connection) {
+      return null;
+    }
+    return createMappedAutomationTarget({
+      baseValue: () => connection.configuredGain,
+      parameter: connection.gain.gain,
+    });
   }
 
   apply(

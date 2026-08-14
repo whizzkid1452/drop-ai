@@ -1,4 +1,5 @@
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
+import type { AutomationLaneState } from '../shared/types/automation-state';
 import type { RegionProcessingState } from '../shared/types/region-processing';
 import type {
   AnalyzeAudioRegionPeakRequest,
@@ -89,6 +90,7 @@ export interface ExportTrack {
   isMuted: boolean;
   isSoloed: boolean;
   pluginInstances: readonly AudioProjectGraphPluginInstance[];
+  automationLanes?: readonly AutomationLaneState[];
   regions: ExportRegion[];
 }
 
@@ -96,6 +98,7 @@ export interface ExportRequest {
   tracks: ExportTrack[];
   masterVolume: number;
   range: ExportRange;
+  routingGraph?: RoutingGraphSnapshot;
   sampleRate: number;
 }
 
@@ -103,6 +106,11 @@ export interface RescheduleRegionRequest {
   trackId: string;
   regionId: string;
   startTime: number;
+}
+
+export interface SetAutomationLanesRequest {
+  readonly automationLanes: readonly AutomationLaneState[];
+  readonly trackId: string;
 }
 
 export interface AudioTempoChange {
@@ -167,6 +175,7 @@ export interface AudioProjectGraphTrack {
   readonly isMuted: boolean;
   readonly isSoloed: boolean;
   readonly pluginInstances: readonly AudioProjectGraphPluginInstance[];
+  readonly automationLanes?: readonly AutomationLaneState[];
   readonly loops?: readonly AudioProjectGraphLoop[];
   readonly regions: readonly RegionData[];
 }
@@ -246,6 +255,7 @@ export interface IAudioEngine {
   setTrackMute(trackId: string, muted: boolean): void;
   setTrackSolo(trackId: string, soloed: boolean): void;
   getTrackParams(trackId: string): { volume: number; pan: number } | null;
+  setAutomationLanes(request: SetAutomationLanesRequest): void;
 
   // Plugin Management
   installPlugin(request: InstallAudioPluginRequest): void;

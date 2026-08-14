@@ -4,6 +4,10 @@ interface GainMockState {
   readonly gain: {
     value: number;
     rampTo: (value: number, rampSeconds: number) => void;
+    cancelScheduledValues: (time: number) => void;
+    linearRampToValueAtTime: (value: number, time: number) => void;
+    setValueAtTime: (value: number, time: number) => void;
+    setValueCurveAtTime: (values: number[], time: number, duration: number) => void;
   };
 }
 
@@ -13,6 +17,7 @@ const toneMocks = vi.hoisted(() => ({
   disconnect: vi.fn(),
   dispose: vi.fn(),
   rampTo: vi.fn(),
+  setValueAtTime: vi.fn(),
 }));
 
 vi.mock('tone', () => {
@@ -26,6 +31,15 @@ vi.mock('tone', () => {
           this.gain.value = value;
           toneMocks.rampTo(value, rampSeconds);
         },
+        cancelScheduledValues: vi.fn(),
+        linearRampToValueAtTime: vi.fn((value: number) => {
+          this.gain.value = value;
+        }),
+        setValueAtTime: vi.fn((value: number, time: number) => {
+          this.gain.value = value;
+          toneMocks.setValueAtTime(value, time);
+        }),
+        setValueCurveAtTime: vi.fn(),
       };
       toneMocks.gains.push(this);
     }
@@ -95,6 +109,21 @@ describe('ToneGainPluginRuntimeFactory', () => {
 
     expect(toneMocks.rampTo).toHaveBeenCalledWith(0.25, 0.01);
     expect(toneMocks.gains[0]?.gain.value).toBe(0.25);
+  });
+
+  it('Automation 종료 시 마지막 예약값이 아니라 저장된 기본값을 복원한다', () => {
+    const runtime = new ToneGainPluginRuntimeFactory(FACTORY_OPTIONS).create({
+      instanceId: 'plugin-1',
+      parameterValues: new Map(),
+    });
+    runtime.setParameter('gain', 0.25);
+    const target = runtime.getAutomationTarget?.('gain');
+    target?.setValueAtTime(1, 0);
+    toneMocks.setValueAtTime.mockClear();
+
+    target?.restoreBaseValue(1);
+
+    expect(toneMocks.setValueAtTime).toHaveBeenCalledWith(0.25, 1);
   });
 
   it.each([true, '1', Number.NaN, Number.POSITIVE_INFINITY, -0.1, 2.1])(

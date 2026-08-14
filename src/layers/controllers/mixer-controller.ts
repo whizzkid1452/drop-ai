@@ -1,6 +1,7 @@
 import type { IAudioEngine } from '../audio-engine/i-audio-engine';
 import type { AudioMonitorState } from '../shared/types/audio-monitor-state';
 import type { SessionStore } from '../session/session';
+import { ProjectStateError, ProjectStateErrorCode } from './project-state-error';
 import {
   assertValidRoutingGraphSnapshot,
   cloneRoutingGraphSnapshot,
@@ -61,6 +62,25 @@ export class MixerController {
   setRoutingGraph(graph: RoutingGraphSnapshot): void {
     const session = this.sessionStore.getState();
     assertValidRoutingGraphSnapshot(graph, [...session.tracks.keys()]);
+    const sendsById = new Map(graph.sends.map(send => [send.id, send]));
+    session.tracks.forEach(track => {
+      const invalidLane = track.automationLanes?.find(lane => {
+        if (lane.target.kind !== 'sendGain') {
+          return false;
+        }
+        const send = sendsById.get(lane.target.sendId);
+        const hasInvalidOwner = send?.sourceTrackId !== track.id;
+        const disablesActiveTarget = lane.isEnabled && lane.points.length > 0 && send?.isEnabled !== true;
+        return hasInvalidOwner || disablesActiveTarget;
+      });
+      if (invalidLane?.target.kind === 'sendGain') {
+        throw new ProjectStateError(
+          ProjectStateErrorCode.AUTOMATION_TARGET_IN_USE,
+          `Send를 대상으로 하는 Automation lane이 남아 있습니다: ${invalidLane.target.sendId}`,
+          { automationLaneId: invalidLane.id, sendId: invalidLane.target.sendId, trackId: track.id }
+        );
+      }
+    });
     this.audioEngine.setRoutingGraph(graph);
     session.setRoutingGraph(graph);
   }

@@ -1,5 +1,6 @@
 import type * as Tone from 'tone';
 import type { PluginParameterValue } from '../../shared/types/plugin-state';
+import type { IAutomationAudioTarget } from '../automation/automation-param-scheduler';
 
 export interface CreateAudioPluginRuntimeRequest {
   readonly instanceId: string;
@@ -14,6 +15,7 @@ export interface IAudioPluginRuntime {
   disconnect(): void;
   dispose(): void;
   setParameter(parameterId: string, value: PluginParameterValue): void;
+  getAutomationTarget?(parameterId: string): IAutomationAudioTarget | null;
 }
 
 export interface IAudioPluginRuntimeFactory {
