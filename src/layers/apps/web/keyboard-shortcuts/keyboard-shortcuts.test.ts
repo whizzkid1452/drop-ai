@@ -107,14 +107,19 @@ describe('resolveKeyboardShortcutAction', () => {
     expect(resolveKeyboardShortcutAction(createKeyboardEvent(eventOptions))).toBe(expectedAction);
   });
 
-  it.each(['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'])(
-    '%s에 초점이 있으면 전역 단축키를 실행하지 않는다',
-    tagName => {
-      const target = document.createElement(tagName);
+  it.each(['INPUT', 'TEXTAREA', 'SELECT', 'A'])('%s에 초점이 있으면 전역 단축키를 실행하지 않는다', tagName => {
+    const target = document.createElement(tagName);
 
-      expect(resolveKeyboardShortcutAction(createKeyboardEvent({ code: 'Space', target }))).toBeNull();
-    }
-  );
+    expect(resolveKeyboardShortcutAction(createKeyboardEvent({ code: 'Space', target }))).toBeNull();
+  });
+
+  it('버튼에 초점이 있어도 Space를 재생 토글로 해석한다', () => {
+    const target = document.createElement('button');
+
+    expect(resolveKeyboardShortcutAction(createKeyboardEvent({ code: 'Space', target }))).toBe(
+      KeyboardShortcutAction.TOGGLE_PLAYBACK
+    );
+  });
 
   it('contenteditable 요소 안에서는 전역 단축키를 실행하지 않는다', () => {
     const editor = document.createElement('div');
@@ -150,6 +155,23 @@ describe('전역 단축키 연결', () => {
     act(() => window.dispatchEvent(event));
 
     expect(onSave).toHaveBeenCalledTimes(1);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('버튼에 초점이 있어도 Space 기본 클릭을 막고 재생 토글을 전달한다', () => {
+    const onTogglePlayback = vi.fn();
+    const { host } = renderShortcutHarness(KeyboardShortcutAction.TOGGLE_PLAYBACK, onTogglePlayback);
+    const button = document.createElement('button');
+    host.append(button);
+    const event = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      code: 'Space',
+    });
+
+    act(() => button.dispatchEvent(event));
+
+    expect(onTogglePlayback).toHaveBeenCalledTimes(1);
     expect(event.defaultPrevented).toBe(true);
   });
 

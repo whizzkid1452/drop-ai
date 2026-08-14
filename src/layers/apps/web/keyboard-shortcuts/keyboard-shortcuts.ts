@@ -96,6 +96,15 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
   );
 }
 
+function isButtonTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Node)) {
+    return false;
+  }
+
+  const element = target instanceof Element ? target : target.parentElement;
+  return Boolean(element?.closest('button, [role="button"]'));
+}
+
 function resolvePrimaryModifierAction(event: KeyboardShortcutEvent): KeyboardShortcutAction | null {
   const editorActionByCode: Readonly<Record<string, KeyboardShortcutAction | undefined>> = {
     KeyC: KeyboardShortcutAction.COPY_REGIONS,
@@ -156,7 +165,9 @@ function resolvePlainAction(event: KeyboardShortcutEvent): KeyboardShortcutActio
 }
 
 export function resolveKeyboardShortcutAction(event: KeyboardShortcutEvent): KeyboardShortcutAction | null {
-  if (event.isComposing || isInteractiveTarget(event.target)) {
+  // 버튼의 기본 Space 클릭보다 Transport 재생 토글을 우선한다.
+  const isPlaybackShortcutFromButton = event.code === 'Space' && isButtonTarget(event.target);
+  if (event.isComposing || (isInteractiveTarget(event.target) && !isPlaybackShortcutFromButton)) {
     return null;
   }
 
