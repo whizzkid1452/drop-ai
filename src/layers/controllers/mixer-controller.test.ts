@@ -8,6 +8,22 @@ const INITIAL_PROJECT_METADATA = {
   name: 'Mixer 테스트',
   revision: 0,
 };
+const TRACK_ID = '22222222-2222-4222-8222-222222222222';
+const BUS_ID = '33333333-3333-4333-8333-333333333333';
+
+function createTrack(id: string) {
+  return {
+    id,
+    isMuted: false,
+    isSoloed: false,
+    name: id,
+    pan: 0,
+    pluginInstances: [],
+    regions: [],
+    status: [],
+    volume: 1,
+  };
+}
 
 function createTestContext() {
   const audioEngine = new MockAudioEngine();
@@ -36,5 +52,62 @@ describe('MixerController', () => {
 
     expect(() => controller.setMasterVolume(0.5)).toThrow('master volume failed');
     expect(sessionStore.getState().masterVolume).toBe(1);
+  });
+
+  it('Monitor 상태는 저장 Session을 변경하지 않고 runtime에만 반영한다', () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    const projectRevision = sessionStore.getState().project.revision;
+
+    controller.setMonitorState({ isCut: true, isDimmed: false, isMono: true });
+
+    expect(audioEngine.getMonitorState()).toEqual({ isCut: true, isDimmed: false, isMono: true });
+    expect(sessionStore.getState().project.revision).toBe(projectRevision);
+  });
+
+  it('Track 출력을 Bus로 연결하고 runtime 성공 뒤 Session에 반영한다', async () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    await audioEngine.addTrack(TRACK_ID);
+    await audioEngine.addTrack(BUS_ID);
+    sessionStore.getState().addTrack(createTrack(TRACK_ID));
+    sessionStore.getState().addTrack(createTrack(BUS_ID));
+    controller.setTrackRouting({ channelCount: 2, kind: 'bus', output: { kind: 'master' }, trackId: BUS_ID });
+
+    controller.setTrackRouting({
+      channelCount: 2,
+      kind: 'audio',
+      output: { kind: 'track', trackId: BUS_ID },
+      trackId: TRACK_ID,
+    });
+
+    expect(audioEngine.getRoutingGraph()).toEqual(sessionStore.getState().routingGraph);
+    expect(sessionStore.getState().routingGraph.routes[0]?.output).toEqual({ kind: 'track', trackId: BUS_ID });
+  });
+
+  it('순환 Send는 AudioEngine 호출 전에 거부한다', async () => {
+    const { audioEngine, controller, sessionStore } = createTestContext();
+    await audioEngine.addTrack(TRACK_ID);
+    await audioEngine.addTrack(BUS_ID);
+    sessionStore.getState().addTrack(createTrack(TRACK_ID));
+    sessionStore.getState().addTrack(createTrack(BUS_ID));
+    controller.setTrackRouting({ channelCount: 2, kind: 'bus', output: { kind: 'master' }, trackId: BUS_ID });
+    controller.setTrackRouting({
+      channelCount: 2,
+      kind: 'aux',
+      output: { kind: 'track', trackId: BUS_ID },
+      trackId: TRACK_ID,
+    });
+    const setRoutingGraph = vi.spyOn(audioEngine, 'setRoutingGraph');
+
+    expect(() =>
+      controller.addSend({
+        destinationTrackId: TRACK_ID,
+        gain: 1,
+        id: '44444444-4444-4444-8444-444444444444',
+        isEnabled: true,
+        sourceTrackId: BUS_ID,
+        tapPoint: 'postFader',
+      })
+    ).toThrow('순환');
+    expect(setRoutingGraph).not.toHaveBeenCalled();
   });
 });

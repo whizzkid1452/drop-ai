@@ -12,6 +12,33 @@ const REGION_ID = '6ba7b810-9dad-41d1-80b4-00c04fd430c8';
 const SOURCE_ID = '11111111-1111-4111-8111-111111111111';
 const PLUGIN_INSTANCE_ID = '22222222-2222-4222-8222-222222222222';
 
+describe('Mixer runtime 명령 계약', () => {
+  it('Monitor cut·dim·mono 상태를 모두 명시해야 한다', () => {
+    const command = {
+      type: AudioCommandType.SET_MONITOR_STATE,
+      isCut: false,
+      isDimmed: true,
+      isMono: true,
+    };
+
+    expect(StrictAudioCommandSchema.parse(command)).toEqual(command);
+    expect(StrictAudioCommandSchema.safeParse({ ...command, isMono: undefined }).success).toBe(false);
+  });
+
+  it('Audio·Aux·Bus·Folder·VCA Track 종류를 허용한다', () => {
+    (['audio', 'aux', 'bus', 'folder', 'vca'] as const).forEach(kind => {
+      expect(
+        StrictAudioCommandSchema.safeParse({
+          type: AudioCommandType.ADD_TRACK,
+          channelCount: 2,
+          kind,
+          trackId: TRACK_ID,
+        }).success
+      ).toBe(true);
+    });
+  });
+});
+
 describe('ADD_TRACK 계약', () => {
   it('Track ID만으로 빈 Track 생성 명령을 허용한다', () => {
     const command = {

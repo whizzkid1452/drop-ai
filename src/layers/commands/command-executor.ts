@@ -155,6 +155,22 @@ export class CommandExecutor {
     switch (validatedCommand.type) {
       case AudioCommandType.ADD_TRACK:
         await this.controller.track.addTrack(validatedCommand.trackId);
+        if (validatedCommand.kind || validatedCommand.channelCount) {
+          try {
+            this.controller.mixer.setTrackRouting({
+              channelCount: validatedCommand.channelCount ?? 2,
+              kind: validatedCommand.kind ?? 'audio',
+              output:
+                validatedCommand.kind === 'folder' || validatedCommand.kind === 'vca'
+                  ? { kind: 'none' }
+                  : { kind: 'master' },
+              trackId: validatedCommand.trackId,
+            });
+          } catch (cause) {
+            this.controller.track.removeTrack(validatedCommand.trackId);
+            throw cause;
+          }
+        }
         return;
 
       case AudioCommandType.REMOVE_TRACK:
@@ -261,6 +277,34 @@ export class CommandExecutor {
 
       case AudioCommandType.SET_MASTER_VOLUME:
         this.controller.mixer.setMasterVolume(validatedCommand.volume);
+        return;
+
+      case AudioCommandType.SET_MONITOR_STATE:
+        this.controller.mixer.setMonitorState(validatedCommand);
+        return;
+
+      case AudioCommandType.SET_ROUTING_GRAPH:
+        this.controller.mixer.setRoutingGraph(validatedCommand.graph);
+        return;
+
+      case AudioCommandType.SET_TRACK_ROUTING:
+        this.controller.mixer.setTrackRouting(validatedCommand);
+        return;
+
+      case AudioCommandType.ADD_SEND:
+        this.controller.mixer.addSend(validatedCommand);
+        return;
+
+      case AudioCommandType.UPDATE_SEND:
+        this.controller.mixer.updateSend(validatedCommand);
+        return;
+
+      case AudioCommandType.REMOVE_SEND:
+        this.controller.mixer.removeSend(validatedCommand.id);
+        return;
+
+      case AudioCommandType.SET_TRACK_GROUPS:
+        this.controller.mixer.setTrackGroups(validatedCommand);
         return;
 
       case AudioCommandType.SET_TRACK_NAME:
@@ -529,6 +573,12 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.SET_LOOP_ENABLED:
     case AudioCommandType.SET_METRONOME:
     case AudioCommandType.SET_MASTER_VOLUME:
+    case AudioCommandType.SET_ROUTING_GRAPH:
+    case AudioCommandType.SET_TRACK_ROUTING:
+    case AudioCommandType.ADD_SEND:
+    case AudioCommandType.UPDATE_SEND:
+    case AudioCommandType.REMOVE_SEND:
+    case AudioCommandType.SET_TRACK_GROUPS:
     case AudioCommandType.SET_TRACK_NAME:
     case AudioCommandType.SET_TRACK_VOLUME:
     case AudioCommandType.SET_TRACK_PAN:
@@ -564,6 +614,7 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.PLAY:
     case AudioCommandType.PAUSE:
     case AudioCommandType.STOP:
+    case AudioCommandType.SET_MONITOR_STATE:
     case AudioCommandType.SET_AUDIO_INPUT_DEVICE:
     case AudioCommandType.SET_INPUT_MONITORING:
     case AudioCommandType.SET_TRACK_RECORD_ARM:

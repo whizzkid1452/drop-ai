@@ -1,7 +1,19 @@
 import { AudioEngineError, AudioEngineErrorCode, ERROR_MESSAGES } from './errors';
 import { COMPLETE_RESOURCE_CLEANUP } from '../shared/types/resource-cleanup';
+import {
+  cloneAudioMonitorState,
+  DEFAULT_AUDIO_MONITOR_STATE,
+  type AudioMonitorState,
+} from '../shared/types/audio-monitor-state';
 import { insertArrayEntry, moveArrayEntry } from '../shared/array-order';
 import type { TimelineRange } from '../shared/types/project-document.schema';
+import {
+  assertValidRoutingGraphSnapshot,
+  cloneRoutingGraphSnapshot,
+  createDefaultRoutingGraphSnapshot,
+  removeTrackFromRoutingGraph,
+  type RoutingGraphSnapshot,
+} from '../shared/types/routing-state';
 import type {
   ExportRequest,
   ArmLoopRequest,
@@ -61,6 +73,8 @@ interface MockPluginState {
 export class MockAudioEngine implements IAudioEngine {
   private mockTime = 0;
   private mockMasterVolume = 1;
+  private mockMonitorState: AudioMonitorState = DEFAULT_AUDIO_MONITOR_STATE;
+  private mockRoutingGraph: RoutingGraphSnapshot = { routes: [], sends: [] };
   private mockTracks: Map<string, MockTrackState> = new Map();
   private mockRegions: Map<string, Map<string, RegionData>> = new Map();
   private mockPlugins: Map<string, Map<string, MockPluginState>> = new Map();
@@ -324,8 +338,34 @@ export class MockAudioEngine implements IAudioEngine {
     this.graphRevision += 1;
   }
 
+  getMonitorState(): AudioMonitorState {
+    return cloneAudioMonitorState(this.mockMonitorState);
+  }
+
+  setMonitorState(state: AudioMonitorState): void {
+    this.mockMonitorState = cloneAudioMonitorState(state);
+    this.graphRevision += 1;
+  }
+
+  getRoutingGraph(): RoutingGraphSnapshot {
+    return cloneRoutingGraphSnapshot(this.mockRoutingGraph);
+  }
+
+  setRoutingGraph(graph: RoutingGraphSnapshot): void {
+    assertValidRoutingGraphSnapshot(graph, [...this.mockTracks.keys()]);
+    this.mockRoutingGraph = cloneRoutingGraphSnapshot(graph);
+    this.graphRevision += 1;
+  }
+
   async addTrack(trackId: string): Promise<void> {
     this.initializeTrack(trackId);
+    this.mockRoutingGraph = {
+      ...this.mockRoutingGraph,
+      routes: [
+        ...this.mockRoutingGraph.routes.filter(route => route.trackId !== trackId),
+        ...createDefaultRoutingGraphSnapshot([trackId]).routes,
+      ],
+    };
     this.graphRevision += 1;
     console.log(`[MockAudioEngine] Track added: ${trackId}`);
   }
@@ -334,6 +374,7 @@ export class MockAudioEngine implements IAudioEngine {
     this.mockTracks.delete(trackId);
     this.mockRegions.delete(trackId);
     this.mockPlugins.delete(trackId);
+    this.mockRoutingGraph = removeTrackFromRoutingGraph(this.mockRoutingGraph, trackId);
     [...this.mockLoopStates.keys()]
       .filter(key => key.startsWith(`${trackId}\u0000`))
       .forEach(key => this.mockLoopStates.delete(key));
@@ -498,8 +539,13 @@ export class MockAudioEngine implements IAudioEngine {
   async prepareProjectGraph({
     tracks,
     masterVolume = 1,
+    routingGraph = createDefaultRoutingGraphSnapshot(tracks.map(track => track.id)),
   }: PrepareAudioProjectGraphRequest): Promise<IPreparedAudioProjectGraph> {
     const expectedRevision = this.graphRevision;
+    assertValidRoutingGraphSnapshot(
+      routingGraph,
+      tracks.map(track => track.id)
+    );
     const nextTracks = new Map<string, MockTrackState>();
     const nextRegions = new Map<string, Map<string, RegionData>>();
     const nextPlugins = new Map<string, Map<string, MockPluginState>>();
@@ -581,6 +627,7 @@ export class MockAudioEngine implements IAudioEngine {
         this.mockPlugins = nextPlugins;
         this.mockLoopStates = nextLoopStates;
         this.mockMasterVolume = masterVolume;
+        this.mockRoutingGraph = cloneRoutingGraphSnapshot(routingGraph);
         this.mockTime = 0;
         this.graphRevision += 1;
         state = 'activated';

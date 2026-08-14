@@ -10,6 +10,7 @@ import {
 } from '@daw-engine-source/browser-adapter';
 import type {
   ArmLoopRequest,
+  AudioMonitorState,
   ExportRequest,
   IAudioEngine,
   InstallAudioPluginRequest,
@@ -23,6 +24,7 @@ import type {
   MeterFrame,
   MeterTarget,
   RecordedTake,
+  RoutingGraphSnapshot,
   RecordingRuntimeListener,
   RecordingRuntimeState,
   MoveAudioPluginRequest,
@@ -287,6 +289,22 @@ export class DawEngineAdapter implements IAudioEngine {
 
   setMasterVolume(volume: number): void {
     this.#engine.session.masterBus.volume = linearGainToDecibels(volume);
+  }
+
+  getMonitorState(): AudioMonitorState {
+    return this.#runtime.getMonitorState();
+  }
+
+  setMonitorState(state: AudioMonitorState): void {
+    this.#runtime.setMonitorState(state);
+  }
+
+  getRoutingGraph(): RoutingGraphSnapshot {
+    return this.#runtime.getRoutingGraph();
+  }
+
+  setRoutingGraph(graph: RoutingGraphSnapshot): void {
+    this.#runtime.setRoutingGraph(graph);
   }
 
   async addTrack(trackId: string): Promise<void> {

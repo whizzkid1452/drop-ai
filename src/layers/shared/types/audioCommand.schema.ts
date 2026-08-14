@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { calculateFiniteRegionSourceEndTime } from '../audio-source-range';
 import { calculateFiniteRegionEndTime } from '../region-timeline';
 import { ProjectTempoChangeSchema, ProjectTimelineMarkerSchema } from './project-document.schema';
+import { ROUTING_CHANNEL_COUNTS, ROUTING_SEND_TAP_POINTS, ROUTING_TRACK_KINDS } from './routing-state';
+import { ProjectRoutingGraphSchema, ProjectRoutingRouteTargetSchema } from './project-document.schema';
 
 export const AudioCommandType = {
   UNDO: 'UNDO',
@@ -32,6 +34,13 @@ export const AudioCommandType = {
   SET_LOOP_ENABLED: 'SET_LOOP_ENABLED',
   SET_METRONOME: 'SET_METRONOME',
   SET_MASTER_VOLUME: 'SET_MASTER_VOLUME',
+  SET_MONITOR_STATE: 'SET_MONITOR_STATE',
+  SET_ROUTING_GRAPH: 'SET_ROUTING_GRAPH',
+  SET_TRACK_ROUTING: 'SET_TRACK_ROUTING',
+  ADD_SEND: 'ADD_SEND',
+  UPDATE_SEND: 'UPDATE_SEND',
+  REMOVE_SEND: 'REMOVE_SEND',
+  SET_TRACK_GROUPS: 'SET_TRACK_GROUPS',
   SET_TRACK_NAME: 'SET_TRACK_NAME',
   SET_TRACK_VOLUME: 'SET_TRACK_VOLUME',
   SET_TRACK_PAN: 'SET_TRACK_PAN',
@@ -206,6 +215,8 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal(AudioCommandType.ADD_TRACK),
     trackId: z.uuid('Invalid track ID format'),
+    kind: z.enum(ROUTING_TRACK_KINDS).optional(),
+    channelCount: z.union([z.literal(ROUTING_CHANNEL_COUNTS[0]), z.literal(ROUTING_CHANNEL_COUNTS[1])]).optional(),
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.REMOVE_TRACK),
@@ -310,6 +321,49 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal(AudioCommandType.SET_MASTER_VOLUME),
     volume: z.number().min(0).max(1),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_MONITOR_STATE),
+    isCut: z.boolean(),
+    isDimmed: z.boolean(),
+    isMono: z.boolean(),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_ROUTING_GRAPH),
+    graph: ProjectRoutingGraphSchema,
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_TRACK_ROUTING),
+    trackId: z.uuid('Invalid Track ID format'),
+    kind: z.enum(ROUTING_TRACK_KINDS),
+    channelCount: z.union([z.literal(ROUTING_CHANNEL_COUNTS[0]), z.literal(ROUTING_CHANNEL_COUNTS[1])]),
+    output: ProjectRoutingRouteTargetSchema,
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.ADD_SEND),
+    id: z.uuid('Invalid Send ID format'),
+    sourceTrackId: z.uuid('Invalid Track ID format'),
+    destinationTrackId: z.uuid('Invalid Track ID format'),
+    gain: z.number().min(0).max(1),
+    tapPoint: z.enum(ROUTING_SEND_TAP_POINTS),
+    isEnabled: z.boolean(),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.UPDATE_SEND),
+    id: z.uuid('Invalid Send ID format'),
+    gain: z.number().min(0).max(1),
+    tapPoint: z.enum(ROUTING_SEND_TAP_POINTS),
+    isEnabled: z.boolean(),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.REMOVE_SEND),
+    id: z.uuid('Invalid Send ID format'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_TRACK_GROUPS),
+    trackId: z.uuid('Invalid Track ID format'),
+    folderId: z.uuid('Invalid Folder Track ID format').nullable(),
+    vcaIds: z.array(z.uuid('Invalid VCA Track ID format')).max(512),
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.SET_TRACK_NAME),

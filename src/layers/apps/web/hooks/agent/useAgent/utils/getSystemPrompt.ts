@@ -79,7 +79,8 @@ const COMMAND_REFERENCE = {
   [AudioCommandType.STOP_ALL_LOOPS]: '{"type":"STOP_ALL_LOOPS"} - 모든 루프 정지 예약',
   [AudioCommandType.UNDO]: '{"type":"UNDO"} - 마지막 편집 실행 취소',
   [AudioCommandType.REDO]: '{"type":"REDO"} - 마지막으로 취소한 편집 다시 실행',
-  [AudioCommandType.ADD_TRACK]: '{"type":"ADD_TRACK","trackId":"<new UUID>"} - 빈 Track 추가. 현재 Agent 생성은 금지',
+  [AudioCommandType.ADD_TRACK]:
+    '{"type":"ADD_TRACK","trackId":"<new UUID>"} - 빈 Track 추가. kind(audio|aux|bus|folder|vca)와 channelCount(1|2)는 선택 사항. 현재 Agent 생성은 금지',
   [AudioCommandType.REMOVE_TRACK]:
     '{"type":"REMOVE_TRACK","trackId":"<existing Track UUID>"} - Track과 포함된 Region을 제거',
   [AudioCommandType.PLAY]: '{"type":"PLAY"} - 재생',
@@ -88,6 +89,19 @@ const COMMAND_REFERENCE = {
   [AudioCommandType.SET_TEMPO]:
     '{"type":"SET_TEMPO","tempo":<number greater than 0>} - 프로젝트 Tempo Map과 재생 scheduler 변경',
   [AudioCommandType.SET_MASTER_VOLUME]: '{"type":"SET_MASTER_VOLUME","volume":<0..1>} - 전체 출력 볼륨 변경',
+  [AudioCommandType.SET_MONITOR_STATE]:
+    '{"type":"SET_MONITOR_STATE","isCut":<boolean>,"isDimmed":<boolean>,"isMono":<boolean>} - Monitor cut·dim·mono 변경',
+  [AudioCommandType.SET_ROUTING_GRAPH]:
+    '{"type":"SET_ROUTING_GRAPH","graph":{"routes":[],"sends":[]}} - 전체 Route graph 교체',
+  [AudioCommandType.SET_TRACK_ROUTING]:
+    '{"type":"SET_TRACK_ROUTING","trackId":"<Track UUID>","kind":"audio|aux|bus|folder|vca","channelCount":<1|2>,"output":{"kind":"master|track|none"}} - Track 종류와 출력 Route 변경',
+  [AudioCommandType.ADD_SEND]:
+    '{"type":"ADD_SEND","id":"<new UUID>","sourceTrackId":"<Track UUID>","destinationTrackId":"<Aux or Bus UUID>","gain":<0..1>,"tapPoint":"preFader|postFader","isEnabled":<boolean>} - Send 추가',
+  [AudioCommandType.UPDATE_SEND]:
+    '{"type":"UPDATE_SEND","id":"<Send UUID>","gain":<0..1>,"tapPoint":"preFader|postFader","isEnabled":<boolean>} - Send 설정 변경',
+  [AudioCommandType.REMOVE_SEND]: '{"type":"REMOVE_SEND","id":"<Send UUID>"} - Send 제거',
+  [AudioCommandType.SET_TRACK_GROUPS]:
+    '{"type":"SET_TRACK_GROUPS","trackId":"<Track UUID>","folderId":"<Folder UUID or null>","vcaIds":["<VCA UUID>"]} - Folder와 VCA 소속 변경',
   [AudioCommandType.SET_TIMELINE_MAP]:
     '{"type":"SET_TIMELINE_MAP","tempoChanges":[{"quarterNotePosition":0,"bpm":120}],"meterChanges":[{"quarterNotePosition":0,"beatsPerBar":4,"beatUnit":4}]} - Tempo·Meter Map 전체 변경',
   [AudioCommandType.SET_TIMELINE_MARKERS]:
