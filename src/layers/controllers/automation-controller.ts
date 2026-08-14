@@ -1,12 +1,31 @@
 import type { IAudioEngine, SetAutomationLanesRequest } from '../audio-engine/i-audio-engine';
 import type { SessionStore, TrackState } from '../session/session';
-import { cloneAutomationLaneState, getAutomationTargetKey } from '../shared/types/automation-state';
+import { applyAutomationWritePass } from '../shared/automation-write-pass';
+import type { TimelineRange } from '../shared/types/project-document.schema';
+import {
+  cloneAutomationLaneState,
+  getAutomationTargetKey,
+  type AutomationLaneState,
+  type AutomationPointState,
+} from '../shared/types/automation-state';
 import { ProjectMutationCompensationError } from './project-mutation-compensation-error';
 import { ProjectStateError, ProjectStateErrorCode } from './project-state-error';
 
 interface AutomationControllerDependencies {
   readonly audioEngine: IAudioEngine;
   readonly sessionStore: SessionStore;
+}
+
+export interface AutomationWritePassRequest {
+  readonly laneId: string;
+  readonly passRange: TimelineRange;
+  readonly samples: readonly AutomationPointState[];
+  readonly trackId: string;
+}
+
+export interface CancelAutomationWritePreviewRequest {
+  readonly laneId: string;
+  readonly trackId: string;
 }
 
 export class AutomationController {
@@ -40,6 +59,29 @@ export class AutomationController {
       }
       throw cause;
     }
+  }
+
+  previewAutomationWritePass(request: AutomationWritePassRequest): void {
+    this.dependencies.audioEngine.setAutomationLanes({
+      automationLanes: this.createWritePassLanes(request),
+      trackId: request.trackId,
+    });
+  }
+
+  commitAutomationWritePass(request: AutomationWritePassRequest): void {
+    this.setTrackAutomation({
+      automationLanes: this.createWritePassLanes(request),
+      trackId: request.trackId,
+    });
+  }
+
+  cancelAutomationWritePreview(request: CancelAutomationWritePreviewRequest): void {
+    const track = this.getTrack(request.trackId);
+    this.getLaneIndex(track, request.laneId);
+    this.dependencies.audioEngine.setAutomationLanes({
+      automationLanes: (track.automationLanes ?? []).map(cloneAutomationLaneState),
+      trackId: request.trackId,
+    });
   }
 
   private getTrack(trackId: string): TrackState {
@@ -78,5 +120,28 @@ export class AutomationController {
         }
       }
     });
+  }
+
+  private createWritePassLanes(request: AutomationWritePassRequest): readonly AutomationLaneState[] {
+    const track = this.getTrack(request.trackId);
+    const automationLanes = track.automationLanes ?? [];
+    const laneIndex = this.getLaneIndex(track, request.laneId);
+    return automationLanes.map((lane, index) =>
+      index === laneIndex
+        ? applyAutomationWritePass({ lane, passRange: request.passRange, samples: request.samples })
+        : cloneAutomationLaneState(lane)
+    );
+  }
+
+  private getLaneIndex(track: TrackState, laneId: string): number {
+    const laneIndex = (track.automationLanes ?? []).findIndex(lane => lane.id === laneId);
+    if (laneIndex >= 0) {
+      return laneIndex;
+    }
+    throw new ProjectStateError(
+      ProjectStateErrorCode.AUTOMATION_LANE_NOT_FOUND,
+      `Automation lane을 찾을 수 없습니다: ${laneId}`,
+      { laneId, trackId: track.id }
+    );
   }
 }

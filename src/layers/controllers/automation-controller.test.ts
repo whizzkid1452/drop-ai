@@ -59,6 +59,70 @@ describe('AutomationController', () => {
     expect(sessionStore.getState().tracks.get(TRACK_ID)?.automationLanes).toEqual([LANE]);
   });
 
+  it('write pass preview는 runtime만 바꾸고 Session은 유지한다', () => {
+    const writableLane = { ...LANE, mode: 'touch' as const };
+    controller.setTrackAutomation({ automationLanes: [writableLane], trackId: TRACK_ID });
+    const runtimeSpy = vi.spyOn(audioEngine, 'setAutomationLanes');
+    runtimeSpy.mockClear();
+
+    controller.previewAutomationWritePass({
+      laneId: LANE.id,
+      passRange: { endTimeSeconds: 2, startTimeSeconds: 1 },
+      samples: [
+        {
+          id: '55555555-5555-4555-8555-555555555555',
+          interpolation: 'linear',
+          timeSeconds: 1,
+          value: 0.75,
+        },
+      ],
+      trackId: TRACK_ID,
+    });
+
+    expect(runtimeSpy).toHaveBeenCalledWith({
+      automationLanes: [
+        expect.objectContaining({ points: expect.arrayContaining([expect.objectContaining({ value: 0.75 })]) }),
+      ],
+      trackId: TRACK_ID,
+    });
+    expect(sessionStore.getState().tracks.get(TRACK_ID)?.automationLanes).toEqual([writableLane]);
+  });
+
+  it('write pass commit은 runtime과 Session에 같은 lane을 확정한다', () => {
+    const writableLane = { ...LANE, mode: 'write' as const };
+    controller.setTrackAutomation({ automationLanes: [writableLane], trackId: TRACK_ID });
+
+    controller.commitAutomationWritePass({
+      laneId: LANE.id,
+      passRange: { endTimeSeconds: 2, startTimeSeconds: 1 },
+      samples: [
+        {
+          id: '55555555-5555-4555-8555-555555555555',
+          interpolation: 'linear',
+          timeSeconds: 1.5,
+          value: 0.75,
+        },
+      ],
+      trackId: TRACK_ID,
+    });
+
+    expect(sessionStore.getState().tracks.get(TRACK_ID)?.automationLanes?.[0]?.points).toEqual([
+      LANE.points[0],
+      expect.objectContaining({ timeSeconds: 1.5, value: 0.75 }),
+    ]);
+  });
+
+  it('write preview 취소는 저장된 Session lane을 runtime에 다시 적용한다', () => {
+    const writableLane = { ...LANE, mode: 'latch' as const };
+    controller.setTrackAutomation({ automationLanes: [writableLane], trackId: TRACK_ID });
+    const runtimeSpy = vi.spyOn(audioEngine, 'setAutomationLanes');
+    runtimeSpy.mockClear();
+
+    controller.cancelAutomationWritePreview({ laneId: LANE.id, trackId: TRACK_ID });
+
+    expect(runtimeSpy).toHaveBeenCalledWith({ automationLanes: [writableLane], trackId: TRACK_ID });
+  });
+
   it('Session 갱신 실패 시 runtime을 이전 lane으로 복원한다', () => {
     const runtimeSpy = vi.spyOn(audioEngine, 'setAutomationLanes');
     vi.spyOn(sessionStore.getState(), 'updateTrack').mockImplementationOnce(() => {

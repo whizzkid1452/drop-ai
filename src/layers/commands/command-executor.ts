@@ -358,6 +358,18 @@ export class CommandExecutor {
         this.controller.automation.setTrackAutomation(validatedCommand);
         return;
 
+      case AudioCommandType.PREVIEW_AUTOMATION_WRITE_PASS:
+        this.controller.automation.previewAutomationWritePass(validatedCommand);
+        return;
+
+      case AudioCommandType.COMMIT_AUTOMATION_WRITE_PASS:
+        this.controller.automation.commitAutomationWritePass(validatedCommand);
+        return;
+
+      case AudioCommandType.CANCEL_AUTOMATION_WRITE_PREVIEW:
+        this.controller.automation.cancelAutomationWritePreview(validatedCommand);
+        return;
+
       case AudioCommandType.INSTALL_PLUGIN:
         this.controller.plugin.installPlugin({
           trackId: validatedCommand.trackId,
@@ -613,6 +625,7 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.SET_TRACK_MUTE:
     case AudioCommandType.SET_TRACK_SOLO:
     case AudioCommandType.SET_AUTOMATION_LANES:
+    case AudioCommandType.COMMIT_AUTOMATION_WRITE_PASS:
     case AudioCommandType.INSTALL_PLUGIN:
     case AudioCommandType.REMOVE_PLUGIN:
     case AudioCommandType.MOVE_PLUGIN:
@@ -657,6 +670,8 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.SET_CURRENT_TIME:
     case AudioCommandType.SET_EDITOR_SELECTION:
     case AudioCommandType.COPY_SELECTED_REGIONS:
+    case AudioCommandType.PREVIEW_AUTOMATION_WRITE_PASS:
+    case AudioCommandType.CANCEL_AUTOMATION_WRITE_PREVIEW:
     case AudioCommandType.EXPORT_AUDIO:
     case AudioCommandType.SAVE_PROJECT:
     case AudioCommandType.LOAD_PROJECT:
