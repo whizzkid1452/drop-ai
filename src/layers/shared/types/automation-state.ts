@@ -1,6 +1,9 @@
 export const AUTOMATION_INTERPOLATIONS = ['hold', 'linear', 'exponential', 'logarithmic', 'curved'] as const;
 export type AutomationInterpolation = (typeof AUTOMATION_INTERPOLATIONS)[number];
 
+export const AUTOMATION_MODES = ['read', 'write', 'touch', 'latch'] as const;
+export type AutomationMode = (typeof AUTOMATION_MODES)[number];
+
 export type AutomationTarget =
   | { readonly kind: 'trackVolume' }
   | { readonly kind: 'trackPan' }
@@ -21,6 +24,7 @@ export interface AutomationPointState {
 export interface AutomationLaneState {
   readonly id: string;
   readonly isEnabled: boolean;
+  readonly mode: AutomationMode;
   readonly points: readonly AutomationPointState[];
   readonly target: AutomationTarget;
 }
@@ -29,6 +33,7 @@ export function cloneAutomationLaneState(lane: AutomationLaneState): AutomationL
   return {
     id: lane.id,
     isEnabled: lane.isEnabled,
+    mode: lane.mode,
     points: lane.points.map(point => ({ ...point })),
     target: { ...lane.target },
   };

@@ -1818,6 +1818,7 @@ describe('CommandExecutor', () => {
       {
         id: REGION_ID,
         isEnabled: true,
+        mode: 'read' as const,
         points: [
           {
             id: SECOND_REGION_ID,

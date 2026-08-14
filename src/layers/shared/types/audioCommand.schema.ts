@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { calculateFiniteRegionSourceEndTime } from '../audio-source-range';
 import { calculateFiniteRegionEndTime } from '../region-timeline';
 import {
-  ProjectAutomationLaneSchema,
+  ProjectAutomationLaneV12Schema,
   ProjectCompSegmentSchema,
   ProjectRoutingGraphSchema,
   ProjectRoutingRouteTargetSchema,
@@ -443,7 +443,7 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.SET_AUTOMATION_LANES),
-    automationLanes: z.array(ProjectAutomationLaneSchema).max(128),
+    automationLanes: z.array(ProjectAutomationLaneV12Schema).max(128),
     trackId: z.uuid('Invalid track ID format'),
   }),
   z.strictObject({

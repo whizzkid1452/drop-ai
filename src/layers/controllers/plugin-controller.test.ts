@@ -354,6 +354,7 @@ describe('PluginController', () => {
         {
           id: '11111111-1111-4111-8111-111111111111',
           isEnabled: true,
+          mode: 'read',
           points: [],
           target: { kind: 'pluginParameter', parameterId: 'gain', pluginInstanceId: 'plugin-1' },
         },
