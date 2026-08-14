@@ -1,6 +1,6 @@
-import type { IAudioEngine } from '../audio-engine/i-audio-engine';
 import {
   classifyStorageHealth,
+  type AudioEngineRuntimeHealth,
   type RuntimeDiagnosticsState,
   type RuntimeVisibilityState,
 } from '../shared/types/runtime-diagnostics';
@@ -11,10 +11,14 @@ export interface StorageEstimate {
 }
 
 interface RuntimeDiagnosticsQueryOptions {
-  readonly audioEngine: Pick<IAudioEngine, 'getRuntimeHealth'>;
+  readonly audioEngine: IRuntimeDiagnosticsQuerySource;
   readonly estimateStorage?: () => Promise<StorageEstimate>;
   readonly now?: () => string;
   readonly readVisibility?: () => string;
+}
+
+export interface IRuntimeDiagnosticsQuerySource {
+  readonly getRuntimeHealth: () => AudioEngineRuntimeHealth;
 }
 
 export interface IRuntimeDiagnosticsQuery {
@@ -39,7 +43,7 @@ function readBrowserVisibility(): string {
 }
 
 export class RuntimeDiagnosticsQuery implements IRuntimeDiagnosticsQuery {
-  readonly #audioEngine: Pick<IAudioEngine, 'getRuntimeHealth'>;
+  readonly #audioEngine: IRuntimeDiagnosticsQuerySource;
   readonly #estimateStorage: () => Promise<StorageEstimate>;
   readonly #listeners = new Set<() => void>();
   readonly #now: () => string;
