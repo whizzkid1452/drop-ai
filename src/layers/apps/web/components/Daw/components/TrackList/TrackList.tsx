@@ -1,6 +1,5 @@
-﻿import { useEffect, useRef, useState, useCallback } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
-import type { RefObject } from 'react';
 import { TrackComponent, type RegionWaveSurferReadyEvent } from '../Track/TrackComponent';
 import {
   createRegionWaveSurferKey,
@@ -10,6 +9,7 @@ import {
 import * as styles from './TrackList.css.ts';
 import { Cursor } from '@/layers/apps/web/components/Cursor/Cursor';
 import {
+  useAudioRuntimeCapabilities,
   useAudioSourceResolver,
   useCommandExecutor,
   useEditorRuntimeState,
@@ -21,6 +21,8 @@ import type { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordina
 import type { TimelineGridSettings } from '../../timeline-grid';
 import { TimelineGrid } from '../TimelineGrid/TimelineGrid';
 import { AudioCommandType } from '@/types/audioCommand.schema';
+import type { AutomationLaneState } from '@/layers/shared/types/automation-state';
+import { AudioRuntimeFeature } from '@/layers/shared/utils/audio-runtime-capabilities';
 
 interface TrackListProps {
   onTrackSelect: (trackId: string) => void;
@@ -44,10 +46,14 @@ export function TrackList({
   timelineViewportRef,
 }: TrackListProps) {
   const tracks = useSession(state => state.tracks);
-  const trackArray = Array.from(tracks.values());
+  const pluginCatalog = useSession(state => state.pluginCatalog);
+  const routingGraph = useSession(state => state.routingGraph);
+  const trackArray = useMemo(() => Array.from(tracks.values()), [tracks]);
   const commandExecutor = useCommandExecutor();
   const editorRuntime = useEditorRuntimeState();
   const audioSourceResolver = useAudioSourceResolver();
+  const automationCapability = useAudioRuntimeCapabilities().features[AudioRuntimeFeature.AUTOMATION];
+  const trackNamesById = useMemo(() => new Map(trackArray.map(track => [track.id, track.name])), [trackArray]);
 
   const [, setWavesurferInstances] = useState<Map<string, WaveSurfer>>(new Map());
   const waveformRenderCacheRef = useRef<WaveformRenderCache>(new Map());
@@ -191,6 +197,21 @@ export function TrackList({
     [commandExecutor, tracks]
   );
 
+  const handleAutomationChange = useCallback(
+    async (trackId: string, automationLanes: readonly AutomationLaneState[]) => {
+      await commandExecutor.execute({
+        automationLanes: automationLanes.map(lane => ({
+          ...lane,
+          points: lane.points.map(point => ({ ...point })),
+          target: { ...lane.target },
+        })),
+        trackId,
+        type: AudioCommandType.SET_AUTOMATION_LANES,
+      });
+    },
+    [commandExecutor]
+  );
+
   const handleRangeSelect = useCallback(
     async (trackId: string, startTimeSeconds: number, endTimeSeconds: number) => {
       try {
@@ -227,9 +248,15 @@ export function TrackList({
           <TrackComponent
             key={track.id}
             track={track}
+            automationCapability={automationCapability}
             isSelected={track.id === selectedTrackId}
             coordinateMapper={coordinateMapper}
+            editPointSeconds={editorRuntime.selection.editPointSeconds}
             gridSettings={gridSettings}
+            pluginCatalog={pluginCatalog}
+            routingGraph={routingGraph}
+            trackNamesById={trackNamesById}
+            onAutomationChange={automationLanes => handleAutomationChange(track.id, automationLanes)}
             onReady={handleReady}
             onFadeChange={(regionId, edge, durationSeconds) =>
               handleFadeChange(track.id, regionId, edge, durationSeconds)
