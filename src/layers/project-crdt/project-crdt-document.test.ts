@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readProjectDocumentV5 } from '../shared/types/project-document-reader';
+import { readProjectDocumentV5, readProjectDocumentV9 } from '../shared/types/project-document-reader';
 import type {
   ProjectDocument,
   ProjectDocumentSnapshot,
@@ -68,6 +68,22 @@ function createSnapshotPeers(baseDocument: ProjectDocumentSnapshot): [ProjectCrd
 }
 
 describe('ProjectCrdtDocument', () => {
+  it('v9 Route를 Track ID keyed collection으로 보존한다', () => {
+    const baseDocument = readProjectDocumentV9(createProjectDocument());
+    const firstPeer = ProjectCrdtDocument.create(baseDocument);
+    const secondPeer = ProjectCrdtDocument.fromUpdate(firstPeer.encodeStateAsUpdate());
+    const nextDocument = structuredClone(baseDocument);
+    nextDocument.mixer.routing.routes[0].channelCount = 1;
+    nextDocument.project.revision = 1;
+
+    const update = firstPeer.applyProjectChange({ baseDocument, nextDocument });
+    secondPeer.applyUpdate(update);
+
+    expect(secondPeer.toProjectDocument()).toMatchObject({
+      mixer: { routing: { routes: [{ channelCount: 1, trackId: FIRST_TRACK_ID }] } },
+    });
+  });
+
   it('Tempo marker의 BPM을 수정해도 음악 위치 순서를 유지한다', () => {
     const baseDocument = createProjectDocumentV5();
     const [firstPeer, secondPeer] = createSnapshotPeers(baseDocument);

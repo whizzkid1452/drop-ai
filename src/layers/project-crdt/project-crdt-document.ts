@@ -7,8 +7,9 @@ const COLLECTION_KIND_KEY = '__dropAiCrdtCollectionKind';
 const COLLECTION_ITEMS_KEY = '__dropAiCrdtItems';
 const COLLECTION_ORDER_KEY = '__dropAiCrdtOrder';
 const KEYED_COLLECTION_KIND = 'keyed';
-const SCALAR_COLLECTION_PATHS = new Set(['overdubSourceIds']);
+const SCALAR_COLLECTION_PATHS = new Set(['overdubSourceIds', 'vcaIds']);
 const TIMELINE_MARKER_COLLECTION_PATHS = new Set(['tempoChanges', 'meterChanges']);
+const TRACK_KEYED_COLLECTION_PATHS = new Set(['routes']);
 
 type JsonPrimitive = boolean | number | string | null;
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
@@ -287,6 +288,9 @@ function createCollectionItemKey(value: JsonValue, path: readonly string[]): str
     return value.id;
   }
   const collectionName = path.at(-1);
+  if (collectionName && TRACK_KEYED_COLLECTION_PATHS.has(collectionName)) {
+    return typeof value.trackId === 'string' ? value.trackId : null;
+  }
   if (collectionName && TIMELINE_MARKER_COLLECTION_PATHS.has(collectionName)) {
     // Timeline marker는 저장 ID 대신 음악 위치를 CRDT key로 사용해 BPM 수정 시 순서를 유지합니다.
     return typeof value.quarterNotePosition === 'number' ? `quarter-note:${value.quarterNotePosition}` : null;

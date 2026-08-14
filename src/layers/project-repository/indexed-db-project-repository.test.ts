@@ -292,12 +292,12 @@ describe('IndexedDbProjectRepository', () => {
     await repository.load(PROJECT_ID);
     await putRawProjectDocumentRecord(indexedDb, {
       projectId: PROJECT_ID,
-      document: { ...createProjectDocument(), schemaVersion: 9 },
+      document: { ...createProjectDocument(), schemaVersion: 10 },
     });
 
     await expect(repository.load(PROJECT_ID)).rejects.toMatchObject({
       code: ProjectRepositoryErrorCode.UNSUPPORTED_STORED_DOCUMENT_SCHEMA_VERSION,
-      details: { projectId: PROJECT_ID, schemaVersion: 9 },
+      details: { projectId: PROJECT_ID, schemaVersion: 10 },
       cause: {
         name: 'ProjectDocumentReadError',
         code: 'UNSUPPORTED_SCHEMA_VERSION',
@@ -335,7 +335,7 @@ describe('IndexedDbProjectRepository', () => {
   it('미래 문서 버전을 save로 덮어쓰지 않는다', async () => {
     const repository = createRepository();
     await repository.load(PROJECT_ID);
-    const futureDocument = { ...createProjectDocument(), schemaVersion: 9 };
+    const futureDocument = { ...createProjectDocument(), schemaVersion: 10 };
     await putRawProjectDocumentRecord(indexedDb, { projectId: PROJECT_ID, document: futureDocument });
 
     await expect(repository.save({ document: createProjectDocument(), expectedRevision: 0 })).rejects.toMatchObject({
