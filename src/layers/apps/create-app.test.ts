@@ -517,7 +517,8 @@ describe('createApp', () => {
 
     expect(app.recording).toBeInstanceOf(RecordingQuery);
     expect(app.recording.readState()).toEqual({
-      armedTrackId: null,
+      armedTrackIds: [],
+      inputRoutes: [],
       phase: 'idle',
       recordStartTimeSeconds: null,
     });

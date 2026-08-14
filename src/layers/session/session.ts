@@ -217,6 +217,7 @@ export interface SessionState {
   setMetronomeState: (state: { readonly isEnabled: boolean; readonly volume: number }) => void;
   setMasterVolume: (volume: number) => void;
   setRoutingGraph: (routingGraph: RoutingGraphSnapshot) => void;
+  setRecording: (recording: ProjectRecordingState) => void;
   setExportRange: (startTime: number | null, endTime: number | null) => void;
   replaceProjectMetadata: (project: ProjectMetadata) => void;
   replaceProjectState: (projectState: ProjectSessionState) => void;
@@ -315,6 +316,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     setMetronomeState: ({ isEnabled, volume }) => set({ isMetronomeEnabled: isEnabled, metronomeVolume: volume }),
     setMasterVolume: volume => set({ masterVolume: volume }),
     setRoutingGraph: routingGraph => set({ routingGraph: cloneRoutingGraphSnapshot(routingGraph) }),
+    setRecording: recording => set({ recording: cloneProjectRecordingState(recording) }),
     setExportRange: (startTime, endTime) => set({ exportStartTime: startTime, exportEndTime: endTime }),
     replaceProjectMetadata: project => set({ project: { ...project } }),
     replaceProjectState: projectState =>

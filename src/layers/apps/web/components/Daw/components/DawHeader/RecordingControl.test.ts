@@ -10,7 +10,8 @@ const layerMocks = vi.hoisted(() => ({
   capability: { blockers: [], status: 'available' as 'available' | 'unavailable' },
   execute: vi.fn().mockResolvedValue(undefined),
   state: {
-    armedTrackId: 'track-1' as string | null,
+    armedTrackIds: ['track-1'] as string[],
+    inputRoutes: [{ channelIndex: 0, deviceId: null, trackId: 'track-1' }],
     phase: 'idle' as 'idle' | 'recording' | 'scheduled' | 'stopping',
   },
 }));
@@ -49,7 +50,7 @@ afterEach(() => {
   document.body.replaceChildren();
   layerMocks.execute.mockClear();
   layerMocks.capability.status = 'available';
-  layerMocks.state.armedTrackId = 'track-1';
+  layerMocks.state.armedTrackIds = ['track-1'];
   layerMocks.state.phase = 'idle';
 });
 
@@ -93,7 +94,7 @@ describe('RecordingControl', () => {
   });
 
   it('arm된 Track이 없으면 녹음 시작을 비활성화한다', () => {
-    layerMocks.state.armedTrackId = null;
+    layerMocks.state.armedTrackIds = [];
     const host = renderControl();
 
     expect(host.querySelector<HTMLButtonElement>('[aria-label="녹음 시작"]')?.disabled).toBe(true);

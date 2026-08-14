@@ -30,7 +30,7 @@ import type {
   LoopSlotAddress,
   MeterFrame,
   MeterTarget,
-  RecordedTake,
+  MultiTrackRecordingResult,
   RecordingRuntimeListener,
   RecordingRuntimeState,
   MoveAudioPluginRequest,
@@ -48,6 +48,7 @@ import type {
   SetAudioPluginParameterRequest,
   SetLiveInputMonitoringRequest,
   SetTrackRecordArmRequest,
+  SetTrackRecordingInputRequest,
   StartLinearRecordingRequest,
   StopAllLoopsRequest,
   TriggerLoopRequest,
@@ -92,7 +93,8 @@ export class MockAudioEngine implements IAudioEngine {
   private mockLiveInputDevices: LiveAudioInputDevice[] = [];
   private mockMonitoringTrackId: string | null = null;
   private mockRecordingState: RecordingRuntimeState = {
-    armedTrackId: null,
+    armedTrackIds: [],
+    inputRoutes: [],
     phase: 'idle',
     recordStartTimeSeconds: null,
   };
@@ -279,7 +281,11 @@ export class MockAudioEngine implements IAudioEngine {
   }
 
   getRecordingState(): RecordingRuntimeState {
-    return { ...this.mockRecordingState };
+    return {
+      ...this.mockRecordingState,
+      armedTrackIds: [...this.mockRecordingState.armedTrackIds],
+      inputRoutes: this.mockRecordingState.inputRoutes.map(route => ({ ...route })),
+    };
   }
 
   subscribeRecordingState(listener: RecordingRuntimeListener): () => void {
@@ -291,30 +297,55 @@ export class MockAudioEngine implements IAudioEngine {
     if (request.armed) {
       this.getTrack(request.trackId);
     }
-    this.setMockRecordingState({ armedTrackId: request.armed ? request.trackId : null });
+    const armedTrackIds = request.armed
+      ? [...new Set([...this.mockRecordingState.armedTrackIds, request.trackId])]
+      : this.mockRecordingState.armedTrackIds.filter(trackId => trackId !== request.trackId);
+    const hasInputRoute = this.mockRecordingState.inputRoutes.some(route => route.trackId === request.trackId);
+    this.setMockRecordingState({
+      armedTrackIds,
+      inputRoutes:
+        request.armed && !hasInputRoute
+          ? [...this.mockRecordingState.inputRoutes, { channelIndex: 0, deviceId: null, trackId: request.trackId }]
+          : this.mockRecordingState.inputRoutes,
+    });
+  }
+
+  setTrackRecordingInput(request: SetTrackRecordingInputRequest): void {
+    this.getTrack(request.trackId);
+    this.setMockRecordingState({
+      inputRoutes: [
+        ...this.mockRecordingState.inputRoutes.filter(route => route.trackId !== request.trackId),
+        { ...request },
+      ],
+    });
   }
 
   async startRecording(request: StartLinearRecordingRequest): Promise<void> {
-    this.getTrack(request.trackId);
+    this.mockRecordingState.armedTrackIds.forEach(trackId => this.getTrack(trackId));
+    if (this.mockRecordingState.armedTrackIds.length === 0) {
+      throw new Error('녹음할 Track이 arm 상태가 아닙니다.');
+    }
     this.setMockRecordingState({
-      armedTrackId: request.trackId,
       phase: request.startDelaySeconds > 0 ? 'scheduled' : 'recording',
       recordStartTimeSeconds: request.recordStartTimeSeconds,
     });
   }
 
-  async stopRecording(): Promise<RecordedTake> {
+  async stopRecording(): Promise<MultiTrackRecordingResult> {
     const state = this.mockRecordingState;
-    if (!state.armedTrackId || state.recordStartTimeSeconds === null || state.phase === 'idle') {
+    if (state.armedTrackIds.length === 0 || state.recordStartTimeSeconds === null || state.phase === 'idle') {
       throw new Error('진행 중인 선형 녹음이 없습니다.');
     }
     this.setMockRecordingState({ phase: 'idle', recordStartTimeSeconds: null });
     return {
-      blob: new Blob([], { type: 'audio/wav' }),
-      durationSeconds: 0,
-      sampleRate: 48_000,
-      startedAtSeconds: state.recordStartTimeSeconds,
-      trackId: state.armedTrackId,
+      failures: [],
+      takes: state.armedTrackIds.map(trackId => ({
+        blob: new Blob([], { type: 'audio/wav' }),
+        durationSeconds: 0,
+        sampleRate: 48_000,
+        startedAtSeconds: state.recordStartTimeSeconds ?? 0,
+        trackId,
+      })),
     };
   }
 

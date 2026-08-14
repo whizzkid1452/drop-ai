@@ -24,7 +24,7 @@ import type {
   LoopSlotAddress,
   MeterFrame,
   MeterTarget,
-  RecordedTake,
+  MultiTrackRecordingResult,
   RoutingGraphSnapshot,
   RecordingRuntimeListener,
   RecordingRuntimeState,
@@ -41,6 +41,7 @@ import type {
   SetAudioPluginParameterRequest,
   SetLiveInputMonitoringRequest,
   SetTrackRecordArmRequest,
+  SetTrackRecordingInputRequest,
   StartLinearRecordingRequest,
   StopAllLoopsRequest,
   TriggerLoopRequest,
@@ -276,11 +277,15 @@ export class DawEngineAdapter implements IAudioEngine {
     this.#runtime.setTrackRecordArm(request);
   }
 
+  setTrackRecordingInput(request: SetTrackRecordingInputRequest): void {
+    this.#runtime.setTrackRecordingInput(request);
+  }
+
   startRecording(request: StartLinearRecordingRequest): Promise<void> {
     return this.#runtime.startRecording(request);
   }
 
-  stopRecording(): Promise<RecordedTake> {
+  stopRecording(): Promise<MultiTrackRecordingResult> {
     return this.#runtime.stopRecording();
   }
 

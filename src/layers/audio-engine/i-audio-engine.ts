@@ -13,10 +13,11 @@ import type { AudioMonitorState, AudioMonitorStateListener } from '../shared/typ
 import type { LiveAudioInputDevice, LiveInputRuntimeListener, LiveInputRuntimeState } from '../shared/types/live-input';
 import type { AudioRuntimeFeatureSupport } from '../shared/utils/audio-runtime-capabilities';
 import type {
-  RecordedTake,
+  MultiTrackRecordingResult,
   RecordingRuntimeListener,
   RecordingRuntimeState,
   SetTrackRecordArmRequest,
+  SetTrackRecordingInputRequest,
   StartLinearRecordingRequest,
 } from '../shared/types/linear-recording';
 import type {
@@ -45,10 +46,11 @@ export type { RoutingGraphSnapshot } from '../shared/types/routing-state';
 export type { AudioMonitorState, AudioMonitorStateListener } from '../shared/types/audio-monitor-state';
 export type { LiveAudioInputDevice, LiveInputRuntimeListener, LiveInputRuntimeState } from '../shared/types/live-input';
 export type {
-  RecordedTake,
+  MultiTrackRecordingResult,
   RecordingRuntimeListener,
   RecordingRuntimeState,
   SetTrackRecordArmRequest,
+  SetTrackRecordingInputRequest,
   StartLinearRecordingRequest,
 } from '../shared/types/linear-recording';
 export type {
@@ -223,8 +225,9 @@ export interface IAudioEngine {
   getRecordingState(): RecordingRuntimeState;
   subscribeRecordingState(listener: RecordingRuntimeListener): () => void;
   setTrackRecordArm(request: SetTrackRecordArmRequest): void;
+  setTrackRecordingInput(request: SetTrackRecordingInputRequest): void;
   startRecording(request: StartLinearRecordingRequest): Promise<void>;
-  stopRecording(): Promise<RecordedTake>;
+  stopRecording(): Promise<MultiTrackRecordingResult>;
   cancelRecording(): void;
 
   // Mixer Control

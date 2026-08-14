@@ -8,7 +8,7 @@ import { TrackRecordArmControl } from './TrackRecordArmControl';
 
 const layerMocks = vi.hoisted(() => ({
   execute: vi.fn().mockResolvedValue(undefined),
-  state: { armedTrackId: null as string | null, phase: 'idle' as 'idle' | 'recording' },
+  state: { armedTrackIds: [] as string[], inputRoutes: [], phase: 'idle' as 'idle' | 'recording' },
 }));
 
 vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
@@ -40,7 +40,7 @@ afterEach(() => {
   act(() => mountedRoots.splice(0).forEach(root => root.unmount()));
   document.body.replaceChildren();
   layerMocks.execute.mockClear();
-  layerMocks.state.armedTrackId = null;
+  layerMocks.state.armedTrackIds = [];
   layerMocks.state.phase = 'idle';
 });
 
@@ -59,7 +59,7 @@ describe('TrackRecordArmControl', () => {
   });
 
   it('다른 Track 녹음 중에는 arm 변경을 비활성화한다', () => {
-    layerMocks.state.armedTrackId = 'track-2';
+    layerMocks.state.armedTrackIds = ['track-2'];
     layerMocks.state.phase = 'recording';
     const host = renderControl();
 

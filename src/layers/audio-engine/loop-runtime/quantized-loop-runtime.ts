@@ -6,6 +6,7 @@ import type { ActivePcmCapture, ILivePcmCapture, ScheduledPcmCapture } from '../
 import type {
   ILinearRecordingAudioRuntime,
   LinearRecordingCapture,
+  LinearRecordingTrackResult,
   StartLinearRecordingRuntimeRequest,
 } from '../recording-runtime/linear-recording-runtime';
 import type { ILoopPlaybackAdapter, ILoopPlayer } from './loop-playback-adapter';
@@ -44,6 +45,11 @@ interface LoopPlaybackEntry {
   readonly players: ILoopPlayer[];
 }
 
+interface ActiveTrackRecording {
+  readonly capture: ActivePcmCapture;
+  readonly channelIndex: number;
+}
+
 type PreparedLoopReplacementState = 'activated' | 'discarded' | 'prepared';
 
 const LOOP_KEY_SEPARATOR = '\u0000';
@@ -66,8 +72,8 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime, ILinearRecording
   #playbackEntries = new Map<string, LoopPlaybackEntry>();
   #revision = 0;
   #inputConnection: ILiveAudioInputConnection | null = null;
-  #linearRecordingCapture: ActivePcmCapture | null = null;
-  #linearRecordingStopPromise: Promise<LinearRecordingCapture> | null = null;
+  #linearRecordingCaptures = new Map<string, ActiveTrackRecording>();
+  #linearRecordingStopPromise: Promise<readonly LinearRecordingTrackResult[]> | null = null;
   #monitorDestination: AudioNode | null = null;
 
   constructor(options: QuantizedLoopRuntimeOptions) {
@@ -78,56 +84,97 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime, ILinearRecording
   }
 
   async startRecording(request: StartLinearRecordingRuntimeRequest): Promise<void> {
-    if (this.#linearRecordingCapture !== null) {
+    if (this.#linearRecordingCaptures.size > 0) {
       throw new Error('이미 선형 녹음 캡처가 진행 중입니다.');
     }
     if (!Number.isFinite(request.startDelaySeconds) || request.startDelaySeconds < 0) {
       throw new RangeError('녹음 시작 지연은 0 이상의 유한한 값이어야 합니다.');
     }
 
+    if (request.assignments.length === 0) {
+      throw new Error('녹음할 Track 입력 Route가 없습니다.');
+    }
+
     await this.#playback.prepare();
     const connection = await this.#ensureInputConnection();
-    this.#linearRecordingCapture = await this.#pcmCapture.start({
-      audioContext: this.#playback.getAudioContext(),
-      onStarted: request.onStarted,
-      startTimeSeconds: this.#playback.getContextTimeSeconds() + request.startDelaySeconds,
-      stream: connection.stream,
-      workletRuntime: this.#playback,
-    });
+    const startedTrackIds = new Set<string>();
+    try {
+      for (const assignment of request.assignments) {
+        if (!Number.isInteger(assignment.channelIndex) || assignment.channelIndex < 0) {
+          throw new RangeError(`입력 채널 index가 유효하지 않습니다: ${assignment.channelIndex}`);
+        }
+        if (assignment.deviceId !== null && assignment.deviceId !== connection.deviceId) {
+          throw new Error(`선택하지 않은 입력 장치는 녹음할 수 없습니다: ${assignment.deviceId}`);
+        }
+        const capture = await this.#pcmCapture.start({
+          audioContext: this.#playback.getAudioContext(),
+          onStarted: () => {
+            startedTrackIds.add(assignment.trackId);
+            if (startedTrackIds.size === request.assignments.length) {
+              request.onStarted();
+            }
+          },
+          startTimeSeconds: this.#playback.getContextTimeSeconds() + request.startDelaySeconds,
+          stream: connection.stream,
+          workletRuntime: this.#playback,
+        });
+        this.#linearRecordingCaptures.set(assignment.trackId, { capture, channelIndex: assignment.channelIndex });
+      }
+    } catch (cause) {
+      this.cancelRecording();
+      throw cause;
+    }
   }
 
-  stopRecording(): Promise<LinearRecordingCapture> {
-    const capture = this.#linearRecordingCapture;
-    if (!capture) {
+  stopRecording(): Promise<readonly LinearRecordingTrackResult[]> {
+    if (this.#linearRecordingCaptures.size === 0) {
       return Promise.reject(new Error('중지할 선형 녹음 캡처가 없습니다.'));
     }
-    this.#linearRecordingStopPromise ??= this.#completeLinearRecording(capture);
+    this.#linearRecordingStopPromise ??= this.#completeLinearRecordings();
     return this.#linearRecordingStopPromise;
   }
 
   cancelRecording(): void {
-    const capture = this.#linearRecordingCapture;
-    this.#linearRecordingCapture = null;
+    const captures = [...this.#linearRecordingCaptures.values()];
+    this.#linearRecordingCaptures.clear();
     this.#linearRecordingStopPromise = null;
-    capture?.cancel();
+    captures.forEach(({ capture }) => capture.cancel());
   }
 
-  async #completeLinearRecording(capture: ActivePcmCapture): Promise<LinearRecordingCapture> {
+  async #completeLinearRecordings(): Promise<readonly LinearRecordingTrackResult[]> {
+    const recordings = [...this.#linearRecordingCaptures.entries()];
     try {
-      const capturedPcm = await capture.stop();
-      const audioBuffer = this.#playback.createAudioBuffer(capturedPcm);
-      const frameCount = Math.min(...capturedPcm.channels.map(channel => channel.length));
-      return {
-        blob: this.#encodeAudioBuffer(audioBuffer),
-        durationSeconds: frameCount / capturedPcm.sampleRate,
-        sampleRate: capturedPcm.sampleRate,
-      };
+      return Promise.all(
+        recordings.map(async ([trackId, recording]): Promise<LinearRecordingTrackResult> => {
+          try {
+            const capture = await this.#completeTrackRecording(recording);
+            return { capture, status: 'success', trackId };
+          } catch (cause) {
+            return { cause, status: 'failure', trackId };
+          }
+        })
+      );
     } finally {
-      if (this.#linearRecordingCapture === capture) {
-        this.#linearRecordingCapture = null;
-        this.#linearRecordingStopPromise = null;
-      }
+      this.#linearRecordingCaptures.clear();
+      this.#linearRecordingStopPromise = null;
     }
+  }
+
+  async #completeTrackRecording(recording: ActiveTrackRecording): Promise<LinearRecordingCapture> {
+    const capturedPcm = await recording.capture.stop();
+    const selectedChannel = capturedPcm.channels[recording.channelIndex];
+    if (!selectedChannel) {
+      throw new RangeError(`녹음 입력에 채널 ${recording.channelIndex}이 없습니다.`);
+    }
+    const audioBuffer = this.#playback.createAudioBuffer({
+      channels: [selectedChannel],
+      sampleRate: capturedPcm.sampleRate,
+    });
+    return {
+      blob: this.#encodeAudioBuffer(audioBuffer),
+      durationSeconds: selectedChannel.length / capturedPcm.sampleRate,
+      sampleRate: capturedPcm.sampleRate,
+    };
   }
 
   async arm(request: ArmLoopRuntimeRequest): Promise<void> {

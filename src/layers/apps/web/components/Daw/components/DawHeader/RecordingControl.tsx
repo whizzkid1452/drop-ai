@@ -31,7 +31,7 @@ export function RecordingControl() {
   const unavailableReason =
     capability.status === 'available' ? undefined : describeAudioRuntimeFeatureCapability(capability);
   const cannotStartReason =
-    isIdle && recordingState.armedTrackId === null ? '녹음 arm된 Track이 필요합니다.' : undefined;
+    isIdle && recordingState.armedTrackIds.length === 0 ? '녹음 arm된 Track이 필요합니다.' : undefined;
 
   const executeRecordingCommand = async () => {
     if (isPending || isStopping || unavailableReason || cannotStartReason) {

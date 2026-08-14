@@ -5,7 +5,8 @@ describe('RecordingQuery', () => {
   it('동일한 runtime 상태는 같은 snapshot으로 반환한다', () => {
     const source = {
       getRecordingState: vi.fn(() => ({
-        armedTrackId: 'track-1',
+        armedTrackIds: ['track-1'],
+        inputRoutes: [{ channelIndex: 0, deviceId: null, trackId: 'track-1' }],
         phase: 'idle' as const,
         recordStartTimeSeconds: null,
       })),
@@ -13,14 +14,24 @@ describe('RecordingQuery', () => {
     };
     const query = new RecordingQuery(source);
 
-    expect(query.readState()).toEqual({ armedTrackId: 'track-1', phase: 'idle', recordStartTimeSeconds: null });
+    expect(query.readState()).toEqual({
+      armedTrackIds: ['track-1'],
+      inputRoutes: [{ channelIndex: 0, deviceId: null, trackId: 'track-1' }],
+      phase: 'idle',
+      recordStartTimeSeconds: null,
+    });
     expect(query.readState()).toBe(query.readState());
   });
 
   it('runtime 상태 알림을 구독하고 해제한다', () => {
     const unsubscribeSource = vi.fn();
     const source = {
-      getRecordingState: vi.fn(() => ({ armedTrackId: null, phase: 'idle' as const, recordStartTimeSeconds: null })),
+      getRecordingState: vi.fn(() => ({
+        armedTrackIds: [],
+        inputRoutes: [],
+        phase: 'idle' as const,
+        recordStartTimeSeconds: null,
+      })),
       subscribeRecordingState: vi.fn((listener: () => void) => {
         listener();
         return unsubscribeSource;
