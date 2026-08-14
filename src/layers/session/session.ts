@@ -198,6 +198,7 @@ export interface SessionState {
 
   addTrack: (track: TrackState) => void;
   updateTrack: (id: string, updates: Partial<TrackState>) => void;
+  replaceTrackStates: (tracks: readonly TrackState[]) => void;
   removeTrack: (id: string) => void;
   updateLoopSlot: (request: UpdateLoopSlotRequest) => void;
 
@@ -326,6 +327,12 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
         newTracks.set(id, { ...track, ...updates });
         return { tracks: newTracks };
       }),
+    replaceTrackStates: tracks =>
+      set(state => {
+        const nextTracks = new Map(state.tracks);
+        tracks.forEach(track => nextTracks.set(track.id, cloneTrackState(track)));
+        return { tracks: nextTracks };
+      }),
     removeTrack: id =>
       set(state => {
         const newTracks = new Map(state.tracks);
@@ -440,18 +447,17 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
 }
 
 function cloneProjectTracks(tracks: ReadonlyMap<string, TrackState>): Map<string, TrackState> {
-  return new Map(
-    [...tracks.entries()].map(([trackId, track]) => [
-      trackId,
-      {
-        ...track,
-        status: [...track.status],
-        pluginInstances: track.pluginInstances.map(clonePluginInstance),
-        regions: track.regions.map(region => ({ ...region, status: [...region.status] })),
-        loopSlots: track.loopSlots?.map(slot => ({ ...slot, overdubSourceIds: [...slot.overdubSourceIds] })),
-      },
-    ])
-  );
+  return new Map([...tracks.entries()].map(([trackId, track]) => [trackId, cloneTrackState(track)]));
+}
+
+function cloneTrackState(track: TrackState): TrackState {
+  return {
+    ...track,
+    status: [...track.status],
+    pluginInstances: track.pluginInstances.map(clonePluginInstance),
+    regions: track.regions.map(region => ({ ...region, status: [...region.status] })),
+    loopSlots: track.loopSlots?.map(slot => ({ ...slot, overdubSourceIds: [...slot.overdubSourceIds] })),
+  };
 }
 
 function clonePluginInstance(instance: PluginInstanceState): PluginInstanceState {

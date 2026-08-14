@@ -127,6 +127,22 @@ const COMMAND_REFERENCE = {
     '{"type":"SPLIT_REGION","trackId":"<existing Track UUID>","regionId":"<existing Region UUID>","splitTime":<absolute seconds >= 0>} - Region 내부를 분할',
   [AudioCommandType.MOVE_REGION]:
     '{"type":"MOVE_REGION","trackId":"<existing Track UUID>","regionId":"<existing Region UUID>","newStartTime":<seconds >= 0>} - Region 시작 위치 변경',
+  [AudioCommandType.SET_EDITOR_SELECTION]:
+    '{"type":"SET_EDITOR_SELECTION","editPointSeconds":<seconds >= 0>,"range":null,"regions":[{"trackId":"<Track UUID>","regionId":"<Region UUID>"}],"trackIds":["<Track UUID>"]} - 편집 대상과 edit point 변경',
+  [AudioCommandType.COPY_SELECTED_REGIONS]: '{"type":"COPY_SELECTED_REGIONS"} - 선택 Region을 runtime Clipboard에 복사',
+  [AudioCommandType.CUT_SELECTED_REGIONS]:
+    '{"type":"CUT_SELECTED_REGIONS"} - 선택 Region을 runtime Clipboard로 옮기고 Timeline에서 제거',
+  [AudioCommandType.PASTE_REGIONS]: '{"type":"PASTE_REGIONS"} - runtime Clipboard Region을 현재 edit point에 붙여넣기',
+  [AudioCommandType.DUPLICATE_SELECTED_REGIONS]:
+    '{"type":"DUPLICATE_SELECTED_REGIONS","offsetSeconds":<seconds > 0>} - 선택 Region을 지정한 간격 뒤에 복제',
+  [AudioCommandType.NUDGE_SELECTED_REGIONS]:
+    '{"type":"NUDGE_SELECTED_REGIONS","deltaSeconds":<non-zero finite seconds>} - 선택 Region을 상대 이동',
+  [AudioCommandType.ALIGN_SELECTED_REGIONS]:
+    '{"type":"ALIGN_SELECTED_REGIONS","edge":"start|end","targetTimeSeconds":<seconds >= 0>} - 선택 Region의 시작 또는 끝을 같은 시각에 정렬',
+  [AudioCommandType.TRIM_REGION]:
+    '{"type":"TRIM_REGION","trackId":"<Track UUID>","regionId":"<Region UUID>","startTimeSeconds":<seconds >= 0>,"sourceStartTimeSeconds":<seconds >= 0>,"durationSeconds":<seconds > 0>} - 원본을 보존하며 Region 범위 변경',
+  [AudioCommandType.SLIP_REGION]:
+    '{"type":"SLIP_REGION","trackId":"<Track UUID>","regionId":"<Region UUID>","sourceStartTimeSeconds":<seconds >= 0>} - Timeline 위치를 유지하며 Source 시작 위치 변경',
   [AudioCommandType.SET_CURRENT_TIME]: '{"type":"SET_CURRENT_TIME","time":<seconds >= 0>} - 재생 위치 변경',
   [AudioCommandType.SET_EXPORT_RANGE]:
     '{"type":"SET_EXPORT_RANGE","startTime":<seconds >= 0>,"endTime":<seconds >= 0>} - 내보내기 범위 선택. endTime > startTime',

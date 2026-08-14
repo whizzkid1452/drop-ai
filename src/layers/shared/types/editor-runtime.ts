@@ -42,3 +42,43 @@ export interface EditorRuntimeState {
 }
 
 export type EditorRuntimeListener = (state: EditorRuntimeState) => void;
+
+export interface EditorRegionSnapshot {
+  readonly durationSeconds: number;
+  readonly id: string;
+  readonly sourceId: string;
+  readonly sourceStartTimeSeconds: number;
+  readonly startTimeSeconds: number;
+}
+
+export interface EditorTrackRegionSnapshot {
+  readonly regions: readonly EditorRegionSnapshot[];
+  readonly trackId: string;
+}
+
+export interface ReplaceEditorTrackRegionsRequest {
+  readonly tracks: readonly EditorTrackRegionSnapshot[];
+}
+
+export interface IEditorRegionRuntime {
+  replaceTrackRegions(request: ReplaceEditorTrackRegionsRequest): Promise<void>;
+}
+
+export interface AlignSelectedRegionsRequest {
+  readonly edge: 'end' | 'start';
+  readonly targetTimeSeconds: number;
+}
+
+export interface TrimRegionRequest {
+  readonly durationSeconds: number;
+  readonly regionId: string;
+  readonly sourceStartTimeSeconds: number;
+  readonly startTimeSeconds: number;
+  readonly trackId: string;
+}
+
+export interface SlipRegionRequest {
+  readonly regionId: string;
+  readonly sourceStartTimeSeconds: number;
+  readonly trackId: string;
+}

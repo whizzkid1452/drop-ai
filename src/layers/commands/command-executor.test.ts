@@ -124,6 +124,59 @@ async function addRegion(commandExecutor: CommandExecutor, audioSourceRegistry: 
 }
 
 describe('CommandExecutor', () => {
+  it('선택 Region을 nudge하고 한 번의 Undo·Redo로 전체 편집을 복원한다', async () => {
+    const { audioSourceRegistry, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
+    await commandExecutor.execute({
+      type: AudioCommandType.SET_EDITOR_SELECTION,
+      editPointSeconds: 0,
+      range: null,
+      regions: [{ regionId: REGION_ID, trackId: TRACK_ID }],
+      trackIds: [TRACK_ID],
+    });
+
+    await commandExecutor.execute({ type: AudioCommandType.NUDGE_SELECTED_REGIONS, deltaSeconds: 2 });
+    expect(session.getState().tracks.get(TRACK_ID)?.regions[0]?.startTime).toBe(2);
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.regions[0]?.startTime).toBe(0);
+
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.regions[0]?.startTime).toBe(2);
+  });
+
+  it('copy와 paste는 runtime Clipboard를 사용하고 Undo·Redo에서 같은 Region ID를 복원한다', async () => {
+    const { audioSourceRegistry, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
+    await commandExecutor.execute({
+      type: AudioCommandType.SET_EDITOR_SELECTION,
+      editPointSeconds: 0,
+      range: null,
+      regions: [{ regionId: REGION_ID, trackId: TRACK_ID }],
+      trackIds: [TRACK_ID],
+    });
+    await commandExecutor.execute({ type: AudioCommandType.COPY_SELECTED_REGIONS });
+    await commandExecutor.execute({
+      type: AudioCommandType.SET_EDITOR_SELECTION,
+      editPointSeconds: 6,
+      range: null,
+      regions: [],
+      trackIds: [TRACK_ID],
+    });
+
+    await commandExecutor.execute({ type: AudioCommandType.PASTE_REGIONS });
+    const pastedRegion = session.getState().tracks.get(TRACK_ID)?.regions.at(-1);
+    expect(pastedRegion).toMatchObject({ sourceId: SOURCE_ID, startTime: 6 });
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.regions).toHaveLength(1);
+
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.regions.at(-1)?.id).toBe(pastedRegion?.id);
+  });
+
   it('단일 Track 녹음을 count-in과 preroll 뒤 시작하고 RecordedTake를 Region으로 저장한다', async () => {
     const { audioEngine, audioSourceRegistry, audioSourceRepository, commandExecutor, session } = createTestContext();
     await addTrack(commandExecutor);

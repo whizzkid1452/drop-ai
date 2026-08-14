@@ -4,12 +4,21 @@ import type { TimelineMeterChange, TimelineTempoChange } from '../shared/timelin
 import type { TimelineMarker } from '../shared/timeline-marker';
 import { AudioCommandType, type AudioCommand } from '../shared/types/audioCommand.schema';
 import type { CommandHistoryEntry } from './command-history';
+import type {
+  EditorRuntimeState,
+  EditorTrackRegionSnapshot,
+  ReplaceEditorTrackRegionsRequest,
+} from '../shared/types/editor-runtime';
 
 interface CreateCommandHistoryEntryOptions {
   readonly afterSession: SessionState;
+  readonly afterEditorRuntime: EditorRuntimeState;
   readonly beforeSession: SessionState;
+  readonly beforeEditorRuntime: EditorRuntimeState;
   readonly command: AudioCommand;
   readonly executeCommand: (command: AudioCommand) => Promise<void>;
+  readonly replaceTrackRegions: (request: ReplaceEditorTrackRegionsRequest) => Promise<void>;
+  readonly restoreEditorRuntime: (state: EditorRuntimeState) => void;
 }
 
 interface CreateEntryOptions {
@@ -120,6 +129,49 @@ function createLoadRegionCommand(trackId: string, region: RegionState): AudioCom
   };
 }
 
+function areRegionArraysEqual(left: readonly RegionState[], right: readonly RegionState[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((region, index) => {
+      const candidate = right[index];
+      return (
+        candidate?.id === region.id &&
+        candidate.sourceId === region.sourceId &&
+        candidate.startTime === region.startTime &&
+        candidate.sourceStartTime === region.sourceStartTime &&
+        candidate.duration === region.duration
+      );
+    })
+  );
+}
+
+function createRegionSnapshotsForChangedTracks({
+  referenceSession,
+  targetSession,
+}: {
+  readonly referenceSession: SessionState;
+  readonly targetSession: SessionState;
+}): EditorTrackRegionSnapshot[] {
+  return [...targetSession.tracks.values()].flatMap(track => {
+    const referenceTrack = referenceSession.tracks.get(track.id);
+    if (referenceTrack && areRegionArraysEqual(referenceTrack.regions, track.regions)) {
+      return [];
+    }
+    return [
+      {
+        regions: track.regions.map(region => ({
+          durationSeconds: region.duration,
+          id: region.id,
+          sourceId: region.sourceId,
+          sourceStartTimeSeconds: region.sourceStartTime,
+          startTimeSeconds: region.startTime,
+        })),
+        trackId: track.id,
+      },
+    ];
+  });
+}
+
 function findPluginInstance({ session, trackId, instanceId }: FindPluginInstanceRequest): LocatedPluginInstance | null {
   const track = session.tracks.get(trackId);
   const instance = track?.pluginInstances.find(candidate => candidate.id === instanceId);
@@ -170,9 +222,13 @@ function createLoopRangeCommand(session: SessionState): AudioCommand {
 
 export function createCommandHistoryEntry({
   afterSession,
+  afterEditorRuntime,
   beforeSession,
+  beforeEditorRuntime,
   command,
   executeCommand,
+  replaceTrackRegions,
+  restoreEditorRuntime,
 }: CreateCommandHistoryEntryOptions): CommandHistoryEntry | null {
   switch (command.type) {
     case AudioCommandType.ADD_TRACK:
@@ -594,6 +650,37 @@ export function createCommandHistoryEntry({
       });
     }
 
+    case AudioCommandType.CUT_SELECTED_REGIONS:
+    case AudioCommandType.PASTE_REGIONS:
+    case AudioCommandType.DUPLICATE_SELECTED_REGIONS:
+    case AudioCommandType.NUDGE_SELECTED_REGIONS:
+    case AudioCommandType.ALIGN_SELECTED_REGIONS:
+    case AudioCommandType.TRIM_REGION:
+    case AudioCommandType.SLIP_REGION: {
+      const undoTracks = createRegionSnapshotsForChangedTracks({
+        referenceSession: afterSession,
+        targetSession: beforeSession,
+      });
+      const redoTracks = createRegionSnapshotsForChangedTracks({
+        referenceSession: beforeSession,
+        targetSession: afterSession,
+      });
+      if (undoTracks.length === 0 || redoTracks.length === 0) {
+        return null;
+      }
+      return {
+        label: command.type,
+        undo: async () => {
+          await replaceTrackRegions({ tracks: undoTracks });
+          restoreEditorRuntime(beforeEditorRuntime);
+        },
+        redo: async () => {
+          await replaceTrackRegions({ tracks: redoTracks });
+          restoreEditorRuntime(afterEditorRuntime);
+        },
+      };
+    }
+
     case AudioCommandType.SET_EXPORT_RANGE:
     case AudioCommandType.CLEAR_EXPORT_RANGE: {
       const undoCommand = createExportRangeCommand(beforeSession);
@@ -628,6 +715,8 @@ export function createCommandHistoryEntry({
     case AudioCommandType.STOP_ALL_LOOPS:
     case AudioCommandType.SET_CURRENT_TIME:
     case AudioCommandType.SPLIT_REGION:
+    case AudioCommandType.SET_EDITOR_SELECTION:
+    case AudioCommandType.COPY_SELECTED_REGIONS:
     case AudioCommandType.EXPORT_AUDIO:
     case AudioCommandType.SAVE_PROJECT:
     case AudioCommandType.LOAD_PROJECT:
