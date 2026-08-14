@@ -71,6 +71,10 @@ export interface RegionData extends RegionProcessingState {
   duration: number;
 }
 
+export interface AuditionAudioSourceRequest {
+  readonly blob: Blob;
+}
+
 export const DEFAULT_EXPORT_SAMPLE_RATE = 44100;
 
 export interface ExportRange {
@@ -306,4 +310,6 @@ export interface IAudioEngine {
   exportProject(request: ExportRequest): Promise<Blob>;
   analyzeAudioRegionPeak(request: AnalyzeAudioRegionPeakRequest): Promise<number>;
   renderDerivedAudioRegion(request: RenderDerivedAudioRegionRequest): Promise<RenderedDerivedAudioRegion>;
+  auditionAudioSource(request: AuditionAudioSourceRequest): Promise<void>;
+  stopAudioSourceAudition(): void;
 }

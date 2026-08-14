@@ -4,6 +4,7 @@ import {
   readProjectDocumentV9,
   readProjectDocumentV13,
   readProjectDocumentV14,
+  readProjectDocumentV16,
 } from '../shared/types/project-document-reader';
 import type {
   ProjectDocument,
@@ -73,6 +74,32 @@ function createSnapshotPeers(baseDocument: ProjectDocumentSnapshot): [ProjectCrd
 }
 
 describe('ProjectCrdtDocument', () => {
+  it('v16 Source tag와 transient 위치를 scalar collection으로 저장한다', () => {
+    const baseDocument = readProjectDocumentV16(createProjectDocument());
+    baseDocument.audioSources.push({
+      bwfMetadata: null,
+      byteLength: 4,
+      derivation: null,
+      durationSeconds: 1,
+      fileName: 'source.wav',
+      id: '55555555-5555-4555-8555-555555555555',
+      mimeType: 'audio/wav',
+      tags: [],
+      transientPositionsSeconds: [0.2, 0.8],
+    });
+    const crdtDocument = ProjectCrdtDocument.create(baseDocument);
+    const nextDocument = structuredClone(baseDocument);
+    nextDocument.audioSources[0]!.tags = ['vocal', 'lead'];
+    nextDocument.audioSources[0]!.transientPositionsSeconds = [0.1, 0.8];
+
+    crdtDocument.applyProjectChange({ baseDocument, nextDocument });
+
+    expect(crdtDocument.toProjectDocument().audioSources[0]).toMatchObject({
+      tags: ['vocal', 'lead'],
+      transientPositionsSeconds: [0.1, 0.8],
+    });
+  });
+
   it('v14 MIDI 제어 포인트를 ID 기반 collection으로 동기화한다', () => {
     const baseDocument = readProjectDocumentV14(createProjectDocument());
     baseDocument.tracks[0].midi = {

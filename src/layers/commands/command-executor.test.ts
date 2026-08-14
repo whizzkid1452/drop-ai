@@ -313,6 +313,138 @@ describe('CommandExecutor', () => {
     expect(session.getState().tracks.get(TRACK_ID)?.regions[0]?.sourceId).not.toBe(SOURCE_ID);
   });
 
+  it('Time Stretch는 비율과 파생 관계를 저장하고 Undo에서 원본 Source를 복원한다', async () => {
+    const { audioEngine, audioSourceRegistry, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
+    await selectRegion(commandExecutor);
+    const renderDerivedAudioRegion = vi.spyOn(audioEngine, 'renderDerivedAudioRegion');
+
+    await commandExecutor.execute({ type: AudioCommandType.TIME_STRETCH_SELECTED_REGIONS, stretchRatio: 1.5 });
+
+    expect(renderDerivedAudioRegion).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: 'timeStretch', stretchRatio: 1.5 })
+    );
+    const stretchedSourceId = session.getState().tracks.get(TRACK_ID)?.regions[0]?.sourceId;
+    expect(audioSourceRegistry.resolve(stretchedSourceId ?? '')?.metadata).toMatchObject({
+      derivation: { operation: 'timeStretch', parameters: { stretchRatio: 1.5 }, sourceId: SOURCE_ID },
+    });
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.regions[0]?.sourceId).toBe(SOURCE_ID);
+  });
+
+  it.each([
+    [{ type: AudioCommandType.PITCH_SHIFT_SELECTED_REGIONS, semitones: 5 }, 'pitchShift'],
+    [{ type: AudioCommandType.ANALYZE_TRANSIENTS_SELECTED_REGIONS, sensitivity: 0.8 }, 'transientAnalysis'],
+    [{ type: AudioCommandType.BOUNCE_SELECTED_REGIONS }, 'bounce'],
+    [{ type: AudioCommandType.FREEZE_SELECTED_REGIONS }, 'freeze'],
+  ] as const)('%s 명령을 파생 Source runtime에 연결한다', async (command, operation) => {
+    const { audioEngine, audioSourceRegistry, commandExecutor } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
+    await selectRegion(commandExecutor);
+    const renderDerivedAudioRegion = vi.spyOn(audioEngine, 'renderDerivedAudioRegion');
+
+    await commandExecutor.execute(command);
+
+    expect(renderDerivedAudioRegion).toHaveBeenCalledWith(expect.objectContaining({ operation }));
+  });
+
+  it('Transient 분석 위치를 파생 Source metadata에 저장한다', async () => {
+    const { audioEngine, audioSourceRegistry, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
+    await selectRegion(commandExecutor);
+    const sourceBlob = audioSourceRegistry.listCommittedRegistrations()[0]!.blob;
+    vi.spyOn(audioEngine, 'renderDerivedAudioRegion').mockResolvedValue({
+      blob: sourceBlob,
+      durationSeconds: 5,
+      transientPositionsSeconds: [0.25, 1.5],
+    });
+
+    await commandExecutor.execute({
+      type: AudioCommandType.ANALYZE_TRANSIENTS_SELECTED_REGIONS,
+      sensitivity: 0.8,
+    });
+
+    const derivedSourceId = session.getState().tracks.get(TRACK_ID)?.regions[0]?.sourceId;
+    expect(audioSourceRegistry.resolve(derivedSourceId ?? '')?.metadata).toMatchObject({
+      transientPositionsSeconds: [0.25, 1.5],
+    });
+  });
+
+  it('Source tag 명령은 committed metadata를 갱신한다', async () => {
+    const { audioSourceRegistry, commandExecutor } = createTestContext();
+    audioSourceRegistry.restoreCommitted({
+      blob: new Blob(['source'], { type: 'audio/wav' }),
+      metadata: {
+        bwfMetadata: null,
+        byteLength: 6,
+        derivation: null,
+        durationSeconds: 1,
+        fileName: 'source.wav',
+        id: SOURCE_ID,
+        mimeType: 'audio/wav',
+        tags: [],
+        transientPositionsSeconds: [],
+      },
+    });
+
+    await commandExecutor.execute({ type: AudioCommandType.SET_SOURCE_TAGS, sourceId: SOURCE_ID, tags: [' vocal '] });
+
+    expect(audioSourceRegistry.resolve(SOURCE_ID)?.metadata).toMatchObject({ tags: ['vocal'] });
+  });
+
+  it('Source audition 명령은 Blob을 재생 runtime에 전달하고 중지한다', async () => {
+    const { audioEngine, audioSourceRegistry, commandExecutor } = createTestContext();
+    const blob = new Blob(['source'], { type: 'audio/wav' });
+    audioSourceRegistry.restoreCommitted({
+      blob,
+      metadata: {
+        bwfMetadata: null,
+        byteLength: 6,
+        derivation: null,
+        durationSeconds: 1,
+        fileName: 'source.wav',
+        id: SOURCE_ID,
+        mimeType: 'audio/wav',
+        tags: [],
+        transientPositionsSeconds: [],
+      },
+    });
+
+    await commandExecutor.execute({ type: AudioCommandType.AUDITION_SOURCE, sourceId: SOURCE_ID });
+    expect(audioEngine.getMockAuditionBlob()).toBe(blob);
+
+    await commandExecutor.execute({ type: AudioCommandType.STOP_SOURCE_AUDITION });
+    expect(audioEngine.getMockAuditionBlob()).toBeNull();
+  });
+
+  it('미사용 Source 정리 명령은 제거한 ID를 반환한다', async () => {
+    const { audioSourceRegistry, audioSourceRepository, commandExecutor } = createTestContext();
+    audioSourceRegistry.restoreCommitted({
+      blob: new Blob(['source'], { type: 'audio/wav' }),
+      metadata: {
+        bwfMetadata: null,
+        byteLength: 6,
+        derivation: null,
+        durationSeconds: 1,
+        fileName: 'unused.wav',
+        id: SOURCE_ID,
+        mimeType: 'audio/wav',
+        tags: [],
+        transientPositionsSeconds: [],
+      },
+    });
+
+    const result = await commandExecutor.execute({ type: AudioCommandType.CLEANUP_UNUSED_SOURCES });
+
+    expect(result).toEqual({ removedSourceIds: [SOURCE_ID] });
+    expect(audioSourceRepository.delete).toHaveBeenCalledWith(SOURCE_ID);
+    expect(audioSourceRegistry.resolve(SOURCE_ID)).toBeNull();
+  });
+
   it('선택 Region을 nudge하고 한 번의 Undo·Redo로 전체 편집을 복원한다', async () => {
     const { audioSourceRegistry, commandExecutor, session } = createTestContext();
     await addTrack(commandExecutor);

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { analyzePcmPeak, reversePcmChannels, stripSilenceFromPcmChannels } from './region-audio-processing';
+import {
+  analyzePcmPeak,
+  detectTransientPositionsSeconds,
+  pitchShiftPcmChannels,
+  reversePcmChannels,
+  stripSilenceFromPcmChannels,
+  timeStretchPcmChannels,
+} from './region-audio-processing';
 
 describe('Region PCM 처리', () => {
   it('모든 Channel의 절댓값 중 가장 큰 값을 peak로 반환한다', () => {
@@ -29,5 +36,37 @@ describe('Region PCM 처리', () => {
 
     expect([...stripped[0]!]).toEqual([0.5, 0.25, 0, 0.5]);
     expect(stripped[1]).toEqual(new Float32Array([0.25, 0.1, 0, 0.25]));
+  });
+
+  it('time stretch 비율만큼 frame 수를 변경하고 입력은 유지한다', () => {
+    const input = [Float32Array.from({ length: 64 }, (_, index) => Math.sin((index / 64) * Math.PI * 4))];
+
+    const stretched = timeStretchPcmChannels({ channels: input, stretchRatio: 1.5 });
+
+    expect(stretched[0]).toHaveLength(96);
+    expect(input[0]).toHaveLength(64);
+  });
+
+  it('pitch shift 뒤에도 원래 frame 수를 유지한다', () => {
+    const input = [Float32Array.from({ length: 128 }, (_, index) => Math.sin((index / 16) * Math.PI))];
+
+    const shifted = pitchShiftPcmChannels({ channels: input, semitones: 12 });
+
+    expect(shifted[0]).toHaveLength(128);
+    expect(shifted[0]).not.toEqual(input[0]);
+  });
+
+  it('에너지 상승 지점을 초 단위 transient 위치로 반환한다', () => {
+    const channel = new Float32Array(100);
+    channel[20] = 1;
+    channel[70] = 0.8;
+
+    const positions = detectTransientPositionsSeconds({
+      channels: [channel],
+      sampleRate: 100,
+      sensitivity: 0.8,
+    });
+
+    expect(positions).toEqual([0.2, 0.7]);
   });
 });

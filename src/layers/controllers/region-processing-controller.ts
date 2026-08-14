@@ -8,7 +8,6 @@ import type {
   EditorTrackRegionSnapshot,
   IEditorRegionRuntime,
 } from '../shared/types/editor-runtime';
-import type { DerivedAudioRegionOperation } from '../shared/types/region-audio-processing';
 import type { EditorController } from './editor-controller';
 import {
   ProjectMutationCompensationError,
@@ -30,6 +29,25 @@ interface StripSilenceRequest {
   readonly minimumSilenceSeconds: number;
   readonly thresholdDb: number;
 }
+
+interface TimeStretchRequest {
+  readonly stretchRatio: number;
+}
+
+interface PitchShiftRequest {
+  readonly semitones: number;
+}
+
+interface TransientAnalysisRequest {
+  readonly sensitivity: number;
+}
+
+type DerivedSourceRequest =
+  | (StripSilenceRequest & { readonly operation: 'stripSilence' })
+  | (TimeStretchRequest & { readonly operation: 'timeStretch' })
+  | (PitchShiftRequest & { readonly operation: 'pitchShift' })
+  | (TransientAnalysisRequest & { readonly operation: 'transientAnalysis' })
+  | { readonly operation: 'bounce' | 'freeze' | 'reverse' };
 
 interface DerivedSourceReplacement {
   readonly durationSeconds: number;
@@ -104,11 +122,27 @@ export class RegionProcessingController {
     return this.createDerivedSourcesForSelection({ operation: 'stripSilence', ...request });
   }
 
-  private async createDerivedSourcesForSelection(
-    request:
-      | (StripSilenceRequest & { readonly operation: DerivedAudioRegionOperation })
-      | { readonly operation: 'reverse' }
-  ): Promise<void> {
+  timeStretchSelectedRegions(request: TimeStretchRequest): Promise<void> {
+    return this.createDerivedSourcesForSelection({ operation: 'timeStretch', ...request });
+  }
+
+  pitchShiftSelectedRegions(request: PitchShiftRequest): Promise<void> {
+    return this.createDerivedSourcesForSelection({ operation: 'pitchShift', ...request });
+  }
+
+  analyzeTransientsInSelectedRegions(request: TransientAnalysisRequest): Promise<void> {
+    return this.createDerivedSourcesForSelection({ operation: 'transientAnalysis', ...request });
+  }
+
+  bounceSelectedRegions(): Promise<void> {
+    return this.createDerivedSourcesForSelection({ operation: 'bounce' });
+  }
+
+  freezeSelectedRegions(): Promise<void> {
+    return this.createDerivedSourcesForSelection({ operation: 'freeze' });
+  }
+
+  private async createDerivedSourcesForSelection(request: DerivedSourceRequest): Promise<void> {
     const selections = this.getSelectedRegions();
     const replacements: DerivedSourceReplacement[] = [];
     const createdSourceIds: string[] = [];
@@ -122,8 +156,11 @@ export class RegionProcessingController {
           durationSeconds: region.duration,
           minimumSilenceSeconds: 'minimumSilenceSeconds' in request ? request.minimumSilenceSeconds : undefined,
           operation: request.operation,
+          pitchSemitones: 'semitones' in request ? request.semitones : undefined,
           sourceStartTimeSeconds: region.sourceStartTime,
+          stretchRatio: 'stretchRatio' in request ? request.stretchRatio : undefined,
           thresholdDb: 'thresholdDb' in request ? request.thresholdDb : undefined,
+          transientSensitivity: 'sensitivity' in request ? request.sensitivity : undefined,
         });
         const sourceId = this.#createSourceId();
         const derivedRegistration = {
@@ -134,6 +171,14 @@ export class RegionProcessingController {
             fileName: `${request.operation}-${sourceId}.wav`,
             id: sourceId,
             mimeType: rendered.blob.type || 'audio/wav',
+            bwfMetadata: null,
+            derivation: {
+              operation: request.operation,
+              parameters: this.createDerivationParameters(request),
+              sourceId: region.sourceId,
+            },
+            tags: [],
+            transientPositionsSeconds: [...(rendered.transientPositionsSeconds ?? [])],
           },
         };
         await this.#audioSourceRepository.create(derivedRegistration);
@@ -177,6 +222,26 @@ export class RegionProcessingController {
     } catch (cause) {
       await this.rollbackDerivedSources({ cause, sourceIds: createdSourceIds });
       throw cause;
+    }
+  }
+
+  private createDerivationParameters(request: DerivedSourceRequest): Record<string, number> {
+    switch (request.operation) {
+      case 'stripSilence':
+        return {
+          minimumSilenceSeconds: request.minimumSilenceSeconds,
+          thresholdDb: request.thresholdDb,
+        };
+      case 'timeStretch':
+        return { stretchRatio: request.stretchRatio };
+      case 'pitchShift':
+        return { semitones: request.semitones };
+      case 'transientAnalysis':
+        return { sensitivity: request.sensitivity };
+      case 'bounce':
+      case 'freeze':
+      case 'reverse':
+        return {};
     }
   }
 

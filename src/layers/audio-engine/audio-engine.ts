@@ -29,6 +29,7 @@ import { encodeAudioBufferToWav } from './encoders/wav-encoder';
 import { AudioEngineError, AudioEngineErrorCode, ERROR_MESSAGES, UnsupportedAudioFeatureError } from './errors';
 import type {
   AudioProjectGraphPluginInstance,
+  AuditionAudioSourceRequest,
   ArmLoopRequest,
   ExportRequest,
   ExportTrack,
@@ -83,7 +84,14 @@ import { AudioPluginRuntimeError } from './plugins/errors';
 import type { ILinearRecordingAudioRuntime } from './recording-runtime/linear-recording-runtime';
 import { RegionRenderer, type RegionRenderParams } from './renderers/region-renderer';
 import { createAudibleRegionSegments } from './region-playback-segments';
-import { analyzePcmPeak, reversePcmChannels, stripSilenceFromPcmChannels } from './region-audio-processing';
+import {
+  analyzePcmPeak,
+  detectTransientPositionsSeconds,
+  pitchShiftPcmChannels,
+  reversePcmChannels,
+  stripSilenceFromPcmChannels,
+  timeStretchPcmChannels,
+} from './region-audio-processing';
 import { ToneTransportRuntime } from './transport-runtime/tone-transport-runtime';
 import { AudioRoutingRuntime, type AudioRoutingTrackNodes } from './routing/audio-routing-runtime';
 import { scheduleAutomationLane, type IAutomationAudioTarget } from './automation/automation-param-scheduler';
@@ -224,6 +232,8 @@ export class AudioEngine implements IAudioEngine {
   private mutedTrackIds: Set<string> = new Set();
   private soloedTrackIds: Set<string> = new Set();
   private players: Map<string, Map<string, RegionPlayerEntry>> = new Map();
+  private sourceAuditionPlayer: Tone.Player | null = null;
+  private sourceAuditionRevision = 0;
   private pluginRuntimes: Map<string, IAudioPluginRuntime[]> = new Map();
   private disabledPluginInstanceIds: Map<string, Set<string>> = new Map();
   private pluginRuntimeStates: Map<string, PluginRuntimeState[]> = new Map();
@@ -1521,17 +1531,7 @@ export class AudioEngine implements IAudioEngine {
     try {
       const sourceBuffer = await this.decodeAudioRegionBlob(request.blob);
       const sourceChannels = this.extractAudioRegionChannels(sourceBuffer, request);
-      const outputChannels =
-        request.operation === 'reverse'
-          ? reversePcmChannels(sourceChannels)
-          : stripSilenceFromPcmChannels({
-              channels: sourceChannels,
-              minimumSilenceFrames: Math.max(
-                1,
-                Math.round((request.minimumSilenceSeconds ?? 0.1) * sourceBuffer.sampleRate)
-              ),
-              thresholdLinear: Math.pow(10, (request.thresholdDb ?? -60) / 20),
-            });
+      const outputChannels = createDerivedPcmChannels({ request, sampleRate: sourceBuffer.sampleRate, sourceChannels });
       const frameCount = outputChannels[0]?.length ?? 0;
       if (frameCount === 0) {
         throw new AudioEngineError(
@@ -1545,15 +1545,68 @@ export class AudioEngine implements IAudioEngine {
         sourceBuffer.sampleRate
       );
       outputChannels.forEach((channel, channelIndex) => outputBuffer.copyToChannel(channel, channelIndex));
+      const transientPositionsSeconds =
+        request.operation === 'transientAnalysis'
+          ? detectTransientPositionsSeconds({
+              channels: outputChannels,
+              sampleRate: sourceBuffer.sampleRate,
+              sensitivity: request.transientSensitivity ?? 0.75,
+            })
+          : undefined;
       return {
         blob: encodeAudioBufferToWav(outputBuffer),
         durationSeconds: frameCount / sourceBuffer.sampleRate,
+        ...(transientPositionsSeconds ? { transientPositionsSeconds } : {}),
       };
     } catch (cause) {
       if (cause instanceof AudioEngineError) {
         throw cause;
       }
       throw this.createRegionProcessingError(cause);
+    }
+  }
+
+  async auditionAudioSource({ blob }: AuditionAudioSourceRequest): Promise<void> {
+    this.stopAudioSourceAudition();
+    const auditionRevision = ++this.sourceAuditionRevision;
+    try {
+      await Tone.start();
+      const audioBuffer = await this.decodeAudioRegionBlob(blob);
+      if (auditionRevision !== this.sourceAuditionRevision) {
+        return;
+      }
+      const player = new Tone.Player({ url: audioBuffer }).connect(Tone.getDestination());
+      player.onstop = () => {
+        if (this.sourceAuditionPlayer !== player) {
+          return;
+        }
+        this.sourceAuditionPlayer = null;
+        player.dispose();
+      };
+      this.sourceAuditionPlayer = player;
+      try {
+        player.start();
+      } catch (cause) {
+        this.sourceAuditionPlayer = null;
+        player.dispose();
+        throw cause;
+      }
+    } catch (cause) {
+      throw this.createRegionProcessingError(cause);
+    }
+  }
+
+  stopAudioSourceAudition(): void {
+    this.sourceAuditionRevision += 1;
+    const player = this.sourceAuditionPlayer;
+    this.sourceAuditionPlayer = null;
+    if (!player) {
+      return;
+    }
+    try {
+      player.stop();
+    } finally {
+      player.dispose();
     }
   }
 
@@ -3415,4 +3468,35 @@ function areRecordingInputRoutesEqual(
         route.channelIndex === right[index]?.channelIndex
     )
   );
+}
+
+interface CreateDerivedPcmChannelsRequest {
+  readonly request: RenderDerivedAudioRegionRequest;
+  readonly sampleRate: number;
+  readonly sourceChannels: readonly Float32Array[];
+}
+
+function createDerivedPcmChannels({
+  request,
+  sampleRate,
+  sourceChannels,
+}: CreateDerivedPcmChannelsRequest): Float32Array[] {
+  switch (request.operation) {
+    case 'reverse':
+      return reversePcmChannels(sourceChannels);
+    case 'stripSilence':
+      return stripSilenceFromPcmChannels({
+        channels: sourceChannels,
+        minimumSilenceFrames: Math.max(1, Math.round((request.minimumSilenceSeconds ?? 0.1) * sampleRate)),
+        thresholdLinear: Math.pow(10, (request.thresholdDb ?? -60) / 20),
+      });
+    case 'timeStretch':
+      return timeStretchPcmChannels({ channels: sourceChannels, stretchRatio: request.stretchRatio ?? 1 });
+    case 'pitchShift':
+      return pitchShiftPcmChannels({ channels: sourceChannels, semitones: request.pitchSemitones ?? 0 });
+    case 'bounce':
+    case 'freeze':
+    case 'transientAnalysis':
+      return sourceChannels.map(channel => Float32Array.from(channel));
+  }
 }

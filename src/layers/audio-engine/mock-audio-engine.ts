@@ -18,6 +18,7 @@ import {
 import type {
   ExportRequest,
   ArmLoopRequest,
+  AuditionAudioSourceRequest,
   IAudioEngine,
   InstallAudioPluginRequest,
   LoadLoopRequest,
@@ -108,6 +109,7 @@ export class MockAudioEngine implements IAudioEngine {
   private readonly monitorStateListeners = new Set<AudioMonitorStateListener>();
   private readonly liveInputStateListeners = new Set<LiveInputRuntimeListener>();
   private mockAudioRegionPeak = 0.5;
+  private mockAuditionBlob: Blob | null = null;
   private mockAutomationLanes = new Map<string, SetAutomationLanesRequest['automationLanes']>();
   private mockMidiTracks = new Map<string, MidiTrackState>();
 
@@ -187,6 +189,18 @@ export class MockAudioEngine implements IAudioEngine {
 
   async renderDerivedAudioRegion(request: RenderDerivedAudioRegionRequest): Promise<RenderedDerivedAudioRegion> {
     return { blob: request.blob, durationSeconds: request.durationSeconds };
+  }
+
+  async auditionAudioSource({ blob }: AuditionAudioSourceRequest): Promise<void> {
+    this.mockAuditionBlob = blob;
+  }
+
+  stopAudioSourceAudition(): void {
+    this.mockAuditionBlob = null;
+  }
+
+  getMockAuditionBlob(): Blob | null {
+    return this.mockAuditionBlob;
   }
 
   async play(): Promise<void> {

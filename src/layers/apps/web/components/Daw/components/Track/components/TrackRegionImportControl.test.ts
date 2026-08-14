@@ -152,11 +152,15 @@ describe('TrackRegionImportControl', () => {
     expect(layerMocks.stage).toHaveBeenCalledWith({
       blob: file,
       metadata: {
+        bwfMetadata: null,
+        derivation: null,
         id: SOURCE_ID,
         fileName: file.name,
         mimeType: file.type,
         byteLength: file.size,
         durationSeconds: 4.5,
+        tags: [],
+        transientPositionsSeconds: [],
       },
     });
     expect(onPendingChange).toHaveBeenNthCalledWith(1, true);

@@ -12,6 +12,7 @@ import {
 } from '@daw-engine-source/browser-adapter';
 import type {
   ArmLoopRequest,
+  AuditionAudioSourceRequest,
   AudioMonitorState,
   AudioMonitorStateListener,
   ExportRequest,
@@ -492,6 +493,14 @@ export class DawEngineAdapter implements IAudioEngine {
 
   renderDerivedAudioRegion(request: RenderDerivedAudioRegionRequest): Promise<RenderedDerivedAudioRegion> {
     return this.#runtime.renderDerivedAudioRegion(request);
+  }
+
+  auditionAudioSource(request: AuditionAudioSourceRequest): Promise<void> {
+    return this.#runtime.auditionAudioSource(request);
+  }
+
+  stopAudioSourceAudition(): void {
+    this.#runtime.stopAudioSourceAudition();
   }
 }
 
