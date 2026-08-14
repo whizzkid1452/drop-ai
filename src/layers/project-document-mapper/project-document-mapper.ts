@@ -29,6 +29,7 @@ import {
   readProjectDocumentV16,
   readProjectDocumentV17,
   readProjectDocumentV18,
+  readProjectDocumentV19,
 } from '../shared/types/project-document-reader';
 import {
   PROJECT_DOCUMENT_SCHEMA_VERSION,
@@ -49,6 +50,7 @@ import {
   PROJECT_DOCUMENT_SCHEMA_VERSION_V16,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V17,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V18,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V19,
   ProjectDocumentSchema,
   ProjectDocumentV2Schema,
   ProjectDocumentV3Schema,
@@ -67,6 +69,7 @@ import {
   ProjectDocumentV16Schema,
   ProjectDocumentV17Schema,
   ProjectDocumentV18Schema,
+  ProjectDocumentV19Schema,
   type ProjectAudioSource,
   type ProjectDocument,
   type ProjectDocumentV2,
@@ -86,9 +89,11 @@ import {
   type ProjectDocumentV16,
   type ProjectDocumentV17,
   type ProjectDocumentV18,
+  type ProjectDocumentV19,
   type ProjectDocumentSnapshot,
   type ProjectLoopSlot,
   type ProjectLoopSlotV4,
+  type ProjectLoopSlotV19,
   type ProjectPluginInstance,
   type ProjectRegion,
   type ProjectRegionV8,
@@ -109,6 +114,7 @@ import { cloneAutomationLaneState } from '../shared/types/automation-state';
 import { cloneMidiTrackState } from '../shared/types/midi-state';
 import { cloneProjectExportState, createDefaultProjectExportState } from '../shared/types/export-state';
 import { cloneProjectLifecycleState, createDefaultProjectLifecycleState } from '../shared/types/session-lifecycle';
+import { cloneCueState, createDefaultCueState } from '../shared/types/clip-cue-state';
 import {
   cloneProjectRecordingState,
   cloneTrackRecordingState,
@@ -145,6 +151,7 @@ export type CreateProjectDocumentV15FromSessionOptions = CreateProjectDocumentV2
 export type CreateProjectDocumentV16FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 export type CreateProjectDocumentV17FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 export type CreateProjectDocumentV18FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
+export type CreateProjectDocumentV19FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 
 export interface ProjectRestoreSnapshot {
   readonly session: SessionProjectSnapshot;
@@ -176,6 +183,7 @@ export type CreateProjectRestoreSnapshotFromDocumentV15Options = CreateProjectRe
 export type CreateProjectRestoreSnapshotFromDocumentV16Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 export type CreateProjectRestoreSnapshotFromDocumentV17Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 export type CreateProjectRestoreSnapshotFromDocumentV18Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
+export type CreateProjectRestoreSnapshotFromDocumentV19Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 
 interface SessionTrackEntry {
   readonly mapKey: string;
@@ -697,6 +705,28 @@ export function createProjectDocumentV18FromSession({
     ...v17Document,
     lifecycle: cloneProjectLifecycleState(session.lifecycle ?? createDefaultProjectLifecycleState()),
     schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V18,
+  });
+}
+
+export function createProjectDocumentV19FromSession({
+  session,
+  audioSources,
+  pluginCatalog,
+}: CreateProjectDocumentV19FromSessionOptions): ProjectDocumentV19 {
+  const v18Document = createProjectDocumentV18FromSession({ audioSources, pluginCatalog, session });
+  return parseSessionDocumentCandidateV19({
+    ...v18Document,
+    cue: cloneCueState(session.cue ?? createDefaultCueState()),
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V19,
+    tracks: v18Document.tracks.map(track => {
+      const sessionTrack = session.tracks.get(track.id);
+      return {
+        ...track,
+        loopSlots: track.loopSlots.map((savedLoopSlot, index) =>
+          createProjectLoopSlotV19({ index, loopSlot: sessionTrack?.loopSlots?.[index], savedLoopSlot })
+        ),
+      };
+    }),
   });
 }
 
@@ -1235,6 +1265,65 @@ export function createProjectRestoreSnapshotFromDocumentV18({
   };
 }
 
+export function createProjectRestoreSnapshotFromDocumentV19({
+  document,
+  pluginCatalog,
+}: CreateProjectRestoreSnapshotFromDocumentV19Options): ProjectRestoreSnapshot {
+  const validatedDocument = readDocumentV19ForMapping(document);
+  const { cue, tracks, ...v18Fields } = validatedDocument;
+  const v18Snapshot = createProjectRestoreSnapshotFromDocumentV18({
+    document: {
+      ...v18Fields,
+      schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V18,
+      tracks: tracks.map(track => ({
+        ...track,
+        loopSlots: track.loopSlots.map(toProjectLoopSlotV4),
+      })),
+    },
+    pluginCatalog,
+  });
+  const sessionTracks = new Map(v18Snapshot.session.tracks);
+  tracks.forEach(track => {
+    const sessionTrack = sessionTracks.get(track.id);
+    if (!sessionTrack) {
+      return;
+    }
+    const savedSlotById = new Map(track.loopSlots.map(slot => [slot.id, slot]));
+    sessionTracks.set(track.id, {
+      ...sessionTrack,
+      loopSlots: sessionTrack.loopSlots?.map(slot => {
+        const savedSlot = savedSlotById.get(slot.id);
+        return savedSlot
+          ? {
+              ...slot,
+              followAction: { ...savedSlot.followAction },
+              launchMode: savedSlot.launchMode,
+              name: savedSlot.name,
+              sourceEndTimeSeconds: savedSlot.sourceEndTimeSeconds,
+              sourceStartTimeSeconds: savedSlot.sourceStartTimeSeconds,
+            }
+          : slot;
+      }),
+    });
+  });
+  return {
+    ...v18Snapshot,
+    session: { ...v18Snapshot.session, cue: cloneCueState(cue), tracks: sessionTracks },
+  };
+}
+
+function toProjectLoopSlotV4(loopSlot: ProjectLoopSlotV19): ProjectLoopSlotV4 {
+  return {
+    gain: loopSlot.gain,
+    id: loopSlot.id,
+    lengthBars: loopSlot.lengthBars,
+    overdubSourceIds: [...loopSlot.overdubSourceIds],
+    quantizationBars: loopSlot.quantizationBars,
+    recordedTempoBpm: loopSlot.recordedTempoBpm,
+    sourceId: loopSlot.sourceId,
+  };
+}
+
 function createExportRange(session: SessionProjectSnapshot): ProjectDocument['exportRange'] {
   const { exportStartTime, exportEndTime } = session;
   if (exportStartTime === null && exportEndTime === null) {
@@ -1374,6 +1463,25 @@ function createProjectLoopSlotV4(loopSlot: LoopSlotState): ProjectLoopSlotV4 {
     quantizationBars: loopSlot.quantizationBars,
     recordedTempoBpm: loopSlot.recordedTempoBpm,
     sourceId: loopSlot.sourceId,
+  };
+}
+
+function createProjectLoopSlotV19({
+  index,
+  loopSlot,
+  savedLoopSlot,
+}: {
+  readonly index: number;
+  readonly loopSlot: LoopSlotState | undefined;
+  readonly savedLoopSlot: ProjectLoopSlotV4;
+}): ProjectLoopSlotV19 {
+  return {
+    ...savedLoopSlot,
+    followAction: loopSlot?.followAction ?? { afterBars: 1, type: 'none' },
+    launchMode: loopSlot?.launchMode ?? 'trigger',
+    name: loopSlot?.name ?? `Clip ${index + 1}`,
+    sourceEndTimeSeconds: loopSlot?.sourceEndTimeSeconds ?? null,
+    sourceStartTimeSeconds: loopSlot?.sourceStartTimeSeconds ?? 0,
   };
 }
 
@@ -1937,6 +2045,25 @@ function parseSessionDocumentCandidateV18(documentCandidate: unknown): ProjectDo
   });
 }
 
+function parseSessionDocumentCandidateV19(documentCandidate: unknown): ProjectDocumentV19 {
+  const schema = ProjectDocumentV19Schema as unknown as {
+    safeParse(
+      input: unknown
+    ):
+      | { readonly success: true; readonly data: ProjectDocumentV19 }
+      | { readonly success: false; readonly error: unknown };
+  };
+  const result = schema.safeParse(documentCandidate);
+  if (result.success) {
+    return result.data;
+  }
+  throw new ProjectDocumentMappingError({
+    code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
+    message: 'Session 상태를 ProjectDocument v19로 변환할 수 없습니다.',
+    details: { validationError: result.error },
+  });
+}
+
 function readDocumentForMapping(document: ProjectDocument): ProjectDocument {
   try {
     return readProjectDocument(document);
@@ -2170,6 +2297,18 @@ function readDocumentV18ForMapping(document: ProjectDocumentSnapshot): ProjectDo
   }
 }
 
+function readDocumentV19ForMapping(document: ProjectDocumentSnapshot): ProjectDocumentV19 {
+  try {
+    return readProjectDocumentV19(document);
+  } catch (cause) {
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT,
+      message: '복원할 ProjectDocument v19가 유효하지 않습니다.',
+      cause,
+    });
+  }
+}
+
 function toProjectAudioSourceV16(source: Readonly<ProjectAudioSource>): ProjectAudioSourceV16 {
   const managedSource = source as Partial<ProjectAudioSourceV16>;
   return {
@@ -2244,14 +2383,19 @@ function createSessionTrackV3({
 function createSessionLoopSlot(loopSlot: ProjectLoopSlot): LoopSlotState {
   return {
     errorMessage: null,
+    followAction: { afterBars: 1, type: 'none' },
     gain: loopSlot.gain,
     id: loopSlot.id,
+    launchMode: 'trigger',
     lengthBars: loopSlot.lengthBars,
+    name: 'Clip',
     overdubSourceIds: [],
     quantizationBars: loopSlot.quantizationBars,
     recordedTempoBpm: loopSlot.recordedTempoBpm,
     scheduledTimeSeconds: null,
     sourceId: loopSlot.sourceId,
+    sourceEndTimeSeconds: null,
+    sourceStartTimeSeconds: 0,
     state: loopSlot.sourceId === null ? 'empty' : 'stopped',
   };
 }
@@ -2389,14 +2533,19 @@ function createSessionTrackV15({
 function createSessionLoopSlotV4(loopSlot: ProjectLoopSlotV4): LoopSlotState {
   return {
     errorMessage: null,
+    followAction: { afterBars: 1, type: 'none' },
     gain: loopSlot.gain,
     id: loopSlot.id,
+    launchMode: 'trigger',
     lengthBars: loopSlot.lengthBars,
+    name: 'Clip',
     overdubSourceIds: [...loopSlot.overdubSourceIds],
     quantizationBars: loopSlot.quantizationBars,
     recordedTempoBpm: loopSlot.recordedTempoBpm,
     scheduledTimeSeconds: null,
     sourceId: loopSlot.sourceId,
+    sourceEndTimeSeconds: null,
+    sourceStartTimeSeconds: 0,
     state: loopSlot.sourceId === null ? 'empty' : 'stopped',
   };
 }

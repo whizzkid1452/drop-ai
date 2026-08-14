@@ -97,7 +97,7 @@ describe('SessionLifecycleControl', () => {
       projectName: 'Recovered session',
       projectRevision: 4,
       savedAtEpochMilliseconds: 1,
-      schemaVersion: 18 as const,
+      schemaVersion: 19 as const,
     };
     const app: AppInstance = {
       ...baseApp,

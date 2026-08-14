@@ -1,5 +1,5 @@
-import { readProjectDocumentV18 } from './project-document-reader';
-import type { ProjectAudioSourceV16, ProjectDocumentV18 } from './project-document.schema';
+import { readProjectDocumentV19 } from './project-document-reader';
+import type { ProjectAudioSourceV16, ProjectDocumentV19 } from './project-document.schema';
 
 export const PROJECT_ARCHIVE_MIME_TYPE = 'application/vnd.drop-ai.session-archive+json';
 const PROJECT_ARCHIVE_TYPE = 'drop-ai-session-archive';
@@ -12,7 +12,7 @@ export interface ProjectArchiveSource {
 }
 
 export interface ProjectArchive {
-  readonly document: ProjectDocumentV18;
+  readonly document: ProjectDocumentV19;
   readonly sources: readonly ProjectArchiveSource[];
 }
 
@@ -74,7 +74,7 @@ export async function createProjectArchiveBlob(archive: ProjectArchive): Promise
 
 export async function readProjectArchiveBlob(blob: Blob): Promise<ProjectArchive> {
   const serialized = readSerializedArchive(JSON.parse(await blob.text()) as unknown);
-  const document = readProjectDocumentV18(serialized.document);
+  const document = readProjectDocumentV19(serialized.document);
   const metadataById = new Map(document.audioSources.map(metadata => [metadata.id, metadata]));
   const sources = serialized.sources.map(source => {
     const documentMetadata = metadataById.get(source.metadata.id);

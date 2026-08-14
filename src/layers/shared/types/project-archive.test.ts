@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { readProjectDocumentV18 } from './project-document-reader';
+import { readProjectDocumentV19 } from './project-document-reader';
 import { createProjectArchiveBlob, readProjectArchiveBlob } from './project-archive';
 import type { ProjectDocumentV16 } from './project-document.schema';
 
 function createDocument(byteLength: number) {
-  return readProjectDocumentV18({
+  return readProjectDocumentV19({
     audioSources: [
       {
         byteLength,

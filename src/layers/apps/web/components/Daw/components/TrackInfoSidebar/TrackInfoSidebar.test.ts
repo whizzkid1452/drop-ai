@@ -89,8 +89,13 @@ vi.mock('./TrackInfoSidebar.css.ts', () => ({
 
 const mountedRoots: Root[] = [];
 const loopSlot: LoopSlotState = {
+  followAction: { afterBars: 1, type: 'none' },
   id: '33333333-3333-4333-8333-333333333333',
+  launchMode: 'trigger',
+  name: 'Clip 1',
   sourceId: null,
+  sourceEndTimeSeconds: null,
+  sourceStartTimeSeconds: 0,
   overdubSourceIds: [],
   lengthBars: 1,
   quantizationBars: 1,

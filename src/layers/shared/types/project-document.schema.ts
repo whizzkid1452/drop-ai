@@ -13,6 +13,13 @@ import {
   EXPORT_MODES,
   EXPORT_SAMPLE_FORMATS,
 } from './export-state';
+import {
+  CLIP_FOLLOW_ACTION_TYPES,
+  CLIP_LAUNCH_MODES,
+  type ClipFollowAction,
+  type ClipLaunchMode,
+  type CueState,
+} from './clip-cue-state';
 
 export const PROJECT_DOCUMENT_SCHEMA_VERSION = 1 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V2 = 2 as const;
@@ -32,6 +39,7 @@ export const PROJECT_DOCUMENT_SCHEMA_VERSION_V15 = 15 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V16 = 16 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V17 = 17 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V18 = 18 as const;
+export const PROJECT_DOCUMENT_SCHEMA_VERSION_V19 = 19 as const;
 
 const MAX_NAME_LENGTH = 255;
 const MAX_MIME_TYPE_LENGTH = 255;
@@ -50,6 +58,8 @@ const MAX_PLUGIN_STATE_BLOB_LENGTH = 1_000_000;
 const MAX_SOURCE_TAGS = 32;
 const MAX_EXPORT_PRESETS = 64;
 const MAX_EXPORT_RANGES = 256;
+const MAX_CUE_PERFORMANCES = 128;
+const MAX_CUE_EVENTS = 10_000;
 const MAX_TRANSIENT_POSITIONS = 100_000;
 const MAX_BWF_TEXT_LENGTH = 65_535;
 const nonBlankNameSchema = z.string().trim().min(1).max(MAX_NAME_LENGTH);
@@ -828,6 +838,56 @@ const ProjectDocumentV18BaseSchema = ProjectDocumentV17BaseSchema.omit({ schemaV
   schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V18),
 });
 
+export const ProjectClipFollowActionSchema = z.strictObject({
+  afterBars: loopLengthBarsSchema,
+  type: z.enum(CLIP_FOLLOW_ACTION_TYPES),
+});
+
+export const ProjectLoopSlotV19Schema = ProjectLoopSlotV4Schema.safeExtend({
+  followAction: ProjectClipFollowActionSchema,
+  launchMode: z.enum(CLIP_LAUNCH_MODES),
+  name: nonBlankNameSchema,
+  sourceEndTimeSeconds: z.number().finite().positive().nullable(),
+  sourceStartTimeSeconds: z.number().finite().nonnegative(),
+})
+  .refine(slot => slot.sourceEndTimeSeconds === null || slot.sourceEndTimeSeconds > slot.sourceStartTimeSeconds, {
+    message: 'Clip Source end must be greater than start',
+    path: ['sourceEndTimeSeconds'],
+  })
+  .refine(slot => slot.sourceId !== null || (slot.sourceStartTimeSeconds === 0 && slot.sourceEndTimeSeconds === null), {
+    message: 'Empty Clip Slot must not contain a Source range',
+    path: ['sourceStartTimeSeconds'],
+  });
+
+export const ProjectTrackV19Schema = ProjectTrackV15Schema.omit({ loopSlots: true }).extend({
+  loopSlots: z.array(ProjectLoopSlotV19Schema).max(MAX_LOOP_SLOTS),
+});
+
+export const ProjectCueEventSchema = z.strictObject({
+  durationQuarterNotes: z.number().finite().positive(),
+  id: z.uuid('Invalid Cue Event ID format'),
+  slotId: z.uuid('Invalid Loop Slot ID format'),
+  startQuarterNotes: z.number().finite().nonnegative(),
+  trackId: z.uuid('Invalid Track ID format'),
+});
+
+export const ProjectCuePerformanceSchema = z.strictObject({
+  createdAt: lifecycleTimestampSchema,
+  events: z.array(ProjectCueEventSchema).max(MAX_CUE_EVENTS),
+  id: z.uuid('Invalid Cue Performance ID format'),
+  name: lifecycleNameSchema,
+});
+
+export const ProjectCueStateSchema = z.strictObject({
+  performances: z.array(ProjectCuePerformanceSchema).max(MAX_CUE_PERFORMANCES),
+});
+
+const ProjectDocumentV19BaseSchema = ProjectDocumentV18BaseSchema.omit({ schemaVersion: true, tracks: true }).extend({
+  cue: ProjectCueStateSchema,
+  schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V19),
+  tracks: z.array(ProjectTrackV19Schema),
+});
+
 interface IdentifiedDocumentPath {
   id: string;
   path: Array<string | number>;
@@ -1301,6 +1361,62 @@ export const ProjectDocumentV18Schema = ProjectDocumentV18BaseSchema.superRefine
     })),
     label: 'Project Template',
     context,
+  });
+});
+
+export const ProjectDocumentV19Schema = ProjectDocumentV19BaseSchema.superRefine((document, context) => {
+  validateProjectDocumentV16State(document as unknown as z.infer<typeof ProjectDocumentV16BaseSchema>, context);
+  validateProjectExportSettings(document.exportSettings, context, ['exportSettings']);
+
+  const cueDocument = document as unknown as {
+    readonly cue: CueState;
+    readonly tracks: readonly { readonly id: string; readonly loopSlots: readonly { readonly id: string }[] }[];
+  };
+  const slotKeys = new Set(cueDocument.tracks.flatMap(track => track.loopSlots.map(slot => `${track.id}:${slot.id}`)));
+  const performances = cueDocument.cue.performances;
+  const lifecycle = document.lifecycle as unknown as ProjectLifecycleState;
+  addDuplicateIdIssues({
+    context,
+    entries: lifecycle.snapshots.map((snapshot, index) => ({
+      id: snapshot.id,
+      path: ['lifecycle', 'snapshots', index, 'id'],
+    })),
+    label: 'Named Snapshot',
+  });
+  addDuplicateIdIssues({
+    context,
+    entries: lifecycle.templates.map((template, index) => ({
+      id: template.id,
+      path: ['lifecycle', 'templates', index, 'id'],
+    })),
+    label: 'Project Template',
+  });
+  addDuplicateIdIssues({
+    context,
+    entries: performances.map((performance, index) => ({
+      id: performance.id,
+      path: ['cue', 'performances', index, 'id'],
+    })),
+    label: 'Cue Performance',
+  });
+  performances.forEach((performance, performanceIndex) => {
+    addDuplicateIdIssues({
+      context,
+      entries: performance.events.map((event, eventIndex) => ({
+        id: event.id,
+        path: ['cue', 'performances', performanceIndex, 'events', eventIndex, 'id'],
+      })),
+      label: 'Cue Event',
+    });
+    performance.events.forEach((event, eventIndex) => {
+      if (!slotKeys.has(`${event.trackId}:${event.slotId}`)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Cue Event must reference an existing Loop Slot',
+          path: ['cue', 'performances', performanceIndex, 'events', eventIndex, 'slotId'],
+        });
+      }
+    });
   });
 });
 
@@ -2055,12 +2171,50 @@ export interface ProjectDocumentV17 extends Omit<ProjectDocumentV16, 'schemaVers
   readonly exportSettings: ProjectExportSettings;
   readonly schemaVersion: typeof PROJECT_DOCUMENT_SCHEMA_VERSION_V17;
 }
-export type ProjectNamedSnapshot = z.infer<typeof ProjectNamedSnapshotSchema>;
-export type ProjectTemplate = z.infer<typeof ProjectTemplateSchema>;
-export type ProjectLifecycleState = z.infer<typeof ProjectLifecycleStateSchema>;
+export interface ProjectNamedSnapshot {
+  readonly createdAt: string;
+  readonly document: ProjectDocumentV17;
+  readonly id: string;
+  readonly name: string;
+}
+export type ProjectTemplate =
+  | {
+      readonly createdAt: string;
+      readonly document: ProjectDocumentV17;
+      readonly id: string;
+      readonly kind: 'session';
+      readonly name: string;
+    }
+  | {
+      readonly createdAt: string;
+      readonly document: ProjectDocumentV17;
+      readonly id: string;
+      readonly kind: 'track';
+      readonly name: string;
+    };
+export interface ProjectLifecycleState {
+  readonly snapshots: readonly ProjectNamedSnapshot[];
+  readonly templates: readonly ProjectTemplate[];
+}
 export interface ProjectDocumentV18 extends Omit<ProjectDocumentV17, 'schemaVersion'> {
   readonly lifecycle: ProjectLifecycleState;
   readonly schemaVersion: typeof PROJECT_DOCUMENT_SCHEMA_VERSION_V18;
+}
+export interface ProjectLoopSlotV19 extends ProjectLoopSlotV4 {
+  readonly followAction: ClipFollowAction;
+  readonly launchMode: ClipLaunchMode;
+  readonly name: string;
+  readonly sourceEndTimeSeconds: number | null;
+  readonly sourceStartTimeSeconds: number;
+}
+export interface ProjectTrackV19 extends Omit<ProjectTrackV15, 'loopSlots'> {
+  readonly loopSlots: ProjectLoopSlotV19[];
+}
+export type ProjectCueState = CueState;
+export interface ProjectDocumentV19 extends Omit<ProjectDocumentV18, 'schemaVersion' | 'tracks'> {
+  readonly cue: ProjectCueState;
+  readonly schemaVersion: typeof PROJECT_DOCUMENT_SCHEMA_VERSION_V19;
+  readonly tracks: ProjectTrackV19[];
 }
 export type ProjectDocumentSnapshot =
   | ProjectDocument
@@ -2080,4 +2234,5 @@ export type ProjectDocumentSnapshot =
   | ProjectDocumentV15
   | ProjectDocumentV16
   | ProjectDocumentV17
-  | ProjectDocumentV18;
+  | ProjectDocumentV18
+  | ProjectDocumentV19;
