@@ -22,6 +22,8 @@ import { createSessionStore, type SessionStore } from '../session/session';
 import { AppController } from '../controllers/app-controller';
 import { CommandExecutor } from '../commands/command-executor';
 import { CommandHistory, type ICommandHistoryQuery } from '../commands/command-history';
+import { BrowserUndoJournal } from '../commands/undo-journal';
+import { BrowserSessionRecoveryStore, type ISessionRecoveryQuery } from '../queries/session-recovery-query';
 import { PlaybackClockQuery, type IPlaybackClockQuery } from '../queries/playback-clock-query';
 import { MeterQuery, type IMeterQuery } from '../queries/meter-query';
 import { LiveInputQuery, type ILiveInputQuery } from '../queries/live-input-query';
@@ -83,6 +85,7 @@ export interface AppInstance {
   pluginRuntime: IPluginRuntimeQuery;
   mediaSource: IMediaSourceQuery;
   renderJob: IRenderJobQuery;
+  readonly sessionRecovery?: ISessionRecoveryQuery;
 }
 
 interface ProjectSyncDependencies {
@@ -104,6 +107,7 @@ export interface CreateAppOptions {
   initialProjectMetadata?: ProjectMetadata;
   initialPluginManifests?: readonly unknown[];
   midiInput?: IMidiInput;
+  browserStorage?: Storage;
 }
 
 interface InitialPluginRegistrationOptions {
@@ -251,6 +255,9 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   });
   const audioSourceCapabilities = createAudioSourceCapabilities(audioSourceRegistry);
   const midiInput = options.midiInput ?? new BrowserMidiInput();
+  const browserStorage = options.browserStorage;
+  const undoJournal = new BrowserUndoJournal(browserStorage);
+  const sessionRecovery = new BrowserSessionRecoveryStore(browserStorage);
   const controller = new AppController({
     sessionStore: session,
     audioEngine,
@@ -260,6 +267,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     projectSync: controllerProjectSync,
     pluginHost,
     midiInput,
+    onRemoteProjectReplaced: projectId => undoJournal.clear(projectId),
   });
   const projectSync =
     options.projectSync ??
@@ -271,7 +279,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     new NoopProjectSyncService();
   projectSyncDelegate.setDelegate(projectSync);
   const commandHistory = new CommandHistory();
-  const commandExecutor = new CommandExecutor(session, controller, commandHistory);
+  const commandExecutor = new CommandExecutor(session, controller, commandHistory, undoJournal, sessionRecovery);
   const commandHistoryQuery = createCommandHistoryQuery(commandHistory);
   const playbackClock = new PlaybackClockQuery(controller.playback);
   const meter = new MeterQuery(controller.meter);
@@ -316,6 +324,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     pluginRuntime,
     mediaSource,
     renderJob,
+    sessionRecovery,
   };
 }
 

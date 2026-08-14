@@ -19,6 +19,7 @@ export interface ICommandHistoryQuery {
 export interface ICommandHistory extends ICommandHistoryQuery {
   clear(): void;
   record(entry: CommandHistoryEntry): void;
+  restore(undoEntries: readonly CommandHistoryEntry[], redoEntries: readonly CommandHistoryEntry[]): void;
   redo(): Promise<void>;
   undo(): Promise<void>;
 }
@@ -79,6 +80,12 @@ export class CommandHistory implements ICommandHistory {
   clear(): void {
     this.undoEntries.splice(0);
     this.redoEntries.splice(0);
+    this.publishSnapshot();
+  }
+
+  restore(undoEntries: readonly CommandHistoryEntry[], redoEntries: readonly CommandHistoryEntry[]): void {
+    this.undoEntries.splice(0, this.undoEntries.length, ...undoEntries.slice(-COMMAND_HISTORY_LIMIT));
+    this.redoEntries.splice(0, this.redoEntries.length, ...redoEntries.slice(-COMMAND_HISTORY_LIMIT));
     this.publishSnapshot();
   }
 

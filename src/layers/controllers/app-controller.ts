@@ -22,6 +22,7 @@ import { RegionProcessingController } from './region-processing-controller';
 import { AutomationController } from './automation-controller';
 import { MidiController } from './midi-controller';
 import { MediaSourceController } from './media-source-controller';
+import { SessionLifecycleController } from './session-lifecycle-controller';
 import type { IMidiInput } from '../midi-input/i-midi-input';
 
 interface AppControllerDependencies {
@@ -33,6 +34,7 @@ interface AppControllerDependencies {
   projectSync?: IProjectSyncService;
   pluginHost: IPluginHost;
   midiInput?: IMidiInput;
+  onRemoteProjectReplaced?: (projectId: string) => void;
 }
 
 /**
@@ -56,6 +58,7 @@ export class AppController {
   public readonly automation: AutomationController;
   public readonly midi: MidiController;
   public readonly mediaSource: MediaSourceController;
+  public readonly sessionLifecycle: SessionLifecycleController;
 
   constructor({
     sessionStore,
@@ -66,6 +69,7 @@ export class AppController {
     projectSync,
     pluginHost,
     midiInput,
+    onRemoteProjectReplaced,
   }: AppControllerDependencies) {
     this.playback = new PlaybackController(sessionStore, audioEngine);
     this.track = new TrackController({ sessionStore, audioEngine, audioSourceRegistry });
@@ -91,7 +95,9 @@ export class AppController {
       projectRepository,
       localProjectRepository: projectRepository,
       projectSync,
+      onRemoteProjectReplaced,
     });
+    this.sessionLifecycle = new SessionLifecycleController({ projectController: this.project, sessionStore });
     this.plugin = new PluginController({ pluginHost, sessionStore, audioEngine });
     this.mixer = new MixerController({ sessionStore, audioEngine });
     this.timeline = new TimelineController(sessionStore);

@@ -26,7 +26,10 @@ Track arm, 활성 녹음 상태는 runtime 값이며 `ProjectDocument`에 저장
 `CANCEL_RENDER_JOB`은 실행 중인 offline render가 끝날 때까지 기다리지 않고 취소 상태를 기록한다. Web Audio의
 offline render 자체는 중단 API가 없으므로 완료된 버퍼는 폐기하고 파일 결과를 반환하지 않는다.
 
-`CommandHistory`는 현재 앱 실행 중에만 유지하는 최대 100개의 역명령 기록이다. `CommandExecutor`가 성공한 편집의 실행 전후
+`CommandHistory`는 메모리에 최대 100개의 역명령을 유지한다. Web에서는 최근 20개 항목의 전·후 `ProjectDocument v17`을
+프로젝트별 Undo journal에도 기록한다. 앱 재시작 뒤 프로젝트 ID·revision·현재 schema가 모두 같을 때만 함수 항목으로
+복원한다. 원격 문서 교체, Snapshot·Template·Archive 적용, revision 또는 schema 불일치 시 해당 journal을 제거한다.
+`CommandExecutor`가 성공한 편집의 실행 전후
 Session을 비교해 Undo·Redo 명령을 만들고, `UNDO`와 `REDO`도 같은 대기열에서 실행한다. Undo·Redo가 실패하면 해당 기록을
 반대쪽 스택으로 옮기지 않는다. 새 편집은 Redo 기록을 제거한다. 지원 범위는 Track 추가, Region 추가·삭제·이동, tempo,
 Master Volume, Track name·volume·pan·mute·solo, Export 범위·preset 설정, Plugin 설치·제거·처리 순서·활성화 상태·Parameter 변경이다. Plugin 기록은 같은
@@ -34,8 +37,13 @@ Master Volume, Track name·volume·pan·mute·solo, Export 범위·preset 설정
 재생·playhead·저장·내보내기는 기록하지 않는다. Track 삭제와 Region
 분할은 손실 없는 복원 명령이 아직 없으므로 Session 변경이 확인되면 기존 기록을 제거한다. 프로젝트 불러오기도 다른
 프로젝트의 명령을 재사용하지 않도록 기록을 제거한다. Session 구독자 예외가 상태 반영 뒤 발생한 경우에는 반영된 편집을
-기록하고 원래 예외를 호출자에게 전달한다. Apps에는 `canUndo`·`canRedo` 조회와 구독만 노출한다. 이 기록은
-`ProjectDocument`에 저장하지 않는다.
+기록하고 원래 예외를 호출자에게 전달한다. Apps에는 `canUndo`·`canRedo` 조회와 구독만 노출한다. Journal은
+프로젝트 동기화 대상인 `ProjectDocument` 본문에는 넣지 않는다.
+
+Named Snapshot과 Session·Track Template은 `ProjectDocument v18.lifecycle`에 저장한다. 각 항목의 내용은 v17 문서로
+고정해 v18의 재귀 포함을 막는다. Track Template은 Source·Region·Take·Automation을 제외하고 적용 시 새 Track·Plugin·Slot
+ID를 만든다. Session Archive는 v18 manifest와 모든 Source 바이트를 함께 저장하며, Source 검증과 AudioEngine graph 준비가
+끝난 뒤 현재 프로젝트를 교체한다. 자동 저장이 성공하면 `SessionRecoveryQuery`가 프로젝트 ID와 revision을 기록한다.
 
 Web 편집기의 전역 단축키는 `KeyboardEvent.code`를 UI 동작 식별자로 변환한 뒤, 각 컴포넌트가 등록한 기존 버튼 처리
 함수를 호출한다. 저장, 불러오기, 내보내기처럼 UI 상태와 후처리가 있는 기능도 별도 실행 경로를 만들지 않는다. 입력창,

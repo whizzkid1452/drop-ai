@@ -120,6 +120,15 @@ export const AudioCommandType = {
   SET_EXPORT_SETTINGS: 'SET_EXPORT_SETTINGS',
   START_RENDER_JOB: 'START_RENDER_JOB',
   CANCEL_RENDER_JOB: 'CANCEL_RENDER_JOB',
+  CREATE_NAMED_SNAPSHOT: 'CREATE_NAMED_SNAPSHOT',
+  RESTORE_NAMED_SNAPSHOT: 'RESTORE_NAMED_SNAPSHOT',
+  DELETE_NAMED_SNAPSHOT: 'DELETE_NAMED_SNAPSHOT',
+  CREATE_PROJECT_TEMPLATE: 'CREATE_PROJECT_TEMPLATE',
+  APPLY_PROJECT_TEMPLATE: 'APPLY_PROJECT_TEMPLATE',
+  DELETE_PROJECT_TEMPLATE: 'DELETE_PROJECT_TEMPLATE',
+  EXPORT_PROJECT_ARCHIVE: 'EXPORT_PROJECT_ARCHIVE',
+  IMPORT_PROJECT_ARCHIVE: 'IMPORT_PROJECT_ARCHIVE',
+  DISMISS_SESSION_RECOVERY: 'DISMISS_SESSION_RECOVERY',
   SAVE_PROJECT: 'SAVE_PROJECT',
   LOAD_PROJECT: 'LOAD_PROJECT',
 } as const;
@@ -783,6 +792,46 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal(AudioCommandType.CANCEL_RENDER_JOB),
     jobId: z.uuid('Invalid Render Job ID format'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.CREATE_NAMED_SNAPSHOT),
+    name: z.string().trim().min(1).max(120),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.RESTORE_NAMED_SNAPSHOT),
+    snapshotId: z.uuid('Invalid Snapshot ID format'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.DELETE_NAMED_SNAPSHOT),
+    snapshotId: z.uuid('Invalid Snapshot ID format'),
+  }),
+  z
+    .strictObject({
+      type: z.literal(AudioCommandType.CREATE_PROJECT_TEMPLATE),
+      kind: z.enum(['session', 'track']),
+      name: z.string().trim().min(1).max(120),
+      trackId: z.uuid('Invalid Track ID format').optional(),
+    })
+    .refine(command => command.kind === 'session' || command.trackId !== undefined, {
+      message: 'Track Template에는 Track ID가 필요합니다.',
+      path: ['trackId'],
+    }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.APPLY_PROJECT_TEMPLATE),
+    templateId: z.uuid('Invalid Template ID format'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.DELETE_PROJECT_TEMPLATE),
+    templateId: z.uuid('Invalid Template ID format'),
+  }),
+  z.strictObject({ type: z.literal(AudioCommandType.EXPORT_PROJECT_ARCHIVE) }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.IMPORT_PROJECT_ARCHIVE),
+    archive: z.instanceof(Blob),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.DISMISS_SESSION_RECOVERY),
+    projectId: z.uuid('Invalid Project ID format').optional(),
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.SET_CURRENT_TIME),

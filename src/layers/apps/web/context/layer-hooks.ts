@@ -26,6 +26,7 @@ import type { IPluginRuntimeQuery } from '../../../queries/plugin-runtime-query'
 import type { IMediaSourceQuery } from '../../../queries/media-source-query';
 import type { IRenderJobQuery } from '../../../queries/render-job-query';
 import type { RenderJobState } from '../../../shared/types/render-job';
+import type { ISessionRecoveryQuery, SessionRecoveryCheckpoint } from '../../../queries/session-recovery-query';
 
 export function useAudioRuntimeCapabilities(): AudioRuntimeCapabilities {
   return useLayer().audioRuntimeCapabilities;
@@ -74,6 +75,16 @@ export function useMidiRecordingRuntimeState(): MidiRecordingRuntimeState {
 export function useCommandHistory(): CommandHistorySnapshot {
   const commandHistory = useLayer().commandHistory;
   return useSyncExternalStore(commandHistory.subscribe, commandHistory.getSnapshot, commandHistory.getSnapshot);
+}
+
+const unavailableSessionRecoveryQuery: ISessionRecoveryQuery = {
+  getSnapshot: () => null,
+  subscribe: () => () => undefined,
+};
+
+export function useSessionRecoveryCheckpoint(): SessionRecoveryCheckpoint | null {
+  const sessionRecovery = useLayer().sessionRecovery ?? unavailableSessionRecoveryQuery;
+  return useSyncExternalStore(sessionRecovery.subscribe, sessionRecovery.getSnapshot, sessionRecovery.getSnapshot);
 }
 
 export function usePlaybackClock(): IPlaybackClockQuery {

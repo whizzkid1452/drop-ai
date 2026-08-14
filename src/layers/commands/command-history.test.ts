@@ -95,4 +95,12 @@ describe('CommandHistory', () => {
     expect(actions).not.toContain('undo:0');
     expect(history.getSnapshot()).toEqual({ canRedo: true, canUndo: false });
   });
+
+  it('저장된 Undo와 Redo stack을 함수 항목으로 복원한다', () => {
+    const history = new CommandHistory();
+
+    history.restore([createEntry('tempo', [])], [createEntry('volume', [])]);
+
+    expect(history.getSnapshot()).toEqual({ canRedo: true, canUndo: true });
+  });
 });
