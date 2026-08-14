@@ -232,13 +232,16 @@ describe('ProjectController', () => {
 
     await context.controller.saveProject();
 
-    expect(context.audioSourceRepository.load).toHaveBeenCalledWith(registration.metadata);
-    expect(context.audioSourceRepository.create).toHaveBeenCalledWith(registration);
+    expect(context.audioSourceRepository.load).toHaveBeenCalledWith(expect.objectContaining(registration.metadata));
+    expect(context.audioSourceRepository.create).toHaveBeenCalledWith({
+      blob: registration.blob,
+      metadata: expect.objectContaining(registration.metadata),
+    });
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        schemaVersion: 15,
+        schemaVersion: 16,
         project: INITIAL_PROJECT_METADATA,
-        audioSources: [registration.metadata],
+        audioSources: [expect.objectContaining(registration.metadata)],
       })
     );
     expect(context.audioSourceRepository.create.mock.invocationCallOrder[0]).toBeLessThan(
@@ -258,7 +261,7 @@ describe('ProjectController', () => {
 
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        schemaVersion: 15,
+        schemaVersion: 16,
         tracks: [
           expect.objectContaining({
             id: TRACK_ID,
@@ -315,8 +318,8 @@ describe('ProjectController', () => {
 
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        audioSources: [registration.metadata],
-        schemaVersion: 15,
+        audioSources: [expect.objectContaining(registration.metadata)],
+        schemaVersion: 16,
         tracks: [
           expect.objectContaining({
             loopSlots: [expect.objectContaining({ id: LOOP_SLOT_ID, overdubSourceIds: [], sourceId: SOURCE_ID })],
@@ -337,7 +340,7 @@ describe('ProjectController', () => {
     expect(context.projectRepository.save).toHaveBeenCalledWith({
       document: expect.objectContaining({
         project: existingDocument.project,
-        schemaVersion: 15,
+        schemaVersion: 16,
       }),
       expectedRevision: 0,
     });
@@ -352,7 +355,7 @@ describe('ProjectController', () => {
 
     await context.controller.saveProject();
 
-    expect(context.audioSourceRepository.load).toHaveBeenCalledWith(registration.metadata);
+    expect(context.audioSourceRepository.load).toHaveBeenCalledWith(expect.objectContaining(registration.metadata));
     expect(context.audioSourceRepository.create).not.toHaveBeenCalled();
     expect(context.projectRepository.create).toHaveBeenCalledTimes(1);
   });

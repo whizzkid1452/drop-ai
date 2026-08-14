@@ -27,6 +27,8 @@ describe('convertFileToAudioFile', () => {
       duration: 3.5,
       formattedDuration: '0:03',
       volume: 1,
+      bwfMetadata: null,
+      detectedCodec: 'wav',
     });
     expect(result).not.toHaveProperty('url');
     expect(createObjectUrl).not.toHaveBeenCalled();

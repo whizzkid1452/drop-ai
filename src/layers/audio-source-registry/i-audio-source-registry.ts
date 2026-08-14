@@ -1,8 +1,15 @@
-import type { ProjectAudioSource } from '../shared/types/project-document.schema';
+import type { ProjectAudioSource, ProjectAudioSourceV16 } from '../shared/types/project-document.schema';
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
 
+export type AudioSourceMetadata = ProjectAudioSource | ProjectAudioSourceV16;
+
 export interface AudioSourceRegistration {
-  readonly metadata: ProjectAudioSource;
+  readonly metadata: AudioSourceMetadata;
+  readonly blob: Blob;
+}
+
+export interface CommittedAudioSourceRegistration {
+  readonly metadata: ProjectAudioSourceV16;
   readonly blob: Blob;
 }
 
@@ -17,7 +24,7 @@ export interface AudioSourceLoopSlotAttachment {
 }
 
 export interface RuntimeAudioSource {
-  readonly metadata: Readonly<ProjectAudioSource>;
+  readonly metadata: Readonly<AudioSourceMetadata>;
   readonly objectUrl: string;
   readonly isCommitted: boolean;
   readonly regionIds: readonly string[];
@@ -31,11 +38,11 @@ export interface IAudioSourceStager {
 
 export interface IAudioSourceResolver {
   resolve(sourceId: string): RuntimeAudioSource | null;
-  listCommittedMetadata(): ReadonlyArray<Readonly<ProjectAudioSource>>;
+  listCommittedMetadata(): ReadonlyArray<Readonly<AudioSourceMetadata>>;
 }
 
 export interface ICommittedAudioSourceReader {
-  listCommittedRegistrations(): ReadonlyArray<Readonly<AudioSourceRegistration>>;
+  listCommittedRegistrations(): ReadonlyArray<Readonly<CommittedAudioSourceRegistration>>;
 }
 
 export interface IRetiredAudioSourceRegistry {
@@ -66,5 +73,6 @@ export interface IAudioSourceRegistry
   detach(attachment: AudioSourceAttachment): void;
   detachLoopSlot(attachment: AudioSourceLoopSlotAttachment): void;
   purgeUnused(sourceId: string): void;
+  updateMetadata(metadata: AudioSourceMetadata): RuntimeAudioSource;
   clear(): void;
 }

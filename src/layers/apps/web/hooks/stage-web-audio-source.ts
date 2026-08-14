@@ -1,6 +1,6 @@
 import type { IAudioSourceStager } from '@/layers/audio-source-registry/i-audio-source-registry';
 import type { AudioFile } from '@/types/audioFile';
-import type { ProjectAudioSource } from '@/types/project-document.schema';
+import type { ProjectAudioSourceV16 } from '@/types/project-document.schema';
 import type { AudioFileMetadata } from '@/utils/audio/convert-file-to-audio-file';
 
 export interface StagedWebAudioSource {
@@ -14,13 +14,17 @@ interface StageWebAudioSourceOptions {
   createSourceId?: () => string;
 }
 
-function createProjectAudioSource(sourceId: string, audioFileMetadata: AudioFileMetadata): ProjectAudioSource {
+function createProjectAudioSource(sourceId: string, audioFileMetadata: AudioFileMetadata): ProjectAudioSourceV16 {
   return {
+    bwfMetadata: audioFileMetadata.bwfMetadata ?? null,
     id: sourceId,
     fileName: audioFileMetadata.name,
     mimeType: audioFileMetadata.type,
     byteLength: audioFileMetadata.size,
     durationSeconds: audioFileMetadata.duration ?? null,
+    derivation: null,
+    tags: [],
+    transientPositionsSeconds: [],
   };
 }
 

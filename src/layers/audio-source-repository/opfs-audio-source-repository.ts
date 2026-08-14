@@ -1,8 +1,12 @@
 import { z } from 'zod';
-import { ProjectAudioSourceSchema, type ProjectAudioSource } from '../shared/types/project-document.schema';
+import { ProjectAudioSourceSchema, ProjectAudioSourceV16Schema } from '../shared/types/project-document.schema';
 import { calculateBlobSha256, Sha256UnavailableError } from '../shared/utils/calculate-blob-sha256';
 import { AudioSourceRepositoryError, AudioSourceRepositoryErrorCode } from './errors';
-import type { CreateAudioSourceRequest, IAudioSourceRepository } from './i-audio-source-repository';
+import type {
+  AudioSourceMetadata,
+  CreateAudioSourceRequest,
+  IAudioSourceRepository,
+} from './i-audio-source-repository';
 
 const LEGACY_OPFS_DIRECTORY_PATH = ['drop-ai', 'audio-sources', 'v1'] as const;
 const CONTENT_OPFS_DIRECTORY_PATH = ['drop-ai', 'audio-sources', 'v2'] as const;
@@ -103,7 +107,7 @@ export class OpfsAudioSourceRepository implements IAudioSourceRepository {
     });
   }
 
-  async load(metadata: ProjectAudioSource): Promise<Blob | null> {
+  async load(metadata: AudioSourceMetadata): Promise<Blob | null> {
     const validatedMetadata = this.validateMetadata(metadata);
 
     return this.runStorageOperation({ operation: 'load', sourceId: validatedMetadata.id }, () =>
@@ -156,7 +160,7 @@ export class OpfsAudioSourceRepository implements IAudioSourceRepository {
     contentHash,
   }: {
     readonly directories: ContentDirectories;
-    readonly metadata: ProjectAudioSource;
+    readonly metadata: AudioSourceMetadata;
     readonly blob: Blob;
     readonly contentHash: string;
   }): Promise<void> {
@@ -204,7 +208,7 @@ export class OpfsAudioSourceRepository implements IAudioSourceRepository {
   }: {
     readonly directories: ContentDirectories;
     readonly manifest: ContentManifest;
-    readonly metadata: ProjectAudioSource;
+    readonly metadata: AudioSourceMetadata;
   }): Promise<Blob | null> {
     if (manifest.byteLength !== metadata.byteLength) {
       throw this.createByteLengthMismatchError(metadata.id, manifest.byteLength, metadata.byteLength);
@@ -236,7 +240,7 @@ export class OpfsAudioSourceRepository implements IAudioSourceRepository {
     return storedBlob;
   }
 
-  private async loadLegacySource(metadata: ProjectAudioSource): Promise<Blob | null> {
+  private async loadLegacySource(metadata: AudioSourceMetadata): Promise<Blob | null> {
     const fileHandle = await this.getLegacySourceFile(metadata.id);
     if (!fileHandle) {
       return null;
@@ -257,7 +261,7 @@ export class OpfsAudioSourceRepository implements IAudioSourceRepository {
   }: {
     readonly fileHandle: FileSystemFileHandle;
     readonly contentHash: string;
-    readonly metadata: ProjectAudioSource;
+    readonly metadata: AudioSourceMetadata;
   }): Promise<void> {
     const storedFile = await fileHandle.getFile();
     const storedBlob = new Blob([storedFile]);
@@ -323,17 +327,21 @@ export class OpfsAudioSourceRepository implements IAudioSourceRepository {
     return false;
   }
 
-  private validateMetadata(metadata: ProjectAudioSource): ProjectAudioSource {
-    const result = ProjectAudioSourceSchema.safeParse(metadata);
-    if (result.success) {
-      return result.data;
+  private validateMetadata(metadata: AudioSourceMetadata): AudioSourceMetadata {
+    const managedResult = ProjectAudioSourceV16Schema.safeParse(metadata);
+    if (managedResult.success) {
+      return managedResult.data;
+    }
+    const legacyResult = ProjectAudioSourceSchema.safeParse(metadata);
+    if (legacyResult.success) {
+      return legacyResult.data;
     }
 
     throw new AudioSourceRepositoryError({
       code: AudioSourceRepositoryErrorCode.INVALID_SOURCE_METADATA,
       message: '오디오 Source metadata가 유효하지 않습니다.',
-      details: { issues: result.error.issues },
-      cause: result.error,
+      details: { issues: managedResult.error.issues },
+      cause: legacyResult.error,
     });
   }
 
