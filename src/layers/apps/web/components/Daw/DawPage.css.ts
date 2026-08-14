@@ -201,6 +201,7 @@ export const workspaceName = style({
 
 export const workspaceViewTabs = style({
   display: 'flex',
+  flexShrink: 0,
   alignSelf: 'stretch',
   gap: '1px',
   border: '1px solid #111416',
@@ -234,6 +235,8 @@ export const projectActions = style({
   justifyContent: 'flex-end',
   gap: '4px',
   minWidth: 0,
+  overflowX: 'auto',
+  overflowY: 'hidden',
 });
 
 export const transportBar = style({

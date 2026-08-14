@@ -24,7 +24,7 @@ interface DawHeaderProps {
   onViewChange: (view: WorkspaceView) => void;
 }
 
-export type WorkspaceView = 'editor' | 'mixer';
+export type WorkspaceView = 'editor' | 'mixer' | 'media';
 
 export function DawHeader({ coordinateMapper, currentView, onViewChange, trackCount }: DawHeaderProps) {
   return (
@@ -52,6 +52,15 @@ export function DawHeader({ coordinateMapper, currentView, onViewChange, trackCo
             type="button"
           >
             MIXER
+          </button>
+          <button
+            aria-label="Open Media"
+            aria-pressed={currentView === 'media'}
+            className={`${styles.workspaceViewButton} ${currentView === 'media' ? styles.workspaceViewButtonActive : ''}`}
+            onClick={() => onViewChange('media')}
+            type="button"
+          >
+            MEDIA
           </button>
         </nav>
         <div className={styles.projectActions}>

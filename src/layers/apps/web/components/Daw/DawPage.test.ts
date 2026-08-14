@@ -16,12 +16,21 @@ vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
 }));
 
 vi.mock('./components/DawHeader/DawHeader', () => ({
-  DawHeader: ({ onViewChange }: { onViewChange: (view: 'editor' | 'mixer') => void }) =>
-    createElement('button', { 'aria-label': 'Open Mixer', onClick: () => onViewChange('mixer') }, 'Mixer'),
+  DawHeader: ({ onViewChange }: { onViewChange: (view: 'editor' | 'mixer' | 'media') => void }) =>
+    createElement(
+      'div',
+      null,
+      createElement('button', { 'aria-label': 'Open Mixer', onClick: () => onViewChange('mixer') }, 'Mixer'),
+      createElement('button', { 'aria-label': 'Open Media', onClick: () => onViewChange('media') }, 'Media')
+    ),
 }));
 
 vi.mock('./components/MixerView/MixerView', () => ({
   MixerView: () => createElement('div', { 'data-testid': 'mixer-view' }),
+}));
+
+vi.mock('./components/MediaSourcePanel/MediaSourcePanel', () => ({
+  MediaSourcePanel: () => createElement('div', { 'data-testid': 'media-source-panel' }),
 }));
 
 vi.mock('./components/TrackList/TrackList', () => ({
@@ -223,6 +232,19 @@ describe('DawPage 작업 화면 전환', () => {
     act(() => host.querySelector<HTMLButtonElement>('[aria-label="Open Mixer"]')?.click());
 
     expect(host.querySelector('[data-testid="mixer-view"]')).not.toBeNull();
+    expect(host.querySelector('.timelineHeader')).toBeNull();
+  });
+
+  it('Header에서 Media를 선택하면 Source 관리 화면을 표시한다', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    mountedRoots.push(root);
+
+    act(() => root.render(createElement(DawPage)));
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Open Media"]')?.click());
+
+    expect(host.querySelector('[data-testid="media-source-panel"]')).not.toBeNull();
     expect(host.querySelector('.timelineHeader')).toBeNull();
   });
 });

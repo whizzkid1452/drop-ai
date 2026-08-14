@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo, type CSSProperties } from 'react';
 import { DawHeader, type WorkspaceView } from './components/DawHeader/DawHeader';
 import { MixerView } from './components/MixerView/MixerView';
+import { MediaSourcePanel } from './components/MediaSourcePanel/MediaSourcePanel';
 import { TrackList } from './components/TrackList/TrackList';
 import { Terminal } from './components/Terminals/Terminal';
 import { TrackInfoSidebar } from './components/TrackInfoSidebar/TrackInfoSidebar';
@@ -342,8 +343,10 @@ export function DawPage() {
               onTrackSelect={setRequestedTrackId}
             />
           </>
-        ) : (
+        ) : workspaceView === 'mixer' ? (
           <MixerView />
+        ) : (
+          <MediaSourcePanel />
         )}
       </div>
       <div

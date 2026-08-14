@@ -37,7 +37,14 @@ export class MediaSourceQuery implements IMediaSourceQuery {
     const supportByCodec = new Map(
       readBrowserAudioCodecSupport({ canPlayType: this.#canPlayType }).map(support => [support.codec, support])
     );
-    return this.#audioSourceResolver.listCommittedMetadata().flatMap(metadata => {
+    const committedMetadata = this.#audioSourceResolver.listCommittedMetadata();
+    const derivedParentSourceIds = new Set(
+      committedMetadata.flatMap(metadata => {
+        const managedMetadata = metadata as Partial<ProjectAudioSourceV16>;
+        return managedMetadata.derivation ? [managedMetadata.derivation.sourceId] : [];
+      })
+    );
+    return committedMetadata.flatMap(metadata => {
       const runtime = this.#audioSourceResolver.resolve(metadata.id);
       if (!runtime) {
         return [];
@@ -59,7 +66,7 @@ export class MediaSourceQuery implements IMediaSourceQuery {
           derivation: managedMetadata.derivation
             ? { ...managedMetadata.derivation, parameters: { ...managedMetadata.derivation.parameters } }
             : null,
-          isInUse: regionIds.length > 0 || loopSlotIds.length > 0,
+          isInUse: regionIds.length > 0 || loopSlotIds.length > 0 || derivedParentSourceIds.has(metadata.id),
           loopSlotIds,
           objectUrl: runtime.objectUrl,
           regionIds,

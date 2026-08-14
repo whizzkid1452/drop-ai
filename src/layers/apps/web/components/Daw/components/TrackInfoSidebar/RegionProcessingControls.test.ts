@@ -18,7 +18,11 @@ vi.mock('./RegionProcessingControls.css.ts', () => ({
   checkbox: 'checkbox',
   control: 'control',
   controlRow: 'controlRow',
+  derivedAction: 'derivedAction',
+  derivedButtons: 'derivedButtons',
+  derivedSection: 'derivedSection',
   label: 'label',
+  pendingMessage: 'pendingMessage',
   value: 'value',
 }));
 
@@ -98,5 +102,48 @@ describe('RegionProcessingControls', () => {
       regionId: region.id,
       trackId,
     });
+  });
+
+  it.each([
+    [
+      'Time stretch 비율',
+      '1.5',
+      'Time stretch 적용',
+      { type: AudioCommandType.TIME_STRETCH_SELECTED_REGIONS, stretchRatio: 1.5 },
+    ],
+    [
+      'Pitch shift 반음',
+      '-3',
+      'Pitch shift 적용',
+      { type: AudioCommandType.PITCH_SHIFT_SELECTED_REGIONS, semitones: -3 },
+    ],
+    [
+      'Transient 민감도',
+      '0.6',
+      'Transient 분석',
+      { type: AudioCommandType.ANALYZE_TRANSIENTS_SELECTED_REGIONS, sensitivity: 0.6 },
+    ],
+  ] as const)('%s 값을 파생 Source 명령으로 전달한다', async (inputLabel, value, buttonLabel, command) => {
+    const host = renderControls();
+
+    changeInput(host, inputLabel, value);
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>(`[aria-label="${buttonLabel}"]`)?.click();
+    });
+
+    expect(execute).toHaveBeenCalledWith(command);
+  });
+
+  it.each([
+    ['선택 Region Bounce', { type: AudioCommandType.BOUNCE_SELECTED_REGIONS }],
+    ['선택 Region Freeze', { type: AudioCommandType.FREEZE_SELECTED_REGIONS }],
+  ] as const)('%s 명령을 실행한다', async (buttonLabel, command) => {
+    const host = renderControls();
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>(`[aria-label="${buttonLabel}"]`)?.click();
+    });
+
+    expect(execute).toHaveBeenCalledWith(command);
   });
 });
