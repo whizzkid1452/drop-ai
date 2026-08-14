@@ -125,6 +125,8 @@ export class MockAudioEngine implements IAudioEngine {
   private readonly renderJobStateListeners = new Set<RenderJobStateListener>();
   private mockRuntimeHealth: AudioEngineRuntimeHealth = {
     audioContextState: 'running',
+    dspLoadRatio: null,
+    lastOfflineRenderRealtimeRatio: null,
     pendingCleanupResourceCount: 0,
   };
 
@@ -154,8 +156,8 @@ export class MockAudioEngine implements IAudioEngine {
     return this.getRuntimeHealth();
   }
 
-  setMockRuntimeHealth(health: AudioEngineRuntimeHealth): void {
-    this.mockRuntimeHealth = { ...health };
+  setMockRuntimeHealth(health: Partial<AudioEngineRuntimeHealth>): void {
+    this.mockRuntimeHealth = { ...this.mockRuntimeHealth, ...health };
   }
 
   async addMidiTrack(trackId: string): Promise<void> {

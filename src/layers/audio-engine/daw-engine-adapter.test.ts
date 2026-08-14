@@ -68,10 +68,14 @@ describe('DawEngineAdapter', () => {
 
     expect(engine.getRuntimeHealth()).toEqual({
       audioContextState: 'suspended',
+      dspLoadRatio: null,
+      lastOfflineRenderRealtimeRatio: null,
       pendingCleanupResourceCount: 1,
     });
     await expect(engine.resumeRuntime()).resolves.toEqual({
       audioContextState: 'running',
+      dspLoadRatio: null,
+      lastOfflineRenderRealtimeRatio: null,
       pendingCleanupResourceCount: 1,
     });
   });

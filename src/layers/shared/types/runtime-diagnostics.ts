@@ -1,6 +1,8 @@
 export const RUNTIME_DIAGNOSTIC_BUDGETS = {
   criticalStorageUsageRatio: 0.95,
   diagnosticsRefreshIntervalMilliseconds: 5_000,
+  maximumDspLoadRatio: 0.8,
+  maximumOfflineRenderRealtimeRatio: 1,
   maximumPendingCleanupResources: 0,
   maximumPcmCaptureBytes: 256 * 1_024 * 1_024,
   maximumWaveformCacheEntries: 128,
@@ -14,6 +16,8 @@ export type RuntimeVisibilityState = 'hidden' | 'prerender' | 'unknown' | 'visib
 
 export interface AudioEngineRuntimeHealth {
   readonly audioContextState: RuntimeAudioContextState;
+  readonly dspLoadRatio: number | null;
+  readonly lastOfflineRenderRealtimeRatio: number | null;
   readonly pendingCleanupResourceCount: number;
 }
 

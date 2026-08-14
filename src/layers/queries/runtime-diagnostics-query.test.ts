@@ -16,6 +16,8 @@ describe('RuntimeDiagnosticsQuery', () => {
     await expect(query.refresh()).resolves.toEqual({
       audioContextState: 'suspended',
       checkedAt: '2026-08-14T00:00:00.000Z',
+      dspLoadRatio: null,
+      lastOfflineRenderRealtimeRatio: null,
       pendingCleanupResourceCount: 2,
       storage: { quotaBytes: 1_000, status: 'warning', usageBytes: 850, usageRatio: 0.85 },
       visibilityState: 'hidden',

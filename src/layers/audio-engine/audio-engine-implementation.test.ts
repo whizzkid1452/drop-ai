@@ -3264,6 +3264,7 @@ describe('AudioEngine Export 회귀', () => {
     expect(toneMocks.offline).toHaveBeenCalledWith(expect.any(Function), 3, 2, 44100);
     expect(blob.type).toBe('audio/wav');
     expect(blob.size).toBeGreaterThan(44);
+    expect(engine.getRuntimeHealth().lastOfflineRenderRealtimeRatio).toEqual(expect.any(Number));
   });
 
   it('offline export도 실시간 재생과 같은 Automation 보간 계획을 사용한다', async () => {
