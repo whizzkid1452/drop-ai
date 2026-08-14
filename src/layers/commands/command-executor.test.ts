@@ -1291,6 +1291,51 @@ describe('CommandExecutor', () => {
     expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances[0]?.isEnabled).toBe(false);
   });
 
+  it('Plugin Preset 적용을 한 번의 Undo와 Redo로 복원한다', async () => {
+    const { commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await commandExecutor.execute({
+      type: AudioCommandType.INSTALL_PLUGIN,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      manifestId: 'builtin.gain',
+      parameterValues: { gain: 0.25 },
+    });
+
+    await commandExecutor.execute({
+      type: AudioCommandType.APPLY_PLUGIN_PRESET,
+      trackId: TRACK_ID,
+      instanceId: PLUGIN_INSTANCE_ID,
+      presetId: 'boost-3db',
+    });
+    expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances[0]).toMatchObject({
+      parameters: [{ id: 'gain', value: 1.4125 }],
+      presetId: 'boost-3db',
+    });
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances[0]).toMatchObject({
+      parameters: [{ id: 'gain', value: 0.25 }],
+      presetId: null,
+    });
+
+    await commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.pluginInstances[0]?.presetId).toBe('boost-3db');
+  });
+
+  it('Plugin Favorite은 프로젝트 변경 기록과 분리한다', async () => {
+    const { commandExecutor, commandHistory, session } = createTestContext();
+
+    await commandExecutor.execute({
+      type: AudioCommandType.SET_PLUGIN_FAVORITE,
+      manifestId: 'builtin.gain',
+      isFavorite: true,
+    });
+
+    expect(session.getState().favoritePluginManifestIds).toEqual(new Set(['builtin.gain']));
+    expect(commandHistory.getSnapshot().canUndo).toBe(false);
+  });
+
   it('비활성화된 Plugin을 제거한 뒤 Undo하면 비활성 상태로 복원한다', async () => {
     const { commandExecutor, session } = createTestContext();
     await addTrack(commandExecutor);
