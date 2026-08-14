@@ -55,6 +55,7 @@ import { createPluginCatalogEntry, type PluginManifest } from '../plugin-sdk/plu
 import { gainPluginManifest } from '../plugins/builtin/gain/gain-plugin-manifest';
 import { saturationPluginManifest } from '../plugins/builtin/saturation/saturation-plugin-manifest';
 import {
+  PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT,
   resolveAudioRuntimeCapabilities,
   type AudioRuntimeCapabilities,
   type AudioRuntimeEnvironment,
@@ -289,7 +290,19 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     new NoopProjectSyncService();
   projectSyncDelegate.setDelegate(projectSync);
   const commandHistory = new CommandHistory();
-  const commandExecutor = new CommandExecutor(session, controller, commandHistory, undoJournal, sessionRecovery);
+  const audioRuntimeEnvironment = options.audioRuntimeEnvironment ?? readAudioRuntimeEnvironment();
+  const audioRuntimeCapabilities = resolveAudioRuntimeCapabilities(
+    audioRuntimeEnvironment,
+    audioEngine.getFeatureSupport()
+  );
+  const commandExecutor = new CommandExecutor(
+    session,
+    controller,
+    commandHistory,
+    undoJournal,
+    sessionRecovery,
+    audioRuntimeCapabilities
+  );
   const agentRuntimeCommands = new AgentRuntimeCommandExecutor(controller.agentRuntime);
   const sessionQuery = createSessionQuery(session);
   const commandHistoryQuery = createCommandHistoryQuery(commandHistory);
@@ -308,11 +321,6 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   });
   const renderJob = new RenderJobQuery(audioEngine);
   const runtimeDiagnostics = new RuntimeDiagnosticsQuery({ audioEngine });
-  const audioRuntimeEnvironment = options.audioRuntimeEnvironment ?? readAudioRuntimeEnvironment();
-  const audioRuntimeCapabilities = resolveAudioRuntimeCapabilities(
-    audioRuntimeEnvironment,
-    audioEngine.getFeatureSupport()
-  );
   const authClient = options.authClient ?? new UnavailableAuthClient();
   const billingClient = options.billingClient ?? new UnavailableBillingClient();
   projectSync.activateProject(initialProjectMetadata.id);
@@ -343,10 +351,13 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   };
 }
 
-export function createCliTestApp(options: Pick<CreateAppOptions, 'sessionStore'> = {}): AppInstance {
+export function createCliTestApp(
+  options: Pick<CreateAppOptions, 'audioRuntimeEnvironment' | 'sessionStore'> = {}
+): AppInstance {
   return createApp({
     ...options,
     audioEngine: new MockAudioEngine(),
+    audioRuntimeEnvironment: options.audioRuntimeEnvironment ?? PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT,
     projectRepository: new InMemoryProjectRepository(),
   });
 }

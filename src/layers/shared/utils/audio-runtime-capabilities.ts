@@ -73,6 +73,16 @@ export interface AudioRuntimeEnvironment {
   readonly isSecureContext: boolean;
 }
 
+export const PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT: AudioRuntimeEnvironment = {
+  crossOriginIsolated: true,
+  hasAudioWorklet: true,
+  hasGetUserMedia: true,
+  hasMediaDevices: true,
+  hasSharedArrayBuffer: true,
+  hasWebAssembly: true,
+  isSecureContext: true,
+};
+
 export interface AudioRuntimeCapabilities {
   readonly blockers: {
     readonly audioWorklet: readonly AudioRuntimeBlocker[];

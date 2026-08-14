@@ -13,6 +13,8 @@ import { gainPluginManifest } from '../plugins/builtin/gain/gain-plugin-manifest
 import type { IProjectSyncService } from '../project-sync/i-project-sync';
 import { AudioCommandType } from '../shared/types/audioCommand.schema';
 import type { ProjectDocument } from '../shared/types/project-document.schema';
+import { UnsupportedAudioCommandError } from '../shared/utils/audio-command-capability-guard';
+import { PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT } from '../shared/utils/audio-runtime-capabilities';
 import { createApp, createCliTestApp, type CreateAppOptions } from './create-app';
 
 function createTestAudioSourceRepository(): IAudioSourceRepository {
@@ -597,5 +599,19 @@ describe('createApp', () => {
       meetsSharedMemoryPreconditions: false,
       meetsWasmPreconditions: true,
     });
+  });
+
+  it('환경 차단 명령을 CommandExecutor에서 실행 전에 거부한다', async () => {
+    const app = createTestApp({
+      audioEngine: new MockAudioEngine(),
+      audioRuntimeEnvironment: {
+        ...PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT,
+        hasGetUserMedia: false,
+      },
+    });
+
+    await expect(
+      app.commandExecutor.execute({ deviceId: null, type: AudioCommandType.SET_AUDIO_INPUT_DEVICE })
+    ).rejects.toBeInstanceOf(UnsupportedAudioCommandError);
   });
 });
