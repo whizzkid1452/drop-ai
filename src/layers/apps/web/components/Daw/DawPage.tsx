@@ -7,7 +7,7 @@ import { Terminal } from './components/Terminals/Terminal';
 import { TrackInfoSidebar } from './components/TrackInfoSidebar/TrackInfoSidebar';
 import { TimeRuler } from './components/TimeRuler/TimeRuler';
 import * as styles from './DawPage.css.ts';
-import { usePlaybackClock, useSession } from '@/layers/apps/web/context/layer-hooks';
+import { useEditorRuntimeState, usePlaybackClock, useSession } from '@/layers/apps/web/context/layer-hooks';
 import {
   KeyboardShortcutAction,
   KEYBOARD_SHORTCUT_LABELS,
@@ -27,7 +27,12 @@ import type { TimelineGridDivision, TimelineSnapMode } from './timeline-grid';
 import { TimelineNavigationControls } from './components/TimelineNavigationControls/TimelineNavigationControls';
 import { TempoMeterRuler } from './components/TempoMeterRuler/TempoMeterRuler';
 import { MarkerRangeRuler } from './components/MarkerRangeRuler/MarkerRangeRuler';
-import { calculateTimelineZoomScrollLeft, TRACK_HEADER_WIDTH_PX, type TimelineZoomFocus } from './timeline-navigation';
+import {
+  calculateTimelineZoomScrollLeft,
+  resolveTimelineZoomAnchor,
+  TRACK_HEADER_WIDTH_PX,
+  type TimelineZoomFocus,
+} from './timeline-navigation';
 
 const CHAT_PANEL_MIN_WIDTH = 280;
 const CHAT_PANEL_MAX_WIDTH = 600;
@@ -61,6 +66,7 @@ export function DawPage() {
   const tempo = useSession(state => state.tempo);
   const tempoChanges = useSession(state => state.tempoChanges);
   const meterChanges = useSession(state => state.meterChanges);
+  const editPointSeconds = useEditorRuntimeState().selection.editPointSeconds;
   const trackCount = tracks.size;
   const [isTerminalOpen, setIsTerminalOpen] = useState(true);
   const [isTrackInfoOpen, setIsTrackInfoOpen] = useState(false);
@@ -118,19 +124,15 @@ export function DawPage() {
       }
 
       const centerViewportPixel = (TRACK_HEADER_WIDTH_PX + mainContent.clientWidth) / 2;
-      const playheadQuarterNotes = coordinateMapper.secondsToQuarterNotes(playbackClock.getCurrentTime());
-      const playheadViewportPixel =
-        TRACK_HEADER_WIDTH_PX + playheadQuarterNotes * coordinateMapper.pixelsPerQuarterNote - mainContent.scrollLeft;
-      const selectedMouseViewportPixel = mouseViewportPixel ?? lastMouseViewportPixelRef.current ?? centerViewportPixel;
-      const anchorViewportPixel =
-        zoomFocus === 'playhead'
-          ? Math.min(mainContent.clientWidth, Math.max(TRACK_HEADER_WIDTH_PX, playheadViewportPixel))
-          : zoomFocus === 'center'
-            ? centerViewportPixel
-            : selectedMouseViewportPixel;
-      const anchorTimelinePixel = Math.max(0, mainContent.scrollLeft + anchorViewportPixel - TRACK_HEADER_WIDTH_PX);
-      const anchorQuarterNotes =
-        zoomFocus === 'playhead' ? playheadQuarterNotes : anchorTimelinePixel / coordinateMapper.pixelsPerQuarterNote;
+      const { anchorQuarterNotes, anchorViewportPixel } = resolveTimelineZoomAnchor({
+        clientWidth: mainContent.clientWidth,
+        editPointQuarterNotes: coordinateMapper.secondsToQuarterNotes(editPointSeconds),
+        focus: zoomFocus,
+        mouseViewportPixel: mouseViewportPixel ?? lastMouseViewportPixelRef.current ?? centerViewportPixel,
+        pixelsPerQuarterNote: coordinateMapper.pixelsPerQuarterNote,
+        playheadQuarterNotes: coordinateMapper.secondsToQuarterNotes(playbackClock.getCurrentTime()),
+        scrollLeft: mainContent.scrollLeft,
+      });
       const requestedScrollLeft = calculateTimelineZoomScrollLeft({
         anchorQuarterNotes,
         anchorViewportPixel,
@@ -142,7 +144,7 @@ export function DawPage() {
         mainContent.scrollLeft = requestedScrollLeft;
       });
     },
-    [coordinateMapper, playbackClock, zoomFocus]
+    [coordinateMapper, editPointSeconds, playbackClock, zoomFocus]
   );
 
   const handleFitSession = useCallback(() => {
