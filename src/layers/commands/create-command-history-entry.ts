@@ -903,7 +903,12 @@ export function createCommandHistoryEntry({
     case AudioCommandType.REMOVE_REGION_CROSSFADE:
     case AudioCommandType.NORMALIZE_SELECTED_REGIONS:
     case AudioCommandType.REVERSE_SELECTED_REGIONS:
-    case AudioCommandType.STRIP_SILENCE_SELECTED_REGIONS: {
+    case AudioCommandType.STRIP_SILENCE_SELECTED_REGIONS:
+    case AudioCommandType.TIME_STRETCH_SELECTED_REGIONS:
+    case AudioCommandType.PITCH_SHIFT_SELECTED_REGIONS:
+    case AudioCommandType.ANALYZE_TRANSIENTS_SELECTED_REGIONS:
+    case AudioCommandType.BOUNCE_SELECTED_REGIONS:
+    case AudioCommandType.FREEZE_SELECTED_REGIONS: {
       const undoTracks = createRegionSnapshotsForChangedTracks({
         referenceSession: afterSession,
         targetSession: beforeSession,
@@ -972,6 +977,10 @@ export function createCommandHistoryEntry({
     case AudioCommandType.START_MIDI_RECORDING:
     case AudioCommandType.CANCEL_MIDI_RECORDING:
     case AudioCommandType.SET_PLUGIN_FAVORITE:
+    case AudioCommandType.SET_SOURCE_TAGS:
+    case AudioCommandType.AUDITION_SOURCE:
+    case AudioCommandType.STOP_SOURCE_AUDITION:
+    case AudioCommandType.CLEANUP_UNUSED_SOURCES:
     case AudioCommandType.EXPORT_AUDIO:
     case AudioCommandType.SAVE_PROJECT:
     case AudioCommandType.LOAD_PROJECT:

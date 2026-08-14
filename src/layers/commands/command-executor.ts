@@ -12,8 +12,14 @@ import type { EditorRuntimeState } from '../shared/types/editor-runtime';
 import type { MidiRecordedTake } from '../shared/types/midi-recording';
 import { createCommandHistoryEntry } from './create-command-history-entry';
 import { assertLiveOperationAllowed } from './live-operation-guard';
+import type { CleanupUnusedSourcesResult } from '../controllers/media-source-controller';
 
-export type CommandExecutionResult = Blob | MidiRecordedTake | MultiTrackRecordingResult | void;
+export type CommandExecutionResult =
+  | Blob
+  | CleanupUnusedSourcesResult
+  | MidiRecordedTake
+  | MultiTrackRecordingResult
+  | void;
 export type CommandBatchExecutionResult = readonly CommandExecutionResult[];
 
 interface CommandBatchExecutionErrorOptions {
@@ -551,6 +557,41 @@ export class CommandExecutor {
         await this.controller.regionProcessing.stripSilenceFromSelectedRegions(validatedCommand);
         return;
 
+      case AudioCommandType.TIME_STRETCH_SELECTED_REGIONS:
+        await this.controller.regionProcessing.timeStretchSelectedRegions(validatedCommand);
+        return;
+
+      case AudioCommandType.PITCH_SHIFT_SELECTED_REGIONS:
+        await this.controller.regionProcessing.pitchShiftSelectedRegions(validatedCommand);
+        return;
+
+      case AudioCommandType.ANALYZE_TRANSIENTS_SELECTED_REGIONS:
+        await this.controller.regionProcessing.analyzeTransientsInSelectedRegions(validatedCommand);
+        return;
+
+      case AudioCommandType.BOUNCE_SELECTED_REGIONS:
+        await this.controller.regionProcessing.bounceSelectedRegions();
+        return;
+
+      case AudioCommandType.FREEZE_SELECTED_REGIONS:
+        await this.controller.regionProcessing.freezeSelectedRegions();
+        return;
+
+      case AudioCommandType.SET_SOURCE_TAGS:
+        this.controller.mediaSource.setSourceTags(validatedCommand);
+        return;
+
+      case AudioCommandType.AUDITION_SOURCE:
+        await this.controller.mediaSource.auditionSource(validatedCommand.sourceId);
+        return;
+
+      case AudioCommandType.STOP_SOURCE_AUDITION:
+        this.controller.mediaSource.stopAudition();
+        return;
+
+      case AudioCommandType.CLEANUP_UNUSED_SOURCES:
+        return this.controller.mediaSource.cleanupUnusedSources();
+
       case AudioCommandType.SET_EXPORT_RANGE:
         this.controller.export.setExportRange(validatedCommand.startTime, validatedCommand.endTime);
         return;
@@ -712,6 +753,13 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.NORMALIZE_SELECTED_REGIONS:
     case AudioCommandType.REVERSE_SELECTED_REGIONS:
     case AudioCommandType.STRIP_SILENCE_SELECTED_REGIONS:
+    case AudioCommandType.TIME_STRETCH_SELECTED_REGIONS:
+    case AudioCommandType.PITCH_SHIFT_SELECTED_REGIONS:
+    case AudioCommandType.ANALYZE_TRANSIENTS_SELECTED_REGIONS:
+    case AudioCommandType.BOUNCE_SELECTED_REGIONS:
+    case AudioCommandType.FREEZE_SELECTED_REGIONS:
+    case AudioCommandType.SET_SOURCE_TAGS:
+    case AudioCommandType.CLEANUP_UNUSED_SOURCES:
     case AudioCommandType.SET_EXPORT_RANGE:
     case AudioCommandType.CLEAR_EXPORT_RANGE:
     case AudioCommandType.STOP_RECORDING:
@@ -740,6 +788,8 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.START_MIDI_RECORDING:
     case AudioCommandType.CANCEL_MIDI_RECORDING:
     case AudioCommandType.SET_PLUGIN_FAVORITE:
+    case AudioCommandType.AUDITION_SOURCE:
+    case AudioCommandType.STOP_SOURCE_AUDITION:
     case AudioCommandType.EXPORT_AUDIO:
     case AudioCommandType.SAVE_PROJECT:
     case AudioCommandType.LOAD_PROJECT:

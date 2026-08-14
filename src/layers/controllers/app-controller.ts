@@ -21,6 +21,7 @@ import { EditorController } from './editor-controller';
 import { RegionProcessingController } from './region-processing-controller';
 import { AutomationController } from './automation-controller';
 import { MidiController } from './midi-controller';
+import { MediaSourceController } from './media-source-controller';
 import type { IMidiInput } from '../midi-input/i-midi-input';
 
 interface AppControllerDependencies {
@@ -54,6 +55,7 @@ export class AppController {
   public readonly regionProcessing: RegionProcessingController;
   public readonly automation: AutomationController;
   public readonly midi: MidiController;
+  public readonly mediaSource: MediaSourceController;
 
   constructor({
     sessionStore,
@@ -79,6 +81,7 @@ export class AppController {
       regionRuntime: this.region,
       sessionStore,
     });
+    this.mediaSource = new MediaSourceController({ audioEngine, audioSourceRegistry, audioSourceRepository });
     this.export = new ExportController({ sessionStore, audioEngine, audioSourceResolver: audioSourceRegistry });
     this.project = new ProjectController({
       sessionStore,

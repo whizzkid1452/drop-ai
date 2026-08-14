@@ -5,6 +5,7 @@ const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
 const SECOND_REGION_ID = '33333333-3333-4333-8333-333333333333';
 const CROSSFADE_ID = '44444444-4444-4444-8444-444444444444';
+const SOURCE_ID = '55555555-5555-4555-8555-555555555555';
 
 describe('편집 AudioCommand 계약', () => {
   it.each([
@@ -64,6 +65,15 @@ describe('편집 AudioCommand 계약', () => {
       minimumSilenceSeconds: 0.1,
       thresholdDb: -60,
     },
+    { type: AudioCommandType.TIME_STRETCH_SELECTED_REGIONS, stretchRatio: 1.5 },
+    { type: AudioCommandType.PITCH_SHIFT_SELECTED_REGIONS, semitones: -7 },
+    { type: AudioCommandType.ANALYZE_TRANSIENTS_SELECTED_REGIONS, sensitivity: 0.75 },
+    { type: AudioCommandType.BOUNCE_SELECTED_REGIONS },
+    { type: AudioCommandType.FREEZE_SELECTED_REGIONS },
+    { type: AudioCommandType.SET_SOURCE_TAGS, sourceId: SOURCE_ID, tags: ['vocal', 'lead'] },
+    { type: AudioCommandType.AUDITION_SOURCE, sourceId: SOURCE_ID },
+    { type: AudioCommandType.STOP_SOURCE_AUDITION },
+    { type: AudioCommandType.CLEANUP_UNUSED_SOURCES },
   ])('$type 명령을 허용한다', command => {
     expect(AudioCommandSchema.parse(command)).toEqual(command);
     expect(StrictAudioCommandSchema.parse(command)).toEqual(command);
@@ -104,6 +114,10 @@ describe('편집 AudioCommand 계약', () => {
       minimumSilenceSeconds: 0,
       thresholdDb: 1,
     },
+    { type: AudioCommandType.TIME_STRETCH_SELECTED_REGIONS, stretchRatio: 0.1 },
+    { type: AudioCommandType.PITCH_SHIFT_SELECTED_REGIONS, semitones: 25 },
+    { type: AudioCommandType.ANALYZE_TRANSIENTS_SELECTED_REGIONS, sensitivity: 0 },
+    { type: AudioCommandType.SET_SOURCE_TAGS, sourceId: SOURCE_ID, tags: Array.from({ length: 33 }, () => 'tag') },
   ])('$type의 무효 값을 거부한다', command => {
     expect(AudioCommandSchema.safeParse(command).success).toBe(false);
   });

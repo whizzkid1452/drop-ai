@@ -7,7 +7,8 @@ const COLLECTION_KIND_KEY = '__dropAiCrdtCollectionKind';
 const COLLECTION_ITEMS_KEY = '__dropAiCrdtItems';
 const COLLECTION_ORDER_KEY = '__dropAiCrdtOrder';
 const KEYED_COLLECTION_KIND = 'keyed';
-const SCALAR_COLLECTION_PATHS = new Set(['overdubSourceIds', 'vcaIds']);
+const SCALAR_COLLECTION_PATHS = new Set(['overdubSourceIds', 'tags', 'transientPositionsSeconds', 'vcaIds']);
+const ORDERED_SCALAR_COLLECTION_PATHS = new Set(['transientPositionsSeconds']);
 const TIMELINE_MARKER_COLLECTION_PATHS = new Set(['tempoChanges', 'meterChanges']);
 const TRACK_KEYED_COLLECTION_PATHS = new Set(['routes']);
 
@@ -156,7 +157,11 @@ function applyValueDiff({
 
   if (Array.isArray(before) && Array.isArray(after)) {
     if (isScalarCollectionPath(path) && currentValue instanceof Y.Array) {
-      applyScalarArrayDiff(currentValue, before, after);
+      if (isOrderedScalarCollectionPath(path)) {
+        replaceScalarArray(currentValue, before, after);
+      } else {
+        applyScalarArrayDiff(currentValue, before, after);
+      }
       return;
     }
     if (currentValue instanceof Y.Map && isKeyedCollection(currentValue)) {
@@ -228,6 +233,18 @@ function applyScalarArrayDiff(
       current.push([value]);
     }
   });
+}
+
+function replaceScalarArray(
+  current: Y.Array<unknown>,
+  before: readonly JsonValue[],
+  after: readonly JsonValue[]
+): void {
+  if (before.length === after.length && before.every((value, index) => value === after[index])) {
+    return;
+  }
+  current.delete(0, current.length);
+  current.push([...after]);
 }
 
 function createSharedValue(value: JsonValue, path: readonly string[]): unknown {
@@ -371,6 +388,10 @@ function isKeyedCollection(value: Y.Map<unknown>): boolean {
 
 function isScalarCollectionPath(path: readonly string[]): boolean {
   return SCALAR_COLLECTION_PATHS.has(path.at(-1) ?? '');
+}
+
+function isOrderedScalarCollectionPath(path: readonly string[]): boolean {
+  return ORDERED_SCALAR_COLLECTION_PATHS.has(path.at(-1) ?? '');
 }
 
 function isJsonObject(value: JsonValue): value is JsonObject {

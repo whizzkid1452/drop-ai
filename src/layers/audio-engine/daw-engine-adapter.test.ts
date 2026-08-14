@@ -84,6 +84,18 @@ describe('DawEngineAdapter', () => {
     });
   });
 
+  it('Source audition 시작과 중지를 제품 runtime에 위임한다', async () => {
+    const runtime = new MockAudioEngine();
+    const engine = new DawEngineAdapter({ runtime });
+    const blob = new Blob(['source'], { type: 'audio/wav' });
+
+    await engine.auditionAudioSource({ blob });
+    expect(runtime.getMockAuditionBlob()).toBe(blob);
+
+    engine.stopAudioSourceAudition();
+    expect(runtime.getMockAuditionBlob()).toBeNull();
+  });
+
   it('MIDI Track과 Region 상태를 DAW domain과 제품 runtime에 함께 반영한다', async () => {
     const runtime = new MockAudioEngine();
     const engine = new DawEngineAdapter({ runtime });

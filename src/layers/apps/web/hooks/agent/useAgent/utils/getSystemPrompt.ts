@@ -204,6 +204,22 @@ const COMMAND_REFERENCE = {
     '{"type":"REVERSE_SELECTED_REGIONS"} - 선택 Region 범위를 뒤집은 파생 Source 생성',
   [AudioCommandType.STRIP_SILENCE_SELECTED_REGIONS]:
     '{"type":"STRIP_SILENCE_SELECTED_REGIONS","thresholdDb":<-120..0>,"minimumSilenceSeconds":<seconds > 0>} - 선택 Region의 연속 무음을 제거한 파생 Source 생성',
+  [AudioCommandType.TIME_STRETCH_SELECTED_REGIONS]:
+    '{"type":"TIME_STRETCH_SELECTED_REGIONS","stretchRatio":<0.25..4>} - 선택 Region의 길이를 바꾼 파생 Source 생성',
+  [AudioCommandType.PITCH_SHIFT_SELECTED_REGIONS]:
+    '{"type":"PITCH_SHIFT_SELECTED_REGIONS","semitones":<-24..24>} - 선택 Region의 음정을 바꾼 파생 Source 생성',
+  [AudioCommandType.ANALYZE_TRANSIENTS_SELECTED_REGIONS]:
+    '{"type":"ANALYZE_TRANSIENTS_SELECTED_REGIONS","sensitivity":<0..1>} - 선택 Region의 transient 위치를 분석한 파생 Source 생성',
+  [AudioCommandType.BOUNCE_SELECTED_REGIONS]:
+    '{"type":"BOUNCE_SELECTED_REGIONS"} - 선택 Region 범위를 새 WAV Source로 고정',
+  [AudioCommandType.FREEZE_SELECTED_REGIONS]:
+    '{"type":"FREEZE_SELECTED_REGIONS"} - 선택 Region 범위를 freeze 파생 Source로 고정',
+  [AudioCommandType.SET_SOURCE_TAGS]:
+    '{"type":"SET_SOURCE_TAGS","sourceId":"<Source UUID>","tags":["<tag>"]} - Source tag 교체',
+  [AudioCommandType.AUDITION_SOURCE]: '{"type":"AUDITION_SOURCE","sourceId":"<Source UUID>"} - Source 미리 듣기',
+  [AudioCommandType.STOP_SOURCE_AUDITION]: '{"type":"STOP_SOURCE_AUDITION"} - Source 미리 듣기 중지',
+  [AudioCommandType.CLEANUP_UNUSED_SOURCES]:
+    '{"type":"CLEANUP_UNUSED_SOURCES"} - Region과 Loop Slot에 연결되지 않은 Source 정리',
   [AudioCommandType.SET_CURRENT_TIME]: '{"type":"SET_CURRENT_TIME","time":<seconds >= 0>} - 재생 위치 변경',
   [AudioCommandType.SET_EXPORT_RANGE]:
     '{"type":"SET_EXPORT_RANGE","startTime":<seconds >= 0>,"endTime":<seconds >= 0>} - 내보내기 범위 선택. endTime > startTime',

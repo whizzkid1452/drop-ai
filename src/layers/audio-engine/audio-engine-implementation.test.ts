@@ -103,6 +103,7 @@ const toneMocks = vi.hoisted(() => ({
   transportSecondsFailures: [] as Array<Error | undefined>,
   transportState: 'stopped' as 'paused' | 'started' | 'stopped',
   contextTimeSeconds: 0,
+  decodeAudioData: vi.fn(),
   midiTriggerAttackRelease: vi.fn(),
   midiReleaseAll: vi.fn(),
 }));
@@ -526,7 +527,7 @@ vi.mock('tone', () => {
     Frequency: (pitch: number) => ({ toFrequency: () => 440 * 2 ** ((pitch - 69) / 12) }),
     dbToGain: (value: number) => (value === Number.NEGATIVE_INFINITY ? 0 : value),
     gainToDb: (value: number) => (value === 0 ? Number.NEGATIVE_INFINITY : value),
-    getContext: () => ({ state: 'running' }),
+    getContext: () => ({ decodeAudioData: toneMocks.decodeAudioData, state: 'running' }),
     getDestination: () => toneMocks.destination,
     getTransport: () => transport,
     now: () => toneMocks.contextTimeSeconds,
@@ -753,6 +754,22 @@ describe('AudioEngine 실시간 상태 일관성', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('Source audition을 재생하고 중지 시 전용 Player를 정리한다', async () => {
+    const engine = new AudioEngine();
+    const decodedAudioBuffer = { duration: 1 };
+    toneMocks.decodeAudioData.mockResolvedValue(decodedAudioBuffer);
+
+    await engine.auditionAudioSource({ blob: new Blob(['source'], { type: 'audio/wav' }) });
+
+    const player = toneMocks.playerInstances.at(-1);
+    expect(player).toMatchObject({ destination: toneMocks.destination, source: decodedAudioBuffer });
+    expect(toneMocks.playerStart).toHaveBeenCalledTimes(1);
+
+    engine.stopAudioSourceAudition();
+    expect(player).toMatchObject({ disposed: true });
+    expect(toneMocks.playerStop).toHaveBeenCalledTimes(1);
   });
 
   it('명시적 mute와 solo 선택을 채널 음소거로 계산한다', async () => {
