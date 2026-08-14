@@ -16,6 +16,7 @@ import { MusicalPositionClock } from './MusicalPositionClock';
 import { InputDeviceControl } from '../LiveInputControls/InputDeviceControl';
 import { RecordingControl } from './RecordingControl';
 import { RegionEditControls } from './RegionEditControls';
+import { SessionLifecycleControl } from '../SessionLifecycleControl/SessionLifecycleControl';
 
 interface DawHeaderProps {
   trackCount: number;
@@ -69,6 +70,7 @@ export function DawHeader({ coordinateMapper, currentView, onViewChange, trackCo
           <UndoRedoControls />
           <LoadProjectControl />
           <SaveProjectButton />
+          <SessionLifecycleControl />
           <ExportButton />
           <AccountControl />
         </div>
