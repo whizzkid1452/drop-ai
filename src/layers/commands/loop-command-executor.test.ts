@@ -4,6 +4,7 @@ import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import type { IAudioSourceRepository } from '../audio-source-repository/i-audio-source-repository';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import { AudioCommandType } from '../shared/types/audioCommand.schema';
+import { PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT } from '../shared/utils/audio-runtime-capabilities';
 
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -20,14 +21,21 @@ function createAudioSourceRepository(): IAudioSourceRepository {
   };
 }
 
-describe('루프 명령 실행 경로', () => {
-  it('Clip 설정과 Cue 기록을 명령으로 저장하고 Undo·Redo한다', async () => {
-    const audioEngine = new MockAudioEngine();
-    const app = createApp({
+function createLoopTestApp(audioEngine = new MockAudioEngine()) {
+  return {
+    audioEngine,
+    app: createApp({
       audioEngine,
+      audioRuntimeEnvironment: PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT,
       audioSourceRepository: createAudioSourceRepository(),
       projectRepository: new InMemoryProjectRepository(),
-    });
+    }),
+  };
+}
+
+describe('루프 명령 실행 경로', () => {
+  it('Clip 설정과 Cue 기록을 명령으로 저장하고 Undo·Redo한다', async () => {
+    const { app, audioEngine } = createLoopTestApp();
     await app.commandExecutor.execute({ trackId: TRACK_ID, type: AudioCommandType.ADD_TRACK });
     const slotId = app.session.getState().tracks.get(TRACK_ID)?.loopSlots?.[0]?.id ?? '';
     audioEngine.emitLoopEvent({
@@ -69,11 +77,7 @@ describe('루프 명령 실행 경로', () => {
   });
 
   it('AudioCommand를 LoopController로 전달해 슬롯을 녹음 대기 상태로 바꾼다', async () => {
-    const app = createApp({
-      audioEngine: new MockAudioEngine(),
-      audioSourceRepository: createAudioSourceRepository(),
-      projectRepository: new InMemoryProjectRepository(),
-    });
+    const { app } = createLoopTestApp();
     await app.commandExecutor.execute({ trackId: TRACK_ID, type: AudioCommandType.ADD_TRACK });
     const slotId = app.session.getState().tracks.get(TRACK_ID)?.loopSlots?.[0]?.id;
     expect(slotId).toBeDefined();
@@ -90,12 +94,7 @@ describe('루프 명령 실행 경로', () => {
   });
 
   it('오버더빙 명령을 재생 중인 루프의 녹음 대기 상태로 전달한다', async () => {
-    const audioEngine = new MockAudioEngine();
-    const app = createApp({
-      audioEngine,
-      audioSourceRepository: createAudioSourceRepository(),
-      projectRepository: new InMemoryProjectRepository(),
-    });
+    const { app, audioEngine } = createLoopTestApp();
     await app.commandExecutor.execute({ trackId: TRACK_ID, type: AudioCommandType.ADD_TRACK });
     const slotId = app.session.getState().tracks.get(TRACK_ID)?.loopSlots?.[0]?.id;
     expect(slotId).toBeDefined();

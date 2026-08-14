@@ -12,6 +12,13 @@ import type { EditorRuntimeState } from '../shared/types/editor-runtime';
 import type { MidiRecordedTake } from '../shared/types/midi-recording';
 import { createCommandHistoryEntry } from './create-command-history-entry';
 import { assertLiveOperationAllowed } from './live-operation-guard';
+import { assertAudioCommandCapability } from '../shared/utils/audio-command-capability-guard';
+import {
+  CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
+  PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT,
+  resolveAudioRuntimeCapabilities,
+  type AudioRuntimeCapabilities,
+} from '../shared/utils/audio-runtime-capabilities';
 import type { CleanupUnusedSourcesResult } from '../controllers/media-source-controller';
 import type { RenderJobResult } from '../shared/types/render-job';
 import type { IUndoJournal, UndoJournalEntry } from './undo-journal';
@@ -58,19 +65,28 @@ function throwUnsupportedCommand(command: never): never {
 
 export class CommandExecutor {
   private executionTail: Promise<void> = Promise.resolve();
+  private readonly audioRuntimeCapabilities: AudioRuntimeCapabilities;
 
   constructor(
     private readonly sessionStore: SessionStore,
     private readonly controller: AppController,
     private readonly commandHistory: ICommandHistory,
     private readonly undoJournal?: IUndoJournal,
-    private readonly sessionRecovery?: ISessionRecoveryStore
+    private readonly sessionRecovery?: ISessionRecoveryStore,
+    audioRuntimeCapabilities?: AudioRuntimeCapabilities
   ) {
+    this.audioRuntimeCapabilities =
+      audioRuntimeCapabilities ??
+      resolveAudioRuntimeCapabilities(PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT, CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT);
     this.restoreUndoJournal();
   }
 
   async execute(command: AudioCommand): Promise<CommandExecutionResult> {
     const validatedCommand = AudioCommandSchema.parse(command);
+    assertAudioCommandCapability({
+      capabilities: this.audioRuntimeCapabilities,
+      command: validatedCommand,
+    });
     if (validatedCommand.type === AudioCommandType.CANCEL_RENDER_JOB) {
       this.controller.export.cancelRenderJob(validatedCommand.jobId);
       return;
@@ -170,6 +186,10 @@ export class CommandExecutor {
   }
 
   private async executeWithoutHistory(validatedCommand: AudioCommand): Promise<CommandExecutionResult> {
+    assertAudioCommandCapability({
+      capabilities: this.audioRuntimeCapabilities,
+      command: validatedCommand,
+    });
     assertLiveOperationAllowed({ command: validatedCommand, session: this.sessionStore.getState() });
 
     if (validatedCommand.type === AudioCommandType.UNDO) {

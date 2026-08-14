@@ -11,6 +11,12 @@ import { PluginHost } from '../plugin-host/plugin-host';
 import { createPluginCatalogEntry } from '../plugin-sdk/plugin-manifest.schema';
 import { gainPluginManifest } from '../plugins/builtin/gain/gain-plugin-manifest';
 import { AudioCommandType, type AudioCommand } from '../shared/types/audioCommand.schema';
+import { UnsupportedAudioCommandError } from '../shared/utils/audio-command-capability-guard';
+import {
+  CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
+  PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT,
+  resolveAudioRuntimeCapabilities,
+} from '../shared/utils/audio-runtime-capabilities';
 import { CommandHistory } from './command-history';
 import { CommandBatchExecutionError, CommandExecutor } from './command-executor';
 
@@ -158,6 +164,50 @@ async function selectRegion(commandExecutor: CommandExecutor): Promise<void> {
 }
 
 describe('CommandExecutor', () => {
+  it('미지원 runtime 기능 명령을 Controller 호출 전에 거부한다', async () => {
+    const { controller, session } = createTestContext();
+    const capabilities = resolveAudioRuntimeCapabilities(PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT, {
+      ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
+      midi: false,
+    });
+    const guardedExecutor = new CommandExecutor(
+      session,
+      controller,
+      new CommandHistory(),
+      undefined,
+      undefined,
+      capabilities
+    );
+
+    await expect(
+      guardedExecutor.execute({ trackId: TRACK_ID, type: AudioCommandType.ADD_MIDI_TRACK })
+    ).rejects.toBeInstanceOf(UnsupportedAudioCommandError);
+    expect(session.getState().tracks.size).toBe(0);
+  });
+
+  it('환경 차단 기능 명령을 Controller 호출 전에 거부한다', async () => {
+    const { controller, session } = createTestContext();
+    const capabilities = resolveAudioRuntimeCapabilities({
+      ...PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT,
+      hasGetUserMedia: false,
+    });
+    const guardedExecutor = new CommandExecutor(
+      session,
+      controller,
+      new CommandHistory(),
+      undefined,
+      undefined,
+      capabilities
+    );
+
+    await expect(
+      guardedExecutor.execute({ deviceId: null, type: AudioCommandType.SET_AUDIO_INPUT_DEVICE })
+    ).rejects.toMatchObject({
+      code: 'UNSUPPORTED_AUDIO_COMMAND',
+      status: 'blocked',
+    });
+  });
+
   it('Region 처리값 변경을 실행하고 Undo에서 이전 값을 복원한다', async () => {
     const { audioSourceRegistry, commandExecutor, session } = createTestContext();
     await addTrack(commandExecutor);
