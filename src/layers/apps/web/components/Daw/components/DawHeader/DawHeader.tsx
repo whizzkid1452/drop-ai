@@ -17,6 +17,7 @@ import { InputDeviceControl } from '../LiveInputControls/InputDeviceControl';
 import { RecordingControl } from './RecordingControl';
 import { RegionEditControls } from './RegionEditControls';
 import { SessionLifecycleControl } from '../SessionLifecycleControl/SessionLifecycleControl';
+import { CueControl } from '../CueControl/CueControl';
 
 interface DawHeaderProps {
   trackCount: number;
@@ -71,6 +72,7 @@ export function DawHeader({ coordinateMapper, currentView, onViewChange, trackCo
           <LoadProjectControl />
           <SaveProjectButton />
           <SessionLifecycleControl />
+          <CueControl />
           <ExportButton />
           <AccountControl />
         </div>

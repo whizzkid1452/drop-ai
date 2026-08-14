@@ -78,4 +78,34 @@ export const settingSelect = style({
   fontSize: '8px',
 });
 
+export const settingsToggle = style({
+  ...compactButton,
+  marginTop: '3px',
+  width: '100%',
+  selectors: { '&[aria-expanded="true"]': { background: '#4d3a50', color: '#ffe6fb' } },
+});
+
+export const clipSettings = style({
+  display: 'grid',
+  gap: '4px',
+  gridTemplateColumns: '1fr 1fr',
+  marginTop: '4px',
+});
+
+export const settingInput = style({
+  minWidth: 0,
+  width: '100%',
+  border: '1px solid #111416',
+  background: '#171a1c',
+  color: '#d7dadb',
+  fontSize: '8px',
+});
+
+export const saveSettingsButton = style({
+  ...compactButton,
+  gridColumn: '1 / -1',
+  background: '#4d3a50',
+  selectors: { '&:disabled': { cursor: 'not-allowed', opacity: 0.45 } },
+});
+
 export const error = style({ color: '#ff7979', fontSize: '8px', fontWeight: 700 });
