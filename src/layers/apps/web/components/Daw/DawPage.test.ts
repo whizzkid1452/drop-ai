@@ -11,6 +11,7 @@ const layerMocks = {
 };
 
 vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
+  useEditorRuntimeState: () => ({ selection: { editPointSeconds: 0 } }),
   usePlaybackClock: () => ({ getCurrentTime: () => 0 }),
   useSession: (selector: (state: typeof layerMocks) => unknown) => selector(layerMocks),
 }));

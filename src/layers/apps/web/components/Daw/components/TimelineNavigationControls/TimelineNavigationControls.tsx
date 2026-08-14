@@ -1,4 +1,4 @@
-import type { TimelineZoomFocus } from '../../timeline-navigation';
+import { TIMELINE_ZOOM_FOCUS_OPTIONS, type TimelineZoomFocus } from '../../timeline-navigation';
 import * as styles from './TimelineNavigationControls.css.ts';
 
 interface TimelineNavigationControlsProps {
@@ -42,9 +42,11 @@ export function TimelineNavigationControls({
         value={zoomFocus}
         onChange={event => onZoomFocusChange(event.target.value as TimelineZoomFocus)}
       >
-        <option value="mouse">Mouse</option>
-        <option value="playhead">Playhead</option>
-        <option value="center">Center</option>
+        {TIMELINE_ZOOM_FOCUS_OPTIONS.map(option => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
       </select>
       <button
         type="button"
