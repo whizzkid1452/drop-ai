@@ -14,6 +14,8 @@ import { createCommandHistoryEntry } from './create-command-history-entry';
 import { assertLiveOperationAllowed } from './live-operation-guard';
 import type { CleanupUnusedSourcesResult } from '../controllers/media-source-controller';
 import type { RenderJobResult } from '../shared/types/render-job';
+import type { IUndoJournal, UndoJournalEntry } from './undo-journal';
+import type { ISessionRecoveryStore } from '../shared/types/session-recovery';
 
 export type CommandExecutionResult =
   | Blob
@@ -60,8 +62,12 @@ export class CommandExecutor {
   constructor(
     private readonly sessionStore: SessionStore,
     private readonly controller: AppController,
-    private readonly commandHistory: ICommandHistory
-  ) {}
+    private readonly commandHistory: ICommandHistory,
+    private readonly undoJournal?: IUndoJournal,
+    private readonly sessionRecovery?: ISessionRecoveryStore
+  ) {
+    this.restoreUndoJournal();
+  }
 
   async execute(command: AudioCommand): Promise<CommandExecutionResult> {
     const validatedCommand = AudioCommandSchema.parse(command);
@@ -98,6 +104,9 @@ export class CommandExecutor {
     if (shouldPersistProjectAfterCommand(validatedCommand)) {
       // 명령 완료를 로컬 commit 뒤로 미뤄 앱 종료 직전의 편집도 Outbox와 함께 남긴다.
       await this.controller.project.saveProject();
+      const project = this.sessionStore.getState().project;
+      this.undoJournal?.updateRevision(project.id, project.revision);
+      this.sessionRecovery?.record(project);
     }
     return result;
   }
@@ -131,6 +140,11 @@ export class CommandExecutor {
   ): void {
     if (this.isHistoryBoundary(command)) {
       this.commandHistory.clear();
+      if (command.type === AudioCommandType.LOAD_PROJECT) {
+        this.restoreUndoJournal();
+      } else {
+        this.undoJournal?.clear(this.sessionStore.getState().project.id);
+      }
       return;
     }
     const historyEntry = createCommandHistoryEntry({
@@ -147,6 +161,11 @@ export class CommandExecutor {
     });
     if (historyEntry) {
       this.commandHistory.record(historyEntry);
+      this.undoJournal?.record(beforeSession.project.id, beforeSession.project.revision, {
+        afterDocument: this.controller.project.createSnapshotDocument(this.sessionStore.getState()),
+        beforeDocument: this.controller.project.createSnapshotDocument(beforeSession),
+        label: historyEntry.label,
+      });
     }
   }
 
@@ -155,10 +174,12 @@ export class CommandExecutor {
 
     if (validatedCommand.type === AudioCommandType.UNDO) {
       await this.commandHistory.undo();
+      this.undoJournal?.undo(this.sessionStore.getState().project.id);
       return;
     }
     if (validatedCommand.type === AudioCommandType.REDO) {
       await this.commandHistory.redo();
+      this.undoJournal?.redo(this.sessionStore.getState().project.id);
       return;
     }
 
@@ -609,6 +630,41 @@ export class CommandExecutor {
         this.controller.export.cancelRenderJob(validatedCommand.jobId);
         return;
 
+      case AudioCommandType.CREATE_NAMED_SNAPSHOT:
+        this.controller.sessionLifecycle.createNamedSnapshot(validatedCommand.name);
+        return;
+
+      case AudioCommandType.RESTORE_NAMED_SNAPSHOT:
+        await this.controller.sessionLifecycle.restoreNamedSnapshot(validatedCommand.snapshotId);
+        return;
+
+      case AudioCommandType.DELETE_NAMED_SNAPSHOT:
+        this.controller.sessionLifecycle.deleteNamedSnapshot(validatedCommand.snapshotId);
+        return;
+
+      case AudioCommandType.CREATE_PROJECT_TEMPLATE:
+        this.controller.sessionLifecycle.createTemplate(validatedCommand);
+        return;
+
+      case AudioCommandType.APPLY_PROJECT_TEMPLATE:
+        await this.controller.sessionLifecycle.applyTemplate(validatedCommand.templateId);
+        return;
+
+      case AudioCommandType.DELETE_PROJECT_TEMPLATE:
+        this.controller.sessionLifecycle.deleteTemplate(validatedCommand.templateId);
+        return;
+
+      case AudioCommandType.EXPORT_PROJECT_ARCHIVE:
+        return this.controller.project.exportProjectArchive();
+
+      case AudioCommandType.IMPORT_PROJECT_ARCHIVE:
+        await this.controller.project.importProjectArchive(validatedCommand.archive);
+        return;
+
+      case AudioCommandType.DISMISS_SESSION_RECOVERY:
+        this.sessionRecovery?.dismiss(validatedCommand.projectId);
+        return;
+
       case AudioCommandType.SET_EXPORT_RANGE:
         this.controller.export.setExportRange(validatedCommand.startTime, validatedCommand.endTime);
         return;
@@ -622,6 +678,7 @@ export class CommandExecutor {
 
       case AudioCommandType.SAVE_PROJECT:
         await this.controller.project.saveProject();
+        this.sessionRecovery?.record(this.sessionStore.getState().project);
         return;
 
       case AudioCommandType.LOAD_PROJECT:
@@ -661,7 +718,10 @@ export class CommandExecutor {
     return (
       command.type === AudioCommandType.REMOVE_TRACK ||
       command.type === AudioCommandType.SPLIT_REGION ||
-      command.type === AudioCommandType.LOAD_PROJECT
+      command.type === AudioCommandType.LOAD_PROJECT ||
+      command.type === AudioCommandType.RESTORE_NAMED_SNAPSHOT ||
+      command.type === AudioCommandType.APPLY_PROJECT_TEMPLATE ||
+      command.type === AudioCommandType.IMPORT_PROJECT_ARCHIVE
     );
   }
 
@@ -672,6 +732,26 @@ export class CommandExecutor {
       () => undefined
     );
     return execution;
+  }
+
+  private restoreUndoJournal(): void {
+    if (!this.undoJournal) {
+      return;
+    }
+    const project = this.sessionStore.getState().project;
+    const snapshot = this.undoJournal.load(project.id, project.revision);
+    this.commandHistory.restore(
+      snapshot.undoEntries.map(entry => this.createJournalHistoryEntry(entry)),
+      snapshot.redoEntries.map(entry => this.createJournalHistoryEntry(entry))
+    );
+  }
+
+  private createJournalHistoryEntry(entry: UndoJournalEntry) {
+    return {
+      label: entry.label,
+      redo: () => this.controller.project.restoreSnapshotDocument(entry.afterDocument),
+      undo: () => this.controller.project.restoreSnapshotDocument(entry.beforeDocument),
+    };
   }
 
   private resolveTrackId(session: SessionState, requestedTrackId?: string): string {
@@ -780,6 +860,13 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.SET_EXPORT_RANGE:
     case AudioCommandType.CLEAR_EXPORT_RANGE:
     case AudioCommandType.SET_EXPORT_SETTINGS:
+    case AudioCommandType.CREATE_NAMED_SNAPSHOT:
+    case AudioCommandType.RESTORE_NAMED_SNAPSHOT:
+    case AudioCommandType.DELETE_NAMED_SNAPSHOT:
+    case AudioCommandType.CREATE_PROJECT_TEMPLATE:
+    case AudioCommandType.APPLY_PROJECT_TEMPLATE:
+    case AudioCommandType.DELETE_PROJECT_TEMPLATE:
+    case AudioCommandType.IMPORT_PROJECT_ARCHIVE:
     case AudioCommandType.STOP_RECORDING:
       return true;
 
@@ -811,6 +898,8 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.EXPORT_AUDIO:
     case AudioCommandType.START_RENDER_JOB:
     case AudioCommandType.CANCEL_RENDER_JOB:
+    case AudioCommandType.EXPORT_PROJECT_ARCHIVE:
+    case AudioCommandType.DISMISS_SESSION_RECOVERY:
     case AudioCommandType.SAVE_PROJECT:
     case AudioCommandType.LOAD_PROJECT:
       return false;

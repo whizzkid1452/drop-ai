@@ -9,10 +9,17 @@ export function createWebApp(): AppInstance {
     supabasePublishableKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
   });
   const billingClient = createWebBillingClient(authClient);
+  let browserStorage: Storage | undefined;
+  try {
+    browserStorage = globalThis.localStorage;
+  } catch {
+    browserStorage = undefined;
+  }
 
   return createApp({
     authClient,
     billingClient,
+    browserStorage,
     createProjectSync: ({ audioSourceRepository, projectRepository, remoteProjectDocumentApplicator }) =>
       createWebProjectSyncService({
         audioSourceRepository,

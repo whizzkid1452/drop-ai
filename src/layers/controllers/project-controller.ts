@@ -13,16 +13,20 @@ import type {
   IRetiredAudioSourceRegistry,
 } from '../audio-source-registry/i-audio-source-registry';
 import {
+  createProjectDocumentV17FromSession,
   createProjectDocumentV18FromSession,
   createProjectRestoreSnapshotFromDocumentV18,
   type ProjectRestoreSnapshot,
 } from '../project-document-mapper/project-document-mapper';
+import { readProjectDocumentV18 } from '../shared/types/project-document-reader';
+import { createProjectArchiveBlob, readProjectArchiveBlob } from '../shared/types/project-archive';
 import type { ILocalFirstProjectRepository, IProjectRepository } from '../project-repository/i-project-repository';
 import type { IProjectSyncService } from '../project-sync/i-project-sync';
 import type { SessionState, SessionStore } from '../session/session';
 import type {
   ProjectAudioSource,
   ProjectDocumentSnapshot,
+  ProjectDocumentV17,
   ProjectDocumentV18,
 } from '../shared/types/project-document.schema';
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
@@ -41,6 +45,7 @@ interface ProjectControllerDependencies {
   readonly projectRepository: IProjectRepository;
   readonly localProjectRepository?: ILocalFirstProjectRepository;
   readonly projectSync?: IProjectSyncService;
+  readonly onRemoteProjectReplaced?: (projectId: string) => void;
 }
 
 interface PreparedProjectRuntime {
@@ -142,6 +147,76 @@ export class ProjectController {
     this.dependencies.projectSync?.activateProject(preparedRuntime.snapshot.session.project.id);
   }
 
+  createSnapshotDocument(session: SessionState = this.dependencies.sessionStore.getState()): ProjectDocumentV17 {
+    const registrations = this.dependencies.audioSourceRegistry.listCommittedRegistrations();
+    return createProjectDocumentV17FromSession({
+      session,
+      audioSources: registrations.map(registration => registration.metadata),
+      pluginCatalog: [...session.pluginCatalog.values()],
+    });
+  }
+
+  async restoreSnapshotDocument(document: ProjectDocumentSnapshot): Promise<void> {
+    const currentSession = this.dependencies.sessionStore.getState();
+    const migratedDocument = readProjectDocumentV18(document);
+    const restoreDocument = readProjectDocumentV18({
+      ...migratedDocument,
+      lifecycle: currentSession.lifecycle,
+      project: currentSession.project,
+    });
+    const preparedAudioSourceRegistry = this.dependencies.audioSourceRegistry.beginReplacement();
+    let preparedAudioGraph: IPreparedAudioProjectGraph | undefined;
+    let preparedRuntime: PreparedProjectRuntime;
+    try {
+      preparedRuntime = await this.prepareProjectRuntimeFromDocument({
+        document: restoreDocument,
+        expectedProjectId: currentSession.project.id,
+        audioSourceRegistry: preparedAudioSourceRegistry,
+      });
+      preparedAudioGraph = preparedRuntime.audioGraph;
+      preparedRuntime.audioSourceRegistry.assertActivatable();
+      preparedRuntime.audioGraph.assertActivatable();
+    } catch (cause) {
+      this.rethrowAfterDiscard({
+        cause,
+        audioGraph: preparedAudioGraph,
+        audioSourceRegistry: preparedAudioSourceRegistry,
+      });
+    }
+    this.activateProjectRuntime(preparedRuntime);
+  }
+
+  async exportProjectArchive(): Promise<Blob> {
+    const session = this.dependencies.sessionStore.getState();
+    const registrations = this.dependencies.audioSourceRegistry.listCommittedRegistrations();
+    return createProjectArchiveBlob({
+      document: createProjectDocumentV18FromSession({
+        session,
+        audioSources: registrations.map(registration => registration.metadata),
+        pluginCatalog: [...session.pluginCatalog.values()],
+      }),
+      sources: registrations,
+    });
+  }
+
+  async importProjectArchive(blob: Blob): Promise<void> {
+    const archive = await readProjectArchiveBlob(blob);
+    for (const source of archive.sources) {
+      try {
+        await this.dependencies.audioSourceRepository.create(source);
+      } catch (cause) {
+        if (!this.isConcurrentSourceCreation(cause)) {
+          throw cause;
+        }
+        const existingBlob = await this.dependencies.audioSourceRepository.load(source.metadata);
+        if (!existingBlob || !(await areBlobsEqual(existingBlob, source.blob))) {
+          throw new Error(`Archive Source ID가 다른 바이트와 충돌합니다: ${source.metadata.id}`, { cause });
+        }
+      }
+    }
+    await this.restoreSnapshotDocument(archive.document);
+  }
+
   async applyRemoteProjectDocument(document: ProjectDocumentSnapshot): Promise<boolean> {
     const expectedSessionVersion = this.captureProjectSessionVersion();
     await this.saveTail;
@@ -182,6 +257,7 @@ export class ProjectController {
     }
 
     this.activateProjectRuntime(preparedRuntime);
+    this.dependencies.onRemoteProjectReplaced?.(document.project.id);
     return true;
   }
 
@@ -587,4 +663,14 @@ export class ProjectController {
   private isConcurrentSourceCreation(cause: unknown): cause is AudioSourceRepositoryError {
     return cause instanceof AudioSourceRepositoryError && cause.code === 'SOURCE_ALREADY_EXISTS';
   }
+}
+
+async function areBlobsEqual(left: Blob, right: Blob): Promise<boolean> {
+  if (left.size !== right.size || left.type !== right.type) {
+    return false;
+  }
+  const [leftBytes, rightBytes] = await Promise.all([left.arrayBuffer(), right.arrayBuffer()]);
+  const leftView = new Uint8Array(leftBytes);
+  const rightView = new Uint8Array(rightBytes);
+  return leftView.every((value, index) => value === rightView[index]);
 }

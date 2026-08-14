@@ -231,6 +231,23 @@ const COMMAND_REFERENCE = {
   [AudioCommandType.START_RENDER_JOB]: '{"type":"START_RENDER_JOB"} - 저장된 Export preset과 range로 RenderJob 시작',
   [AudioCommandType.CANCEL_RENDER_JOB]:
     '{"type":"CANCEL_RENDER_JOB","jobId":"<Render Job UUID>"} - 실행 중인 RenderJob 취소',
+  [AudioCommandType.CREATE_NAMED_SNAPSHOT]:
+    '{"type":"CREATE_NAMED_SNAPSHOT","name":"<name>"} - 현재 Session Snapshot 저장',
+  [AudioCommandType.RESTORE_NAMED_SNAPSHOT]:
+    '{"type":"RESTORE_NAMED_SNAPSHOT","snapshotId":"<Snapshot UUID>"} - Named Snapshot 복원',
+  [AudioCommandType.DELETE_NAMED_SNAPSHOT]:
+    '{"type":"DELETE_NAMED_SNAPSHOT","snapshotId":"<Snapshot UUID>"} - Named Snapshot 삭제',
+  [AudioCommandType.CREATE_PROJECT_TEMPLATE]:
+    '{"type":"CREATE_PROJECT_TEMPLATE","kind":"session|track","name":"<name>","trackId":"<Track UUID for track kind>"} - Template 저장',
+  [AudioCommandType.APPLY_PROJECT_TEMPLATE]:
+    '{"type":"APPLY_PROJECT_TEMPLATE","templateId":"<Template UUID>"} - Template 적용',
+  [AudioCommandType.DELETE_PROJECT_TEMPLATE]:
+    '{"type":"DELETE_PROJECT_TEMPLATE","templateId":"<Template UUID>"} - Template 삭제',
+  [AudioCommandType.EXPORT_PROJECT_ARCHIVE]: '{"type":"EXPORT_PROJECT_ARCHIVE"} - Session Archive 생성',
+  [AudioCommandType.IMPORT_PROJECT_ARCHIVE]:
+    '{"type":"IMPORT_PROJECT_ARCHIVE","archive":"<UI File>"} - UI에서 선택한 Session Archive 복원',
+  [AudioCommandType.DISMISS_SESSION_RECOVERY]:
+    '{"type":"DISMISS_SESSION_RECOVERY","projectId":"<optional Project UUID>"} - Crash recovery 알림 닫기',
   [AudioCommandType.SAVE_PROJECT]: '{"type":"SAVE_PROJECT"} - 현재 프로젝트와 오디오 원본 저장',
   [AudioCommandType.LOAD_PROJECT]:
     '{"type":"LOAD_PROJECT","projectId":"<user-provided Project UUID>"} - 저장된 프로젝트 불러오기',

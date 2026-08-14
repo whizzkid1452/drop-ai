@@ -1003,6 +1003,15 @@ export function createCommandHistoryEntry({
     case AudioCommandType.EXPORT_AUDIO:
     case AudioCommandType.START_RENDER_JOB:
     case AudioCommandType.CANCEL_RENDER_JOB:
+    case AudioCommandType.CREATE_NAMED_SNAPSHOT:
+    case AudioCommandType.RESTORE_NAMED_SNAPSHOT:
+    case AudioCommandType.DELETE_NAMED_SNAPSHOT:
+    case AudioCommandType.CREATE_PROJECT_TEMPLATE:
+    case AudioCommandType.APPLY_PROJECT_TEMPLATE:
+    case AudioCommandType.DELETE_PROJECT_TEMPLATE:
+    case AudioCommandType.EXPORT_PROJECT_ARCHIVE:
+    case AudioCommandType.IMPORT_PROJECT_ARCHIVE:
+    case AudioCommandType.DISMISS_SESSION_RECOVERY:
     case AudioCommandType.SAVE_PROJECT:
     case AudioCommandType.LOAD_PROJECT:
       return null;
