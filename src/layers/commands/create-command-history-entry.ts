@@ -1021,6 +1021,7 @@ export function createCommandHistoryEntry({
     case AudioCommandType.PLAY:
     case AudioCommandType.PAUSE:
     case AudioCommandType.STOP:
+    case AudioCommandType.RESUME_AUDIO_RUNTIME:
     case AudioCommandType.SET_MONITOR_STATE:
     case AudioCommandType.SET_AUDIO_INPUT_DEVICE:
     case AudioCommandType.SET_INPUT_MONITORING:

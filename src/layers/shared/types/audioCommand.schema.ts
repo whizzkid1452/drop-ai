@@ -29,6 +29,7 @@ export const AudioCommandType = {
   PLAY: 'PLAY',
   PAUSE: 'PAUSE',
   STOP: 'STOP',
+  RESUME_AUDIO_RUNTIME: 'RESUME_AUDIO_RUNTIME',
   SET_AUDIO_INPUT_DEVICE: 'SET_AUDIO_INPUT_DEVICE',
   SET_INPUT_MONITORING: 'SET_INPUT_MONITORING',
   SET_TRACK_RECORD_ARM: 'SET_TRACK_RECORD_ARM',
@@ -360,6 +361,9 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.STOP),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.RESUME_AUDIO_RUNTIME),
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.SET_AUDIO_INPUT_DEVICE),
