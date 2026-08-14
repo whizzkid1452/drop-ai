@@ -18,6 +18,9 @@ import type { PluginCatalogEntry } from '@/layers/shared/types/plugin-state';
 import type { RoutingGraphSnapshot } from '@/layers/shared/types/routing-state';
 import type { AudioRuntimeFeatureCapability } from '@/layers/shared/utils/audio-runtime-capabilities';
 import { describeAudioRuntimeFeatureCapability } from '@/layers/apps/web/utils/audio-runtime-capability-labels';
+import type { MidiTrackState } from '@/layers/shared/types/midi-state';
+import { MidiRegionComponent } from './MidiRegionComponent';
+import { PianoRollEditor } from './PianoRollEditor';
 
 export interface RegionWaveSurferReadyEvent {
   trackId: string;
@@ -30,6 +33,7 @@ export const TrackComponent = memo(function TrackComponent({
   isSelected,
   track,
   automationCapability,
+  midiCapability,
   coordinateMapper,
   editPointSeconds,
   gridSettings,
@@ -44,6 +48,8 @@ export const TrackComponent = memo(function TrackComponent({
   onReady,
   onFadeChange,
   onMuteChange,
+  onMidiChange,
+  onMidiExport,
   onSelect,
   onSoloChange,
   onRegionSelect,
@@ -56,6 +62,7 @@ export const TrackComponent = memo(function TrackComponent({
   isSelected: boolean;
   track: TrackState;
   automationCapability: AudioRuntimeFeatureCapability;
+  midiCapability: AudioRuntimeFeatureCapability;
   coordinateMapper: TimelineCoordinateMapper;
   editPointSeconds: number;
   gridSettings: TimelineGridSettings;
@@ -70,6 +77,8 @@ export const TrackComponent = memo(function TrackComponent({
   onReady: (event: RegionWaveSurferReadyEvent) => void;
   onFadeChange: (regionId: string, edge: 'in' | 'out', durationSeconds: number) => Promise<void>;
   onMuteChange: (muted: boolean) => Promise<TrackToggleResult>;
+  onMidiChange: (midi: MidiTrackState) => Promise<void>;
+  onMidiExport: () => void;
   onSelect: () => void;
   onSoloChange: (soloed: boolean) => Promise<TrackToggleResult>;
   onRegionSelect: (regionId: string, additive: boolean) => void;
@@ -86,6 +95,8 @@ export const TrackComponent = memo(function TrackComponent({
   const [isMutePending, setIsMutePending] = useState(false);
   const [isSoloPending, setIsSoloPending] = useState(false);
   const [isAutomationOpen, setIsAutomationOpen] = useState(false);
+  const [isPianoRollOpen, setIsPianoRollOpen] = useState(false);
+  const [requestedMidiRegionId, setRequestedMidiRegionId] = useState<string | null>(track.midi?.regions[0]?.id ?? null);
   const rangePointerId = useRef<number | null>(null);
   const rangeStartTime = useRef(0);
   const [rangePreview, setRangePreview] = useState<{ endTimeSeconds: number; startTimeSeconds: number } | null>(null);
@@ -188,6 +199,12 @@ export const TrackComponent = memo(function TrackComponent({
 
   const displayedRange = rangePreview ?? selectedRange;
   const isAutomationAvailable = automationCapability.status === 'available';
+  const isMidiTrack = track.midi != null;
+  const isMidiAvailable = midiCapability.status === 'available';
+  const activeMidiRegionId =
+    track.midi?.regions.some(region => region.id === requestedMidiRegionId) === true
+      ? requestedMidiRegionId
+      : (track.midi?.regions[0]?.id ?? null);
 
   return (
     <article
@@ -201,7 +218,7 @@ export const TrackComponent = memo(function TrackComponent({
       <div className={`${styles.trackHeader} ${isSelected ? styles.trackHeaderSelected : ''}`}>
         <TrackNameControl trackId={track.id} name={track.name} />
         <div className={styles.actionControls}>
-          <TrackRecordArmControl trackId={track.id} trackName={track.name} />
+          {isMidiTrack ? null : <TrackRecordArmControl trackId={track.id} trackName={track.name} />}
           <button
             type="button"
             className={`${styles.trackActionButton} ${track.isMuted ? styles.muteButtonActive : ''}`}
@@ -224,7 +241,32 @@ export const TrackComponent = memo(function TrackComponent({
           >
             S
           </button>
-          <TrackInputMonitoringControl trackId={track.id} trackName={track.name} />
+          {isMidiTrack ? null : <TrackInputMonitoringControl trackId={track.id} trackName={track.name} />}
+          {isMidiTrack ? (
+            <>
+              <button
+                type="button"
+                className={`${styles.trackActionButton} ${isPianoRollOpen ? styles.midiButtonActive : ''}`}
+                aria-label={`${track.name} Piano Roll 표시`}
+                aria-pressed={isPianoRollOpen}
+                disabled={!isMidiAvailable}
+                onClick={() => setIsPianoRollOpen(isOpen => !isOpen)}
+                title={isMidiAvailable ? 'Piano Roll' : describeAudioRuntimeFeatureCapability(midiCapability)}
+              >
+                P
+              </button>
+              <button
+                type="button"
+                className={styles.trackActionButton}
+                aria-label={`${track.name} MIDI 파일 내보내기`}
+                disabled={!isMidiAvailable || track.midi?.regions.length === 0}
+                onClick={onMidiExport}
+                title="Standard MIDI File로 내보냅니다."
+              >
+                MIDI↓
+              </button>
+            </>
+          ) : null}
           <button
             type="button"
             className={`${styles.trackActionButton} ${isAutomationOpen ? styles.automationButtonActive : ''}`}
@@ -283,7 +325,28 @@ export const TrackComponent = memo(function TrackComponent({
             waveformRenderData={waveformRenderCache.get(region.sourceId)}
           />
         ))}
+        {track.midi?.regions.map(region => (
+          <MidiRegionComponent
+            key={region.id}
+            coordinateMapper={coordinateMapper}
+            onSelect={() => {
+              setRequestedMidiRegionId(region.id);
+              setIsPianoRollOpen(true);
+            }}
+            region={region}
+            selected={isPianoRollOpen && activeMidiRegionId === region.id}
+          />
+        ))}
       </div>
+      {isPianoRollOpen && track.midi ? (
+        <PianoRollEditor
+          editPointSeconds={editPointSeconds}
+          midi={track.midi}
+          onChange={onMidiChange}
+          regionId={activeMidiRegionId}
+          trackName={track.name}
+        />
+      ) : null}
       {isAutomationOpen ? (
         <AutomationLaneEditor
           coordinateMapper={coordinateMapper}

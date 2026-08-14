@@ -25,6 +25,8 @@ import { TimelineGrid } from '../TimelineGrid/TimelineGrid';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import type { AutomationLaneState } from '@/layers/shared/types/automation-state';
 import { AudioRuntimeFeature } from '@/layers/shared/utils/audio-runtime-capabilities';
+import type { MidiTrackState } from '@/layers/shared/types/midi-state';
+import { writeStandardMidiFile } from '@/layers/midi-file/midi-file-codec';
 
 interface TrackListProps {
   onTrackSelect: (trackId: string) => void;
@@ -48,6 +50,7 @@ export function TrackList({
   timelineViewportRef,
 }: TrackListProps) {
   const tracks = useSession(state => state.tracks);
+  const tempoBpm = useSession(state => state.tempo);
   const pluginCatalog = useSession(state => state.pluginCatalog);
   const routingGraph = useSession(state => state.routingGraph);
   const trackArray = useMemo(() => Array.from(tracks.values()), [tracks]);
@@ -56,6 +59,7 @@ export function TrackList({
   const editorRuntime = useEditorRuntimeState();
   const audioSourceResolver = useAudioSourceResolver();
   const automationCapability = useAudioRuntimeCapabilities().features[AudioRuntimeFeature.AUTOMATION];
+  const midiCapability = useAudioRuntimeCapabilities().features[AudioRuntimeFeature.MIDI];
   const trackNamesById = useMemo(() => new Map(trackArray.map(track => [track.id, track.name])), [trackArray]);
 
   const [, setWavesurferInstances] = useState<Map<string, WaveSurfer>>(new Map());
@@ -215,6 +219,43 @@ export function TrackList({
     [commandExecutor]
   );
 
+  const handleMidiChange = useCallback(
+    async (trackId: string, midi: MidiTrackState) => {
+      await commandExecutor.execute({
+        midi: {
+          instrumentId: midi.instrumentId,
+          regions: midi.regions.map(region => ({
+            ...region,
+            notes: region.notes.map(note => ({ ...note })),
+          })),
+        },
+        trackId,
+        type: AudioCommandType.SET_MIDI_TRACK_STATE,
+      });
+    },
+    [commandExecutor]
+  );
+
+  const handleMidiExport = useCallback(
+    (trackId: string) => {
+      const track = tracks.get(trackId);
+      if (!track?.midi) {
+        return;
+      }
+      const data = writeStandardMidiFile({
+        tempoBpm,
+        tracks: [{ midi: track.midi, name: track.name }],
+      });
+      const objectUrl = URL.createObjectURL(new Blob([data], { type: 'audio/midi' }));
+      const download = document.createElement('a');
+      download.download = `${track.name.replaceAll(/[^\p{L}\p{N}._-]+/gu, '-') || 'midi-track'}.mid`;
+      download.href = objectUrl;
+      download.click();
+      URL.revokeObjectURL(objectUrl);
+    },
+    [tempoBpm, tracks]
+  );
+
   const handleAutomationWritePreview = useCallback(
     async (trackId: string, request: AutomationWritePassDraft) => {
       await commandExecutor.execute({
@@ -287,6 +328,7 @@ export function TrackList({
             key={track.id}
             track={track}
             automationCapability={automationCapability}
+            midiCapability={midiCapability}
             isSelected={track.id === selectedTrackId}
             coordinateMapper={coordinateMapper}
             editPointSeconds={editorRuntime.selection.editPointSeconds}
@@ -304,6 +346,8 @@ export function TrackList({
               handleFadeChange(track.id, regionId, edge, durationSeconds)
             }
             onMuteChange={muted => handleMuteChange(track.id, muted)}
+            onMidiChange={midi => handleMidiChange(track.id, midi)}
+            onMidiExport={() => handleMidiExport(track.id)}
             onSelect={() => onTrackSelect(track.id)}
             onSoloChange={soloed => handleSoloChange(track.id, soloed)}
             onRegionSelect={(regionId, additive) => void handleRegionSelect(track.id, regionId, additive)}

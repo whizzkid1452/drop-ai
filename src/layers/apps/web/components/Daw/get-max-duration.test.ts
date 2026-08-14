@@ -44,4 +44,24 @@ describe('getMaxDuration', () => {
   it('Track이 없으면 0을 반환한다', () => {
     expect(getMaxDuration([])).toBe(0);
   });
+
+  it('MIDI Region의 시작 시각과 길이도 포함한다', () => {
+    const midiTrack: TrackState = {
+      ...createTrack('midi-track', []),
+      midi: {
+        instrumentId: 'builtin.poly-synth',
+        regions: [
+          {
+            durationSeconds: 3,
+            id: '11111111-1111-4111-8111-111111111111',
+            name: 'MIDI Region',
+            notes: [],
+            startTimeSeconds: 12,
+          },
+        ],
+      },
+    };
+
+    expect(getMaxDuration([midiTrack])).toBe(15);
+  });
 });

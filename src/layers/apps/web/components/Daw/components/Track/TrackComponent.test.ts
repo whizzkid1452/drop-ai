@@ -9,10 +9,13 @@ import type { TrackToggleResult } from '@/layers/apps/web/hooks/track-mute-solo-
 import { TrackComponent } from './TrackComponent';
 import { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 
-const { renderAutomationLaneEditor, renderRegionComponent } = vi.hoisted(() => ({
-  renderAutomationLaneEditor: vi.fn(),
-  renderRegionComponent: vi.fn(),
-}));
+const { renderAutomationLaneEditor, renderMidiRegionComponent, renderPianoRollEditor, renderRegionComponent } =
+  vi.hoisted(() => ({
+    renderAutomationLaneEditor: vi.fn(),
+    renderMidiRegionComponent: vi.fn(),
+    renderPianoRollEditor: vi.fn(),
+    renderRegionComponent: vi.fn(),
+  }));
 
 vi.mock('@/layers/apps/web/hooks/useTrackActions', () => ({
   useTrackActions: () => ({
@@ -32,6 +35,20 @@ vi.mock('./AutomationLaneEditor', () => ({
   AutomationLaneEditor: (props: unknown) => {
     renderAutomationLaneEditor(props);
     return createElement('div', { 'data-testid': 'automation-lane-editor' });
+  },
+}));
+
+vi.mock('./MidiRegionComponent', () => ({
+  MidiRegionComponent: (props: unknown) => {
+    renderMidiRegionComponent(props);
+    return createElement('div', { 'data-testid': 'midi-region' });
+  },
+}));
+
+vi.mock('./PianoRollEditor', () => ({
+  PianoRollEditor: (props: unknown) => {
+    renderPianoRollEditor(props);
+    return createElement('div', { 'data-testid': 'piano-roll-editor' });
   },
 }));
 
@@ -60,6 +77,7 @@ vi.mock('./Track.css.ts', () => ({
   trackHeaderSelected: 'trackHeaderSelected',
   trackRow: 'trackRow',
   trackTimeline: 'trackTimeline',
+  midiButtonActive: 'midiButtonActive',
 }));
 
 vi.mock('./components/TrackNameControl', () => ({
@@ -147,6 +165,7 @@ function renderTrack(
       createElement(TrackComponent, {
         track: options.track ?? track,
         automationCapability: { blockers: [], status: 'available' },
+        midiCapability: { blockers: [], status: 'available' },
         isSelected: options.isSelected ?? false,
         coordinateMapper,
         editPointSeconds: 0,
@@ -163,6 +182,8 @@ function renderTrack(
         onReady: vi.fn(),
         onFadeChange: options.onFadeChange ?? vi.fn().mockResolvedValue(undefined),
         onMuteChange: options.onMuteChange ?? vi.fn().mockResolvedValue('updated'),
+        onMidiChange: vi.fn().mockResolvedValue(undefined),
+        onMidiExport: vi.fn(),
         onSelect: options.onSelect ?? vi.fn(),
         onSoloChange: options.onSoloChange ?? vi.fn().mockResolvedValue('updated'),
         onRegionSelect: options.onRegionSelect ?? vi.fn(),
@@ -184,9 +205,41 @@ afterEach(() => {
   document.body.replaceChildren();
   renderRegionComponent.mockReset();
   renderAutomationLaneEditor.mockReset();
+  renderMidiRegionComponent.mockReset();
+  renderPianoRollEditor.mockReset();
 });
 
 describe('TrackComponent 제어', () => {
+  it('MIDI Track에서 Region과 Piano Roll을 열고 오디오 녹음 제어를 숨긴다', () => {
+    const midiTrack: TrackState = {
+      ...track,
+      midi: {
+        instrumentId: 'builtin.poly-synth',
+        regions: [
+          {
+            durationSeconds: 2,
+            id: '44444444-4444-4444-8444-444444444444',
+            name: 'Verse',
+            notes: [],
+            startTimeSeconds: 0,
+          },
+        ],
+      },
+      name: 'Keys',
+    };
+    const host = renderTrack({ track: midiTrack });
+    const pianoRollButton = host.querySelector<HTMLButtonElement>('button[aria-label="Keys Piano Roll 표시"]');
+
+    expect(renderMidiRegionComponent).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[aria-label="Keys 녹음 arm"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Keys 입력 모니터링"]')).toBeNull();
+
+    act(() => pianoRollButton?.click());
+
+    expect(host.querySelector('[data-testid="piano-roll-editor"]')).not.toBeNull();
+    expect(renderPianoRollEditor).toHaveBeenCalledTimes(1);
+  });
+
   it('Automation 버튼으로 Lane 편집기를 바로 열고 닫는다', () => {
     const host = renderTrack();
     const automationButton = host.querySelector<HTMLButtonElement>(
@@ -212,6 +265,15 @@ describe('TrackComponent 제어', () => {
     expect(host.querySelector(`[aria-label="${track.name} 입력 모니터링"]`)).not.toBeNull();
     expect(host.querySelector(`[aria-label="${track.name} 녹음 arm"]`)).not.toBeNull();
     expect(host.querySelector('[data-meter-label="Track"]')).not.toBeNull();
+  });
+
+  it('저장 문서에서 midi가 null인 Audio Track에는 녹음 제어를 유지한다', () => {
+    const restoredAudioTrack: TrackState = { ...track, midi: null };
+    const host = renderTrack({ track: restoredAudioTrack });
+
+    expect(host.querySelector(`[aria-label="${track.name} 녹음 arm"]`)).not.toBeNull();
+    expect(host.querySelector(`[aria-label="${track.name} 입력 모니터링"]`)).not.toBeNull();
+    expect(host.querySelector(`[aria-label="${track.name} Piano Roll 표시"]`)).toBeNull();
   });
 
   it('Track 행을 누르면 선택을 요청하고 선택 상태를 표시한다', () => {

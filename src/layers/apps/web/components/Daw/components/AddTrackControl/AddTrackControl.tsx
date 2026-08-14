@@ -1,5 +1,9 @@
 import { useRef, useState, type ChangeEvent } from 'react';
-import { useAudioSourceStager, useCommandExecutor } from '@/layers/apps/web/context/layer-hooks';
+import {
+  useAudioRuntimeCapabilities,
+  useAudioSourceStager,
+  useCommandExecutor,
+} from '@/layers/apps/web/context/layer-hooks';
 import { stageWebAudioSource } from '@/layers/apps/web/hooks/stage-web-audio-source';
 import { convertFileToAudioFile } from '@/utils/audio/convert-file-to-audio-file';
 import {
@@ -9,6 +13,12 @@ import {
 } from '@/layers/apps/web/components/common/FileDrop/constants/audioConstants';
 import { executeAudioFileImport } from '@/layers/apps/web/components/common/FileDrop/execute-audio-file-import';
 import * as styles from './AddTrackControl.css.ts';
+import { AudioCommandType } from '@/layers/shared/types/audioCommand.schema';
+import { AudioRuntimeFeature } from '@/layers/shared/utils/audio-runtime-capabilities';
+import { describeAudioRuntimeFeatureCapability } from '@/layers/apps/web/utils/audio-runtime-capability-labels';
+import { executeMidiFileImport } from '@/layers/apps/web/midi/execute-midi-file-import';
+
+const ACCEPTED_MIDI_FILE_TYPES = '.mid,.midi,audio/midi,audio/x-midi';
 
 function getFileValidationMessage(file: File): string | null {
   if (!ACCEPTED_AUDIO_TYPES.some(acceptedType => acceptedType === file.type)) {
@@ -24,10 +34,13 @@ function getErrorMessage(error: unknown): string {
 
 export function AddTrackControl() {
   const commandExecutor = useCommandExecutor();
+  const midiCapability = useAudioRuntimeCapabilities().features[AudioRuntimeFeature.MIDI];
   const audioSourceStager = useAudioSourceStager();
   const inputRef = useRef<HTMLInputElement>(null);
+  const midiInputRef = useRef<HTMLInputElement>(null);
   const isPendingRef = useRef(false);
   const [isPending, setIsPending] = useState(false);
+  const [isMidiPending, setIsMidiPending] = useState(false);
 
   const updatePending = (nextIsPending: boolean) => {
     isPendingRef.current = nextIsPending;
@@ -76,6 +89,38 @@ export function AddTrackControl() {
     }
   };
 
+  const handleAddMidiTrack = async () => {
+    if (isMidiPending || midiCapability.status !== 'available') {
+      return;
+    }
+    setIsMidiPending(true);
+    try {
+      await commandExecutor.execute({ trackId: crypto.randomUUID(), type: AudioCommandType.ADD_MIDI_TRACK });
+    } catch (error) {
+      window.alert(`MIDI Track을 추가하지 못했습니다: ${getErrorMessage(error)}`);
+    } finally {
+      setIsMidiPending(false);
+    }
+  };
+
+  const handleMidiFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file || isMidiPending || midiCapability.status !== 'available') {
+      input.value = '';
+      return;
+    }
+    setIsMidiPending(true);
+    try {
+      await executeMidiFileImport({ commandExecutor, createId: () => crypto.randomUUID(), file });
+    } catch (error) {
+      window.alert(`MIDI 파일을 가져오지 못했습니다: ${getErrorMessage(error)}`);
+    } finally {
+      input.value = '';
+      setIsMidiPending(false);
+    }
+  };
+
   return (
     <>
       <input
@@ -88,6 +133,16 @@ export function AddTrackControl() {
         disabled={isPending}
         onChange={event => void handleFileChange(event)}
       />
+      <input
+        ref={midiInputRef}
+        className={styles.input}
+        type="file"
+        accept={ACCEPTED_MIDI_FILE_TYPES}
+        aria-label="MIDI 파일 선택"
+        tabIndex={-1}
+        disabled={isMidiPending || midiCapability.status !== 'available'}
+        onChange={event => void handleMidiFileChange(event)}
+      />
       <button
         className={styles.button}
         type="button"
@@ -98,6 +153,36 @@ export function AddTrackControl() {
         onClick={() => inputRef.current?.click()}
       >
         {isPending ? 'ADDING…' : '+ TRACK'}
+      </button>
+      <button
+        className={styles.button}
+        type="button"
+        aria-label="빈 MIDI Track 추가"
+        aria-busy={isMidiPending}
+        disabled={isMidiPending || midiCapability.status !== 'available'}
+        title={
+          midiCapability.status === 'available'
+            ? '내장 Instrument를 사용하는 MIDI Track을 추가합니다.'
+            : describeAudioRuntimeFeatureCapability(midiCapability)
+        }
+        onClick={() => void handleAddMidiTrack()}
+      >
+        {isMidiPending ? 'ADDING…' : '+ MIDI'}
+      </button>
+      <button
+        className={styles.button}
+        type="button"
+        aria-label="MIDI 파일 가져오기"
+        aria-busy={isMidiPending}
+        disabled={isMidiPending || midiCapability.status !== 'available'}
+        title={
+          midiCapability.status === 'available'
+            ? 'Standard MIDI File을 새 MIDI Track으로 가져옵니다.'
+            : describeAudioRuntimeFeatureCapability(midiCapability)
+        }
+        onClick={() => midiInputRef.current?.click()}
+      >
+        MIDI FILE
       </button>
     </>
   );
