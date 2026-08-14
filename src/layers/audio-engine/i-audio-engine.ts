@@ -8,7 +8,7 @@ import type {
   RenderDerivedAudioRegionRequest,
   RenderedDerivedAudioRegion,
 } from '../shared/types/region-audio-processing';
-import type { PluginParameterValue } from '../shared/types/plugin-state';
+import type { PluginParameterValue, PluginRuntimeState } from '../shared/types/plugin-state';
 import type { TimelineRange } from '../shared/types/project-document.schema';
 import type { MeterFrame, MeterTarget } from '../shared/types/meter-frame';
 import type { RoutingGraphSnapshot } from '../shared/types/routing-state';
@@ -148,6 +148,8 @@ export interface InstallAudioPluginRequest {
   readonly isEnabled?: boolean;
   readonly targetIndex?: number;
   readonly parameterValues: ReadonlyMap<string, PluginParameterValue>;
+  readonly stateBlob?: string | null;
+  readonly sidechainSourceTrackId?: string | null;
 }
 
 export interface MoveAudioPluginRequest {
@@ -174,6 +176,8 @@ export interface AudioProjectGraphPluginInstance {
   readonly manifestId: string;
   readonly isEnabled: boolean;
   readonly parameterValues: ReadonlyMap<string, PluginParameterValue>;
+  readonly stateBlob?: string | null;
+  readonly sidechainSourceTrackId?: string | null;
 }
 
 export interface AudioProjectGraphLoop {
@@ -276,6 +280,8 @@ export interface IAudioEngine {
   midiPanic(): void;
 
   // Plugin Management
+  listAvailablePluginManifestIds(): readonly string[];
+  readPluginRuntimeStates(trackId: string): readonly PluginRuntimeState[];
   installPlugin(request: InstallAudioPluginRequest): void;
   removePlugin(trackId: string, instanceId: string): void;
   movePlugin(request: MoveAudioPluginRequest): void;

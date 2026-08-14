@@ -191,6 +191,7 @@ describe('Plugin Manifest 판독', () => {
     const catalogEntry = createPluginCatalogEntry(parsedManifest);
 
     expect(catalogEntry).toEqual({
+      category: 'other',
       id: 'builtin.channel-tools',
       name: 'Channel Tools',
       version: '1.0.0',
@@ -216,8 +217,32 @@ describe('Plugin Manifest 판독', () => {
           ],
         },
       ],
+      presets: [],
+      supportsSidechain: false,
     });
     expect(catalogEntry).not.toHaveProperty('dsp');
     expect(catalogEntry).not.toHaveProperty('ui');
+  });
+
+  it('Preset이 없는 Parameter를 참조하면 거부한다', () => {
+    const manifest = createValidManifest();
+
+    expect(
+      validatePluginManifest({
+        ...manifest,
+        presets: [{ id: 'broken', name: 'Broken', parameterValues: { missing: 1 } }],
+      }).status
+    ).toBe('invalid');
+  });
+
+  it('Preset Parameter 값이 정의 범위를 벗어나면 거부한다', () => {
+    const manifest = createValidManifest();
+
+    expect(
+      validatePluginManifest({
+        ...manifest,
+        presets: [{ id: 'broken', name: 'Broken', parameterValues: { gain: 3 } }],
+      }).status
+    ).toBe('invalid');
   });
 });

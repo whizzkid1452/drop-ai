@@ -9,6 +9,7 @@ import { MeterQuery } from '../queries/meter-query';
 import { LiveInputQuery } from '../queries/live-input-query';
 import { RecordingQuery } from '../queries/recording-query';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
+import { gainPluginManifest } from '../plugins/builtin/gain/gain-plugin-manifest';
 import type { IProjectSyncService } from '../project-sync/i-project-sync';
 import { AudioCommandType } from '../shared/types/audioCommand.schema';
 import type { ProjectDocument } from '../shared/types/project-document.schema';
@@ -390,6 +391,7 @@ describe('createApp', () => {
     const app = createTestApp({ audioEngine: new MockAudioEngine() });
 
     expect(app.session.getState().pluginCatalog.get('builtin.gain')).toEqual({
+      category: 'utility',
       id: 'builtin.gain',
       name: 'Gain',
       version: '1.0.0',
@@ -404,6 +406,12 @@ describe('createApp', () => {
           step: 0.01,
         },
       ],
+      presets: [
+        { id: 'unity', name: 'Unity', parameterValues: { gain: 1 } },
+        { id: 'boost-3db', name: '+3 dB', parameterValues: { gain: 1.4125 } },
+        { id: 'cut-6db', name: '-6 dB', parameterValues: { gain: 0.5012 } },
+      ],
+      supportsSidechain: false,
     });
     expect(app.session.getState().pluginCatalog.get('builtin.gain')).not.toHaveProperty('dsp');
     expect(app.session.getState().pluginValidationResults.get('builtin.gain')).toEqual({
@@ -412,6 +420,7 @@ describe('createApp', () => {
       issues: [],
     });
     expect(app.session.getState().pluginCatalog.get('builtin.saturation')).toEqual({
+      category: 'distortion',
       id: 'builtin.saturation',
       name: 'Saturation',
       version: '1.0.0',
@@ -426,12 +435,33 @@ describe('createApp', () => {
           step: 0.01,
         },
       ],
+      presets: [
+        { id: 'subtle', name: 'Subtle', parameterValues: { drive: 0.15 } },
+        { id: 'warm', name: 'Warm', parameterValues: { drive: 0.4 } },
+        { id: 'heavy', name: 'Heavy', parameterValues: { drive: 0.8 } },
+      ],
+      supportsSidechain: false,
     });
     expect(app.session.getState().pluginValidationResults.get('builtin.saturation')).toEqual({
       manifestId: 'builtin.saturation',
       status: 'valid',
       issues: [],
     });
+  });
+
+  it('runtime factory가 없는 metadata-only Plugin을 catalog에서 숨긴다', () => {
+    const metadataOnlyManifest = {
+      ...gainPluginManifest,
+      id: 'external.metadata-only',
+      name: 'Metadata Only',
+    };
+    const app = createTestApp({
+      audioEngine: new MockAudioEngine(),
+      initialPluginManifests: [gainPluginManifest, metadataOnlyManifest],
+    });
+
+    expect(app.session.getState().pluginCatalog.has('builtin.gain')).toBe(true);
+    expect(app.session.getState().pluginCatalog.has('external.metadata-only')).toBe(false);
   });
 
   it('Saturation을 공통 Command 경로로 설치한다', async () => {
@@ -449,10 +479,14 @@ describe('createApp', () => {
 
     expect(app.session.getState().tracks.get(trackId)?.pluginInstances).toEqual([
       {
+        availability: 'available',
         id: instanceId,
         manifestSummary: { id: 'builtin.saturation', name: 'Saturation', version: '1.0.0' },
         isEnabled: true,
         parameters: [{ id: 'drive', value: 0.2 }],
+        presetId: null,
+        sidechainSourceTrackId: null,
+        stateBlob: null,
       },
     ]);
   });

@@ -552,6 +552,10 @@ function createPluginCatalog(manifests: readonly PluginCatalogEntry[]): Map<stri
             ? { ...parameter, options: parameter.options.map(option => ({ ...option })) }
             : { ...parameter }
         ),
+        presets: manifest.presets?.map(preset => ({
+          ...preset,
+          parameterValues: { ...preset.parameterValues },
+        })),
       },
     ])
   );

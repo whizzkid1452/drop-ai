@@ -196,6 +196,14 @@ export class DawEngineAdapter implements IAudioEngine {
     return this.#runtime.getFeatureSupport();
   }
 
+  listAvailablePluginManifestIds(): readonly string[] {
+    return this.#runtime.listAvailablePluginManifestIds();
+  }
+
+  readPluginRuntimeStates(trackId: string) {
+    return this.#runtime.readPluginRuntimeStates(trackId);
+  }
+
   setTempoMap(request: SetAudioTempoMapRequest): void {
     this.#runtime.setTempoMap(request);
   }

@@ -101,6 +101,7 @@ export interface CreateAppOptions {
 }
 
 interface InitialPluginRegistrationOptions {
+  readonly availableManifestIds: readonly string[];
   readonly session: SessionStore;
   readonly pluginHost: IPluginHost;
   readonly pluginManifests: readonly unknown[];
@@ -138,13 +139,16 @@ function createCommandHistoryQuery(commandHistory: CommandHistory): ICommandHist
 }
 
 function registerInitialPluginManifests({
+  availableManifestIds,
   session,
   pluginHost,
   pluginManifests,
 }: InitialPluginRegistrationOptions): void {
   const registeredManifests = pluginManifests.map(manifest => pluginHost.registerManifest(manifest));
+  const availableManifestIdSet = new Set(availableManifestIds);
+  const availableManifests = registeredManifests.filter(manifest => availableManifestIdSet.has(manifest.id));
   session.getState().replacePluginCatalogState({
-    manifests: registeredManifests.map(createPluginCatalogEntry),
+    manifests: availableManifests.map(createPluginCatalogEntry),
     validationResults: registeredManifests.map(createValidManifestResult),
   });
 }
@@ -234,6 +238,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   const controllerProjectSync = options.projectSync ?? projectSyncDelegate;
   const pluginHost = new PluginHost();
   registerInitialPluginManifests({
+    availableManifestIds: audioEngine.listAvailablePluginManifestIds(),
     session,
     pluginHost,
     pluginManifests: options.initialPluginManifests ?? [gainPluginManifest, saturationPluginManifest],

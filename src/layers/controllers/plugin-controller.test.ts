@@ -96,10 +96,14 @@ describe('PluginController', () => {
     });
     expect(sessionStore.getState().tracks.get('track-1')?.pluginInstances).toEqual([
       {
+        availability: 'available',
         id: 'plugin-1',
         manifestSummary: { id: 'builtin.gain', name: 'Gain', version: '1.0.0' },
         isEnabled: true,
         parameters: [{ id: 'gain', value: 1 }],
+        presetId: null,
+        sidechainSourceTrackId: null,
+        stateBlob: null,
       },
     ]);
   });

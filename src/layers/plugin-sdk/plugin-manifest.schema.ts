@@ -67,7 +67,19 @@ const PluginManifestBaseSchema = z.strictObject({
   description: z.string().trim().min(1).max(MAX_DESCRIPTION_LENGTH).optional(),
   version: z.string().min(1).max(MAX_TEXT_LENGTH).regex(SEMANTIC_VERSION_PATTERN),
   type: z.literal('effect'),
+  category: memberIdSchema.optional(),
   parameters: z.array(PluginParameterManifestSchema).max(MAX_MANIFEST_ENTRIES),
+  presets: z
+    .array(
+      z.strictObject({
+        id: memberIdSchema,
+        name: displayNameSchema,
+        parameterValues: z.record(memberIdSchema, z.union([z.boolean(), z.number().finite(), memberIdSchema])),
+      })
+    )
+    .max(MAX_MANIFEST_ENTRIES)
+    .optional(),
+  supportsSidechain: z.boolean().optional(),
   dsp: z.strictObject({
     workletModulePath: z.string().min(1).max(MAX_TEXT_LENGTH).regex(WORKLET_MODULE_PATH_PATTERN),
     processorName: z.string().min(1).max(MAX_TEXT_LENGTH).regex(PROCESSOR_NAME_PATTERN),
@@ -226,6 +238,44 @@ function validateUiControls({ controls, parameters, context }: ControlRefinement
   });
 }
 
+function isPresetValueCompatible(parameter: PluginParameterManifest, value: boolean | number | string): boolean {
+  if (parameter.type === 'boolean') {
+    return typeof value === 'boolean';
+  }
+  if (parameter.type === 'enum') {
+    return typeof value === 'string' && parameter.options.some(option => option.value === value);
+  }
+  return typeof value === 'number' && value >= parameter.minValue && value <= parameter.maxValue;
+}
+
+function validatePresets(
+  presets: NonNullable<z.infer<typeof PluginManifestBaseSchema>['presets']>,
+  parameters: readonly PluginParameterManifest[],
+  context: z.RefinementCtx
+): void {
+  addDuplicateValueIssues({
+    entries: presets,
+    getValue: preset => preset.id,
+    pathPrefix: ['presets'],
+    label: 'preset ID',
+    context,
+  });
+  const parametersById = new Map(parameters.map(parameter => [parameter.id, parameter]));
+  presets.forEach((preset, presetIndex) => {
+    Object.entries(preset.parameterValues).forEach(([parameterId, value]) => {
+      const parameter = parametersById.get(parameterId);
+      if (parameter && isPresetValueCompatible(parameter, value)) {
+        return;
+      }
+      context.addIssue({
+        code: 'custom',
+        message: parameter ? `Preset value is invalid: ${parameterId}` : `Preset parameter is missing: ${parameterId}`,
+        path: ['presets', presetIndex, 'parameterValues', parameterId],
+      });
+    });
+  });
+}
+
 export const PluginManifestSchema = PluginManifestBaseSchema.superRefine((manifest, context) => {
   addDuplicateValueIssues({
     entries: manifest.parameters,
@@ -239,6 +289,7 @@ export const PluginManifestSchema = PluginManifestBaseSchema.superRefine((manife
     validateParameterDefinition({ parameter, parameterIndex, context });
   });
   validateUiControls({ controls: manifest.ui.controls, parameters: manifest.parameters, context });
+  validatePresets(manifest.presets ?? [], manifest.parameters, context);
 });
 
 export type PluginManifest = z.infer<typeof PluginManifestSchema>;
@@ -289,11 +340,17 @@ export function createPluginManifestSummary(manifest: PluginManifest) {
 export function createPluginCatalogEntry(manifest: PluginManifest) {
   return {
     ...createPluginManifestSummary(manifest),
+    category: manifest.category ?? 'other',
     parameters: manifest.parameters.map(parameter => {
       if (parameter.type !== 'enum') {
         return { ...parameter };
       }
       return { ...parameter, options: parameter.options.map(option => ({ ...option })) };
     }),
+    presets: (manifest.presets ?? []).map(preset => ({
+      ...preset,
+      parameterValues: { ...preset.parameterValues },
+    })),
+    supportsSidechain: manifest.supportsSidechain ?? false,
   };
 }

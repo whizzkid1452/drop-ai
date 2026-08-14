@@ -21,6 +21,7 @@ export const PROJECT_DOCUMENT_SCHEMA_VERSION_V11 = 11 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V12 = 12 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V13 = 13 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V14 = 14 as const;
+export const PROJECT_DOCUMENT_SCHEMA_VERSION_V15 = 15 as const;
 
 const MAX_NAME_LENGTH = 255;
 const MAX_MIME_TYPE_LENGTH = 255;
@@ -35,6 +36,7 @@ const MAX_MIDI_REGIONS = 4_096;
 const MAX_MIDI_NOTES = 100_000;
 const MAX_MIDI_CONTROL_LANES = 128;
 const MAX_MIDI_CONTROL_POINTS = 100_000;
+const MAX_PLUGIN_STATE_BLOB_LENGTH = 1_000_000;
 const nonBlankNameSchema = z.string().trim().min(1).max(MAX_NAME_LENGTH);
 const pluginTextSchema = z
   .string()
@@ -676,6 +678,21 @@ const ProjectDocumentV14BaseSchema = ProjectDocumentV13BaseSchema.omit({ schemaV
   tracks: z.array(ProjectTrackV14Schema),
 });
 
+export const ProjectPluginInstanceV15Schema = ProjectPluginInstanceSchema.safeExtend({
+  presetId: pluginTextSchema.nullable(),
+  sidechainSourceTrackId: z.uuid('Invalid sidechain source Track ID format').nullable(),
+  stateBlob: z.string().max(MAX_PLUGIN_STATE_BLOB_LENGTH).nullable(),
+});
+
+export const ProjectTrackV15Schema = ProjectTrackV14Schema.safeExtend({
+  pluginInstances: z.array(ProjectPluginInstanceV15Schema).max(MAX_PLUGIN_ENTRIES),
+});
+
+const ProjectDocumentV15BaseSchema = ProjectDocumentV14BaseSchema.omit({ schemaVersion: true, tracks: true }).extend({
+  schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V15),
+  tracks: z.array(ProjectTrackV15Schema),
+});
+
 interface IdentifiedDocumentPath {
   id: string;
   path: Array<string | number>;
@@ -1035,6 +1052,58 @@ export const ProjectDocumentV14Schema = ProjectDocumentV14BaseSchema.superRefine
   validateAutomationState(document, context);
   validateMidiState(document, context);
 });
+
+export const ProjectDocumentV15Schema = ProjectDocumentV15BaseSchema.superRefine((document, context) => {
+  const v14CompatibleDocument = document as unknown as z.infer<typeof ProjectDocumentV14BaseSchema>;
+  validateProjectRelations(v14CompatibleDocument, context);
+  validatePluginState(v14CompatibleDocument, context);
+  validateTimelineMap(v14CompatibleDocument, context);
+  addDuplicateIdIssues({
+    entries: document.timeline.markers.map((marker, index) => ({
+      id: marker.id,
+      path: ['timeline', 'markers', index, 'id'],
+    })),
+    label: 'Timeline marker',
+    context,
+  });
+  validateRegionProcessing(v14CompatibleDocument, context);
+  validateRoutingGraph(v14CompatibleDocument, context);
+  validateRecordingState(v14CompatibleDocument, context);
+  validateAutomationState(v14CompatibleDocument, context);
+  validateMidiState(v14CompatibleDocument, context);
+  validatePluginSidechains(document as unknown as PluginSidechainDocument, context);
+});
+
+interface PluginSidechainDocument {
+  readonly tracks: readonly {
+    readonly id: string;
+    readonly pluginInstances: readonly { readonly sidechainSourceTrackId: string | null }[];
+  }[];
+}
+
+function validatePluginSidechains(document: PluginSidechainDocument, context: z.RefinementCtx): void {
+  const trackIds = new Set(document.tracks.map(track => track.id));
+  document.tracks.forEach((track, trackIndex) => {
+    track.pluginInstances.forEach((instance, instanceIndex) => {
+      const sourceTrackId = instance.sidechainSourceTrackId;
+      if (sourceTrackId === null) {
+        return;
+      }
+      const path = ['tracks', trackIndex, 'pluginInstances', instanceIndex, 'sidechainSourceTrackId'];
+      if (sourceTrackId === track.id) {
+        context.addIssue({ code: 'custom', message: 'Plugin sidechain source must be a different Track', path });
+        return;
+      }
+      if (!trackIds.has(sourceTrackId)) {
+        context.addIssue({
+          code: 'custom',
+          message: `Plugin sidechain source Track is missing: ${sourceTrackId}`,
+          path,
+        });
+      }
+    });
+  });
+}
 
 function getMidiControlLanes(
   region: z.infer<typeof ProjectMidiRegionSchema> | z.infer<typeof ProjectMidiRegionV14Schema>
@@ -1692,6 +1761,18 @@ export type ProjectMidiRegionV14 = z.infer<typeof ProjectMidiRegionV14Schema>;
 export type ProjectMidiTrackV14 = z.infer<typeof ProjectMidiTrackV14Schema>;
 export type ProjectTrackV14 = z.infer<typeof ProjectTrackV14Schema>;
 export type ProjectDocumentV14 = z.infer<typeof ProjectDocumentV14Schema>;
+export interface ProjectPluginInstanceV15 extends ProjectPluginInstance {
+  readonly presetId: string | null;
+  readonly sidechainSourceTrackId: string | null;
+  readonly stateBlob: string | null;
+}
+export interface ProjectTrackV15 extends Omit<ProjectTrackV14, 'pluginInstances'> {
+  readonly pluginInstances: ProjectPluginInstanceV15[];
+}
+export interface ProjectDocumentV15 extends Omit<ProjectDocumentV14, 'schemaVersion' | 'tracks'> {
+  readonly schemaVersion: typeof PROJECT_DOCUMENT_SCHEMA_VERSION_V15;
+  readonly tracks: ProjectTrackV15[];
+}
 export type ProjectDocumentSnapshot =
   | ProjectDocument
   | ProjectDocumentV2
@@ -1706,4 +1787,5 @@ export type ProjectDocumentSnapshot =
   | ProjectDocumentV11
   | ProjectDocumentV12
   | ProjectDocumentV13
-  | ProjectDocumentV14;
+  | ProjectDocumentV14
+  | ProjectDocumentV15;
