@@ -8,7 +8,9 @@ import type { IMeterQuery } from '../../../queries/meter-query';
 import type { ILiveInputQuery } from '../../../queries/live-input-query';
 import type { LiveInputRuntimeState } from '../../../shared/types/live-input';
 import type { IProjectCatalogQuery } from '../../../queries/project-catalog-query';
+import type { IRecordingQuery } from '../../../queries/recording-query';
 import type { SessionState } from '../../../session/session';
+import type { RecordingRuntimeState } from '../../../shared/types/linear-recording';
 import type { AudioRuntimeCapabilities } from '../../../shared/utils/audio-runtime-capabilities';
 import type { IMidiInput } from '../../../midi-input/i-midi-input';
 import type { AuthSnapshot, IAuthClient } from '../../../auth/i-auth-client';
@@ -69,6 +71,17 @@ export function useLiveInputRuntimeState(): LiveInputRuntimeState {
   const liveInput = useLiveInputQuery();
   const subscribe = useCallback((listener: () => void) => liveInput.subscribe(listener), [liveInput]);
   const getSnapshot = useCallback(() => liveInput.readState(), [liveInput]);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+export function useRecordingQuery(): IRecordingQuery {
+  return useLayer().recording;
+}
+
+export function useRecordingRuntimeState(): RecordingRuntimeState {
+  const recording = useRecordingQuery();
+  const subscribe = useCallback((listener: () => void) => recording.subscribe(listener), [recording]);
+  const getSnapshot = useCallback(() => recording.readState(), [recording]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 

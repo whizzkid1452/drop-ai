@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { ensureFakeAudioInputFixture } from './fixtures/fake-audio-input';
 
-test('기능 지원 상태를 확인하고 미구현 기능을 구분한다', async ({ page }) => {
+test('기능별 runtime 지원 상태를 확인한다', async ({ page }) => {
   await page.goto('/');
   const fakeInputTrackCount = await page.evaluate(async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -22,7 +22,7 @@ test('기능 지원 상태를 확인하고 미구현 기능을 구분한다', as
   await expect(capabilityPanel.locator('[data-feature="timelinePlayback"]')).toContainText('사용 가능');
   await expect(capabilityPanel.locator('[data-feature="tempoLoopMetronome"]')).toContainText('사용 가능');
   await expect(capabilityPanel.locator('[data-feature="metering"]')).toContainText('사용 가능');
-  await expect(capabilityPanel.locator('[data-feature="linearRecording"]')).toContainText('미구현');
+  await expect(capabilityPanel.locator('[data-feature="linearRecording"]')).toContainText('사용 가능');
 });
 
 test('Loop 범위와 Metronome을 Transport에서 바로 제어한다', async ({ page }) => {
@@ -85,6 +85,38 @@ test('Track·Master·입력 meter와 Track monitoring을 즉시 확인한다', a
   await expect(monitoringButton).toHaveAttribute('aria-pressed', 'true');
 });
 
+test('단일 Track을 녹음하고 저장된 waveform Region을 다시 불러온다', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('input[type="file"]').setInputFiles(ensureFakeAudioInputFixture());
+  await page.waitForURL('**/daw');
+
+  const existingRegionCount = await page.getByRole('button', { name: 'Region 삭제' }).count();
+  const armButton = page.getByRole('button', { name: /녹음 arm$/ }).first();
+  await armButton.click();
+  await expect(armButton).toHaveAttribute('aria-pressed', 'true');
+
+  await page.getByRole('button', { name: '녹음 시작' }).click();
+  const stopButton = page.getByRole('button', { name: '녹음 중지' });
+  await expect(stopButton).toBeVisible();
+  await expect(page.getByRole('group', { name: '녹음' })).toContainText('녹음 중');
+  await page.waitForTimeout(750);
+  await stopButton.click();
+
+  await expect(page.getByRole('button', { name: '녹음 시작' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Region 삭제' })).toHaveCount(existingRegionCount + 1);
+
+  await page.reload();
+  const projectSelect = page.getByLabel('프로젝트');
+  await expect(projectSelect).toBeEnabled();
+  await page.getByRole('button', { name: '불러오기' }).click();
+  await expect(page.getByRole('button', { name: 'Region 삭제' })).toHaveCount(existingRegionCount + 1);
+  await expect(page.getByRole('button', { name: /녹음 arm$/ }).first()).toHaveAttribute('aria-pressed', 'false');
+
+  const restoredTrackMeter = page.getByRole('meter', { name: 'Track' });
+  await page.getByTitle(/^Play/).click();
+  await expect.poll(async () => Number(await restoredTrackMeter.getAttribute('data-peak-dbfs'))).toBeGreaterThan(-60);
+});
+
 test('오디오 입력 API가 없으면 원인 표시와 함께 관련 UI를 비활성화한다', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
@@ -99,6 +131,8 @@ test('오디오 입력 API가 없으면 원인 표시와 함께 관련 UI를 비
   await expect(liveInputCapability).toContainText('미디어 장치 API 없음');
   await expect(page.getByLabel('입력 장치', { exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: '입력 장치 연결' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '녹음 시작' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /녹음 arm$/ }).first()).toBeDisabled();
   await page.getByRole('button', { name: 'Open track inspector' }).click();
   await expect(page.getByRole('button', { name: 'CONNECT' })).toBeDisabled();
 });
