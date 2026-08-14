@@ -13,6 +13,10 @@ export const AudioCommandType = {
   STOP: 'STOP',
   SET_AUDIO_INPUT_DEVICE: 'SET_AUDIO_INPUT_DEVICE',
   SET_INPUT_MONITORING: 'SET_INPUT_MONITORING',
+  SET_TRACK_RECORD_ARM: 'SET_TRACK_RECORD_ARM',
+  START_RECORDING: 'START_RECORDING',
+  STOP_RECORDING: 'STOP_RECORDING',
+  CANCEL_RECORDING: 'CANCEL_RECORDING',
   ARM_LOOP_SLOT: 'ARM_LOOP_SLOT',
   ARM_LOOP_OVERDUB: 'ARM_LOOP_OVERDUB',
   CANCEL_LOOP_SLOT: 'CANCEL_LOOP_SLOT',
@@ -171,6 +175,22 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
     type: z.literal(AudioCommandType.SET_INPUT_MONITORING),
     trackId: z.uuid('Invalid Track ID format'),
     enabled: z.boolean(),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_TRACK_RECORD_ARM),
+    trackId: z.uuid('Invalid Track ID format'),
+    armed: z.boolean(),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.START_RECORDING),
+    countInBars: z.number().int().min(0).max(4),
+    prerollSeconds: z.number().finite().min(0).max(60),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.STOP_RECORDING),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.CANCEL_RECORDING),
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.ARM_LOOP_SLOT),

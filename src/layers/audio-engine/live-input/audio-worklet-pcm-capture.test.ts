@@ -30,6 +30,66 @@ afterEach(() => {
 });
 
 describe('AudioWorkletPcmCapture', () => {
+  it('start 이후 stop까지 받은 PCM chunk를 하나의 캡처로 반환한다', async () => {
+    vi.stubGlobal('AudioWorkletNode', AudioWorkletNodeStub);
+    const source = { connect: vi.fn(), disconnect: vi.fn() };
+    const silentGain = { connect: vi.fn(), disconnect: vi.fn(), gain: { value: 1 } };
+    const audioContext = {
+      audioWorklet: { addModule: vi.fn().mockResolvedValue(undefined) },
+      createGain: () => silentGain,
+      createMediaStreamSource: () => source,
+      destination: {},
+      sampleRate: 4,
+    } as unknown as AudioContext;
+    const onStarted = vi.fn();
+
+    const session = await new AudioWorkletPcmCapture().start({
+      audioContext,
+      onStarted,
+      startTimeSeconds: 2,
+      stream: {} as MediaStream,
+    });
+    const worklet = AudioWorkletNodeStub.instance;
+
+    expect(worklet?.port.postMessage).toHaveBeenCalledWith({ startFrame: 8, type: 'start' });
+    worklet?.emit({ type: 'started' });
+    worklet?.emit({ channels: [new Float32Array([1, 2])], type: 'chunk' });
+    worklet?.emit({ channels: [new Float32Array([3, 4])], type: 'chunk' });
+
+    const completion = session.stop();
+    expect(worklet?.port.postMessage).toHaveBeenLastCalledWith({ type: 'stop' });
+    worklet?.emit({ type: 'complete' });
+
+    await expect(completion).resolves.toEqual({ channels: [new Float32Array([1, 2, 3, 4])], sampleRate: 4 });
+    expect(onStarted).toHaveBeenCalledOnce();
+    expect(source.disconnect).toHaveBeenCalledOnce();
+  });
+
+  it('활성 캡처를 취소하면 Worklet 연결을 정리하고 stop을 거부한다', async () => {
+    vi.stubGlobal('AudioWorkletNode', AudioWorkletNodeStub);
+    const source = { connect: vi.fn(), disconnect: vi.fn() };
+    const silentGain = { connect: vi.fn(), disconnect: vi.fn(), gain: { value: 1 } };
+    const audioContext = {
+      audioWorklet: { addModule: vi.fn().mockResolvedValue(undefined) },
+      createGain: () => silentGain,
+      createMediaStreamSource: () => source,
+      destination: {},
+      sampleRate: 48_000,
+    } as unknown as AudioContext;
+    const session = await new AudioWorkletPcmCapture().start({
+      audioContext,
+      onStarted: vi.fn(),
+      startTimeSeconds: 2,
+      stream: {} as MediaStream,
+    });
+
+    session.cancel();
+
+    await expect(session.stop()).rejects.toThrow('PCM 캡처가 취소되었습니다.');
+    expect(AudioWorkletNodeStub.instance?.port.postMessage).toHaveBeenLastCalledWith({ type: 'cancel' });
+    expect(source.disconnect).toHaveBeenCalledOnce();
+  });
+
   it('절대 Context 프레임 구간을 Worklet에 예약하고 PCM을 순서대로 반환한다', async () => {
     vi.stubGlobal('AudioWorkletNode', AudioWorkletNodeStub);
     const source = { connect: vi.fn(), disconnect: vi.fn() };

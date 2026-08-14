@@ -418,6 +418,11 @@ import type {
 } from './loop-runtime/loop-runtime-contract';
 import { ToneGainPluginRuntimeFactory } from './plugins/tone-gain-plugin-runtime';
 import { ToneSaturationPluginRuntimeFactory } from './plugins/tone-saturation-plugin-runtime';
+import type {
+  ILinearRecordingAudioRuntime,
+  LinearRecordingCapture,
+  StartLinearRecordingRuntimeRequest,
+} from './recording-runtime/linear-recording-runtime';
 
 const ORIGINAL_REGION = {
   id: 'region-1',
@@ -500,6 +505,24 @@ class LoopRuntimeStub implements ILoopAudioRuntime {
 
   async trigger(_request: TriggerLoopRequest): Promise<void> {
     void _request;
+  }
+}
+
+class LinearRecordingRuntimeStub implements ILinearRecordingAudioRuntime {
+  readonly cancelRecording = vi.fn();
+  readonly startRequests: StartLinearRecordingRuntimeRequest[] = [];
+  capture: LinearRecordingCapture = {
+    blob: new Blob(['recording'], { type: 'audio/wav' }),
+    durationSeconds: 1.25,
+    sampleRate: 48_000,
+  };
+
+  async startRecording(request: StartLinearRecordingRuntimeRequest): Promise<void> {
+    this.startRequests.push(request);
+  }
+
+  async stopRecording(): Promise<LinearRecordingCapture> {
+    return this.capture;
   }
 }
 
@@ -635,6 +658,74 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     await expect(
       engine.startRecording({ recordStartTimeSeconds: 0, startDelaySeconds: 0, trackId: 'track-1' })
     ).rejects.toMatchObject({ code: AudioEngineErrorCode.UNSUPPORTED_FEATURE });
+  });
+
+  it('Track arm과 녹음 진행 상태를 구독자에게 알리고 RecordedTake를 반환한다', async () => {
+    const recordingRuntime = new LinearRecordingRuntimeStub();
+    const engine = new AudioEngine({ recordingRuntime });
+    const listener = vi.fn();
+    engine.subscribeRecordingState(listener);
+    await engine.addTrack('track-1');
+
+    engine.setTrackRecordArm({ armed: true, trackId: 'track-1' });
+    await engine.startRecording({ recordStartTimeSeconds: 3, startDelaySeconds: 1, trackId: 'track-1' });
+
+    expect(engine.getRecordingState()).toEqual({
+      armedTrackId: 'track-1',
+      phase: 'scheduled',
+      recordStartTimeSeconds: 3,
+    });
+    recordingRuntime.startRequests[0].onStarted();
+    expect(engine.getRecordingState().phase).toBe('recording');
+
+    await expect(engine.stopRecording()).resolves.toEqual({
+      ...recordingRuntime.capture,
+      startedAtSeconds: 3,
+      trackId: 'track-1',
+    });
+    expect(engine.getRecordingState()).toEqual({
+      armedTrackId: 'track-1',
+      phase: 'idle',
+      recordStartTimeSeconds: null,
+    });
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ phase: 'scheduled' }));
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ phase: 'recording' }));
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ phase: 'stopping' }));
+  });
+
+  it('armed Track을 제거하면 활성 캡처를 취소하고 disarm한다', async () => {
+    const recordingRuntime = new LinearRecordingRuntimeStub();
+    const engine = new AudioEngine({ recordingRuntime });
+    await engine.addTrack('track-1');
+    engine.setTrackRecordArm({ armed: true, trackId: 'track-1' });
+    await engine.startRecording({ recordStartTimeSeconds: 0, startDelaySeconds: 0, trackId: 'track-1' });
+
+    engine.removeTrack('track-1');
+
+    expect(recordingRuntime.cancelRecording).toHaveBeenCalledOnce();
+    expect(engine.getRecordingState()).toEqual({
+      armedTrackId: null,
+      phase: 'idle',
+      recordStartTimeSeconds: null,
+    });
+  });
+
+  it('새 프로젝트 그래프를 활성화하면 녹음을 취소하고 disarm한다', async () => {
+    const recordingRuntime = new LinearRecordingRuntimeStub();
+    const engine = new AudioEngine({ recordingRuntime });
+    await engine.addTrack('track-1');
+    engine.setTrackRecordArm({ armed: true, trackId: 'track-1' });
+    await engine.startRecording({ recordStartTimeSeconds: 0, startDelaySeconds: 0, trackId: 'track-1' });
+
+    const prepared = await engine.prepareProjectGraph({ tracks: [] });
+    prepared.activate();
+
+    expect(recordingRuntime.cancelRecording).toHaveBeenCalledOnce();
+    expect(engine.getRecordingState()).toEqual({
+      armedTrackId: null,
+      phase: 'idle',
+      recordStartTimeSeconds: null,
+    });
   });
 
   it('선택한 입력 장치와 monitoring Track을 runtime 상태로 유지한다', async () => {

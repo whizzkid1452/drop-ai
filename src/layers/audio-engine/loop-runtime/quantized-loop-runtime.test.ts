@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ILiveAudioInput, ILiveAudioInputConnection } from '../live-input/live-audio-input';
 import type {
+  ActivePcmCapture,
   CapturedPcm,
   ILivePcmCapture,
   SchedulePcmCaptureRequest,
   ScheduledPcmCapture,
+  StartPcmCaptureRequest,
 } from '../live-input/live-pcm-capture';
 import type { ILoopPlaybackAdapter, ILoopPlayer } from './loop-playback-adapter';
 import { QuantizedLoopRuntime } from './quantized-loop-runtime';
@@ -41,6 +43,9 @@ class LiveAudioInputStub implements ILiveAudioInput {
 }
 
 class LivePcmCaptureStub implements ILivePcmCapture {
+  readonly activeRequests: StartPcmCaptureRequest[] = [];
+  readonly activeSessions: ActivePcmCapture[] = [];
+  readonly activeCompletions: Array<Deferred<CapturedPcm>> = [];
   readonly requests: SchedulePcmCaptureRequest[] = [];
   readonly sessions: ScheduledPcmCapture[] = [];
   readonly completions: Array<Deferred<CapturedPcm>> = [];
@@ -51,6 +56,15 @@ class LivePcmCaptureStub implements ILivePcmCapture {
     this.requests.push(request);
     this.sessions.push(session);
     this.completions.push(completion);
+    return session;
+  }
+
+  async start(request: StartPcmCaptureRequest): Promise<ActivePcmCapture> {
+    const completion = createDeferred<CapturedPcm>();
+    const session = { cancel: vi.fn(), stop: vi.fn(() => completion.promise) };
+    this.activeRequests.push(request);
+    this.activeSessions.push(session);
+    this.activeCompletions.push(completion);
     return session;
   }
 }
@@ -114,6 +128,48 @@ const destination = {} as AudioNode;
 const address = { slotId: 'slot-1', trackId: 'track-1' };
 
 describe('QuantizedLoopRuntime', () => {
+  it('지정한 지연 뒤 선형 PCM 캡처를 시작하고 stop 결과를 WAV로 반환한다', async () => {
+    const { encodeAudioBuffer, pcmCapture, runtime } = createRuntime();
+    const onStarted = vi.fn();
+
+    await runtime.startRecording({ onStarted, startDelaySeconds: 1.5 });
+
+    expect(pcmCapture.activeRequests[0]).toMatchObject({ startTimeSeconds: 21.5 });
+    pcmCapture.activeRequests[0].onStarted();
+    expect(onStarted).toHaveBeenCalledOnce();
+
+    const stopPromise = runtime.stopRecording();
+    expect(pcmCapture.activeSessions[0].stop).toHaveBeenCalledOnce();
+    pcmCapture.activeCompletions[0].resolve({ channels: [new Float32Array(24_000)], sampleRate: 48_000 });
+
+    await expect(stopPromise).resolves.toEqual({
+      blob: expect.any(Blob),
+      durationSeconds: 0.5,
+      sampleRate: 48_000,
+    });
+    expect(encodeAudioBuffer).toHaveBeenCalledOnce();
+  });
+
+  it('활성 선형 캡처를 취소하고 같은 runtime에서 다시 시작할 수 있다', async () => {
+    const { pcmCapture, runtime } = createRuntime();
+    await runtime.startRecording({ onStarted: vi.fn(), startDelaySeconds: 0 });
+
+    runtime.cancelRecording();
+    await runtime.startRecording({ onStarted: vi.fn(), startDelaySeconds: 0 });
+
+    expect(pcmCapture.activeSessions[0].cancel).toHaveBeenCalledOnce();
+    expect(pcmCapture.activeRequests).toHaveLength(2);
+  });
+
+  it('동시에 두 선형 캡처를 시작하지 않는다', async () => {
+    const { runtime } = createRuntime();
+    await runtime.startRecording({ onStarted: vi.fn(), startDelaySeconds: 0 });
+
+    await expect(runtime.startRecording({ onStarted: vi.fn(), startDelaySeconds: 0 })).rejects.toThrow(
+      '이미 선형 녹음 캡처가 진행 중입니다.'
+    );
+  });
+
   it('다음 마디 경계부터 지정한 길이만큼 녹음하고 완료 버퍼를 반복 재생한다', async () => {
     const { pcmCapture, playback, runtime } = createRuntime();
     const events = vi.fn();

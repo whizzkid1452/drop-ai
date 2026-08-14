@@ -72,7 +72,13 @@ export class AppController {
     this.timeline = new TimelineController(sessionStore);
     this.meter = new MeterController(audioEngine);
     this.liveInput = new LiveInputController(audioEngine);
-    this.recording = new RecordingController(audioEngine);
+    this.recording = new RecordingController({
+      sessionStore,
+      audioEngine,
+      audioSourceRegistry,
+      audioSourceRepository,
+      regionController: this.region,
+    });
     this.loop = new LoopController({
       sessionStore,
       audioEngine,

@@ -15,6 +15,20 @@ class LoopPcmCaptureProcessor extends AudioWorkletProcessor {
         this.startFrame = null;
         return;
       }
+      if (event.data.type === 'stop') {
+        if (this.startFrame !== null) {
+          this.port.postMessage({ type: 'complete' });
+        }
+        this.endFrame = null;
+        this.startFrame = null;
+        return;
+      }
+      if (event.data.type === 'start') {
+        this.endFrame = Number.POSITIVE_INFINITY;
+        this.hasStarted = false;
+        this.startFrame = event.data.startFrame;
+        return;
+      }
       if (event.data.type === 'schedule') {
         this.endFrame = event.data.endFrame;
         this.hasStarted = false;
