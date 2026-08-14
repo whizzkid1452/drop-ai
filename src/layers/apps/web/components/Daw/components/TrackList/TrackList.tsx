@@ -171,6 +171,26 @@ export function TrackList({
     [commandExecutor]
   );
 
+  const handleFadeChange = useCallback(
+    async (trackId: string, regionId: string, edge: 'in' | 'out', durationSeconds: number) => {
+      const region = tracks.get(trackId)?.regions.find(candidate => candidate.id === regionId);
+      if (!region) {
+        return;
+      }
+      const fade = {
+        curve: edge === 'in' ? region.fadeIn.curve : region.fadeOut.curve,
+        durationSeconds,
+      };
+      await commandExecutor.execute({
+        type: AudioCommandType.SET_REGION_PROCESSING,
+        ...(edge === 'in' ? { fadeIn: fade } : { fadeOut: fade }),
+        regionId,
+        trackId,
+      });
+    },
+    [commandExecutor, tracks]
+  );
+
   const handleRangeSelect = useCallback(
     async (trackId: string, startTimeSeconds: number, endTimeSeconds: number) => {
       try {
@@ -211,6 +231,9 @@ export function TrackList({
             coordinateMapper={coordinateMapper}
             gridSettings={gridSettings}
             onReady={handleReady}
+            onFadeChange={(regionId, edge, durationSeconds) =>
+              handleFadeChange(track.id, regionId, edge, durationSeconds)
+            }
             onMuteChange={muted => handleMuteChange(track.id, muted)}
             onSelect={() => onTrackSelect(track.id)}
             onSoloChange={soloed => handleSoloChange(track.id, soloed)}

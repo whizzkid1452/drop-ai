@@ -31,6 +31,13 @@ interface RegionTrimPreview {
   startTimeSeconds: number;
 }
 
+interface RegionFadeSession {
+  edge: 'in' | 'out';
+  initialDurationSeconds: number;
+  initialPointerX: number;
+  pointerId: number;
+}
+
 interface WaveformRenderSelection {
   objectUrl: string | null;
   renderData: WaveformRenderData | null;
@@ -41,6 +48,7 @@ interface RegionComponentProps {
   coordinateMapper: TimelineCoordinateMapper;
   gridSettings: TimelineGridSettings;
   onReady?: (ws: WaveSurfer) => void;
+  onFadeChange?: (edge: 'in' | 'out', durationSeconds: number) => Promise<void>;
   onMove?: (newStartTime: number) => Promise<void>;
   onRemove?: () => void;
   onSelect?: (additive: boolean) => void;
@@ -63,6 +71,7 @@ export const RegionComponent = ({
   coordinateMapper,
   gridSettings,
   onReady: onReadyProp,
+  onFadeChange,
   onMove,
   onRemove,
   onSelect,
@@ -72,13 +81,19 @@ export const RegionComponent = ({
 }: RegionComponentProps) => {
   const audioSourceResolver = useAudioSourceResolver();
   const dragSession = useRef<RegionDragSession | null>(null);
+  const fadeSession = useRef<RegionFadeSession | null>(null);
   const trimSession = useRef<RegionTrimSession | null>(null);
   const waveSurferRef = useRef<WaveSurfer | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [fadePreview, setFadePreview] = useState<{ durationSeconds: number; edge: 'in' | 'out' } | null>(null);
   const [previewStartTime, setPreviewStartTime] = useState<number | null>(null);
   const [trimPreview, setTrimPreview] = useState<RegionTrimPreview | null>(null);
   const displayedStartTime = trimPreview?.startTimeSeconds ?? previewStartTime ?? region.startTime;
   const displayedDuration = trimPreview?.durationSeconds ?? region.duration;
+  const displayedFadeInDuration =
+    fadePreview?.edge === 'in' ? fadePreview.durationSeconds : region.fadeIn.durationSeconds;
+  const displayedFadeOutDuration =
+    fadePreview?.edge === 'out' ? fadePreview.durationSeconds : region.fadeOut.durationSeconds;
   const left = coordinateMapper.secondsToPixels(displayedStartTime);
   const width = coordinateMapper.durationToPixels({
     startSeconds: displayedStartTime,
@@ -229,6 +244,74 @@ export const RegionComponent = ({
     setTrimPreview(null);
   };
 
+  const calculateFadeDuration = (pointerX: number, session: RegionFadeSession): number => {
+    const regionEndTime = region.startTime + region.duration;
+    const initialHandleTime =
+      session.edge === 'in'
+        ? region.startTime + session.initialDurationSeconds
+        : regionEndTime - session.initialDurationSeconds;
+    const handlePixels = Math.max(
+      0,
+      coordinateMapper.secondsToPixels(initialHandleTime) + pointerX - session.initialPointerX
+    );
+    const handleTime = coordinateMapper.pixelsToSeconds(handlePixels);
+    const rawDuration = session.edge === 'in' ? handleTime - region.startTime : regionEndTime - handleTime;
+    return Math.min(region.duration, Math.max(0, rawDuration));
+  };
+
+  const handleFadePointerDown = (edge: RegionFadeSession['edge'], event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!event.isPrimary || event.button !== 0 || !onFadeChange || fadeSession.current) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    onSelect?.(false);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const initialDurationSeconds = edge === 'in' ? region.fadeIn.durationSeconds : region.fadeOut.durationSeconds;
+    fadeSession.current = { edge, initialDurationSeconds, initialPointerX: event.clientX, pointerId: event.pointerId };
+    setFadePreview({ durationSeconds: initialDurationSeconds, edge });
+  };
+
+  const handleFadePointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const session = fadeSession.current;
+    if (!session || session.pointerId !== event.pointerId) {
+      return;
+    }
+    event.stopPropagation();
+    setFadePreview({ durationSeconds: calculateFadeDuration(event.clientX, session), edge: session.edge });
+  };
+
+  const handleFadePointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const session = fadeSession.current;
+    if (!session || session.pointerId !== event.pointerId || !onFadeChange) {
+      return;
+    }
+    event.stopPropagation();
+    const durationSeconds = calculateFadeDuration(event.clientX, session);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    fadeSession.current = null;
+    setFadePreview({ durationSeconds, edge: session.edge });
+    void onFadeChange(session.edge, durationSeconds).then(
+      () => setFadePreview(null),
+      () => setFadePreview(null)
+    );
+  };
+
+  const handleFadePointerCancel = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const session = fadeSession.current;
+    if (!session || session.pointerId !== event.pointerId) {
+      return;
+    }
+    event.stopPropagation();
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    fadeSession.current = null;
+    setFadePreview(null);
+  };
+
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if ((event.key === 'Enter' || event.key === ' ') && onSelect) {
       event.preventDefault();
@@ -340,6 +423,64 @@ export const RegionComponent = ({
       onPointerCancel={handlePointerCancel}
       onKeyDown={handleKeyDown}
     >
+      {displayedFadeInDuration > 0 ? (
+        <div
+          className={`${styles.fadeRamp} ${styles.fadeInRamp}`}
+          style={{
+            width: coordinateMapper.durationToPixels({
+              durationSeconds: displayedFadeInDuration,
+              startSeconds: region.startTime,
+            }),
+          }}
+        />
+      ) : null}
+      {displayedFadeOutDuration > 0 ? (
+        <div
+          className={`${styles.fadeRamp} ${styles.fadeOutRamp}`}
+          style={{
+            width: coordinateMapper.durationToPixels({
+              durationSeconds: displayedFadeOutDuration,
+              startSeconds: region.startTime + region.duration - displayedFadeOutDuration,
+            }),
+          }}
+        />
+      ) : null}
+      {selected && onFadeChange ? (
+        <>
+          <button
+            type="button"
+            className={`${styles.fadeHandle} ${styles.fadeInHandle}`}
+            aria-label="Region fade in"
+            style={{
+              left:
+                coordinateMapper.durationToPixels({
+                  durationSeconds: displayedFadeInDuration,
+                  startSeconds: region.startTime,
+                }) - 5,
+            }}
+            onPointerCancel={handleFadePointerCancel}
+            onPointerDown={event => handleFadePointerDown('in', event)}
+            onPointerMove={handleFadePointerMove}
+            onPointerUp={handleFadePointerUp}
+          />
+          <button
+            type="button"
+            className={`${styles.fadeHandle} ${styles.fadeOutHandle}`}
+            aria-label="Region fade out"
+            style={{
+              right:
+                coordinateMapper.durationToPixels({
+                  durationSeconds: displayedFadeOutDuration,
+                  startSeconds: region.startTime + region.duration - displayedFadeOutDuration,
+                }) - 5,
+            }}
+            onPointerCancel={handleFadePointerCancel}
+            onPointerDown={event => handleFadePointerDown('out', event)}
+            onPointerMove={handleFadePointerMove}
+            onPointerUp={handleFadePointerUp}
+          />
+        </>
+      ) : null}
       {onTrim ? (
         <>
           <button

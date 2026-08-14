@@ -111,6 +111,7 @@ function createDeferred<T>(): Deferred<T> {
 function renderTrack(
   options: {
     isSelected?: boolean;
+    onFadeChange?: (regionId: string, edge: 'in' | 'out', durationSeconds: number) => Promise<void>;
     onMuteChange?: (muted: boolean) => Promise<TrackToggleResult>;
     onSelect?: () => void;
     onSoloChange?: (soloed: boolean) => Promise<TrackToggleResult>;
@@ -139,6 +140,7 @@ function renderTrack(
         gridSettings,
         waveformRenderCache,
         onReady: vi.fn(),
+        onFadeChange: options.onFadeChange ?? vi.fn().mockResolvedValue(undefined),
         onMuteChange: options.onMuteChange ?? vi.fn().mockResolvedValue('updated'),
         onSelect: options.onSelect ?? vi.fn(),
         onSoloChange: options.onSoloChange ?? vi.fn().mockResolvedValue('updated'),
@@ -245,14 +247,17 @@ describe('TrackComponent 제어', () => {
       status: [],
     };
     const onRegionSelect = vi.fn();
+    const onFadeChange = vi.fn().mockResolvedValue(undefined);
     const onTrimRegion = vi.fn().mockResolvedValue(undefined);
     renderTrack({
+      onFadeChange,
       onRegionSelect,
       onTrimRegion,
       selectedRegionIds: new Set([selectedRegion.id]),
       track: { ...track, regions: [selectedRegion] },
     });
     const regionProps = renderRegionComponent.mock.calls[0]?.[0] as {
+      onFadeChange: (edge: 'in' | 'out', durationSeconds: number) => Promise<void>;
       onSelect: (additive: boolean) => void;
       onTrim: (request: {
         durationSeconds: number;
@@ -264,10 +269,12 @@ describe('TrackComponent 제어', () => {
     const trimRequest = { durationSeconds: 1, sourceStartTimeSeconds: 0.5, startTimeSeconds: 1.5 };
 
     regionProps.onSelect(true);
+    await regionProps.onFadeChange('in', 0.25);
     await regionProps.onTrim(trimRequest);
 
     expect(regionProps.selected).toBe(true);
     expect(onRegionSelect).toHaveBeenCalledWith(selectedRegion.id, true);
+    expect(onFadeChange).toHaveBeenCalledWith(selectedRegion.id, 'in', 0.25);
     expect(onTrimRegion).toHaveBeenCalledWith(selectedRegion.id, trimRequest);
   });
 

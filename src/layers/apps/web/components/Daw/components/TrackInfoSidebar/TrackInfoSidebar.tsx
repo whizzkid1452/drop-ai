@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useErrorBoundary } from 'react-error-boundary';
-import { useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
+import { useCommandExecutor, useEditorRuntimeState, useSession } from '@/layers/apps/web/context/layer-hooks';
 import { executeConfirmedTrackRemoval } from '@/layers/apps/web/hooks/track-action-commands';
 import { resolveSplitRegionId } from '@/layers/apps/web/hooks/resolve-split-region-id';
 import { useTrackActions } from '@/layers/apps/web/hooks/useTrackActions';
@@ -11,6 +11,7 @@ import { TrackPluginControls } from '../Track/components/TrackPluginControls';
 import { TrackRegionImportControl } from '../Track/components/TrackRegionImportControl';
 import { TrackVolumeController } from '../Track/components/TrackVolumeController';
 import * as styles from './TrackInfoSidebar.css.ts';
+import { RegionProcessingControls } from './RegionProcessingControls';
 
 interface TrackInfoSidebarProps {
   selectedTrackId: string | null;
@@ -19,6 +20,7 @@ interface TrackInfoSidebarProps {
 export function TrackInfoSidebar({ selectedTrackId }: TrackInfoSidebarProps) {
   const tracks = useSession(state => state.tracks);
   const currentTime = useSession(state => state.currentTime);
+  const editorRuntime = useEditorRuntimeState();
   const selectedTrack = selectedTrackId === null ? undefined : tracks.get(selectedTrackId);
   const commandExecutor = useCommandExecutor();
   const { splitRegion } = useTrackActions();
@@ -36,6 +38,12 @@ export function TrackInfoSidebar({ selectedTrackId }: TrackInfoSidebarProps) {
   }
 
   const splitRegionId = resolveSplitRegionId({ regions: selectedTrack.regions, splitTime: currentTime });
+  const selectedRegionReference =
+    editorRuntime.selection.regions.length === 1 ? editorRuntime.selection.regions[0] : undefined;
+  const selectedRegion =
+    selectedRegionReference?.trackId === selectedTrack.id
+      ? selectedTrack.regions.find(region => region.id === selectedRegionReference.regionId)
+      : undefined;
 
   const handleVolumeChange = async (volume: number) => {
     try {
@@ -102,6 +110,14 @@ export function TrackInfoSidebar({ selectedTrackId }: TrackInfoSidebarProps) {
         <span className={styles.trackName}>{selectedTrack.name}</span>
       </div>
       <div className={styles.contentArea}>
+        {selectedRegion ? (
+          <section className={styles.section} aria-labelledby="region-processing-title">
+            <h2 id="region-processing-title" className={styles.sectionTitle}>
+              REGION
+            </h2>
+            <RegionProcessingControls region={selectedRegion} trackId={selectedTrack.id} />
+          </section>
+        ) : null}
         <section className={styles.section} aria-labelledby="track-mix-title">
           <h2 id="track-mix-title" className={styles.sectionTitle}>
             MIX

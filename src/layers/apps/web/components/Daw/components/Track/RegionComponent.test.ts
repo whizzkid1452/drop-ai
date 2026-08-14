@@ -36,6 +36,12 @@ vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
 
 vi.mock('./RegionComponent.css.ts', () => ({
   endTrimHandle: 'endTrimHandle',
+  fadeHandle: 'fadeHandle',
+  fadeInHandle: 'fadeInHandle',
+  fadeInRamp: 'fadeInRamp',
+  fadeOutHandle: 'fadeOutHandle',
+  fadeOutRamp: 'fadeOutRamp',
+  fadeRamp: 'fadeRamp',
   regionContainer: 'regionContainer',
   removeButton: 'removeButton',
   selectedRegion: 'selectedRegion',
@@ -51,6 +57,7 @@ interface Deferred<T> {
 
 interface RenderRegionOptions {
   gridSettings?: TimelineGridSettings;
+  onFadeChange?: (edge: 'in' | 'out', durationSeconds: number) => Promise<void>;
   onMove: (newStartTime: number) => Promise<void>;
   onRemove?: () => void;
   onSelect?: (additive: boolean) => void;
@@ -110,6 +117,7 @@ function createDeferred<T>(): Deferred<T> {
 
 function renderRegion({
   gridSettings: selectedGridSettings = gridSettings,
+  onFadeChange,
   onMove,
   onRemove,
   onSelect,
@@ -129,6 +137,7 @@ function renderRegion({
         region,
         coordinateMapper,
         gridSettings: selectedGridSettings,
+        onFadeChange,
         onMove,
         onRemove,
         onSelect,
@@ -559,5 +568,28 @@ describe('RegionComponent 선택과 trim', () => {
       sourceStartTimeSeconds: 0,
       startTimeSeconds: 2,
     });
+  });
+
+  it('Fade handle 드래그 결과를 초 단위 Region Fade 변경으로 전달한다', async () => {
+    const onFadeChange = vi.fn().mockResolvedValue(undefined);
+    const { host } = renderRegion({
+      onFadeChange,
+      onMove: vi.fn().mockResolvedValue(undefined),
+      selected: true,
+    });
+    const fadeInHandle = host.querySelector('[aria-label="Region fade in"]');
+    const fadeOutHandle = host.querySelector('[aria-label="Region fade out"]');
+    if (!fadeInHandle || !fadeOutHandle) {
+      throw new Error('Region Fade handle을 찾을 수 없습니다.');
+    }
+
+    dispatchPointer(fadeInHandle, 'pointerdown', { clientX: 100, pointerId: 8 });
+    dispatchPointer(fadeInHandle, 'pointerup', { clientX: 150, pointerId: 8 });
+    dispatchPointer(fadeOutHandle, 'pointerdown', { clientX: 100, pointerId: 9 });
+    dispatchPointer(fadeOutHandle, 'pointerup', { clientX: 50, pointerId: 9 });
+    await act(async () => Promise.resolve());
+
+    expect(onFadeChange).toHaveBeenNthCalledWith(1, 'in', 0.5);
+    expect(onFadeChange).toHaveBeenNthCalledWith(2, 'out', 0.5);
   });
 });
