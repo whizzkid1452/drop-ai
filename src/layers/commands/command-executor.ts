@@ -284,11 +284,11 @@ export class CommandExecutor {
         return;
 
       case AudioCommandType.TRIGGER_LOOP_SLOT:
-        await this.controller.loop.trigger(validatedCommand);
+        await this.controller.cue.trigger(validatedCommand);
         return;
 
       case AudioCommandType.STOP_LOOP_SLOT:
-        this.controller.loop.stop(validatedCommand);
+        this.controller.cue.stop(validatedCommand);
         return;
 
       case AudioCommandType.CLEAR_LOOP_SLOT:
@@ -296,7 +296,35 @@ export class CommandExecutor {
         return;
 
       case AudioCommandType.STOP_ALL_LOOPS:
-        this.controller.loop.stopAll();
+        this.controller.cue.stopAll();
+        return;
+
+      case AudioCommandType.SET_CLIP_SLOT_SETTINGS:
+        this.controller.cue.configureClip(validatedCommand);
+        return;
+
+      case AudioCommandType.START_CUE_RECORDING:
+        this.controller.cue.startRecording();
+        return;
+
+      case AudioCommandType.STOP_CUE_RECORDING:
+        this.controller.cue.stopRecording(validatedCommand.name);
+        return;
+
+      case AudioCommandType.CANCEL_CUE_RECORDING:
+        this.controller.cue.dismissRecording();
+        return;
+
+      case AudioCommandType.SET_CUE_STATE:
+        this.controller.cue.setCueState(validatedCommand.cue);
+        return;
+
+      case AudioCommandType.DELETE_CUE_PERFORMANCE:
+        this.controller.cue.deletePerformance(validatedCommand.performanceId);
+        return;
+
+      case AudioCommandType.CONVERT_CUE_TO_ARRANGEMENT:
+        await this.controller.cue.convertToArrangement(validatedCommand.performanceId);
         return;
 
       case AudioCommandType.SET_TEMPO:
@@ -867,6 +895,11 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.APPLY_PROJECT_TEMPLATE:
     case AudioCommandType.DELETE_PROJECT_TEMPLATE:
     case AudioCommandType.IMPORT_PROJECT_ARCHIVE:
+    case AudioCommandType.SET_CLIP_SLOT_SETTINGS:
+    case AudioCommandType.STOP_CUE_RECORDING:
+    case AudioCommandType.SET_CUE_STATE:
+    case AudioCommandType.DELETE_CUE_PERFORMANCE:
+    case AudioCommandType.CONVERT_CUE_TO_ARRANGEMENT:
     case AudioCommandType.STOP_RECORDING:
       return true;
 
@@ -884,6 +917,8 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.TRIGGER_LOOP_SLOT:
     case AudioCommandType.STOP_LOOP_SLOT:
     case AudioCommandType.STOP_ALL_LOOPS:
+    case AudioCommandType.START_CUE_RECORDING:
+    case AudioCommandType.CANCEL_CUE_RECORDING:
     case AudioCommandType.SET_CURRENT_TIME:
     case AudioCommandType.SET_EDITOR_SELECTION:
     case AudioCommandType.COPY_SELECTED_REGIONS:

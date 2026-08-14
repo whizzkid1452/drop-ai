@@ -415,7 +415,13 @@ export class ProjectController {
               details: { loopSlotId: loopSlot.id, sourceId },
             });
           }
-          return { slotId: loopSlot.id, url: source.objectUrl };
+          return {
+            gain: loopSlot.gain,
+            slotId: loopSlot.id,
+            sourceEndTimeSeconds: loopSlot.sourceEndTimeSeconds,
+            sourceStartTimeSeconds: loopSlot.sourceStartTimeSeconds,
+            url: source.objectUrl,
+          };
         });
       }),
       regions: track.regions.map(region => {

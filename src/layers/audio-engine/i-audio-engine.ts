@@ -27,6 +27,7 @@ import type {
 } from '../shared/types/linear-recording';
 import type {
   ArmLoopRequest,
+  ConfigureLoopRequest,
   LoadLoopRequest,
   LoopRuntimeListener,
   LoopSlotAddress,
@@ -37,6 +38,7 @@ import type {
 
 export type {
   ArmLoopRequest,
+  ConfigureLoopRequest,
   LoadLoopRequest,
   LoopRuntimeEvent,
   LoopRuntimeListener,
@@ -203,7 +205,10 @@ export interface AudioProjectGraphPluginInstance {
 }
 
 export interface AudioProjectGraphLoop {
+  readonly gain?: number;
   readonly slotId: string;
+  readonly sourceEndTimeSeconds?: number | null;
+  readonly sourceStartTimeSeconds?: number;
   readonly url: string;
 }
 
@@ -266,6 +271,7 @@ export interface IAudioEngine {
   triggerLoop(request: TriggerLoopRequest): Promise<void>;
   stopLoop(request: TriggerLoopRequest): void;
   clearLoop(address: LoopSlotAddress): void;
+  configureLoop(request: ConfigureLoopRequest): void;
   stopAllLoops(request: StopAllLoopsRequest): void;
   loadLoop(request: LoadLoopRequest): Promise<void>;
   subscribeLoopEvents(listener: LoopRuntimeListener): () => void;

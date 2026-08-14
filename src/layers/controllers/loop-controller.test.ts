@@ -94,6 +94,42 @@ describe('LoopController', () => {
     expect(readLoopSlot(session)).toMatchObject({ lengthBars: 2, quantizationBars: 1, state: 'armed' });
   });
 
+  it('Clip 설정을 runtime과 Session에 함께 반영한다', () => {
+    audioEngine.emitLoopEvent({
+      blob: new Blob(['loop'], { type: 'audio/wav' }),
+      captureMode: 'initial',
+      durationSeconds: 2,
+      recordedTempoBpm: 120,
+      slotId: SLOT_ID,
+      trackId: TRACK_ID,
+      type: 'RECORDING_COMPLETED',
+    });
+    const configureLoop = vi.spyOn(audioEngine, 'configureLoop');
+
+    controller.configureClip({
+      followAction: { afterBars: 2, type: 'next' },
+      gain: 0.5,
+      launchMode: 'toggle',
+      name: 'Verse',
+      quantizationBars: 2,
+      slotId: SLOT_ID,
+      sourceEndTimeSeconds: 1.5,
+      sourceStartTimeSeconds: 0.25,
+      trackId: TRACK_ID,
+    });
+
+    expect(configureLoop).toHaveBeenCalledWith(
+      expect.objectContaining({ gain: 0.5, sourceEndTimeSeconds: 1.5, sourceStartTimeSeconds: 0.25 })
+    );
+    expect(readLoopSlot(session)).toMatchObject({
+      followAction: { afterBars: 2, type: 'next' },
+      gain: 0.5,
+      launchMode: 'toggle',
+      name: 'Verse',
+      quantizationBars: 2,
+    });
+  });
+
   it('녹음 완료 Blob을 Source에 연결한 뒤 슬롯에 sourceId를 반영한다', () => {
     const blob = new Blob(['loop'], { type: 'audio/wav' });
 

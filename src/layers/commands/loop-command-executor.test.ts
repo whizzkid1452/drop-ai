@@ -21,6 +21,53 @@ function createAudioSourceRepository(): IAudioSourceRepository {
 }
 
 describe('루프 명령 실행 경로', () => {
+  it('Clip 설정과 Cue 기록을 명령으로 저장하고 Undo·Redo한다', async () => {
+    const audioEngine = new MockAudioEngine();
+    const app = createApp({
+      audioEngine,
+      audioSourceRepository: createAudioSourceRepository(),
+      projectRepository: new InMemoryProjectRepository(),
+    });
+    await app.commandExecutor.execute({ trackId: TRACK_ID, type: AudioCommandType.ADD_TRACK });
+    const slotId = app.session.getState().tracks.get(TRACK_ID)?.loopSlots?.[0]?.id ?? '';
+    audioEngine.emitLoopEvent({
+      blob: new Blob(['loop'], { type: 'audio/wav' }),
+      captureMode: 'initial',
+      durationSeconds: 2,
+      recordedTempoBpm: 120,
+      slotId,
+      trackId: TRACK_ID,
+      type: 'RECORDING_COMPLETED',
+    });
+    await app.commandExecutor.execute({
+      followAction: { afterBars: 1, type: 'none' },
+      gain: 0.5,
+      launchMode: 'toggle',
+      name: 'Verse',
+      quantizationBars: 1,
+      slotId,
+      sourceEndTimeSeconds: 2,
+      sourceStartTimeSeconds: 0,
+      trackId: TRACK_ID,
+      type: AudioCommandType.SET_CLIP_SLOT_SETTINGS,
+    });
+    await app.commandExecutor.execute({ type: AudioCommandType.START_CUE_RECORDING });
+    await app.commandExecutor.execute({ slotId, trackId: TRACK_ID, type: AudioCommandType.TRIGGER_LOOP_SLOT });
+    await app.commandExecutor.execute({ name: '첫 연주', type: AudioCommandType.STOP_CUE_RECORDING });
+
+    expect(app.session.getState().cue.performances[0]).toMatchObject({ name: '첫 연주' });
+    expect(app.session.getState().tracks.get(TRACK_ID)?.loopSlots?.[0]).toMatchObject({
+      gain: 0.5,
+      launchMode: 'toggle',
+      name: 'Verse',
+    });
+
+    await app.commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(app.session.getState().cue.performances).toEqual([]);
+    await app.commandExecutor.execute({ type: AudioCommandType.REDO });
+    expect(app.session.getState().cue.performances).toHaveLength(1);
+  });
+
   it('AudioCommand를 LoopController로 전달해 슬롯을 녹음 대기 상태로 바꾼다', async () => {
     const app = createApp({
       audioEngine: new MockAudioEngine(),

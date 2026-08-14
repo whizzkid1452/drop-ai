@@ -16,6 +16,13 @@ class ToneLoopPlayer implements ILoopPlayer {
   constructor(request: CreateLoopPlayerRequest) {
     this.#player = new Tone.Player({ loop: true, url: request.audioBuffer });
     this.#player.connect(request.destination);
+    this.configure(request);
+  }
+
+  configure(request: Omit<CreateLoopPlayerRequest, 'audioBuffer' | 'destination'>): void {
+    this.#player.volume.value = request.gain === 0 ? -Infinity : Tone.gainToDb(request.gain);
+    this.#player.loopStart = request.sourceStartTimeSeconds;
+    this.#player.loopEnd = request.sourceEndTimeSeconds ?? this.#player.buffer.duration;
   }
 
   dispose(): void {

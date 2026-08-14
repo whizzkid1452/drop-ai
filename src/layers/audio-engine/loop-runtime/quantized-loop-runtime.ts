@@ -12,6 +12,7 @@ import type {
 import type { ILoopPlaybackAdapter, ILoopPlayer } from './loop-playback-adapter';
 import type {
   ArmLoopRuntimeRequest,
+  ConfigureLoopRequest,
   ILoopAudioRuntime,
   IPreparedLoopRuntimeReplacement,
   IRetiredLoopRuntime,
@@ -274,6 +275,13 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime, ILinearRecording
       });
   }
 
+  configure(request: ConfigureLoopRequest): void {
+    const entry = this.#getPlaybackEntry(request);
+    const { gain, sourceEndTimeSeconds, sourceStartTimeSeconds } = request;
+    entry.players.forEach(player => player.configure({ gain, sourceEndTimeSeconds, sourceStartTimeSeconds }));
+    this.#revision += 1;
+  }
+
   async load(request: LoadLoopRuntimeRequest): Promise<void> {
     const audioBuffer = await this.#loadAudioBuffer(request.url);
     this.#appendPlayer(request, audioBuffer);
@@ -295,7 +303,13 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime, ILinearRecording
       for (const request of requests) {
         const key = createLoopKey(request);
         const audioBuffer = await this.#loadAudioBuffer(request.url);
-        const player = this.#playback.createPlayer({ audioBuffer, destination: request.destination });
+        const player = this.#playback.createPlayer({
+          audioBuffer,
+          destination: request.destination,
+          gain: request.gain ?? 1,
+          sourceEndTimeSeconds: request.sourceEndTimeSeconds ?? null,
+          sourceStartTimeSeconds: request.sourceStartTimeSeconds ?? 0,
+        });
         const entry = preparedEntries.get(key);
         if (entry) {
           entry.players.push(player);
@@ -436,16 +450,36 @@ export class QuantizedLoopRuntime implements ILoopAudioRuntime, ILinearRecording
   ): ILoopPlayer {
     const key = createLoopKey(request);
     this.#playbackEntries.get(key)?.players.forEach(player => player.dispose());
-    const player = this.#playback.createPlayer({ audioBuffer, destination: request.destination });
+    const player = this.#playback.createPlayer({
+      audioBuffer,
+      destination: request.destination,
+      gain: 1,
+      sourceEndTimeSeconds: null,
+      sourceStartTimeSeconds: 0,
+    });
     this.#playbackEntries.set(key, { players: [player] });
     this.#revision += 1;
     return player;
   }
 
-  #appendPlayer(request: LoopSlotAddress & { readonly destination: AudioNode }, audioBuffer: AudioBuffer): ILoopPlayer {
+  #appendPlayer(
+    request: LoopSlotAddress & {
+      readonly destination: AudioNode;
+      readonly gain?: number;
+      readonly sourceEndTimeSeconds?: number | null;
+      readonly sourceStartTimeSeconds?: number;
+    },
+    audioBuffer: AudioBuffer
+  ): ILoopPlayer {
     // 오버더빙은 원본 Player를 교체하지 않아 각 녹음 레이어를 별도 Source로 보존한다.
     const key = createLoopKey(request);
-    const player = this.#playback.createPlayer({ audioBuffer, destination: request.destination });
+    const player = this.#playback.createPlayer({
+      audioBuffer,
+      destination: request.destination,
+      gain: request.gain ?? 1,
+      sourceEndTimeSeconds: request.sourceEndTimeSeconds ?? null,
+      sourceStartTimeSeconds: request.sourceStartTimeSeconds ?? 0,
+    });
     const entry = this.#playbackEntries.get(key);
     if (entry) {
       entry.players.push(player);

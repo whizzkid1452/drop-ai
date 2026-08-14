@@ -7,6 +7,7 @@ import type {
 } from '../audio-engine/i-audio-engine';
 import type { IAudioSourceRegistry, RuntimeAudioSource } from '../audio-source-registry/i-audio-source-registry';
 import type { LoopSlotState, SessionStore } from '../session/session';
+import type { ClipFollowAction, ClipLaunchMode } from '../shared/types/clip-cue-state';
 import { MAX_LOOP_OVERDUB_LAYERS } from '../shared/loop-time';
 import { ProjectStateError, ProjectStateErrorCode } from './project-state-error';
 
@@ -20,6 +21,16 @@ interface LoopControllerDependencies {
 }
 
 type ArmLoopControllerRequest = Omit<ArmLoopRequest, 'tempoBpm'>;
+
+export interface ConfigureClipSlotRequest extends LoopSlotAddress {
+  readonly followAction: ClipFollowAction;
+  readonly gain: number;
+  readonly launchMode: ClipLaunchMode;
+  readonly name: string;
+  readonly quantizationBars: LoopSlotState['quantizationBars'];
+  readonly sourceEndTimeSeconds: number | null;
+  readonly sourceStartTimeSeconds: number;
+}
 
 export class LoopController {
   readonly #audioEngine: IAudioEngine;
@@ -156,6 +167,26 @@ export class LoopController {
     sources.forEach(source => this.#audioSourceRegistry.purgeUnused(source.metadata.id));
   }
 
+  configureClip(request: ConfigureClipSlotRequest): void {
+    const slot = this.#getLoopSlot(request);
+    this.#assertValidSourceRange(request, slot);
+    if (slot.sourceId !== null) {
+      this.#audioEngine.configureLoop(request);
+    }
+    this.#sessionStore.getState().updateLoopSlot({
+      ...request,
+      updates: {
+        followAction: { ...request.followAction },
+        gain: request.gain,
+        launchMode: request.launchMode,
+        name: request.name,
+        quantizationBars: request.quantizationBars,
+        sourceEndTimeSeconds: request.sourceEndTimeSeconds,
+        sourceStartTimeSeconds: request.sourceStartTimeSeconds,
+      },
+    });
+  }
+
   stopAll(): void {
     const session = this.#sessionStore.getState();
     this.#audioEngine.stopAllLoops({ quantizationBars: 1, tempoBpm: session.tempo });
@@ -207,6 +238,30 @@ export class LoopController {
     });
   }
 
+  #assertValidSourceRange(request: ConfigureClipSlotRequest, slot: LoopSlotState): void {
+    if (
+      request.sourceStartTimeSeconds < 0 ||
+      (request.sourceEndTimeSeconds !== null && request.sourceEndTimeSeconds <= request.sourceStartTimeSeconds)
+    ) {
+      throw new RangeError('Clip Source 범위가 유효하지 않습니다.');
+    }
+    if (slot.sourceId === null) {
+      if (request.sourceStartTimeSeconds !== 0 || request.sourceEndTimeSeconds !== null) {
+        throw new RangeError('빈 Clip Slot에는 Source 범위를 설정할 수 없습니다.');
+      }
+      return;
+    }
+    const durationSeconds = this.#audioSourceRegistry.resolve(slot.sourceId)?.metadata.durationSeconds;
+    if (
+      durationSeconds !== null &&
+      durationSeconds !== undefined &&
+      (request.sourceStartTimeSeconds >= durationSeconds ||
+        (request.sourceEndTimeSeconds ?? durationSeconds) > durationSeconds)
+    ) {
+      throw new RangeError('Clip Source 범위가 Source 길이를 벗어납니다.');
+    }
+  }
+
   #enqueueProjectPersistence(): void {
     // 녹음 완료는 명령 반환 뒤 발생하므로 이벤트별 저장을 순서대로 이어 Outbox revision 순서를 보존한다.
     const persistence = this.#persistenceTail.then(() => this.#persistProjectChange());
@@ -254,6 +309,14 @@ export class LoopController {
           ? { sourceId }
           : { overdubSourceIds: [...slot.overdubSourceIds, sourceId] }),
       },
+    });
+    const configuredSlot = this.#getLoopSlot(event);
+    this.#audioEngine.configureLoop({
+      gain: configuredSlot.gain,
+      slotId: event.slotId,
+      sourceEndTimeSeconds: configuredSlot.sourceEndTimeSeconds,
+      sourceStartTimeSeconds: configuredSlot.sourceStartTimeSeconds,
+      trackId: event.trackId,
     });
   }
 

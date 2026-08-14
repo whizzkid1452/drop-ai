@@ -34,7 +34,16 @@ export interface SetLiveInputMonitoringRequest {
 }
 
 export interface LoadLoopRequest extends LoopSlotAddress {
+  readonly gain?: number;
+  readonly sourceEndTimeSeconds?: number | null;
+  readonly sourceStartTimeSeconds?: number;
   readonly url: string;
+}
+
+export interface ConfigureLoopRequest extends LoopSlotAddress {
+  readonly gain: number;
+  readonly sourceEndTimeSeconds: number | null;
+  readonly sourceStartTimeSeconds: number;
 }
 
 export interface LoopRuntimeStateChangedEvent extends LoopSlotAddress {
@@ -78,6 +87,7 @@ export interface ILoopAudioRuntime {
   cancel(address: LoopSlotAddress): void;
   clear(address: LoopSlotAddress): void;
   clearTrack(trackId: string): void;
+  configure(request: ConfigureLoopRequest): void;
   load(request: LoadLoopRuntimeRequest): Promise<void>;
   listInputDevices(): Promise<readonly LiveAudioInputDevice[]>;
   prepareReplacement(requests: readonly LoadLoopRuntimeRequest[]): Promise<IPreparedLoopRuntimeReplacement>;

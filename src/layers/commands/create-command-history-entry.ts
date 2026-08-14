@@ -11,7 +11,10 @@ import type {
   EditorTrackRegionSnapshot,
   ReplaceEditorTrackRegionsRequest,
 } from '../shared/types/editor-runtime';
-import { ValidatedProjectExportSettingsSchema } from '../shared/types/project-document.schema';
+import {
+  ValidatedProjectCueStateSchema,
+  ValidatedProjectExportSettingsSchema,
+} from '../shared/types/project-document.schema';
 
 interface CreateCommandHistoryEntryOptions {
   readonly afterSession: SessionState;
@@ -349,6 +352,52 @@ export function createCommandHistoryEntry({
         label: command.type,
         undoCommand: { ...command, name: beforeTrack.name },
         redoCommand: command,
+      });
+    }
+
+    case AudioCommandType.SET_CLIP_SLOT_SETTINGS: {
+      const beforeSlot = beforeSession.tracks.get(command.trackId)?.loopSlots?.find(slot => slot.id === command.slotId);
+      const afterSlot = afterSession.tracks.get(command.trackId)?.loopSlots?.find(slot => slot.id === command.slotId);
+      if (!beforeSlot || !afterSlot || JSON.stringify(beforeSlot) === JSON.stringify(afterSlot)) {
+        return null;
+      }
+      const createSettingsCommand = (slot: typeof beforeSlot): AudioCommand => ({
+        followAction: { ...slot.followAction },
+        gain: slot.gain,
+        launchMode: slot.launchMode,
+        name: slot.name,
+        quantizationBars: slot.quantizationBars,
+        slotId: slot.id,
+        sourceEndTimeSeconds: slot.sourceEndTimeSeconds,
+        sourceStartTimeSeconds: slot.sourceStartTimeSeconds,
+        trackId: command.trackId,
+        type: AudioCommandType.SET_CLIP_SLOT_SETTINGS,
+      });
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        redoCommand: createSettingsCommand(afterSlot),
+        undoCommand: createSettingsCommand(beforeSlot),
+      });
+    }
+
+    case AudioCommandType.STOP_CUE_RECORDING:
+    case AudioCommandType.SET_CUE_STATE:
+    case AudioCommandType.DELETE_CUE_PERFORMANCE: {
+      if (JSON.stringify(beforeSession.cue) === JSON.stringify(afterSession.cue)) {
+        return null;
+      }
+      return createEntry({
+        executeCommand,
+        label: command.type,
+        redoCommand: {
+          cue: ValidatedProjectCueStateSchema.parse(afterSession.cue),
+          type: AudioCommandType.SET_CUE_STATE,
+        },
+        undoCommand: {
+          cue: ValidatedProjectCueStateSchema.parse(beforeSession.cue),
+          type: AudioCommandType.SET_CUE_STATE,
+        },
       });
     }
 
@@ -909,7 +958,8 @@ export function createCommandHistoryEntry({
     case AudioCommandType.PITCH_SHIFT_SELECTED_REGIONS:
     case AudioCommandType.ANALYZE_TRANSIENTS_SELECTED_REGIONS:
     case AudioCommandType.BOUNCE_SELECTED_REGIONS:
-    case AudioCommandType.FREEZE_SELECTED_REGIONS: {
+    case AudioCommandType.FREEZE_SELECTED_REGIONS:
+    case AudioCommandType.CONVERT_CUE_TO_ARRANGEMENT: {
       const undoTracks = createRegionSnapshotsForChangedTracks({
         referenceSession: afterSession,
         targetSession: beforeSession,
@@ -986,6 +1036,8 @@ export function createCommandHistoryEntry({
     case AudioCommandType.STOP_LOOP_SLOT:
     case AudioCommandType.CLEAR_LOOP_SLOT:
     case AudioCommandType.STOP_ALL_LOOPS:
+    case AudioCommandType.START_CUE_RECORDING:
+    case AudioCommandType.CANCEL_CUE_RECORDING:
     case AudioCommandType.SET_CURRENT_TIME:
     case AudioCommandType.SPLIT_REGION:
     case AudioCommandType.SET_EDITOR_SELECTION:

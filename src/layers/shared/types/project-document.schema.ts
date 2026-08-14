@@ -881,6 +881,26 @@ export const ProjectCuePerformanceSchema = z.strictObject({
 export const ProjectCueStateSchema = z.strictObject({
   performances: z.array(ProjectCuePerformanceSchema).max(MAX_CUE_PERFORMANCES),
 });
+export const ValidatedProjectCueStateSchema = ProjectCueStateSchema.superRefine((cue, context) => {
+  addDuplicateIdIssues({
+    context,
+    entries: cue.performances.map((performance, index) => ({
+      id: performance.id,
+      path: ['performances', index, 'id'],
+    })),
+    label: 'Cue Performance',
+  });
+  cue.performances.forEach((performance, performanceIndex) => {
+    addDuplicateIdIssues({
+      context,
+      entries: performance.events.map((event, eventIndex) => ({
+        id: event.id,
+        path: ['performances', performanceIndex, 'events', eventIndex, 'id'],
+      })),
+      label: 'Cue Event',
+    });
+  });
+});
 
 const ProjectDocumentV19BaseSchema = ProjectDocumentV18BaseSchema.omit({ schemaVersion: true, tracks: true }).extend({
   cue: ProjectCueStateSchema,
@@ -1370,10 +1390,37 @@ export const ProjectDocumentV19Schema = ProjectDocumentV19BaseSchema.superRefine
 
   const cueDocument = document as unknown as {
     readonly cue: CueState;
-    readonly tracks: readonly { readonly id: string; readonly loopSlots: readonly { readonly id: string }[] }[];
+    readonly audioSources: readonly { readonly durationSeconds: number | null; readonly id: string }[];
+    readonly tracks: readonly {
+      readonly id: string;
+      readonly loopSlots: readonly ProjectLoopSlotV19[];
+    }[];
   };
   const slotKeys = new Set(cueDocument.tracks.flatMap(track => track.loopSlots.map(slot => `${track.id}:${slot.id}`)));
   const performances = cueDocument.cue.performances;
+  const sourceDurationById = new Map(
+    cueDocument.audioSources.map(source => [source.id, source.durationSeconds] as const)
+  );
+  cueDocument.tracks.forEach((track, trackIndex) => {
+    track.loopSlots.forEach((slot, slotIndex) => {
+      if (slot.sourceId === null) {
+        return;
+      }
+      const durationSeconds = sourceDurationById.get(slot.sourceId);
+      if (
+        durationSeconds !== null &&
+        durationSeconds !== undefined &&
+        (slot.sourceStartTimeSeconds >= durationSeconds ||
+          (slot.sourceEndTimeSeconds ?? durationSeconds) > durationSeconds)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Clip Source range must stay within Source duration',
+          path: ['tracks', trackIndex, 'loopSlots', slotIndex, 'sourceEndTimeSeconds'],
+        });
+      }
+    });
+  });
   const lifecycle = document.lifecycle as unknown as ProjectLifecycleState;
   addDuplicateIdIssues({
     context,

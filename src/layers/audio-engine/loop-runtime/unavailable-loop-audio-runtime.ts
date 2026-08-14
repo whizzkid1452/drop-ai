@@ -1,5 +1,6 @@
 import type {
   ArmLoopRuntimeRequest,
+  ConfigureLoopRequest,
   ILoopAudioRuntime,
   IPreparedLoopRuntimeReplacement,
   LoadLoopRuntimeRequest,
@@ -40,6 +41,11 @@ export class UnavailableLoopAudioRuntime implements ILoopAudioRuntime {
 
   clearTrack(_trackId: string): void {
     void _trackId;
+  }
+
+  configure(_request: ConfigureLoopRequest): void {
+    void _request;
+    throwRuntimeUnavailable();
   }
 
   async load(_request: LoadLoopRuntimeRequest): Promise<void> {

@@ -9,6 +9,9 @@ export interface CreateLoopAudioBufferRequest {
 export interface CreateLoopPlayerRequest {
   readonly audioBuffer: AudioBuffer;
   readonly destination: AudioNode;
+  readonly gain: number;
+  readonly sourceEndTimeSeconds: number | null;
+  readonly sourceStartTimeSeconds: number;
 }
 
 export interface SetLoopMonitoringRequest {
@@ -18,6 +21,7 @@ export interface SetLoopMonitoringRequest {
 
 export interface ILoopPlayer {
   dispose(): void;
+  configure(request: Omit<CreateLoopPlayerRequest, 'audioBuffer' | 'destination'>): void;
   startAt(contextTimeSeconds: number): void;
   stopAt(contextTimeSeconds: number): void;
 }

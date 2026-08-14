@@ -32,6 +32,7 @@ import type {
   AudioProjectGraphPluginInstance,
   AuditionAudioSourceRequest,
   ArmLoopRequest,
+  ConfigureLoopRequest,
   ExportRequest,
   ExportTrack,
   IAudioEngine,
@@ -490,6 +491,10 @@ export class AudioEngine implements IAudioEngine {
 
   clearLoop(address: LoopSlotAddress): void {
     this.loopRuntime.clear(address);
+  }
+
+  configureLoop(request: ConfigureLoopRequest): void {
+    this.loopRuntime.configure(request);
   }
 
   stopAllLoops(request: StopAllLoopsRequest): void {

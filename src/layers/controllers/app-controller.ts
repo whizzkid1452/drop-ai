@@ -23,6 +23,7 @@ import { AutomationController } from './automation-controller';
 import { MidiController } from './midi-controller';
 import { MediaSourceController } from './media-source-controller';
 import { SessionLifecycleController } from './session-lifecycle-controller';
+import { CueController } from './cue-controller';
 import type { IMidiInput } from '../midi-input/i-midi-input';
 
 interface AppControllerDependencies {
@@ -59,6 +60,7 @@ export class AppController {
   public readonly midi: MidiController;
   public readonly mediaSource: MediaSourceController;
   public readonly sessionLifecycle: SessionLifecycleController;
+  public readonly cue: CueController;
 
   constructor({
     sessionStore,
@@ -115,6 +117,13 @@ export class AppController {
       audioEngine,
       audioSourceRegistry,
       persistProjectChange: () => this.project.saveProject(),
+    });
+    this.cue = new CueController({
+      audioSourceRegistry,
+      editorController: this.editor,
+      loopController: this.loop,
+      regionController: this.region,
+      sessionStore,
     });
   }
 }
