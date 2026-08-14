@@ -20,6 +20,10 @@ export function encodeAudioBufferToWav(audioBuffer: AudioBuffer): Blob {
   const dataSize = audioBuffer.length * audioBuffer.numberOfChannels * PCM_BYTES_PER_SAMPLE;
   const wavBuffer = new ArrayBuffer(WAV_HEADER_SIZE + dataSize);
   const view = new DataView(wavBuffer);
+  // 채널 참조를 루프 밖에서 고정해 조회 횟수가 샘플 수에 비례해 늘어나지 않게 한다.
+  const channelSamples = Array.from({ length: audioBuffer.numberOfChannels }, (_, channelIndex) =>
+    audioBuffer.getChannelData(channelIndex)
+  );
 
   writeText(view, { offset: 0, value: 'RIFF' });
   view.setUint32(4, wavBuffer.byteLength - 8, true);
@@ -38,7 +42,7 @@ export function encodeAudioBufferToWav(audioBuffer: AudioBuffer): Blob {
   let writeOffset = WAV_HEADER_SIZE;
   for (let sampleIndex = 0; sampleIndex < audioBuffer.length; sampleIndex += 1) {
     for (let channelIndex = 0; channelIndex < audioBuffer.numberOfChannels; channelIndex += 1) {
-      const sample = clampSample(audioBuffer.getChannelData(channelIndex)[sampleIndex]);
+      const sample = clampSample(channelSamples[channelIndex][sampleIndex]);
       const pcmSample = Math.round(sample * (sample < 0 ? PCM_NEGATIVE_MAX : PCM_POSITIVE_MAX));
       view.setInt16(writeOffset, pcmSample, true);
       writeOffset += PCM_BYTES_PER_SAMPLE;
