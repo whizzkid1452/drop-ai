@@ -1,18 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { createCliTestApp } from '../apps/create-app';
 import { AudioCommandType } from '../shared/types/audioCommand.schema';
+import { createSessionStore } from '../session/session';
 import { LiveOperationConflictError } from './live-operation-guard';
 
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 
 async function createAppWithPlayingLoop() {
-  const app = createCliTestApp();
+  const sessionStore = createSessionStore({
+    initialProjectMetadata: {
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      name: '테스트 프로젝트',
+      revision: 0,
+    },
+  });
+  const app = createCliTestApp({ sessionStore });
   await app.commandExecutor.execute({ type: AudioCommandType.ADD_TRACK, trackId: TRACK_ID });
   const loopSlot = app.session.getState().tracks.get(TRACK_ID)?.loopSlots?.[0];
   if (!loopSlot) {
     throw new Error('테스트할 루프 슬롯이 없습니다.');
   }
-  app.session.getState().updateLoopSlot({
+  sessionStore.getState().updateLoopSlot({
     slotId: loopSlot.id,
     trackId: TRACK_ID,
     updates: { state: 'playing' },
@@ -31,14 +39,21 @@ describe('CommandExecutor live operation guard', () => {
   });
 
   it('Undo가 복원하려는 충돌 명령도 거부한다', async () => {
-    const app = createCliTestApp();
+    const sessionStore = createSessionStore({
+      initialProjectMetadata: {
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        name: '테스트 프로젝트',
+        revision: 0,
+      },
+    });
+    const app = createCliTestApp({ sessionStore });
     await app.commandExecutor.execute({ type: AudioCommandType.ADD_TRACK, trackId: TRACK_ID });
     await app.commandExecutor.execute({ type: AudioCommandType.SET_TEMPO, tempo: 128 });
     const loopSlot = app.session.getState().tracks.get(TRACK_ID)?.loopSlots?.[0];
     if (!loopSlot) {
       throw new Error('테스트할 루프 슬롯이 없습니다.');
     }
-    app.session.getState().updateLoopSlot({
+    sessionStore.getState().updateLoopSlot({
       slotId: loopSlot.id,
       trackId: TRACK_ID,
       updates: { state: 'playing' },

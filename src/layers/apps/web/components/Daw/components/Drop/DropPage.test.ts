@@ -13,7 +13,7 @@ vi.mock('react-router-dom', () => ({
 }));
 
 vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
-  useSession: () => vi.fn(),
+  useAgentRuntimeCommands: () => ({ execute: vi.fn() }),
 }));
 
 vi.mock('@/layers/apps/web/components/Auth/AccountControl', () => ({

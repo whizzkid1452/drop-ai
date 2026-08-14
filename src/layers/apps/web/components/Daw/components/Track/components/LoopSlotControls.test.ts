@@ -7,6 +7,7 @@ import { createCliTestApp } from '@/layers/apps/create-app';
 import { LayerProvider } from '@/layers/apps/web/context/layer-provider';
 import { AudioCommandType } from '@/layers/shared/types/audioCommand.schema';
 import { AudioRuntimeFeature } from '@/layers/shared/utils/audio-runtime-capabilities';
+import { createSessionStore } from '@/layers/session/session';
 import { LoopSlotControls } from './LoopSlotControls';
 
 vi.mock('./LoopSlotControls.css', () => ({
@@ -90,7 +91,14 @@ describe('LoopSlotControls', () => {
   });
 
   it('재생 중인 슬롯의 DUB 버튼을 오버더빙 명령으로 변환한다', async () => {
-    const baseApp = createCliTestApp();
+    const sessionStore = createSessionStore({
+      initialProjectMetadata: {
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        name: '테스트 프로젝트',
+        revision: 0,
+      },
+    });
+    const baseApp = createCliTestApp({ sessionStore });
     const app = {
       ...baseApp,
       audioRuntimeCapabilities: {
@@ -107,7 +115,7 @@ describe('LoopSlotControls', () => {
     if (!loopSlot) {
       throw new Error('테스트 루프 슬롯이 없습니다.');
     }
-    app.session.getState().updateLoopSlot({
+    sessionStore.getState().updateLoopSlot({
       slotId: loopSlot.id,
       trackId: TRACK_ID,
       updates: { sourceId: SOURCE_ID, state: 'playing' },

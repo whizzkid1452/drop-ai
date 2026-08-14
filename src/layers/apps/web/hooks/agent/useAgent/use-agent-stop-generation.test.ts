@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentRequestCancelledError } from './utils/agent-request-cancelled-error';
 import { useAgent } from './useAgent';
+import { AgentRuntimeCommandType } from '@/layers/commands/agent-runtime-command-executor';
 
 const mocks = vi.hoisted(() => {
   const sessionState = {
@@ -12,11 +13,6 @@ const mocks = vi.hoisted(() => {
     pluginCatalog: new Map(),
     agentMessages: [],
     agentStatus: 'idle',
-    addAgentMessage: vi.fn(),
-    updateAgentMessage: vi.fn(),
-    setAgentStatus: vi.fn(),
-    setAgentRunStatus: vi.fn(),
-    markAgentResultSuccessful: vi.fn(),
   };
 
   return {
@@ -24,6 +20,7 @@ const mocks = vi.hoisted(() => {
     executeMany: vi.fn(),
     handleAIResponse: vi.fn(),
     interruptGeneration: vi.fn(),
+    executeAgentRuntimeCommand: vi.fn(),
   };
 });
 
@@ -35,6 +32,7 @@ vi.mock('@/layers/apps/web/hooks/agent/useWebLLM', () => ({
 }));
 
 vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
+  useAgentRuntimeCommands: () => ({ execute: mocks.executeAgentRuntimeCommand }),
   useAudioSourceResolver: () => ({
     resolve: () => null,
     listCommittedMetadata: () => [],
@@ -122,12 +120,19 @@ describe('useAgent 생성 중단', () => {
     });
 
     expect(mocks.interruptGeneration).toHaveBeenCalledOnce();
-    expect(mocks.sessionState.updateAgentMessage).toHaveBeenCalledWith(
-      'assistant-message',
-      '응답 생성을 중지했습니다.'
-    );
-    expect(mocks.sessionState.setAgentStatus).toHaveBeenLastCalledWith('idle');
-    expect(mocks.sessionState.setAgentRunStatus).toHaveBeenLastCalledWith('cancelled');
+    expect(mocks.executeAgentRuntimeCommand).toHaveBeenCalledWith({
+      content: '응답 생성을 중지했습니다.',
+      id: 'assistant-message',
+      type: AgentRuntimeCommandType.UPDATE_MESSAGE,
+    });
+    expect(mocks.executeAgentRuntimeCommand).toHaveBeenCalledWith({
+      status: 'idle',
+      type: AgentRuntimeCommandType.SET_STATUS,
+    });
+    expect(mocks.executeAgentRuntimeCommand).toHaveBeenCalledWith({
+      status: 'cancelled',
+      type: AgentRuntimeCommandType.SET_RUN_STATUS,
+    });
     expect(mocks.executeMany).not.toHaveBeenCalled();
   });
 

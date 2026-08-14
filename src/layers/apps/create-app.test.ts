@@ -513,6 +513,14 @@ describe('createApp', () => {
     expect('undo' in app.commandHistory).toBe(false);
   });
 
+  it('Session을 action이 없는 읽기 전용 Query로 노출한다', () => {
+    const app = createTestApp({ audioEngine: new MockAudioEngine() });
+
+    expect(app.session.getState()).not.toHaveProperty('setTempo');
+    expect(app.session.getState()).not.toHaveProperty('setAgentStatus');
+    expect(app.session.getState().tempo).toBe(120);
+  });
+
   it('Controller를 노출하지 않고 읽기 전용 PlaybackClock을 조립한다', () => {
     const audioEngine = new MockAudioEngine();
     audioEngine.setTime(7.5);

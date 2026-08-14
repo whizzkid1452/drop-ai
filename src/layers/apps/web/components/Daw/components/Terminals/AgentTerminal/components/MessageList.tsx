@@ -2,7 +2,7 @@ import type { AgentStatus, Message } from '@/types/agent';
 import * as styles from '../ChatModalTerminal.css.ts';
 
 interface MessageListProps {
-  messages: Message[];
+  messages: readonly Message[];
   agentStatus: AgentStatus;
 }
 

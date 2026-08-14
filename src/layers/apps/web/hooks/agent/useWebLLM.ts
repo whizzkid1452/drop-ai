@@ -1,5 +1,6 @@
 import { useCallback, useEffect } from 'react';
-import { useSession } from '@/layers/apps/web/context/layer-hooks';
+import { useAgentRuntimeCommands } from '@/layers/apps/web/context/layer-hooks';
+import { AgentRuntimeCommandType } from '@/layers/commands/agent-runtime-command-executor';
 import {
   disposeWebLLM,
   getWebLLMEngine,
@@ -9,8 +10,19 @@ import {
 } from '@/layers/apps/web/hooks/agent/web-llm-engine';
 
 export function useWebLLM() {
-  const setModelStatus = useSession(state => state.setAgentModelStatus);
-  const setLoadingProgress = useSession(state => state.setAgentLoadingProgress);
+  const agentRuntimeCommands = useAgentRuntimeCommands();
+  const setModelStatus = useCallback(
+    (status: 'loading' | 'ready' | 'error') => {
+      agentRuntimeCommands.execute({ status, type: AgentRuntimeCommandType.SET_MODEL_STATUS });
+    },
+    [agentRuntimeCommands]
+  );
+  const setLoadingProgress = useCallback(
+    (progress: number, text: string) => {
+      agentRuntimeCommands.execute({ progress, text, type: AgentRuntimeCommandType.SET_LOADING_PROGRESS });
+    },
+    [agentRuntimeCommands]
+  );
 
   const initializeModel = useCallback(async () => {
     setModelStatus('loading');

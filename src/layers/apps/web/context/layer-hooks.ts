@@ -1,7 +1,7 @@
 import { useCallback, useSyncExternalStore } from 'react';
-import { useStore } from 'zustand';
 import type { IAudioSourceResolver, IAudioSourceStager } from '../../../audio-source-registry/i-audio-source-registry';
 import type { CommandExecutor } from '../../../commands/command-executor';
+import type { IAgentRuntimeCommandExecutor } from '../../../commands/agent-runtime-command-executor';
 import type { CommandHistorySnapshot } from '../../../commands/command-history';
 import type { IPlaybackClockQuery } from '../../../queries/playback-clock-query';
 import type { IMeterQuery } from '../../../queries/meter-query';
@@ -9,7 +9,7 @@ import type { ILiveInputQuery } from '../../../queries/live-input-query';
 import type { LiveInputRuntimeState } from '../../../shared/types/live-input';
 import type { IProjectCatalogQuery } from '../../../queries/project-catalog-query';
 import type { IRecordingQuery } from '../../../queries/recording-query';
-import type { SessionState } from '../../../session/session';
+import type { SessionSnapshot } from '../../../session/session-query';
 import type { RecordingRuntimeState } from '../../../shared/types/linear-recording';
 import type { AudioRuntimeCapabilities } from '../../../shared/utils/audio-runtime-capabilities';
 import type { IMidiInput } from '../../../midi-input/i-midi-input';
@@ -57,6 +57,10 @@ export function useAudioSourceStager(): IAudioSourceStager {
 
 export function useCommandExecutor(): CommandExecutor {
   return useLayer().commandExecutor;
+}
+
+export function useAgentRuntimeCommands(): IAgentRuntimeCommandExecutor {
+  return useLayer().agentRuntimeCommands;
 }
 
 export function useMidiInput(): IMidiInput {
@@ -173,6 +177,8 @@ export function useRuntimeDiagnosticsState(): RuntimeDiagnosticsState {
   return useSyncExternalStore(runtimeDiagnostics.subscribe, runtimeDiagnostics.readState, runtimeDiagnostics.readState);
 }
 
-export function useSession<T>(selector: (state: SessionState) => T): T {
-  return useStore(useLayer().session, selector);
+export function useSession<T>(selector: (state: SessionSnapshot) => T): T {
+  const session = useLayer().session;
+  const snapshot = useSyncExternalStore(session.subscribe, session.getState, session.getState);
+  return selector(snapshot);
 }
