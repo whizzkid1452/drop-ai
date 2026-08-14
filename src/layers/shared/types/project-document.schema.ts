@@ -31,6 +31,7 @@ export const PROJECT_DOCUMENT_SCHEMA_VERSION_V14 = 14 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V15 = 15 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V16 = 16 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V17 = 17 as const;
+export const PROJECT_DOCUMENT_SCHEMA_VERSION_V18 = 18 as const;
 
 const MAX_NAME_LENGTH = 255;
 const MAX_MIME_TYPE_LENGTH = 255;
@@ -785,6 +786,48 @@ const ProjectDocumentV17BaseSchema = ProjectDocumentV16BaseSchema.omit({ schemaV
   schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V17),
 });
 
+const lifecycleNameSchema = z.string().trim().min(1).max(120);
+const lifecycleTimestampSchema = z.iso.datetime({ offset: true });
+
+export const ProjectNamedSnapshotSchema = z.strictObject({
+  createdAt: lifecycleTimestampSchema,
+  document: z.lazy(() => ProjectDocumentV17Schema),
+  id: z.uuid('Invalid Snapshot ID format'),
+  name: lifecycleNameSchema,
+});
+
+export const ProjectTemplateSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    createdAt: lifecycleTimestampSchema,
+    document: z.lazy(() => ProjectDocumentV17Schema),
+    id: z.uuid('Invalid Session Template ID format'),
+    kind: z.literal('session'),
+    name: lifecycleNameSchema,
+  }),
+  z
+    .strictObject({
+      createdAt: lifecycleTimestampSchema,
+      document: z.lazy(() => ProjectDocumentV17Schema),
+      id: z.uuid('Invalid Track Template ID format'),
+      kind: z.literal('track'),
+      name: lifecycleNameSchema,
+    })
+    .refine(template => template.document.tracks.length === 1, {
+      message: 'Track Template must contain exactly one Track',
+      path: ['document', 'tracks'],
+    }),
+]);
+
+export const ProjectLifecycleStateSchema = z.strictObject({
+  snapshots: z.array(ProjectNamedSnapshotSchema).max(32),
+  templates: z.array(ProjectTemplateSchema).max(32),
+});
+
+const ProjectDocumentV18BaseSchema = ProjectDocumentV17BaseSchema.omit({ schemaVersion: true }).extend({
+  lifecycle: ProjectLifecycleStateSchema,
+  schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V18),
+});
+
 interface IdentifiedDocumentPath {
   id: string;
   path: Array<string | number>;
@@ -1234,6 +1277,31 @@ export const ValidatedProjectExportSettingsSchema = ProjectExportSettingsSchema.
 export const ProjectDocumentV17Schema = ProjectDocumentV17BaseSchema.superRefine((document, context) => {
   validateProjectDocumentV16State(document as unknown as z.infer<typeof ProjectDocumentV16BaseSchema>, context);
   validateProjectExportSettings(document.exportSettings, context, ['exportSettings']);
+});
+
+export const ProjectDocumentV18Schema = ProjectDocumentV18BaseSchema.superRefine((document, context) => {
+  validateProjectDocumentV16State(document as unknown as z.infer<typeof ProjectDocumentV16BaseSchema>, context);
+  validateProjectExportSettings(document.exportSettings, context, ['exportSettings']);
+  const lifecycle = document.lifecycle as unknown as {
+    readonly snapshots: readonly { readonly id: string }[];
+    readonly templates: readonly { readonly id: string }[];
+  };
+  addDuplicateIdIssues({
+    entries: lifecycle.snapshots.map((snapshot, index) => ({
+      id: snapshot.id,
+      path: ['lifecycle', 'snapshots', index, 'id'],
+    })),
+    label: 'Named Snapshot',
+    context,
+  });
+  addDuplicateIdIssues({
+    entries: lifecycle.templates.map((template, index) => ({
+      id: template.id,
+      path: ['lifecycle', 'templates', index, 'id'],
+    })),
+    label: 'Project Template',
+    context,
+  });
 });
 
 function validateAudioSourceManagement(
@@ -1987,6 +2055,13 @@ export interface ProjectDocumentV17 extends Omit<ProjectDocumentV16, 'schemaVers
   readonly exportSettings: ProjectExportSettings;
   readonly schemaVersion: typeof PROJECT_DOCUMENT_SCHEMA_VERSION_V17;
 }
+export type ProjectNamedSnapshot = z.infer<typeof ProjectNamedSnapshotSchema>;
+export type ProjectTemplate = z.infer<typeof ProjectTemplateSchema>;
+export type ProjectLifecycleState = z.infer<typeof ProjectLifecycleStateSchema>;
+export interface ProjectDocumentV18 extends Omit<ProjectDocumentV17, 'schemaVersion'> {
+  readonly lifecycle: ProjectLifecycleState;
+  readonly schemaVersion: typeof PROJECT_DOCUMENT_SCHEMA_VERSION_V18;
+}
 export type ProjectDocumentSnapshot =
   | ProjectDocument
   | ProjectDocumentV2
@@ -2004,4 +2079,5 @@ export type ProjectDocumentSnapshot =
   | ProjectDocumentV14
   | ProjectDocumentV15
   | ProjectDocumentV16
-  | ProjectDocumentV17;
+  | ProjectDocumentV17
+  | ProjectDocumentV18;

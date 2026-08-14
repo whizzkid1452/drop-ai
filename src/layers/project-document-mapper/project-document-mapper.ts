@@ -28,6 +28,7 @@ import {
   readProjectDocumentV15,
   readProjectDocumentV16,
   readProjectDocumentV17,
+  readProjectDocumentV18,
 } from '../shared/types/project-document-reader';
 import {
   PROJECT_DOCUMENT_SCHEMA_VERSION,
@@ -47,6 +48,7 @@ import {
   PROJECT_DOCUMENT_SCHEMA_VERSION_V15,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V16,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V17,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V18,
   ProjectDocumentSchema,
   ProjectDocumentV2Schema,
   ProjectDocumentV3Schema,
@@ -64,6 +66,7 @@ import {
   ProjectDocumentV15Schema,
   ProjectDocumentV16Schema,
   ProjectDocumentV17Schema,
+  ProjectDocumentV18Schema,
   type ProjectAudioSource,
   type ProjectDocument,
   type ProjectDocumentV2,
@@ -82,6 +85,7 @@ import {
   type ProjectDocumentV15,
   type ProjectDocumentV16,
   type ProjectDocumentV17,
+  type ProjectDocumentV18,
   type ProjectDocumentSnapshot,
   type ProjectLoopSlot,
   type ProjectLoopSlotV4,
@@ -104,6 +108,7 @@ import {
 import { cloneAutomationLaneState } from '../shared/types/automation-state';
 import { cloneMidiTrackState } from '../shared/types/midi-state';
 import { cloneProjectExportState, createDefaultProjectExportState } from '../shared/types/export-state';
+import { cloneProjectLifecycleState, createDefaultProjectLifecycleState } from '../shared/types/session-lifecycle';
 import {
   cloneProjectRecordingState,
   cloneTrackRecordingState,
@@ -139,6 +144,7 @@ export type CreateProjectDocumentV14FromSessionOptions = CreateProjectDocumentV2
 export type CreateProjectDocumentV15FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 export type CreateProjectDocumentV16FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 export type CreateProjectDocumentV17FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
+export type CreateProjectDocumentV18FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 
 export interface ProjectRestoreSnapshot {
   readonly session: SessionProjectSnapshot;
@@ -169,6 +175,7 @@ export type CreateProjectRestoreSnapshotFromDocumentV14Options = CreateProjectRe
 export type CreateProjectRestoreSnapshotFromDocumentV15Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 export type CreateProjectRestoreSnapshotFromDocumentV16Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 export type CreateProjectRestoreSnapshotFromDocumentV17Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
+export type CreateProjectRestoreSnapshotFromDocumentV18Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 
 interface SessionTrackEntry {
   readonly mapKey: string;
@@ -677,6 +684,19 @@ export function createProjectDocumentV17FromSession({
     ...v16Document,
     exportSettings: cloneProjectExportState(session.exportSettings ?? createDefaultProjectExportState()),
     schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V17,
+  });
+}
+
+export function createProjectDocumentV18FromSession({
+  session,
+  audioSources,
+  pluginCatalog,
+}: CreateProjectDocumentV18FromSessionOptions): ProjectDocumentV18 {
+  const v17Document = createProjectDocumentV17FromSession({ audioSources, pluginCatalog, session });
+  return parseSessionDocumentCandidateV18({
+    ...v17Document,
+    lifecycle: cloneProjectLifecycleState(session.lifecycle ?? createDefaultProjectLifecycleState()),
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V18,
   });
 }
 
@@ -1193,6 +1213,25 @@ export function createProjectRestoreSnapshotFromDocumentV17({
       tags: [...source.tags],
       transientPositionsSeconds: [...source.transientPositionsSeconds],
     })),
+  };
+}
+
+export function createProjectRestoreSnapshotFromDocumentV18({
+  document,
+  pluginCatalog,
+}: CreateProjectRestoreSnapshotFromDocumentV18Options): ProjectRestoreSnapshot {
+  const validatedDocument = readDocumentV18ForMapping(document);
+  const { lifecycle, ...v17Fields } = validatedDocument;
+  const v17Snapshot = createProjectRestoreSnapshotFromDocumentV17({
+    document: { ...v17Fields, schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V17 },
+    pluginCatalog,
+  });
+  return {
+    ...v17Snapshot,
+    session: {
+      ...v17Snapshot.session,
+      lifecycle: cloneProjectLifecycleState(lifecycle),
+    },
   };
 }
 
@@ -1879,6 +1918,25 @@ function parseSessionDocumentCandidateV17(documentCandidate: unknown): ProjectDo
   });
 }
 
+function parseSessionDocumentCandidateV18(documentCandidate: unknown): ProjectDocumentV18 {
+  const schema = ProjectDocumentV18Schema as unknown as {
+    safeParse(
+      input: unknown
+    ):
+      | { readonly success: true; readonly data: ProjectDocumentV18 }
+      | { readonly success: false; readonly error: unknown };
+  };
+  const result = schema.safeParse(documentCandidate);
+  if (result.success) {
+    return result.data;
+  }
+  throw new ProjectDocumentMappingError({
+    code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
+    message: 'Session 상태를 ProjectDocument v18로 변환할 수 없습니다.',
+    details: { validationError: result.error },
+  });
+}
+
 function readDocumentForMapping(document: ProjectDocument): ProjectDocument {
   try {
     return readProjectDocument(document);
@@ -2095,6 +2153,18 @@ function readDocumentV17ForMapping(document: ProjectDocumentSnapshot): ProjectDo
       code: ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT,
       message: '복원할 ProjectDocument v17이 유효하지 않습니다.',
       details: { reason: 'PROJECT_DOCUMENT_READ_FAILED' },
+      cause,
+    });
+  }
+}
+
+function readDocumentV18ForMapping(document: ProjectDocumentSnapshot): ProjectDocumentV18 {
+  try {
+    return readProjectDocumentV18(document);
+  } catch (cause) {
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT,
+      message: '복원할 ProjectDocument v18이 유효하지 않습니다.',
       cause,
     });
   }

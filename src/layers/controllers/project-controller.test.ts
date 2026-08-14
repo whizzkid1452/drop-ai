@@ -239,7 +239,7 @@ describe('ProjectController', () => {
     });
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        schemaVersion: 17,
+        schemaVersion: 18,
         project: INITIAL_PROJECT_METADATA,
         audioSources: [expect.objectContaining(registration.metadata)],
       })
@@ -261,7 +261,7 @@ describe('ProjectController', () => {
 
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        schemaVersion: 17,
+        schemaVersion: 18,
         tracks: [
           expect.objectContaining({
             id: TRACK_ID,
@@ -319,7 +319,7 @@ describe('ProjectController', () => {
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         audioSources: [expect.objectContaining(registration.metadata)],
-        schemaVersion: 17,
+        schemaVersion: 18,
         tracks: [
           expect.objectContaining({
             loopSlots: [expect.objectContaining({ id: LOOP_SLOT_ID, overdubSourceIds: [], sourceId: SOURCE_ID })],
@@ -340,7 +340,7 @@ describe('ProjectController', () => {
     expect(context.projectRepository.save).toHaveBeenCalledWith({
       document: expect.objectContaining({
         project: existingDocument.project,
-        schemaVersion: 17,
+        schemaVersion: 18,
       }),
       expectedRevision: 0,
     });

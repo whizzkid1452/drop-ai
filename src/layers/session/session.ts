@@ -1,7 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 import type { RegionStatus, TrackStatus } from '@/types/statusTypes';
 import type { AgentModelStatus, AgentRunStatus, AgentStatus, Message } from '@/types/agent';
-import type { ProjectMetadata, TimelineRange } from '../shared/types/project-document.schema';
+import type { ProjectLifecycleState, ProjectMetadata, TimelineRange } from '../shared/types/project-document.schema';
 import type {
   PluginCatalogEntry,
   PluginInstanceState,
@@ -35,6 +35,7 @@ import {
   createDefaultProjectExportState,
   type ProjectExportState,
 } from '../shared/types/export-state';
+import { cloneProjectLifecycleState, createDefaultProjectLifecycleState } from '../shared/types/session-lifecycle';
 
 export const DEFAULT_LOOP_SLOT_COUNT = 4;
 export const DEFAULT_METRONOME_VOLUME = 0.8;
@@ -128,6 +129,7 @@ export interface ProjectSessionState {
   readonly exportStartTime: number | null;
   readonly exportEndTime: number | null;
   readonly exportSettings?: ProjectExportState;
+  readonly lifecycle?: ProjectLifecycleState;
   readonly tracks: ReadonlyMap<string, TrackState>;
 }
 
@@ -199,6 +201,7 @@ export interface SessionState {
   exportStartTime: number | null;
   exportEndTime: number | null;
   exportSettings: ProjectExportState;
+  lifecycle: ProjectLifecycleState;
   tracks: Map<string, TrackState>;
   pluginCatalog: Map<string, PluginCatalogEntry>;
   pluginValidationResults: Map<string, PluginValidationResult>;
@@ -239,6 +242,7 @@ export interface SessionState {
   setRecording: (recording: ProjectRecordingState) => void;
   setExportRange: (startTime: number | null, endTime: number | null) => void;
   setExportSettings: (exportSettings: ProjectExportState) => void;
+  setLifecycle: (lifecycle: ProjectLifecycleState) => void;
   replaceProjectMetadata: (project: ProjectMetadata) => void;
   replaceProjectState: (projectState: ProjectSessionState) => void;
 
@@ -293,6 +297,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     exportStartTime: null,
     exportEndTime: null,
     exportSettings: createDefaultProjectExportState(),
+    lifecycle: createDefaultProjectLifecycleState(),
     tracks: new Map(),
     pluginCatalog: new Map(),
     pluginValidationResults: new Map(),
@@ -343,6 +348,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     setRecording: recording => set({ recording: cloneProjectRecordingState(recording) }),
     setExportRange: (startTime, endTime) => set({ exportStartTime: startTime, exportEndTime: endTime }),
     setExportSettings: exportSettings => set({ exportSettings: cloneProjectExportState(exportSettings) }),
+    setLifecycle: lifecycle => set({ lifecycle: cloneProjectLifecycleState(lifecycle) }),
     replaceProjectMetadata: project => set({ project: { ...project } }),
     replaceProjectState: projectState =>
       set({
@@ -367,6 +373,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
         exportStartTime: projectState.exportStartTime,
         exportEndTime: projectState.exportEndTime,
         exportSettings: cloneProjectExportState(projectState.exportSettings ?? createDefaultProjectExportState()),
+        lifecycle: cloneProjectLifecycleState(projectState.lifecycle ?? createDefaultProjectLifecycleState()),
         tracks: cloneProjectTracks(projectState.tracks),
         isPlaying: false,
         currentTime: 0,
