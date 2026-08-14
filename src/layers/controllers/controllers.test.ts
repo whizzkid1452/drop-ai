@@ -370,6 +370,7 @@ describe('Controllers - Phase 3 검증', () => {
       });
 
       expect(addRegionSpy).toHaveBeenCalledWith('track-1', {
+        ...createDefaultRegionProcessingState(),
         id: SOURCE_REGION_ID,
         url: SOURCE_OBJECT_URL,
         startTime: 1,
@@ -1128,6 +1129,7 @@ describe('Controllers - Phase 3 검증', () => {
       ).rejects.toThrowError('detach failed');
 
       expect(addRegionSpy).toHaveBeenCalledWith('track-1', {
+        ...createDefaultRegionProcessingState(),
         id: SOURCE_REGION_ID,
         url: SOURCE_OBJECT_URL,
         startTime: 0,
@@ -1645,6 +1647,7 @@ describe('Controllers - Phase 3 검증', () => {
             ],
             regions: [
               {
+                ...createDefaultRegionProcessingState(),
                 id: SOURCE_REGION_ID,
                 url: SOURCE_OBJECT_URL,
                 startTime: 0,

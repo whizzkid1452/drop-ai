@@ -142,7 +142,12 @@ describe('MockAudioEngine - Phase 2 검증', () => {
 
   describe('Region Management', () => {
     const regionData: RegionData = {
+      fadeIn: { crossfadeId: null, curve: 'linear', durationSeconds: 0 },
+      fadeOut: { crossfadeId: null, curve: 'linear', durationSeconds: 0 },
+      gain: 1,
       id: 'region-1',
+      isOpaque: false,
+      layer: 0,
       url: 'test.mp3',
       startTime: 0,
       sourceStartTime: 0,
@@ -184,7 +189,12 @@ describe('MockAudioEngine - Phase 2 검증', () => {
       ],
       regions: [
         {
+          fadeIn: { crossfadeId: null, curve: 'linear' as const, durationSeconds: 0 },
+          fadeOut: { crossfadeId: null, curve: 'linear' as const, durationSeconds: 0 },
+          gain: 1,
           id: 'replacement-region',
+          isOpaque: false,
+          layer: 0,
           url: 'replacement.wav',
           startTime: 1,
           sourceStartTime: 0,
@@ -284,7 +294,20 @@ describe('MockAudioEngine - Phase 2 검증', () => {
           isMuted: false,
           isSoloed: false,
           pluginInstances: [],
-          regions: [{ id: 'region-1', url: 'test.mp3', startTime: 0, sourceStartTime: 0, duration: 10 }],
+          regions: [
+            {
+              fadeIn: { crossfadeId: null, curve: 'linear' as const, durationSeconds: 0 },
+              fadeOut: { crossfadeId: null, curve: 'linear' as const, durationSeconds: 0 },
+              gain: 1,
+              id: 'region-1',
+              isOpaque: false,
+              layer: 0,
+              url: 'test.mp3',
+              startTime: 0,
+              sourceStartTime: 0,
+              duration: 10,
+            },
+          ],
         },
       ],
       masterVolume: 1,

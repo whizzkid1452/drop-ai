@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { RegionRenderer } from './region-renderer';
 
 const renderParams = {
+  fadeIn: { crossfadeId: null, curve: 'linear' as const, durationSeconds: 0 },
+  fadeOut: { crossfadeId: null, curve: 'linear' as const, durationSeconds: 0 },
+  gain: 1,
   url: 'test.wav',
   startTime: 1,
   startOffset: 3,
@@ -15,6 +18,9 @@ describe('RegionRenderer.adjustForExportRange', () => {
       startTime: 0,
       startOffset: 6,
       duration: 4,
+      fadeIn: { crossfadeId: null, curve: 'linear', durationSeconds: 0 },
+      fadeOut: { crossfadeId: null, curve: 'linear', durationSeconds: 0 },
+      gain: 1,
     });
   });
 

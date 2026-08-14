@@ -25,6 +25,9 @@ import type {
   IRetiredAudioProjectGraph,
   PrepareAudioProjectGraphRequest,
   RegionData,
+  AnalyzeAudioRegionPeakRequest,
+  RenderDerivedAudioRegionRequest,
+  RenderedDerivedAudioRegion,
   ReplaceRegionRequest,
   RescheduleRegionRequest,
   SetAudioTempoMapRequest,
@@ -80,9 +83,23 @@ export class MockAudioEngine implements IAudioEngine {
   };
   private readonly recordingStateListeners = new Set<RecordingRuntimeListener>();
   private readonly liveInputStateListeners = new Set<LiveInputRuntimeListener>();
+  private mockAudioRegionPeak = 0.5;
 
   getFeatureSupport(): AudioRuntimeFeatureSupport {
     return { ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT, metering: true, tempoLoopMetronome: true };
+  }
+
+  setMockAudioRegionPeak(peak: number): void {
+    this.mockAudioRegionPeak = peak;
+  }
+
+  async analyzeAudioRegionPeak(_request: AnalyzeAudioRegionPeakRequest): Promise<number> {
+    void _request;
+    return this.mockAudioRegionPeak;
+  }
+
+  async renderDerivedAudioRegion(request: RenderDerivedAudioRegionRequest): Promise<RenderedDerivedAudioRegion> {
+    return { blob: request.blob, durationSeconds: request.durationSeconds };
   }
 
   async play(): Promise<void> {
@@ -673,7 +690,7 @@ export class MockAudioEngine implements IAudioEngine {
   }
 
   private cloneRegionData(regionData: RegionData): RegionData {
-    return { ...regionData };
+    return { ...regionData, fadeIn: { ...regionData.fadeIn }, fadeOut: { ...regionData.fadeOut } };
   }
 }
 

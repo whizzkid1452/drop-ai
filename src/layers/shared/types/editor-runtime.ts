@@ -1,5 +1,5 @@
 import type { TimelineRange } from './project-document.schema';
-import type { RegionProcessingState } from './region-processing';
+import type { RegionFadeCurve, RegionProcessingState } from './region-processing';
 
 export interface EditorRegionSelection {
   readonly regionId: string;
@@ -81,5 +81,28 @@ export interface TrimRegionRequest {
 export interface SlipRegionRequest {
   readonly regionId: string;
   readonly sourceStartTimeSeconds: number;
+  readonly trackId: string;
+}
+
+export interface SetRegionProcessingRequest {
+  readonly fadeIn?: { readonly curve: RegionFadeCurve; readonly durationSeconds: number };
+  readonly fadeOut?: { readonly curve: RegionFadeCurve; readonly durationSeconds: number };
+  readonly gain?: number;
+  readonly isOpaque?: boolean;
+  readonly layer?: number;
+  readonly regionId: string;
+  readonly trackId: string;
+}
+
+export interface CreateRegionCrossfadeRequest {
+  readonly crossfadeId: string;
+  readonly curve: RegionFadeCurve;
+  readonly fadeInRegionId: string;
+  readonly fadeOutRegionId: string;
+  readonly trackId: string;
+}
+
+export interface RemoveRegionCrossfadeRequest {
+  readonly crossfadeId: string;
   readonly trackId: string;
 }

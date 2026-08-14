@@ -88,7 +88,12 @@ describe('DawEngineAdapter', () => {
     const engine = new DawEngineAdapter({ runtime });
     const region = {
       duration: 2,
+      fadeIn: { crossfadeId: null, curve: 'linear' as const, durationSeconds: 0 },
+      fadeOut: { crossfadeId: null, curve: 'linear' as const, durationSeconds: 0 },
+      gain: 1,
       id: 'region-1',
+      isOpaque: false,
+      layer: 0,
       sourceStartTime: 0.25,
       startTime: 1,
       url: 'blob:region-1',

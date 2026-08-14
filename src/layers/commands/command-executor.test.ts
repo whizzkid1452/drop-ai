@@ -16,6 +16,7 @@ import { CommandBatchExecutionError, CommandExecutor } from './command-executor'
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
 const SECOND_REGION_ID = '33333333-3333-4333-8333-333333333333';
+const CROSSFADE_ID = '88888888-8888-4888-8888-888888888888';
 const SOURCE_ID = '55555555-5555-4555-8555-555555555555';
 const SOURCE_OBJECT_URL = 'blob:command-source';
 const PLUGIN_INSTANCE_ID = '66666666-6666-4666-8666-666666666666';
@@ -123,7 +124,172 @@ async function addRegion(commandExecutor: CommandExecutor, audioSourceRegistry: 
   });
 }
 
+async function selectRegion(commandExecutor: CommandExecutor): Promise<void> {
+  await commandExecutor.execute({
+    type: AudioCommandType.SET_EDITOR_SELECTION,
+    editPointSeconds: 0,
+    range: null,
+    regions: [{ regionId: REGION_ID, trackId: TRACK_ID }],
+    trackIds: [TRACK_ID],
+  });
+}
+
 describe('CommandExecutor', () => {
+  it('Region 처리값 변경을 실행하고 Undo에서 이전 값을 복원한다', async () => {
+    const { audioSourceRegistry, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
+
+    await commandExecutor.execute({
+      type: AudioCommandType.SET_REGION_PROCESSING,
+      fadeIn: { curve: 'linear', durationSeconds: 1 },
+      gain: 0.5,
+      isOpaque: true,
+      layer: 2,
+      regionId: REGION_ID,
+      trackId: TRACK_ID,
+    });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.regions[0]).toMatchObject({
+      fadeIn: { crossfadeId: null, curve: 'linear', durationSeconds: 1 },
+      gain: 0.5,
+      isOpaque: true,
+      layer: 2,
+    });
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.regions[0]).toMatchObject({
+      fadeIn: { crossfadeId: null, curve: 'linear', durationSeconds: 0 },
+      gain: 1,
+      isOpaque: false,
+      layer: 0,
+    });
+  });
+
+  it('겹치는 Region의 Crossfade를 만들고 한 번의 Undo로 두 Fade를 함께 제거한다', async () => {
+    const { audioSourceRegistry, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
+    await commandExecutor.execute({
+      type: AudioCommandType.LOAD_REGION,
+      duration: 2,
+      regionId: SECOND_REGION_ID,
+      sourceId: SOURCE_ID,
+      startTime: 3,
+      trackId: TRACK_ID,
+    });
+
+    await commandExecutor.execute({
+      type: AudioCommandType.CREATE_REGION_CROSSFADE,
+      crossfadeId: CROSSFADE_ID,
+      curve: 'linear',
+      fadeInRegionId: SECOND_REGION_ID,
+      fadeOutRegionId: REGION_ID,
+      trackId: TRACK_ID,
+    });
+
+    const crossfadedRegions = session.getState().tracks.get(TRACK_ID)?.regions;
+    expect(crossfadedRegions?.find(region => region.id === REGION_ID)?.fadeOut).toEqual({
+      crossfadeId: CROSSFADE_ID,
+      curve: 'linear',
+      durationSeconds: 2,
+    });
+    expect(crossfadedRegions?.find(region => region.id === SECOND_REGION_ID)?.fadeIn).toEqual({
+      crossfadeId: CROSSFADE_ID,
+      curve: 'linear',
+      durationSeconds: 2,
+    });
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(
+      session
+        .getState()
+        .tracks.get(TRACK_ID)
+        ?.regions.every(region => region.fadeIn.crossfadeId === null && region.fadeOut.crossfadeId === null)
+    ).toBe(true);
+  });
+
+  it('Normalize는 원본 Source를 유지하고 Region gain만 한 번의 Undo 단위로 변경한다', async () => {
+    const { audioEngine, audioSourceRegistry, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
+    await selectRegion(commandExecutor);
+    audioEngine.setMockAudioRegionPeak(0.25);
+    const originalRegistration = audioSourceRegistry.listCommittedRegistrations()[0];
+
+    await commandExecutor.execute({ type: AudioCommandType.NORMALIZE_SELECTED_REGIONS, targetPeak: 0.5 });
+
+    expect(session.getState().tracks.get(TRACK_ID)?.regions[0]).toMatchObject({ gain: 2, sourceId: SOURCE_ID });
+    expect(audioSourceRegistry.listCommittedRegistrations()).toHaveLength(1);
+    expect(audioSourceRegistry.listCommittedRegistrations()[0]?.blob).toBe(originalRegistration?.blob);
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.regions[0]).toMatchObject({ gain: 1, sourceId: SOURCE_ID });
+  });
+
+  it('Reverse는 파생 Source를 저장해 Region에 연결하고 Undo에서 원본 Source를 복원한다', async () => {
+    const { audioSourceRegistry, audioSourceRepository, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
+    await selectRegion(commandExecutor);
+    const originalBlob = audioSourceRegistry.listCommittedRegistrations()[0]?.blob;
+    vi.mocked(audioSourceRepository.create).mockClear();
+
+    await commandExecutor.execute({ type: AudioCommandType.REVERSE_SELECTED_REGIONS });
+
+    const reversedRegion = session.getState().tracks.get(TRACK_ID)?.regions[0];
+    expect(reversedRegion?.sourceId).not.toBe(SOURCE_ID);
+    expect(reversedRegion?.sourceStartTime).toBe(0);
+    expect(
+      vi
+        .mocked(audioSourceRepository.create)
+        .mock.calls.some(([registration]) => registration.metadata.fileName.startsWith('reverse-'))
+    ).toBe(true);
+    expect(
+      audioSourceRegistry.listCommittedRegistrations().find(source => source.metadata.id === SOURCE_ID)?.blob
+    ).toBe(originalBlob);
+
+    await commandExecutor.execute({ type: AudioCommandType.UNDO });
+    expect(session.getState().tracks.get(TRACK_ID)?.regions[0]?.sourceId).toBe(SOURCE_ID);
+  });
+
+  it('파생 Source 연결 실패 시 새 runtime 등록과 저장 파일을 정리한다', async () => {
+    const { audioSourceRegistry, audioSourceRepository, commandExecutor, controller } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
+    await selectRegion(commandExecutor);
+    vi.mocked(audioSourceRepository.create).mockClear();
+    vi.mocked(audioSourceRepository.delete).mockClear();
+    vi.spyOn(controller.region, 'replaceTrackRegions').mockRejectedValueOnce(new Error('Region 교체 실패'));
+
+    await expect(commandExecutor.execute({ type: AudioCommandType.REVERSE_SELECTED_REGIONS })).rejects.toThrow(
+      'Region 교체 실패'
+    );
+
+    const createdRegistration = vi.mocked(audioSourceRepository.create).mock.calls[0]?.[0];
+    expect(createdRegistration).toBeDefined();
+    expect(audioSourceRepository.delete).toHaveBeenCalledWith(createdRegistration?.metadata.id);
+    expect(audioSourceRegistry.resolve(createdRegistration?.metadata.id ?? '')).toBeNull();
+  });
+
+  it('Strip Silence 임계값과 최소 길이를 runtime에 전달하고 파생 Source를 연결한다', async () => {
+    const { audioEngine, audioSourceRegistry, commandExecutor, session } = createTestContext();
+    await addTrack(commandExecutor);
+    await addRegion(commandExecutor, audioSourceRegistry);
+    await selectRegion(commandExecutor);
+    const renderDerivedAudioRegion = vi.spyOn(audioEngine, 'renderDerivedAudioRegion');
+
+    await commandExecutor.execute({
+      type: AudioCommandType.STRIP_SILENCE_SELECTED_REGIONS,
+      minimumSilenceSeconds: 0.2,
+      thresholdDb: -48,
+    });
+
+    expect(renderDerivedAudioRegion).toHaveBeenCalledWith(
+      expect.objectContaining({ minimumSilenceSeconds: 0.2, operation: 'stripSilence', thresholdDb: -48 })
+    );
+    expect(session.getState().tracks.get(TRACK_ID)?.regions[0]?.sourceId).not.toBe(SOURCE_ID);
+  });
+
   it('선택 Region을 nudge하고 한 번의 Undo·Redo로 전체 편집을 복원한다', async () => {
     const { audioSourceRegistry, commandExecutor, session } = createTestContext();
     await addTrack(commandExecutor);

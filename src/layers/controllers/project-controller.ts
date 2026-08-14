@@ -337,7 +337,12 @@ export class ProjectController {
         }
 
         return {
+          fadeIn: { ...region.fadeIn },
+          fadeOut: { ...region.fadeOut },
+          gain: region.gain,
           id: region.id,
+          isOpaque: region.isOpaque,
+          layer: region.layer,
           url: source.objectUrl,
           startTime: region.startTime,
           sourceStartTime: region.sourceStartTime,

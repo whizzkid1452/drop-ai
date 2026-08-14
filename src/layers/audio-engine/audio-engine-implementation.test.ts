@@ -14,8 +14,11 @@ interface PlayerMockState {
   buffer: { duration: number };
   destination?: unknown;
   disposed: boolean;
+  fadeIn: number;
+  fadeOut: number;
   source: unknown;
   unsyncCount: number;
+  volume: { value: number };
 }
 
 interface GainMockState {
@@ -280,11 +283,17 @@ vi.mock('tone', () => {
     buffer = { duration: 10 };
     destination?: unknown;
     disposed = false;
+    fadeIn: number;
+    fadeOut: number;
     source: unknown;
     unsyncCount = 0;
+    volume: { value: number };
 
-    constructor(options?: { url?: unknown }) {
+    constructor(options?: { fadeIn?: number; fadeOut?: number; url?: unknown; volume?: number }) {
+      this.fadeIn = options?.fadeIn ?? 0;
+      this.fadeOut = options?.fadeOut ?? 0;
       this.source = options?.url;
+      this.volume = { value: options?.volume ?? 0 };
       toneMocks.playerInstances.push(this);
     }
 
@@ -423,9 +432,15 @@ import type {
   LinearRecordingCapture,
   StartLinearRecordingRuntimeRequest,
 } from './recording-runtime/linear-recording-runtime';
+import { createDefaultRegionProcessingState } from '../shared/types/region-processing';
 
 const ORIGINAL_REGION = {
+  fadeIn: { crossfadeId: null, curve: 'linear' as const, durationSeconds: 0 },
+  fadeOut: { crossfadeId: null, curve: 'linear' as const, durationSeconds: 0 },
+  gain: 1,
   id: 'region-1',
+  isOpaque: false,
+  layer: 0,
   url: 'original.wav',
   startTime: 4,
   sourceStartTime: 2,
@@ -844,6 +859,152 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     expect(toneMocks.playerLoad).toHaveBeenCalledWith('original.wav');
     expect(toneMocks.playerSync).toHaveBeenCalledOnce();
     expect(toneMocks.playerStart).toHaveBeenCalledWith(4, 2, 3);
+  });
+
+  it('Region gain과 linear Fade를 Player에 적용한다', async () => {
+    const engine = new AudioEngine();
+
+    await engine.addRegion('track-1', {
+      ...ORIGINAL_REGION,
+      fadeIn: { crossfadeId: null, curve: 'linear', durationSeconds: 0.5 },
+      fadeOut: { crossfadeId: null, curve: 'linear', durationSeconds: 1 },
+      gain: 0.25,
+    });
+
+    expect(toneMocks.playerInstances[0]).toMatchObject({
+      fadeIn: 0.5,
+      fadeOut: 1,
+      volume: { value: 0.25 },
+    });
+  });
+
+  it('높은 opaque Region의 구간에서는 낮은 Region Player를 예약하지 않는다', async () => {
+    const engine = new AudioEngine();
+
+    const replacement = await engine.prepareProjectGraph({
+      tracks: [
+        {
+          id: 'track-1',
+          isMuted: false,
+          isSoloed: false,
+          pan: 0,
+          pluginInstances: [],
+          regions: [
+            { ...ORIGINAL_REGION, duration: 10, sourceStartTime: 0, startTime: 0 },
+            {
+              ...ORIGINAL_REGION,
+              duration: 2,
+              id: 'cover',
+              isOpaque: true,
+              layer: 1,
+              sourceStartTime: 0,
+              startTime: 3,
+            },
+          ],
+          volume: 1,
+        },
+      ],
+    });
+    replacement.discard();
+
+    expect(toneMocks.playerStart).toHaveBeenCalledWith(0, 0, 3);
+    expect(toneMocks.playerStart).toHaveBeenCalledWith(5, 5, 5);
+    expect(toneMocks.playerStart).toHaveBeenCalledWith(3, 0, 2);
+  });
+
+  it('opaque Region을 추가하면 같은 Track의 낮은 Region 예약을 다시 계산한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addRegion('track-1', {
+      ...ORIGINAL_REGION,
+      duration: 10,
+      id: 'lower',
+      sourceStartTime: 0,
+      startTime: 0,
+    });
+
+    toneMocks.playerStart.mockClear();
+    await engine.addRegion('track-1', {
+      ...ORIGINAL_REGION,
+      duration: 2,
+      id: 'cover',
+      isOpaque: true,
+      layer: 1,
+      sourceStartTime: 0,
+      startTime: 3,
+    });
+
+    expect(toneMocks.playerStart).toHaveBeenCalledWith(0, 0, 3);
+    expect(toneMocks.playerStart).toHaveBeenCalledWith(5, 5, 5);
+    expect(toneMocks.playerStart).toHaveBeenCalledWith(3, 0, 2);
+  });
+
+  it('opaque Region을 이동하거나 제거하면 같은 Track의 낮은 Region 예약을 다시 계산한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addRegion('track-1', {
+      ...ORIGINAL_REGION,
+      duration: 10,
+      id: 'lower',
+      sourceStartTime: 0,
+      startTime: 0,
+    });
+    await engine.addRegion('track-1', {
+      ...ORIGINAL_REGION,
+      duration: 2,
+      id: 'cover',
+      isOpaque: true,
+      layer: 1,
+      sourceStartTime: 0,
+      startTime: 3,
+    });
+
+    toneMocks.playerStart.mockClear();
+    engine.rescheduleRegion({ trackId: 'track-1', regionId: 'cover', startTime: 6 });
+    expect(toneMocks.playerStart).toHaveBeenCalledWith(0, 0, 6);
+    expect(toneMocks.playerStart).toHaveBeenCalledWith(8, 8, 2);
+    expect(toneMocks.playerStart).toHaveBeenCalledWith(6, 0, 2);
+
+    toneMocks.playerStart.mockClear();
+    engine.removeRegion('track-1', 'cover');
+    expect(toneMocks.playerStart).toHaveBeenCalledWith(0, 0, 10);
+  });
+
+  it('Region 교체 시 같은 Track의 opaque Region을 예약 계산에 포함한다', async () => {
+    const engine = new AudioEngine();
+    await engine.addRegion('track-1', {
+      ...ORIGINAL_REGION,
+      duration: 10,
+      id: 'lower',
+      sourceStartTime: 0,
+      startTime: 0,
+    });
+    await engine.addRegion('track-1', {
+      ...ORIGINAL_REGION,
+      duration: 2,
+      id: 'cover',
+      isOpaque: true,
+      layer: 1,
+      sourceStartTime: 0,
+      startTime: 3,
+    });
+
+    toneMocks.playerStart.mockClear();
+    await engine.replaceRegion({
+      trackId: 'track-1',
+      regionId: 'lower',
+      replacements: [
+        {
+          ...ORIGINAL_REGION,
+          duration: 10,
+          id: 'replacement',
+          sourceStartTime: 0,
+          startTime: 0,
+        },
+      ],
+    });
+
+    expect(toneMocks.playerStart).toHaveBeenCalledWith(0, 0, 3);
+    expect(toneMocks.playerStart).toHaveBeenCalledWith(5, 5, 5);
+    expect(toneMocks.playerStart).not.toHaveBeenCalledWith(0, 0, 10);
   });
 
   it('Region Player를 Track input에 연결하고 input을 Channel 앞에 둔다', async () => {
@@ -2304,7 +2465,16 @@ describe('AudioEngine Export 회귀', () => {
           isMuted: false,
           isSoloed: false,
           pluginInstances: [],
-          regions: [{ id: 'region-1', url: 'test.wav', startTime: 1, sourceStartTime: 1, duration: 10 }],
+          regions: [
+            {
+              ...createDefaultRegionProcessingState(),
+              id: 'region-1',
+              url: 'test.wav',
+              startTime: 1,
+              sourceStartTime: 1,
+              duration: 10,
+            },
+          ],
         },
       ],
       masterVolume: 0.5,
@@ -2333,7 +2503,16 @@ describe('AudioEngine Export 회귀', () => {
       isMuted: false,
       isSoloed,
       pluginInstances: [],
-      regions: [{ id: `${id}-region`, url, startTime: 0, sourceStartTime: 0, duration: 1 }],
+      regions: [
+        {
+          ...createDefaultRegionProcessingState(),
+          id: `${id}-region`,
+          url,
+          startTime: 0,
+          sourceStartTime: 0,
+          duration: 1,
+        },
+      ],
     });
 
     await engine.exportProject({
@@ -2369,7 +2548,16 @@ describe('AudioEngine Export 회귀', () => {
               parameterValues: new Map([['gain', 0.5]]),
             },
           ],
-          regions: [{ id: 'region-1', url: 'test.wav', startTime: 0, sourceStartTime: 0, duration: 1 }],
+          regions: [
+            {
+              ...createDefaultRegionProcessingState(),
+              id: 'region-1',
+              url: 'test.wav',
+              startTime: 0,
+              sourceStartTime: 0,
+              duration: 1,
+            },
+          ],
         },
       ],
       masterVolume: 1,
@@ -2403,7 +2591,16 @@ describe('AudioEngine Export 회귀', () => {
               parameterValues: new Map([['gain', 0.5]]),
             },
           ],
-          regions: [{ id: 'region-1', url: 'test.wav', startTime: 0, sourceStartTime: 0, duration: 1 }],
+          regions: [
+            {
+              ...createDefaultRegionProcessingState(),
+              id: 'region-1',
+              url: 'test.wav',
+              startTime: 0,
+              sourceStartTime: 0,
+              duration: 1,
+            },
+          ],
         },
       ],
       masterVolume: 1,
@@ -2437,7 +2634,16 @@ describe('AudioEngine Export 회귀', () => {
                 parameterValues: new Map(),
               },
             ],
-            regions: [{ id: 'region-1', url: 'test.wav', startTime: 0, sourceStartTime: 0, duration: 1 }],
+            regions: [
+              {
+                ...createDefaultRegionProcessingState(),
+                id: 'region-1',
+                url: 'test.wav',
+                startTime: 0,
+                sourceStartTime: 0,
+                duration: 1,
+              },
+            ],
           },
         ],
         masterVolume: 1,

@@ -1,4 +1,5 @@
 import type { ExportRange, ExportRegion } from '../i-audio-engine';
+import type { RegionFadeState } from '../../shared/types/region-processing';
 
 /**
  * Region 렌더링 파라미터
@@ -14,6 +15,9 @@ export interface RegionRenderParams {
   startOffset: number;
   /** 재생 지속 시간 (초) */
   duration: number;
+  fadeIn: RegionFadeState;
+  fadeOut: RegionFadeState;
+  gain: number;
 }
 
 /**
@@ -44,6 +48,9 @@ export class RegionRenderer {
       startTime: region.startTime,
       startOffset: region.sourceStartTime,
       duration: region.duration,
+      fadeIn: { ...region.fadeIn },
+      fadeOut: { ...region.fadeOut },
+      gain: region.gain,
     };
   }
 
@@ -63,6 +70,8 @@ export class RegionRenderer {
     }
 
     let { startTime, startOffset, duration } = params;
+    let fadeIn = { ...params.fadeIn };
+    let fadeOut = { ...params.fadeOut };
     const regionEndTime = startTime + duration;
 
     // 1. 리전이 Export 범위 밖인 경우: duration을 0으로
@@ -76,12 +85,14 @@ export class RegionRenderer {
       startOffset += trimAmountFromLeft;
       duration -= trimAmountFromLeft;
       startTime = exportRange.startTime;
+      fadeIn = { ...fadeIn, durationSeconds: Math.max(0, fadeIn.durationSeconds - trimAmountFromLeft) };
     }
 
     // 3. 오른쪽이 잘리는 경우 (리전이 Export 끝점을 넘어감)
     if (regionEndTime > exportRange.endTime) {
       const trimAmountFromRight = regionEndTime - exportRange.endTime;
       duration -= trimAmountFromRight;
+      fadeOut = { ...fadeOut, durationSeconds: Math.max(0, fadeOut.durationSeconds - trimAmountFromRight) };
     }
 
     // 4. Export 시작점 기준으로 시간 조정
@@ -92,6 +103,9 @@ export class RegionRenderer {
       startTime: adjustedStartTime,
       startOffset,
       duration,
+      fadeIn,
+      fadeOut,
+      gain: params.gain,
     };
   }
 }

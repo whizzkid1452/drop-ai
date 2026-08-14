@@ -33,6 +33,9 @@ import type {
   IRetiredAudioProjectGraph,
   PrepareAudioProjectGraphRequest,
   RegionData,
+  AnalyzeAudioRegionPeakRequest,
+  RenderDerivedAudioRegionRequest,
+  RenderedDerivedAudioRegion,
   ReplaceRegionRequest,
   RescheduleRegionRequest,
   SetAudioTempoMapRequest,
@@ -57,10 +60,13 @@ import type { IAudioPluginRuntime, IAudioPluginRuntimeFactory } from './plugins/
 import { AudioPluginRuntimeError } from './plugins/errors';
 import type { ILinearRecordingAudioRuntime } from './recording-runtime/linear-recording-runtime';
 import { RegionRenderer, type RegionRenderParams } from './renderers/region-renderer';
+import { createAudibleRegionSegments } from './region-playback-segments';
+import { analyzePcmPeak, reversePcmChannels, stripSilenceFromPcmChannels } from './region-audio-processing';
 import { ToneTransportRuntime } from './transport-runtime/tone-transport-runtime';
 
 interface RegionPlayerEntry {
-  player: Tone.Player;
+  players: Tone.Player[];
+  playbackSegments: RegionData[];
   regionData: RegionData;
   revision: number;
 }
@@ -68,6 +74,7 @@ interface RegionPlayerEntry {
 interface CreateRegionEntriesRequest {
   input: Tone.Gain;
   regions: RegionData[];
+  schedulingRegions?: readonly RegionData[];
 }
 
 interface AudioProjectGraphState {
@@ -505,7 +512,7 @@ export class AudioEngine implements IAudioEngine {
       this.graphRevision += 1;
     }
     const trackPlayers = this.players.get(trackId);
-    trackPlayers?.forEach(entry => this.disposePlayer(entry.player));
+    trackPlayers?.forEach(entry => entry.players.forEach(player => this.disposePlayer(player)));
     this.players.delete(trackId);
 
     this.pluginRuntimes
@@ -787,7 +794,12 @@ export class AudioEngine implements IAudioEngine {
     }
     this.graphRevision += 1;
 
-    const [entry] = await this.createScheduledRegionEntries({ input, regions: [regionData] });
+    const schedulingRegions = [...trackPlayers.values()].map(candidate => candidate.regionData).concat(regionData);
+    const [entry] = await this.createScheduledRegionEntries({
+      input,
+      regions: [regionData],
+      schedulingRegions,
+    });
     this.ensureRuntimeReadyOrCleanupEntries(entry ? [entry] : []);
     if (!entry) {
       return;
@@ -801,7 +813,24 @@ export class AudioEngine implements IAudioEngine {
       throw this.createRegionIdConflictError({ trackId, regionId: regionData.id });
     }
 
-    trackPlayers.set(entry.regionData.id, entry);
+    if (regionData.isOpaque) {
+      let nextEntries: RegionPlayerEntry[];
+      try {
+        nextEntries = this.createRescheduledTrackRegionEntries({
+          input,
+          loadedEntries: [entry],
+          regions: schedulingRegions,
+          trackPlayers,
+        });
+      } catch (error) {
+        this.cleanupRegionEntries([entry]);
+        throw error;
+      }
+      this.cleanupRegionEntries([entry]);
+      this.replaceActiveTrackRegionEntries(trackPlayers, nextEntries);
+    } else {
+      trackPlayers.set(entry.regionData.id, entry);
+    }
     this.graphRevision += 1;
   }
 
@@ -814,8 +843,22 @@ export class AudioEngine implements IAudioEngine {
     }
 
     this.graphRevision += 1;
-    this.disposePlayer(entry.player);
-    trackPlayers?.delete(regionId);
+    if (!entry.regionData.isOpaque || !trackPlayers) {
+      entry.players.forEach(player => this.disposePlayer(player));
+      trackPlayers?.delete(regionId);
+      return;
+    }
+
+    const input = this.getExistingInput(trackId);
+    const remainingRegions = [...trackPlayers.values()]
+      .filter(candidate => candidate.regionData.id !== regionId)
+      .map(candidate => candidate.regionData);
+    const nextEntries = this.createRescheduledTrackRegionEntries({
+      input,
+      regions: remainingRegions,
+      trackPlayers,
+    });
+    this.replaceActiveTrackRegionEntries(trackPlayers, nextEntries);
   }
 
   rescheduleRegion(request: RescheduleRegionRequest): void {
@@ -824,15 +867,31 @@ export class AudioEngine implements IAudioEngine {
     const entry = this.getRegionEntry(request);
     const input = this.getExistingInput(request.trackId);
     this.graphRevision += 1;
-    const nextRegionData = { ...entry.regionData, startTime: request.startTime };
-    const nextEntry: RegionPlayerEntry = {
-      player: new Tone.Player({ url: entry.player.buffer, loop: false }).connect(input),
-      regionData: this.cloneRegionData(nextRegionData),
+    const nextRegionData = this.cloneRegionData({ ...entry.regionData, startTime: request.startTime });
+    const nextTrackRegions = [...(trackPlayers?.values() ?? [])].map(candidate =>
+      candidate.regionData.id === request.regionId ? nextRegionData : candidate.regionData
+    );
+    if (entry.regionData.isOpaque && trackPlayers) {
+      const nextEntries = this.createRescheduledTrackRegionEntries({
+        input,
+        regions: nextTrackRegions,
+        trackPlayers,
+        updatedEntries: new Map([[request.regionId, { ...entry, regionData: nextRegionData }]]),
+      });
+      this.replaceActiveTrackRegionEntries(trackPlayers, nextEntries);
+      return;
+    }
+
+    const nextEntry = this.createRegionEntryFromBuffer({
+      buffer: entry.players[0]?.buffer,
+      input,
+      regionData: nextRegionData,
+      regions: nextTrackRegions,
       revision: entry.revision + 1,
-    };
+    });
 
     try {
-      this.schedulePlayer(nextEntry.player, nextEntry.regionData);
+      this.scheduleEntryPlayers(nextEntry);
     } catch (error) {
       this.cleanupRegionEntries([nextEntry]);
       throw new AudioEngineError(AudioEngineErrorCode.REGION_SCHEDULE_FAILED, ERROR_MESSAGES.REGION_SCHEDULE_FAILED, {
@@ -840,7 +899,7 @@ export class AudioEngine implements IAudioEngine {
       });
     }
 
-    this.disposePlayer(entry.player);
+    entry.players.forEach(player => this.disposePlayer(player));
     trackPlayers?.set(request.regionId, nextEntry);
   }
 
@@ -856,9 +915,14 @@ export class AudioEngine implements IAudioEngine {
     this.validateReplacementIds(trackPlayers, request);
     const input = this.getExistingInput(request.trackId);
     this.graphRevision += 1;
+    const schedulingRegions = [...trackPlayers.values()]
+      .filter(entry => entry.regionData.id !== request.regionId)
+      .map(entry => entry.regionData)
+      .concat(request.replacements);
     const replacementEntries = await this.createScheduledRegionEntries({
       input,
       regions: request.replacements,
+      schedulingRegions,
     });
     this.ensureRuntimeReadyOrCleanupEntries(replacementEntries);
 
@@ -879,9 +943,28 @@ export class AudioEngine implements IAudioEngine {
       throw error;
     }
 
-    this.disposePlayer(originalEntry.player);
-    trackPlayers.delete(request.regionId);
-    replacementEntries.forEach(entry => trackPlayers.set(entry.regionData.id, entry));
+    const requiresTrackReschedule =
+      originalEntry.regionData.isOpaque || request.replacements.some(replacement => replacement.isOpaque);
+    if (requiresTrackReschedule) {
+      let nextEntries: RegionPlayerEntry[];
+      try {
+        nextEntries = this.createRescheduledTrackRegionEntries({
+          input,
+          loadedEntries: replacementEntries,
+          regions: schedulingRegions,
+          trackPlayers,
+        });
+      } catch (error) {
+        this.cleanupRegionEntries(replacementEntries);
+        throw error;
+      }
+      this.cleanupRegionEntries(replacementEntries);
+      this.replaceActiveTrackRegionEntries(trackPlayers, nextEntries);
+    } else {
+      originalEntry.players.forEach(player => this.disposePlayer(player));
+      trackPlayers.delete(request.regionId);
+      replacementEntries.forEach(entry => trackPlayers.set(entry.regionData.id, entry));
+    }
     this.graphRevision += 1;
   }
 
@@ -993,8 +1076,90 @@ export class AudioEngine implements IAudioEngine {
     }
   }
 
+  async analyzeAudioRegionPeak(request: AnalyzeAudioRegionPeakRequest): Promise<number> {
+    try {
+      const audioBuffer = await this.decodeAudioRegionBlob(request.blob);
+      return analyzePcmPeak(this.extractAudioRegionChannels(audioBuffer, request));
+    } catch (cause) {
+      throw this.createRegionProcessingError(cause);
+    }
+  }
+
+  async renderDerivedAudioRegion(request: RenderDerivedAudioRegionRequest): Promise<RenderedDerivedAudioRegion> {
+    try {
+      const sourceBuffer = await this.decodeAudioRegionBlob(request.blob);
+      const sourceChannels = this.extractAudioRegionChannels(sourceBuffer, request);
+      const outputChannels =
+        request.operation === 'reverse'
+          ? reversePcmChannels(sourceChannels)
+          : stripSilenceFromPcmChannels({
+              channels: sourceChannels,
+              minimumSilenceFrames: Math.max(
+                1,
+                Math.round((request.minimumSilenceSeconds ?? 0.1) * sourceBuffer.sampleRate)
+              ),
+              thresholdLinear: Math.pow(10, (request.thresholdDb ?? -60) / 20),
+            });
+      const frameCount = outputChannels[0]?.length ?? 0;
+      if (frameCount === 0) {
+        throw new AudioEngineError(
+          AudioEngineErrorCode.REGION_PROCESSING_EMPTY_RESULT,
+          ERROR_MESSAGES.REGION_PROCESSING_EMPTY_RESULT
+        );
+      }
+      const outputBuffer = Tone.getContext().rawContext.createBuffer(
+        outputChannels.length,
+        frameCount,
+        sourceBuffer.sampleRate
+      );
+      outputChannels.forEach((channel, channelIndex) => outputBuffer.copyToChannel(channel, channelIndex));
+      return {
+        blob: encodeAudioBufferToWav(outputBuffer),
+        durationSeconds: frameCount / sourceBuffer.sampleRate,
+      };
+    } catch (cause) {
+      if (cause instanceof AudioEngineError) {
+        throw cause;
+      }
+      throw this.createRegionProcessingError(cause);
+    }
+  }
+
   private getOrInitChannel(trackId: string): Tone.Channel {
     return this.getOrInitTrackNodes(trackId).channel;
+  }
+
+  private decodeAudioRegionBlob(blob: Blob): Promise<AudioBuffer> {
+    return blob.arrayBuffer().then(arrayBuffer => Tone.getContext().decodeAudioData(arrayBuffer));
+  }
+
+  private extractAudioRegionChannels(
+    audioBuffer: AudioBuffer,
+    request: { readonly durationSeconds: number; readonly sourceStartTimeSeconds: number }
+  ): Float32Array[] {
+    const startFrame = Math.round(request.sourceStartTimeSeconds * audioBuffer.sampleRate);
+    const frameCount = Math.round(request.durationSeconds * audioBuffer.sampleRate);
+    const endFrame = startFrame + frameCount;
+    if (
+      !Number.isSafeInteger(startFrame) ||
+      !Number.isSafeInteger(frameCount) ||
+      startFrame < 0 ||
+      frameCount <= 0 ||
+      endFrame > audioBuffer.length
+    ) {
+      throw new RangeError('Region Source 범위가 디코딩된 오디오 범위를 벗어났습니다.');
+    }
+    return Array.from({ length: audioBuffer.numberOfChannels }, (_, channelIndex) =>
+      audioBuffer.getChannelData(channelIndex).slice(startFrame, endFrame)
+    );
+  }
+
+  private createRegionProcessingError(cause: unknown): AudioEngineError {
+    return new AudioEngineError(
+      AudioEngineErrorCode.REGION_PROCESSING_FAILED,
+      ERROR_MESSAGES.REGION_PROCESSING_FAILED,
+      { cause: this.describeError(cause) }
+    );
   }
 
   private createPluginRuntime(
@@ -1391,7 +1556,9 @@ export class AudioEngine implements IAudioEngine {
 
     graph.players.forEach((trackPlayers, trackId) => {
       trackPlayers.forEach((entry, regionId) => {
-        if (this.disposePlayerSafely(entry.player, errorMessage)) {
+        const remainingPlayers = entry.players.filter(player => !this.disposePlayerSafely(player, errorMessage));
+        entry.players = remainingPlayers;
+        if (remainingPlayers.length === 0) {
           trackPlayers.delete(regionId);
         }
       });
@@ -1886,16 +2053,20 @@ export class AudioEngine implements IAudioEngine {
 
   private async createScheduledRegionEntries(request: CreateRegionEntriesRequest): Promise<RegionPlayerEntry[]> {
     const entries: RegionPlayerEntry[] = [];
+    const schedulingRegions = request.schedulingRegions ?? request.regions;
 
     try {
       request.regions.forEach(regionData => {
+        const playbackSegments = createAudibleRegionSegments({ region: regionData, regions: schedulingRegions });
+        const primarySegment = playbackSegments[0] ?? regionData;
         const entry = {
-          player: new Tone.Player({ loop: false }),
+          players: [new Tone.Player(this.createPlayerOptions(primarySegment))],
+          playbackSegments,
           regionData: this.cloneRegionData(regionData),
           revision: 0,
         };
         entries.push(entry);
-        entry.player.connect(request.input);
+        entry.players[0]?.connect(request.input);
       });
     } catch (cause) {
       this.cleanupRegionEntries(entries);
@@ -1904,7 +2075,7 @@ export class AudioEngine implements IAudioEngine {
       });
     }
 
-    const loadResults = await Promise.allSettled(entries.map(entry => entry.player.load(entry.regionData.url)));
+    const loadResults = await Promise.allSettled(entries.map(entry => entry.players[0]?.load(entry.regionData.url)));
     const loadFailure = loadResults.find(result => result.status === 'rejected');
     if (loadFailure?.status === 'rejected') {
       this.cleanupRegionEntries(entries);
@@ -1914,7 +2085,10 @@ export class AudioEngine implements IAudioEngine {
     }
 
     try {
-      entries.forEach(entry => this.schedulePlayer(entry.player, entry.regionData));
+      entries.forEach(entry => {
+        this.appendAdditionalSegmentPlayers(entry, request.input);
+        this.scheduleEntryPlayers(entry);
+      });
     } catch (error) {
       this.cleanupRegionEntries(entries);
       throw new AudioEngineError(AudioEngineErrorCode.REGION_SCHEDULE_FAILED, ERROR_MESSAGES.REGION_SCHEDULE_FAILED, {
@@ -1923,6 +2097,121 @@ export class AudioEngine implements IAudioEngine {
     }
 
     return entries;
+  }
+
+  private createRescheduledTrackRegionEntries({
+    input,
+    loadedEntries = [],
+    regions,
+    trackPlayers,
+    updatedEntries = new Map(),
+  }: {
+    readonly input: Tone.Gain;
+    readonly loadedEntries?: readonly RegionPlayerEntry[];
+    readonly regions: readonly RegionData[];
+    readonly trackPlayers: ReadonlyMap<string, RegionPlayerEntry>;
+    readonly updatedEntries?: ReadonlyMap<string, RegionPlayerEntry>;
+  }): RegionPlayerEntry[] {
+    const sourceEntries = new Map(trackPlayers);
+    updatedEntries.forEach((entry, regionId) => sourceEntries.set(regionId, entry));
+    loadedEntries.forEach(entry => sourceEntries.set(entry.regionData.id, entry));
+    const nextEntries: RegionPlayerEntry[] = [];
+
+    try {
+      regions.forEach(regionData => {
+        const sourceEntry = sourceEntries.get(regionData.id);
+        const nextEntry = this.createRegionEntryFromBuffer({
+          buffer: sourceEntry?.players[0]?.buffer,
+          input,
+          regionData,
+          regions,
+          revision: (sourceEntry?.revision ?? 0) + 1,
+        });
+        nextEntries.push(nextEntry);
+        this.scheduleEntryPlayers(nextEntry);
+      });
+    } catch (error) {
+      this.cleanupRegionEntries(nextEntries);
+      if (error instanceof AudioEngineError) {
+        throw error;
+      }
+      throw new AudioEngineError(AudioEngineErrorCode.REGION_SCHEDULE_FAILED, ERROR_MESSAGES.REGION_SCHEDULE_FAILED, {
+        cause: this.describeError(error),
+      });
+    }
+
+    return nextEntries;
+  }
+
+  private replaceActiveTrackRegionEntries(
+    trackPlayers: Map<string, RegionPlayerEntry>,
+    nextEntries: readonly RegionPlayerEntry[]
+  ): void {
+    const previousEntries = [...trackPlayers.values()];
+    trackPlayers.clear();
+    nextEntries.forEach(entry => trackPlayers.set(entry.regionData.id, entry));
+    this.cleanupRegionEntries(previousEntries);
+  }
+
+  private createRegionEntryFromBuffer({
+    buffer,
+    input,
+    regionData,
+    regions,
+    revision,
+  }: {
+    readonly buffer: Tone.ToneAudioBuffer | undefined;
+    readonly input: Tone.Gain;
+    readonly regionData: RegionData;
+    readonly regions: readonly RegionData[];
+    readonly revision: number;
+  }): RegionPlayerEntry {
+    if (!buffer) {
+      throw new AudioEngineError(AudioEngineErrorCode.REGION_STATE_CHANGED, ERROR_MESSAGES.REGION_STATE_CHANGED, {
+        regionId: regionData.id,
+      });
+    }
+
+    const playbackSegments = createAudibleRegionSegments({ region: regionData, regions });
+    const segmentsForPlayers = playbackSegments.length === 0 ? [regionData] : playbackSegments;
+    const players = segmentsForPlayers.map(segment =>
+      new Tone.Player({ ...this.createPlayerOptions(segment), url: buffer }).connect(input)
+    );
+    return {
+      playbackSegments,
+      players,
+      regionData: this.cloneRegionData(regionData),
+      revision,
+    };
+  }
+
+  private appendAdditionalSegmentPlayers(entry: RegionPlayerEntry, input: Tone.Gain): void {
+    const buffer = entry.players[0]?.buffer;
+    if (!buffer) {
+      return;
+    }
+
+    entry.playbackSegments.slice(1).forEach(segment => {
+      entry.players.push(new Tone.Player({ ...this.createPlayerOptions(segment), url: buffer }).connect(input));
+    });
+  }
+
+  private createPlayerOptions(regionData: RegionData): Partial<Tone.PlayerOptions> {
+    return {
+      fadeIn: regionData.fadeIn.durationSeconds,
+      fadeOut: regionData.fadeOut.durationSeconds,
+      loop: false,
+      volume: Tone.gainToDb(regionData.gain),
+    };
+  }
+
+  private scheduleEntryPlayers(entry: RegionPlayerEntry): void {
+    entry.playbackSegments.forEach((segment, index) => {
+      const player = entry.players[index];
+      if (player) {
+        this.schedulePlayer(player, segment);
+      }
+    });
   }
 
   private schedulePlayer(player: Tone.Player, regionData: RegionData): void {
@@ -1972,12 +2261,16 @@ export class AudioEngine implements IAudioEngine {
   }
 
   private cloneRegionData(regionData: RegionData): RegionData {
-    return { ...regionData };
+    return {
+      ...regionData,
+      fadeIn: { ...regionData.fadeIn },
+      fadeOut: { ...regionData.fadeOut },
+    };
   }
 
   private cleanupRegionEntries(entries: RegionPlayerEntry[]): void {
     entries.forEach(entry => {
-      this.disposePlayerSafely(entry.player, 'Region Player 정리에 실패했습니다.');
+      entry.players.forEach(player => this.disposePlayerSafely(player, 'Region Player 정리에 실패했습니다.'));
     });
   }
 
@@ -2066,12 +2359,26 @@ export class AudioEngine implements IAudioEngine {
       });
 
       for (const region of track.regions) {
-        const params = RegionRenderer.adjustForExportRange(RegionRenderer.calculateRenderParams(region), request.range);
-        if (params.duration <= 0) {
-          continue;
-        }
+        const segments = createAudibleRegionSegments({ region, regions: track.regions });
+        segments.forEach(segment => {
+          const params = RegionRenderer.adjustForExportRange(
+            RegionRenderer.calculateRenderParams(segment),
+            request.range
+          );
+          if (params.duration <= 0) {
+            return;
+          }
 
-        scheduledPlayers.push({ player: new Tone.Player({ loop: false }).connect(input), params });
+          scheduledPlayers.push({
+            player: new Tone.Player({
+              fadeIn: params.fadeIn.durationSeconds,
+              fadeOut: params.fadeOut.durationSeconds,
+              loop: false,
+              volume: Tone.gainToDb(params.gain),
+            }).connect(input),
+            params,
+          });
+        });
       }
     }
 

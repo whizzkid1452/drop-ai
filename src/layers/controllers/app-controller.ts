@@ -18,6 +18,7 @@ import { MeterController } from './meter-controller';
 import { LiveInputController } from './live-input-controller';
 import { RecordingController } from './recording-controller';
 import { EditorController } from './editor-controller';
+import { RegionProcessingController } from './region-processing-controller';
 
 interface AppControllerDependencies {
   sessionStore: SessionStore;
@@ -46,6 +47,7 @@ export class AppController {
   public readonly liveInput: LiveInputController;
   public readonly recording: RecordingController;
   public readonly editor: EditorController;
+  public readonly regionProcessing: RegionProcessingController;
 
   constructor({
     sessionStore,
@@ -60,6 +62,14 @@ export class AppController {
     this.track = new TrackController({ sessionStore, audioEngine, audioSourceRegistry });
     this.region = new RegionController({ sessionStore, audioEngine, audioSourceRegistry });
     this.editor = new EditorController({ regionRuntime: this.region, sessionStore });
+    this.regionProcessing = new RegionProcessingController({
+      audioEngine,
+      audioSourceRegistry,
+      audioSourceRepository,
+      editorController: this.editor,
+      regionRuntime: this.region,
+      sessionStore,
+    });
     this.export = new ExportController({ sessionStore, audioEngine, audioSourceResolver: audioSourceRegistry });
     this.project = new ProjectController({
       sessionStore,

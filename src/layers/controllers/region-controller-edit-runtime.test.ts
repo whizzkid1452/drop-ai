@@ -63,7 +63,12 @@ async function createRuntime() {
   audioSourceRegistry.attach({ regionId: REGION_ID, sourceId: SOURCE_ID });
   await audioEngine.addRegion(TRACK_ID, {
     duration: 2,
+    fadeIn: { crossfadeId: null, curve: 'linear', durationSeconds: 0 },
+    fadeOut: { crossfadeId: null, curve: 'linear', durationSeconds: 0 },
+    gain: 1,
     id: REGION_ID,
+    isOpaque: false,
+    layer: 0,
     sourceStartTime: 0,
     startTime: 1,
     url: source.objectUrl,

@@ -131,7 +131,12 @@ export class ExportController {
 
   private createExportRegion(region: RegionState, url: string): ExportRegion {
     return {
+      fadeIn: { ...region.fadeIn },
+      fadeOut: { ...region.fadeOut },
+      gain: region.gain,
       id: region.id,
+      isOpaque: region.isOpaque,
+      layer: region.layer,
       url,
       startTime: region.startTime,
       sourceStartTime: region.sourceStartTime,
