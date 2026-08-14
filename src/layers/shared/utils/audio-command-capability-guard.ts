@@ -33,6 +33,18 @@ export class UnsupportedAudioCommandError extends Error {
   }
 }
 
+export function isAudioCommandCapabilityAllowed(
+  commandType: AudioCommandType,
+  capabilities: AudioRuntimeCapabilities
+): boolean {
+  const feature = getAudioCommandFeatureRequirement(commandType);
+  if (feature === null) {
+    return true;
+  }
+
+  return capabilities.features[feature].status === 'available';
+}
+
 export function assertAudioCommandCapability({ capabilities, command }: AssertAudioCommandCapabilityOptions): void {
   const feature = getAudioCommandFeatureRequirement(command.type);
   if (feature === null) {

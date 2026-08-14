@@ -38,6 +38,7 @@ vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
     listCommittedMetadata: () => [],
   }),
   useCommandExecutor: () => ({ executeMany: mocks.executeMany }),
+  useAudioRuntimeCapabilities: () => ({ features: {} }),
   useSession: (selector: (state: typeof mocks.sessionState) => unknown) => selector(mocks.sessionState),
 }));
 

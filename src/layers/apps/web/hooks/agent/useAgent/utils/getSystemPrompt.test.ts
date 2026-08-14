@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { AgentAudioCommandBatchSchema, AudioCommandType } from '@/types/audioCommand.schema';
 import {
+  AudioRuntimeFeature,
+  CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
+  PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT,
+  resolveAudioRuntimeCapabilities,
+} from '@/layers/shared/utils/audio-runtime-capabilities';
+import {
   AGENT_PLUGIN_CONTEXT_MAX_CHARACTERS,
   AGENT_PROJECT_CONTEXT_MAX_CHARACTERS,
   AGENT_PROMPT_EXAMPLES,
@@ -83,6 +89,21 @@ describe('Agent 시스템 Prompt', () => {
     for (const commandType of Object.values(AudioCommandType)) {
       expect(prompt).toContain(`- ${commandType}:`);
     }
+  });
+
+  it('사용 불가 기능 명령을 지원 목록과 예시에서 제외한다', () => {
+    const capabilities = resolveAudioRuntimeCapabilities(PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT, {
+      ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
+      [AudioRuntimeFeature.MIDI]: false,
+      [AudioRuntimeFeature.TEMPO_LOOP_METRONOME]: false,
+    });
+    const prompt = getSystemPrompt({ capabilities, tracks });
+
+    expect(prompt).not.toContain('- ADD_MIDI_TRACK:');
+    expect(prompt).not.toContain('- SET_TEMPO:');
+    expect(prompt).not.toContain('"type":"SET_TEMPO","tempo":128');
+    expect(prompt).toContain('- PLAY:');
+    expect(prompt).toContain('지원 명령 목록에 없는 타입은 사용하지 않고');
   });
 
   it('Track 이름과 이름 변경 예시를 제공한다', () => {
@@ -272,6 +293,7 @@ describe('Agent 시스템 Prompt', () => {
     expect(prompt).toContain('"sourceId":"<listed Source UUID>"');
     expect(prompt).not.toContain('"sourceId":"<listed Source UUID optional>"');
     expect(prompt).toContain('정보가 부족하면 []');
+    expect(prompt).toContain('지원 명령 목록에 없는 타입은 사용하지 않고');
     expect(prompt).toContain('ADD_TRACK은 현재 Agent에서 사용하지 않는다');
     expect(prompt).toContain('{"type":"ADD_TRACK","trackId":"<new UUID>"}');
     expect(prompt).not.toContain('{"type":"ADD_TRACK","trackId":"<new UUID>","url"');

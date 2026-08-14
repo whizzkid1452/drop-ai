@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { AudioCommandType } from '../types/audioCommand.schema';
-import { assertAudioCommandCapability, UnsupportedAudioCommandError } from './audio-command-capability-guard';
+import {
+  assertAudioCommandCapability,
+  isAudioCommandCapabilityAllowed,
+  UnsupportedAudioCommandError,
+} from './audio-command-capability-guard';
 import {
   AudioRuntimeBlocker,
   AudioRuntimeFeature,
@@ -13,6 +17,7 @@ describe('assertAudioCommandCapability', () => {
   it('사용 가능한 기능 명령은 통과시킨다', () => {
     const capabilities = resolveAudioRuntimeCapabilities(PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT);
 
+    expect(isAudioCommandCapabilityAllowed(AudioCommandType.PLAY, capabilities)).toBe(true);
     expect(() =>
       assertAudioCommandCapability({
         capabilities,
@@ -56,6 +61,8 @@ describe('assertAudioCommandCapability', () => {
         status: 'unsupported',
       });
     }
+
+    expect(isAudioCommandCapabilityAllowed(AudioCommandType.ADD_MIDI_TRACK, capabilities)).toBe(false);
   });
 
   it('환경 차단 기능 명령을 실행 전에 거부한다', () => {

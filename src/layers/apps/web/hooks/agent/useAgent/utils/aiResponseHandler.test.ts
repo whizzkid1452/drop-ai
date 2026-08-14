@@ -3,6 +3,10 @@ import { CommandBatchExecutionError, type CommandBatchExecutionResult } from '@/
 import type { MLCEngine } from '@/types/webllm.types';
 import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
 import { handleAIResponse } from './aiResponseHandler';
+import {
+  PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT,
+  resolveAudioRuntimeCapabilities,
+} from '@/layers/shared/utils/audio-runtime-capabilities';
 
 const mocks = vi.hoisted(() => ({
   queryToLLM: vi.fn(),
@@ -61,6 +65,22 @@ describe('Agent 응답 명령 검증', () => {
     expect(mocks.queryToLLM).toHaveBeenCalledWith(
       expect.objectContaining({ engine, plugins, tracks: [], userInput: 'Plugin 추가' })
     );
+  });
+
+  it('runtime 기능 상태를 LLM 요청에 전달한다', async () => {
+    const capabilities = resolveAudioRuntimeCapabilities(PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT);
+    mocks.queryToLLM.mockResolvedValueOnce({ fullResponse: '[]', error: null });
+
+    await handleAIResponse({
+      capabilities,
+      engine,
+      plugins: [],
+      tracks: [],
+      userInput: '재생',
+      executeMany,
+    });
+
+    expect(mocks.queryToLLM).toHaveBeenCalledWith(expect.objectContaining({ capabilities }));
   });
 
   it('응답 생성 중 취소되면 명령을 실행하지 않는다', async () => {
