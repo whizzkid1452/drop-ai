@@ -9,13 +9,19 @@ import type { TrackToggleResult } from '@/layers/apps/web/hooks/track-mute-solo-
 import { TrackComponent } from './TrackComponent';
 import { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 
-const { renderAutomationLaneEditor, renderMidiRegionComponent, renderPianoRollEditor, renderRegionComponent } =
-  vi.hoisted(() => ({
-    renderAutomationLaneEditor: vi.fn(),
-    renderMidiRegionComponent: vi.fn(),
-    renderPianoRollEditor: vi.fn(),
-    renderRegionComponent: vi.fn(),
-  }));
+const {
+  renderAutomationLaneEditor,
+  renderMidiRecordingControls,
+  renderMidiRegionComponent,
+  renderPianoRollEditor,
+  renderRegionComponent,
+} = vi.hoisted(() => ({
+  renderAutomationLaneEditor: vi.fn(),
+  renderMidiRecordingControls: vi.fn(),
+  renderMidiRegionComponent: vi.fn(),
+  renderPianoRollEditor: vi.fn(),
+  renderRegionComponent: vi.fn(),
+}));
 
 vi.mock('@/layers/apps/web/hooks/useTrackActions', () => ({
   useTrackActions: () => ({
@@ -49,6 +55,13 @@ vi.mock('./PianoRollEditor', () => ({
   PianoRollEditor: (props: unknown) => {
     renderPianoRollEditor(props);
     return createElement('div', { 'data-testid': 'piano-roll-editor' });
+  },
+}));
+
+vi.mock('./MidiRecordingControls', () => ({
+  MidiRecordingControls: (props: unknown) => {
+    renderMidiRecordingControls(props);
+    return createElement('div', { 'data-testid': 'midi-recording-controls' });
   },
 }));
 

@@ -46,7 +46,9 @@ export function quantizeMidiNotes(request: QuantizeMidiNotesRequest) {
               }
               const gridTimeSeconds = Math.round(note.startOffsetSeconds / request.stepSeconds) * request.stepSeconds;
               const latestStartTimeSeconds = region.durationSeconds - note.durationSeconds;
-              return { ...note, startOffsetSeconds: Math.min(latestStartTimeSeconds, Math.max(0, gridTimeSeconds)) };
+              const latestGridTimeSeconds =
+                Math.floor(latestStartTimeSeconds / request.stepSeconds) * request.stepSeconds;
+              return { ...note, startOffsetSeconds: Math.min(latestGridTimeSeconds, Math.max(0, gridTimeSeconds)) };
             }),
           }
         : region

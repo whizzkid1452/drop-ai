@@ -38,6 +38,9 @@ const mountedRoots: Root[] = [];
 
 vi.mock('./PianoRollEditor.css.ts', () => ({
   button: 'button',
+  controlLaneActions: 'controlLaneActions',
+  controlLaneEditor: 'controlLaneEditor',
+  controlPoint: 'controlPoint',
   error: 'error',
   grid: 'grid',
   header: 'header',
@@ -52,7 +55,7 @@ vi.mock('./PianoRollEditor.css.ts', () => ({
   titleRow: 'titleRow',
 }));
 
-function renderEditor(onChange = vi.fn().mockResolvedValue(undefined)) {
+function renderEditor(onChange = vi.fn().mockResolvedValue(undefined), midiState: MidiTrackState = midi) {
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
@@ -61,7 +64,7 @@ function renderEditor(onChange = vi.fn().mockResolvedValue(undefined)) {
     root.render(
       createElement(PianoRollEditor, {
         editPointSeconds: 1.5,
-        midi,
+        midi: midiState,
         onChange,
         regionId: REGION_ID,
         trackName: 'Keys',
@@ -146,6 +149,77 @@ describe('PianoRollEditor', () => {
     await act(async () => note?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Delete' })));
     expect(onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ regions: [expect.objectContaining({ notes: [] })] })
+    );
+  });
+
+  it('edit point에 CC lane과 첫 제어 point를 추가한다', async () => {
+    vi.spyOn(crypto, 'randomUUID')
+      .mockReturnValueOnce('33333333-3333-4333-8333-333333333333')
+      .mockReturnValueOnce('44444444-4444-4444-8444-444444444444');
+    const { host, onChange } = renderEditor();
+
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Keys CC lane 추가"]')?.click());
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        regions: [
+          expect.objectContaining({
+            controlLanes: [
+              expect.objectContaining({
+                channel: 1,
+                controllerNumber: 1,
+                points: [expect.objectContaining({ timeOffsetSeconds: 1.5, value: 64 })],
+                type: 'controlChange',
+              }),
+            ],
+          }),
+        ],
+      })
+    );
+  });
+
+  it('선택한 pitch bend point 값을 MIDI 범위 안에서 변경한다', async () => {
+    const midiWithControlLane: MidiTrackState = {
+      ...midi,
+      regions: [
+        {
+          ...midi.regions[0],
+          controlLanes: [
+            {
+              channel: 1,
+              id: '33333333-3333-4333-8333-333333333333',
+              points: [
+                {
+                  id: '44444444-4444-4444-8444-444444444444',
+                  timeOffsetSeconds: 1,
+                  value: 0,
+                },
+              ],
+              type: 'pitchBend',
+            },
+          ],
+        },
+      ],
+    };
+    const { host, onChange } = renderEditor(vi.fn().mockResolvedValue(undefined), midiWithControlLane);
+    const valueInput = host.querySelector<HTMLInputElement>('input[aria-label="Keys Pitch Bend point 1 값"]');
+    const setInputValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+
+    await act(async () => {
+      if (valueInput && setInputValue) {
+        setInputValue.call(valueInput, '9000');
+        valueInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        regions: [
+          expect.objectContaining({
+            controlLanes: [expect.objectContaining({ points: [expect.objectContaining({ value: 8191 })] })],
+          }),
+        ],
+      })
     );
   });
 });

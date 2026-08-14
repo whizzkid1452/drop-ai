@@ -21,6 +21,7 @@ import { describeAudioRuntimeFeatureCapability } from '@/layers/apps/web/utils/a
 import type { MidiTrackState } from '@/layers/shared/types/midi-state';
 import { MidiRegionComponent } from './MidiRegionComponent';
 import { PianoRollEditor } from './PianoRollEditor';
+import { MidiRecordingControls } from './MidiRecordingControls';
 
 export interface RegionWaveSurferReadyEvent {
   trackId: string;
@@ -343,6 +344,14 @@ export const TrackComponent = memo(function TrackComponent({
           editPointSeconds={editPointSeconds}
           midi={track.midi}
           onChange={onMidiChange}
+          recordingControls={
+            <MidiRecordingControls
+              midi={track.midi}
+              regionId={activeMidiRegionId}
+              trackId={track.id}
+              trackName={track.name}
+            />
+          }
           regionId={activeMidiRegionId}
           trackName={track.name}
         />
