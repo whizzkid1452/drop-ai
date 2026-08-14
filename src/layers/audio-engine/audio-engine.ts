@@ -9,7 +9,7 @@ import {
 } from '../shared/utils/audio-runtime-capabilities';
 import { startPlayer } from './config/player-config';
 import { encodeAudioBufferToWav } from './encoders/wav-encoder';
-import { AudioEngineError, AudioEngineErrorCode, ERROR_MESSAGES } from './errors';
+import { AudioEngineError, AudioEngineErrorCode, ERROR_MESSAGES, UnsupportedAudioFeatureError } from './errors';
 import type {
   AudioProjectGraphPluginInstance,
   ArmLoopRequest,
@@ -20,6 +20,8 @@ import type {
   LoadLoopRequest,
   LoopRuntimeListener,
   LoopSlotAddress,
+  MeterFrame,
+  MeterTarget,
   MoveAudioPluginRequest,
   IPreparedAudioProjectGraph,
   IRetiredAudioProjectGraph,
@@ -240,6 +242,11 @@ export class AudioEngine implements IAudioEngine {
   setMetronomeVolume(volume: number): void {
     this.ensureRuntimeReady();
     this.transportRuntime.setMetronomeVolume(volume);
+  }
+
+  readMeterFrame(target: MeterTarget): MeterFrame {
+    void target;
+    throw new UnsupportedAudioFeatureError({ feature: AudioRuntimeFeature.METERING, method: 'readMeterFrame' });
   }
 
   setLiveInputDevice(deviceId: string | null): Promise<string | null> {

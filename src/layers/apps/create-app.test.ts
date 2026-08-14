@@ -5,6 +5,7 @@ import type { IAudioSourceRepository } from '../audio-source-repository/i-audio-
 import { CommandExecutor } from '../commands/command-executor';
 import { MockAudioEngine } from '../audio-engine/mock-audio-engine';
 import { PlaybackClockQuery } from '../queries/playback-clock-query';
+import { MeterQuery } from '../queries/meter-query';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import type { IProjectSyncService } from '../project-sync/i-project-sync';
 import { AudioCommandType } from '../shared/types/audioCommand.schema';
@@ -482,6 +483,20 @@ describe('createApp', () => {
     expect(app.playbackClock).toBeInstanceOf(PlaybackClockQuery);
     expect(app.playbackClock.getCurrentTime()).toBe(7.5);
     expect('controller' in app).toBe(false);
+  });
+
+  it('AudioEngine을 노출하지 않고 읽기 전용 MeterQuery를 조립한다', () => {
+    const audioEngine = new MockAudioEngine();
+    audioEngine.setMockMeterFrame(
+      { kind: 'master' },
+      { capturedAtSeconds: 2, channels: [{ isClipHeld: false, peakDbfs: -3, rmsDbfs: -9 }] }
+    );
+
+    const app = createTestApp({ audioEngine });
+
+    expect(app.meter).toBeInstanceOf(MeterQuery);
+    expect(app.meter.read({ kind: 'master' })).toMatchObject({ capturedAtSeconds: 2 });
+    expect('audioEngine' in app).toBe(false);
   });
 
   it('CLI 테스트용 AudioEngine도 Composition Root에서 조립한다', async () => {
