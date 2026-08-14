@@ -317,6 +317,7 @@ export class AudioEngine implements IAudioEngine {
   private readonly renderJobStateListeners = new Set<RenderJobStateListener>();
   private cancelledRenderJobId: string | null = null;
   private activeRenderJobId: string | null = null;
+  private lastOfflineRenderRealtimeRatio: number | null = null;
 
   listAvailablePluginManifestIds(): readonly string[] {
     return [...this.pluginRuntimeFactories.keys()];
@@ -364,6 +365,8 @@ export class AudioEngine implements IAudioEngine {
   getRuntimeHealth(): AudioEngineRuntimeHealth {
     return {
       audioContextState: normalizeAudioContextState(Tone.getContext().state),
+      dspLoadRatio: null,
+      lastOfflineRenderRealtimeRatio: this.lastOfflineRenderRealtimeRatio,
       pendingCleanupResourceCount:
         this.pendingGraphCleanup.size +
         this.pendingChannelCleanup.size +
@@ -1643,12 +1646,14 @@ export class AudioEngine implements IAudioEngine {
     if (request.tracks.length === 0) {
       throw new AudioEngineError(AudioEngineErrorCode.EXPORT_NO_TRACKS, ERROR_MESSAGES.EXPORT_NO_TRACKS);
     }
+    const renderStartedAtMilliseconds = performance.now();
     const renderedBuffer = await Tone.Offline(
       async () => this.scheduleExport(request),
       duration,
       2,
       request.sampleRate
     );
+    this.lastOfflineRenderRealtimeRatio = (performance.now() - renderStartedAtMilliseconds) / (duration * 1_000);
     const audioBuffer = renderedBuffer.get();
     if (!audioBuffer) {
       throw new AudioEngineError(AudioEngineErrorCode.RENDER_FAILED, ERROR_MESSAGES.RENDER_FAILED);
