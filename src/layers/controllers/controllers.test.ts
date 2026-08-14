@@ -112,6 +112,14 @@ describe('Controllers - Phase 3 검증', () => {
   });
 
   describe('PlaybackController 확장', () => {
+    it('AudioContext 재개를 AudioEngine에 위임한다', async () => {
+      engine.setMockRuntimeHealth({ audioContextState: 'suspended', pendingCleanupResourceCount: 0 });
+
+      await controller.playback.resumeAudioRuntime();
+
+      expect(engine.getRuntimeHealth().audioContextState).toBe('running');
+    });
+
     it('handleSeek 호출 가능', () => {
       expect(() => controller.playback.handleSeek(5.5)).not.toThrow();
     });

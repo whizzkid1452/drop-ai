@@ -54,6 +54,8 @@ export const AGENT_PLUGIN_CONTEXT_MAX_CHARACTERS = 1200;
 const EXAMPLE_PROJECT_ID = '99999999-9999-4999-8999-999999999999';
 
 const COMMAND_REFERENCE = {
+  [AudioCommandType.RESUME_AUDIO_RUNTIME]:
+    '{"type":"RESUME_AUDIO_RUNTIME"} - 중단된 AudioContext를 사용자 동작으로 재개하고 대기 중인 runtime 정리를 재시도',
   [AudioCommandType.SET_AUDIO_INPUT_DEVICE]:
     '{"type":"SET_AUDIO_INPUT_DEVICE","deviceId":"<browser audio input device ID or null>"} - 실시간 입력 장치 선택',
   [AudioCommandType.SET_INPUT_MONITORING]:

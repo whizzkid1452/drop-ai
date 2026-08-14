@@ -228,6 +228,10 @@ export class CommandExecutor {
         this.controller.playback.handleStop();
         return;
 
+      case AudioCommandType.RESUME_AUDIO_RUNTIME:
+        await this.controller.playback.resumeAudioRuntime();
+        return;
+
       case AudioCommandType.SET_AUDIO_INPUT_DEVICE:
         await this.controller.loop.setInputDevice(validatedCommand.deviceId);
         return;
@@ -906,6 +910,7 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.PLAY:
     case AudioCommandType.PAUSE:
     case AudioCommandType.STOP:
+    case AudioCommandType.RESUME_AUDIO_RUNTIME:
     case AudioCommandType.SET_MONITOR_STATE:
     case AudioCommandType.SET_AUDIO_INPUT_DEVICE:
     case AudioCommandType.SET_INPUT_MONITORING:

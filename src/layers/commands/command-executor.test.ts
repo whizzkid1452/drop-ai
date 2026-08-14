@@ -1689,6 +1689,16 @@ describe('CommandExecutor', () => {
     expect(session.getState().isPlaying).toBe(true);
   });
 
+  it('AudioContext 재개 명령은 재생 상태를 바꾸지 않고 runtime만 재개한다', async () => {
+    const { audioEngine, commandExecutor, session } = createTestContext();
+    audioEngine.setMockRuntimeHealth({ audioContextState: 'suspended', pendingCleanupResourceCount: 0 });
+
+    await commandExecutor.execute({ type: AudioCommandType.RESUME_AUDIO_RUNTIME });
+
+    expect(audioEngine.getRuntimeHealth().audioContextState).toBe('running');
+    expect(session.getState().isPlaying).toBe(false);
+  });
+
   it('LOAD_REGION 명령으로 Region을 추가한다', async () => {
     const { audioSourceRegistry, commandExecutor, session } = createTestContext();
     await addTrack(commandExecutor);

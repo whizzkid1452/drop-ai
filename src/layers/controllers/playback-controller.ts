@@ -32,6 +32,10 @@ export class PlaybackController {
     this.sessionStore.getState().setPlaying(true);
   }
 
+  async resumeAudioRuntime(): Promise<void> {
+    await this.audioEngine.resumeRuntime();
+  }
+
   handleStop(): void {
     console.log('[PlaybackController] Handling Stop Request');
 
