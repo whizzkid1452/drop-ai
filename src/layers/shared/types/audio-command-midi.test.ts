@@ -67,4 +67,55 @@ describe('MIDI 명령 계약', () => {
       false
     );
   });
+
+  it('MIDI 녹음 시작 명령의 입력 route를 검증한다', () => {
+    const command = {
+      inputChannel: 16,
+      inputId: 'keyboard-1',
+      trackId: TRACK_ID,
+      type: AudioCommandType.START_MIDI_RECORDING,
+    };
+
+    expect(StrictAudioCommandSchema.parse(command)).toEqual(command);
+    expect(StrictAudioCommandSchema.safeParse({ ...command, inputChannel: 17 }).success).toBe(false);
+    expect(StrictAudioCommandSchema.safeParse({ ...command, inputId: ' ' }).success).toBe(false);
+  });
+
+  it('MIDI 녹음 모드와 종료 명령을 검증한다', () => {
+    expect(
+      StrictAudioCommandSchema.parse({
+        recordMode: 'overdub',
+        trackId: TRACK_ID,
+        type: AudioCommandType.SET_MIDI_RECORD_MODE,
+      })
+    ).toMatchObject({ recordMode: 'overdub' });
+    expect(
+      StrictAudioCommandSchema.parse({ trackId: TRACK_ID, type: AudioCommandType.STOP_MIDI_RECORDING })
+    ).toMatchObject({ trackId: TRACK_ID });
+    expect(
+      StrictAudioCommandSchema.parse({ trackId: TRACK_ID, type: AudioCommandType.CANCEL_MIDI_RECORDING })
+    ).toMatchObject({ trackId: TRACK_ID });
+  });
+
+  it('Quantize 간격과 Transpose 범위를 검증한다', () => {
+    const quantize = {
+      noteIds: [NOTE_ID],
+      regionId: REGION_ID,
+      stepSeconds: 0.25,
+      trackId: TRACK_ID,
+      type: AudioCommandType.QUANTIZE_MIDI_NOTES,
+    };
+    const transpose = {
+      noteIds: [NOTE_ID],
+      regionId: REGION_ID,
+      semitones: -12,
+      trackId: TRACK_ID,
+      type: AudioCommandType.TRANSPOSE_MIDI_NOTES,
+    };
+
+    expect(StrictAudioCommandSchema.parse(quantize)).toEqual(quantize);
+    expect(StrictAudioCommandSchema.parse(transpose)).toEqual(transpose);
+    expect(StrictAudioCommandSchema.safeParse({ ...quantize, stepSeconds: 0 }).success).toBe(false);
+    expect(StrictAudioCommandSchema.safeParse({ ...transpose, semitones: 128 }).success).toBe(false);
+  });
 });

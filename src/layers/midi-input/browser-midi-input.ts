@@ -1,4 +1,4 @@
-import type { IMidiInput, MidiInputDevice, MidiNoteOnEvent, MidiNoteOnListener } from './i-midi-input';
+import type { IMidiInput, MidiInputDevice, MidiInputEvent, MidiInputListener } from './i-midi-input';
 import { MidiInputError, MidiInputErrorCode } from './midi-input-error';
 
 type RequestMidiAccess = (options?: MIDIOptions) => Promise<MIDIAccess>;
@@ -19,26 +19,50 @@ function resolveDefaultRequestMidiAccess(): RequestMidiAccess | null {
   return options => navigator.requestMIDIAccess(options);
 }
 
-function parseNoteOnEvent(inputId: string, data: Uint8Array): MidiNoteOnEvent | null {
-  const [status, note, velocity] = data;
-  if (status === undefined || note === undefined || velocity === undefined) {
+function parseChannelVoiceEvent(inputId: string, data: Uint8Array): MidiInputEvent | null {
+  const status = data[0];
+  const firstDataByte = data[1];
+  if (status === undefined || firstDataByte === undefined) {
     return null;
   }
   const messageType = status & 0xf0;
-  // MIDI 규약은 velocity 0인 Note On을 Note Off로 해석한다.
-  if (messageType !== 0x90 || velocity === 0) {
+  const channel = (status & 0x0f) + 1;
+  if (messageType === 0xd0) {
+    return { channel, inputId, type: 'channelPressure', value: firstDataByte };
+  }
+
+  const secondDataByte = data[2];
+  if (secondDataByte === undefined) {
     return null;
   }
-  return {
-    channel: (status & 0x0f) + 1,
-    inputId,
-    note,
-    velocity,
-  };
+  if (messageType === 0x80 || (messageType === 0x90 && secondDataByte === 0)) {
+    return { channel, inputId, note: firstDataByte, type: 'noteOff', velocity: secondDataByte };
+  }
+  if (messageType === 0x90) {
+    return { channel, inputId, note: firstDataByte, type: 'noteOn', velocity: secondDataByte };
+  }
+  if (messageType === 0xb0) {
+    return {
+      channel,
+      controllerNumber: firstDataByte,
+      inputId,
+      type: 'controlChange',
+      value: secondDataByte,
+    };
+  }
+  if (messageType === 0xe0) {
+    return {
+      channel,
+      inputId,
+      type: 'pitchBend',
+      value: (secondDataByte << 7) + firstDataByte - 8192,
+    };
+  }
+  return null;
 }
 
 export class BrowserMidiInput implements IMidiInput {
-  readonly #listeners = new Set<MidiNoteOnListener>();
+  readonly #listeners = new Set<MidiInputListener>();
   readonly #requestMidiAccess: RequestMidiAccess | null;
   #access: MIDIAccess | null = null;
   #bindings: MidiInputBinding[] = [];
@@ -81,7 +105,7 @@ export class BrowserMidiInput implements IMidiInput {
     this.#access = null;
   }
 
-  subscribe(listener: MidiNoteOnListener): () => void {
+  subscribe(listener: MidiInputListener): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
   }
@@ -91,9 +115,9 @@ export class BrowserMidiInput implements IMidiInput {
     this.#access?.inputs.forEach(input => {
       const listener: EventListener = event => {
         const messageData = (event as MIDIMessageEvent).data;
-        const noteOnEvent = messageData ? parseNoteOnEvent(input.id, messageData) : null;
-        if (noteOnEvent) {
-          this.#listeners.forEach(noteListener => noteListener(noteOnEvent));
+        const midiEvent = messageData ? parseChannelVoiceEvent(input.id, messageData) : null;
+        if (midiEvent) {
+          this.#listeners.forEach(midiListener => midiListener(midiEvent));
         }
       };
       input.addEventListener('midimessage', listener);

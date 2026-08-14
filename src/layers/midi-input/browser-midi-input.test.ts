@@ -4,7 +4,7 @@ import { BrowserMidiInput } from './browser-midi-input';
 class FakeMidiInput extends EventTarget {
   readonly id = 'midi-input-1';
   readonly manufacturer = '테스트 제조사';
-  readonly name = '테스트 패드';
+  readonly name = '테스트 키보드';
   readonly state = 'connected' as const;
 
   emit(data: readonly number[]): void {
@@ -39,7 +39,7 @@ describe('BrowserMidiInput', () => {
     expect(requestMidiAccess).toHaveBeenCalledWith({ sysex: false });
   });
 
-  it('Note On 메시지를 채널·노트·속도로 변환한다', async () => {
+  it('Note On 메시지를 채널·음표·속도로 변환한다', async () => {
     const input = new FakeMidiInput();
     const midiInput = new BrowserMidiInput({ requestMidiAccess: () => Promise.resolve(createMidiAccess(input)) });
     const listener = vi.fn();
@@ -48,24 +48,47 @@ describe('BrowserMidiInput', () => {
 
     input.emit([0x92, 36, 100]);
 
-    expect(listener).toHaveBeenCalledWith({ channel: 3, inputId: input.id, note: 36, velocity: 100 });
+    expect(listener).toHaveBeenCalledWith({
+      channel: 3,
+      inputId: input.id,
+      note: 36,
+      type: 'noteOn',
+      velocity: 100,
+    });
   });
 
   it.each([
-    [0x82, 36, 100],
-    [0x92, 36, 0],
-    [0xb2, 36, 100],
-  ])('Note On이 아닌 메시지 %j를 무시한다', async (status, note, velocity) => {
+    [[0x82, 36, 64], { channel: 3, inputId: 'midi-input-1', note: 36, type: 'noteOff', velocity: 64 }],
+    [[0x92, 36, 0], { channel: 3, inputId: 'midi-input-1', note: 36, type: 'noteOff', velocity: 0 }],
+    [[0xb2, 74, 100], { channel: 3, controllerNumber: 74, inputId: 'midi-input-1', type: 'controlChange', value: 100 }],
+    [[0xd2, 96], { channel: 3, inputId: 'midi-input-1', type: 'channelPressure', value: 96 }],
+    [[0xe2, 0, 96], { channel: 3, inputId: 'midi-input-1', type: 'pitchBend', value: 4096 }],
+  ])('channel voice 메시지 %j를 정규화한다', async (message, expected) => {
     const input = new FakeMidiInput();
     const midiInput = new BrowserMidiInput({ requestMidiAccess: () => Promise.resolve(createMidiAccess(input)) });
     const listener = vi.fn();
     midiInput.subscribe(listener);
     await midiInput.connect();
 
-    input.emit([status, note, velocity]);
+    input.emit(message);
 
-    expect(listener).not.toHaveBeenCalled();
+    expect(listener).toHaveBeenCalledWith(expected);
   });
+
+  it.each([{ message: [0xa2, 36, 100] }, { message: [0xf8] }])(
+    '지원 범위 밖의 메시지 $message를 무시한다',
+    async ({ message }) => {
+      const input = new FakeMidiInput();
+      const midiInput = new BrowserMidiInput({ requestMidiAccess: () => Promise.resolve(createMidiAccess(input)) });
+      const listener = vi.fn();
+      midiInput.subscribe(listener);
+      await midiInput.connect();
+
+      input.emit(message);
+
+      expect(listener).not.toHaveBeenCalled();
+    }
+  );
 
   it('Web MIDI API가 없으면 분류된 오류를 반환한다', async () => {
     const midiInput = new BrowserMidiInput({ requestMidiAccess: null });
