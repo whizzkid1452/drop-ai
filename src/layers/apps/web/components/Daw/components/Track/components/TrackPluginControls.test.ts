@@ -4,7 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AudioCommand } from '@/types/audioCommand.schema';
-import type { PluginCatalogEntry, PluginInstanceState } from '@/types/plugin-state';
+import type { PluginCatalogEntry, PluginInstanceState, PluginRuntimeState } from '@/types/plugin-state';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import { TrackPluginControls } from './TrackPluginControls';
 
@@ -18,6 +18,9 @@ const pluginCatalog = new Map<string, PluginCatalogEntry>([
       id: 'builtin.multi',
       name: 'Multi Effect',
       version: '1.0.0',
+      category: 'utility',
+      presets: [{ id: 'warm', name: 'Warm', parameterValues: { gain: 1.5 } }],
+      supportsSidechain: true,
       parameters: [
         {
           id: 'gain',
@@ -66,19 +69,40 @@ const orderedPluginInstances: PluginInstanceState[] = [
 const layerMocks = vi.hoisted(() => ({
   execute: vi.fn<(command: AudioCommand) => Promise<unknown>>(),
   pluginCatalog: new Map<string, PluginCatalogEntry>(),
+  favoritePluginManifestIds: new Set<string>(),
+  tracks: new Map([
+    ['11111111-1111-4111-8111-111111111111', { id: '11111111-1111-4111-8111-111111111111', name: 'Track 1' }],
+    ['44444444-4444-4444-8444-444444444444', { id: '44444444-4444-4444-8444-444444444444', name: 'Kick' }],
+  ]),
+  runtimeStates: [
+    { instanceId: '22222222-2222-4222-8222-222222222222', latencySamples: 64, reason: null, status: 'active' },
+    {
+      instanceId: '33333333-3333-4333-8333-333333333333',
+      latencySamples: 0,
+      reason: null,
+      status: 'active',
+    },
+  ] as PluginRuntimeState[],
 }));
 
 vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
   useCommandExecutor: () => ({ execute: layerMocks.execute }),
-  useSession: (selector: (state: { pluginCatalog: Map<string, PluginCatalogEntry> }) => unknown) =>
-    selector({ pluginCatalog: layerMocks.pluginCatalog }),
+  usePluginRuntimeQuery: () => ({ readTrack: () => layerMocks.runtimeStates }),
+  useSession: (selector: (state: unknown) => unknown) =>
+    selector({
+      pluginCatalog: layerMocks.pluginCatalog,
+      favoritePluginManifestIds: layerMocks.favoritePluginManifestIds,
+      tracks: layerMocks.tracks,
+    }),
 }));
 
 vi.mock('./TrackPluginControls.css.ts', () => ({
   addButton: 'addButton',
   addControls: 'addControls',
+  browserControls: 'browserControls',
   container: 'container',
   emptyMessage: 'emptyMessage',
+  favoriteFilter: 'favoriteFilter',
   header: 'header',
   instance: 'instance',
   instanceActions: 'instanceActions',
@@ -87,6 +111,10 @@ vi.mock('./TrackPluginControls.css.ts', () => ({
   parameter: 'parameter',
   parameterName: 'parameterName',
   parameterValue: 'parameterValue',
+  runtimeBadge: 'runtimeBadge',
+  runtimeReason: 'runtimeReason',
+  searchInput: 'searchInput',
+  settingRow: 'settingRow',
   removeButton: 'removeButton',
   toggleButton: 'toggleButton',
   select: 'select',
@@ -134,6 +162,11 @@ afterEach(() => {
   document.body.replaceChildren();
   layerMocks.execute.mockReset();
   layerMocks.pluginCatalog = new Map();
+  layerMocks.favoritePluginManifestIds = new Set();
+  layerMocks.runtimeStates = [
+    { instanceId, latencySamples: 64, reason: null, status: 'active' },
+    { instanceId: secondInstanceId, latencySamples: 0, reason: null, status: 'active' },
+  ];
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -302,8 +335,65 @@ describe('TrackPluginControls', () => {
   it('catalog에 없는 기존 인스턴스는 삭제만 허용한다', () => {
     const host = renderControls(pluginInstances);
 
-    expect(host.textContent).toContain('Parameter 정보를 불러올 수 없습니다.');
+    expect(host.textContent).toContain('Plugin runtime과 Parameter 정보를 찾을 수 없습니다.');
     expect(host.querySelector('input[name="gain"]')).toBeNull();
     expect(host.querySelector('button[aria-label="Multi Effect Plugin 삭제"]')).not.toBeNull();
+  });
+
+  it('검색으로 설치 가능한 Plugin을 좁힌다', () => {
+    layerMocks.pluginCatalog = new Map([
+      ...pluginCatalog,
+      ['builtin.echo', { id: 'builtin.echo', name: 'Echo', version: '1.0.0', category: 'delay', parameters: [] }],
+    ]);
+    const host = renderControls();
+    const searchInput = host.querySelector<HTMLInputElement>('input[aria-label="Plugin 검색"]');
+    const pluginSelect = host.querySelector<HTMLSelectElement>('select[aria-label="설치할 Plugin"]');
+    if (!searchInput || !pluginSelect) {
+      throw new Error('Plugin 검색 UI를 찾을 수 없습니다.');
+    }
+
+    changeInput(searchInput, 'echo');
+
+    expect([...pluginSelect.options].map(option => option.value)).toEqual(['builtin.echo']);
+  });
+
+  it('Preset과 sidechain source 변경 명령을 실행한다', async () => {
+    layerMocks.pluginCatalog = pluginCatalog;
+    layerMocks.execute.mockResolvedValue(undefined);
+    const host = renderControls(pluginInstances);
+    const presetSelect = host.querySelector<HTMLSelectElement>('select[aria-label="Multi Effect Preset"]');
+    const sidechainSelect = host.querySelector<HTMLSelectElement>('select[aria-label="Multi Effect Sidechain source"]');
+    if (!presetSelect || !sidechainSelect) {
+      throw new Error('Preset 또는 sidechain UI를 찾을 수 없습니다.');
+    }
+
+    changeInput(presetSelect, 'warm');
+    await act(async () => undefined);
+    changeInput(sidechainSelect, '44444444-4444-4444-8444-444444444444');
+    await act(async () => undefined);
+
+    expect(layerMocks.execute.mock.calls.map(call => call[0])).toEqual([
+      { type: AudioCommandType.APPLY_PLUGIN_PRESET, trackId, instanceId, presetId: 'warm' },
+      {
+        type: AudioCommandType.SET_PLUGIN_SIDECHAIN,
+        trackId,
+        instanceId,
+        sourceTrackId: '44444444-4444-4444-8444-444444444444',
+      },
+    ]);
+  });
+
+  it('실패한 runtime의 이유를 표시하고 편집만 비활성화한다', () => {
+    layerMocks.pluginCatalog = pluginCatalog;
+    layerMocks.runtimeStates = [
+      { instanceId, latencySamples: 0, reason: 'AudioWorklet 초기화 실패', status: 'failed' },
+    ];
+    const host = renderControls(pluginInstances);
+
+    expect(host.textContent).toContain('AudioWorklet 초기화 실패');
+    expect(host.querySelector<HTMLInputElement>('input[name="gain"]')?.disabled).toBe(true);
+    expect(host.querySelector<HTMLButtonElement>('button[aria-label="Multi Effect Plugin 삭제"]')?.disabled).toBe(
+      false
+    );
   });
 });

@@ -26,6 +26,19 @@ interface SetPluginEnabledOptions extends PluginInstanceTarget {
   isEnabled: boolean;
 }
 
+interface ApplyPluginPresetOptions extends PluginInstanceTarget {
+  presetId: string;
+}
+
+interface SetPluginSidechainOptions extends PluginInstanceTarget {
+  sourceTrackId: string | null;
+}
+
+interface SetPluginFavoriteOptions {
+  manifestId: string;
+  isFavorite: boolean;
+}
+
 interface CommandExecutionOptions {
   executeCommand: (command: AudioCommand) => Promise<unknown>;
   notifyFailure: (message: string) => void;
@@ -37,7 +50,10 @@ interface PluginActionExecutionOptions extends CommandExecutionOptions {
     | MovePluginCommand
     | RemovePluginCommand
     | SetPluginEnabledCommand
-    | SetPluginParameterCommand;
+    | SetPluginParameterCommand
+    | ApplyPluginPresetCommand
+    | SetPluginSidechainCommand
+    | SetPluginFavoriteCommand;
   failureMessage: string;
 }
 
@@ -46,6 +62,9 @@ type MovePluginCommand = Extract<AudioCommand, { type: typeof AudioCommandType.M
 type RemovePluginCommand = Extract<AudioCommand, { type: typeof AudioCommandType.REMOVE_PLUGIN }>;
 type SetPluginEnabledCommand = Extract<AudioCommand, { type: typeof AudioCommandType.SET_PLUGIN_ENABLED }>;
 type SetPluginParameterCommand = Extract<AudioCommand, { type: typeof AudioCommandType.SET_PLUGIN_PARAMETER }>;
+type ApplyPluginPresetCommand = Extract<AudioCommand, { type: typeof AudioCommandType.APPLY_PLUGIN_PRESET }>;
+type SetPluginSidechainCommand = Extract<AudioCommand, { type: typeof AudioCommandType.SET_PLUGIN_SIDECHAIN }>;
+type SetPluginFavoriteCommand = Extract<AudioCommand, { type: typeof AudioCommandType.SET_PLUGIN_FAVORITE }>;
 export type PluginActionResult = 'updated' | 'failed';
 
 function getErrorMessage(error: unknown): string {
@@ -189,6 +208,50 @@ export function executePluginEnabledChange({
   return executePluginAction({
     command: createSetPluginEnabledCommand({ trackId, instanceId, isEnabled }),
     failureMessage: 'Plugin 활성화 상태를 변경하지 못했습니다',
+    executeCommand,
+    notifyFailure,
+  });
+}
+
+export function executePluginPresetApply({
+  trackId,
+  instanceId,
+  presetId,
+  executeCommand,
+  notifyFailure,
+}: ApplyPluginPresetOptions & CommandExecutionOptions): Promise<PluginActionResult> {
+  return executePluginAction({
+    command: { type: AudioCommandType.APPLY_PLUGIN_PRESET, trackId, instanceId, presetId },
+    failureMessage: 'Plugin Preset을 적용하지 못했습니다.',
+    executeCommand,
+    notifyFailure,
+  });
+}
+
+export function executePluginSidechainChange({
+  trackId,
+  instanceId,
+  sourceTrackId,
+  executeCommand,
+  notifyFailure,
+}: SetPluginSidechainOptions & CommandExecutionOptions): Promise<PluginActionResult> {
+  return executePluginAction({
+    command: { type: AudioCommandType.SET_PLUGIN_SIDECHAIN, trackId, instanceId, sourceTrackId },
+    failureMessage: 'Plugin sidechain source를 변경하지 못했습니다.',
+    executeCommand,
+    notifyFailure,
+  });
+}
+
+export function executePluginFavoriteChange({
+  manifestId,
+  isFavorite,
+  executeCommand,
+  notifyFailure,
+}: SetPluginFavoriteOptions & CommandExecutionOptions): Promise<PluginActionResult> {
+  return executePluginAction({
+    command: { type: AudioCommandType.SET_PLUGIN_FAVORITE, manifestId, isFavorite },
+    failureMessage: 'Plugin Favorite을 변경하지 못했습니다.',
     executeCommand,
     notifyFailure,
   });

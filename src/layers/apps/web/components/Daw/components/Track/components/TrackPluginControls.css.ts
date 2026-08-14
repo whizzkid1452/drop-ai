@@ -51,6 +51,33 @@ export const addControls = style({
   minWidth: 0,
 });
 
+export const browserControls = style({
+  display: 'grid',
+  gridTemplateColumns: 'minmax(80px, 1fr) minmax(80px, 110px)',
+  gap: '3px',
+  alignItems: 'center',
+});
+
+export const searchInput = style({
+  minWidth: 0,
+  height: '22px',
+  padding: '0 5px',
+  border: '1px solid #111416',
+  borderRadius: '2px',
+  backgroundColor: '#171a1c',
+  color: '#d8dadb',
+  fontSize: '9px',
+});
+
+export const favoriteFilter = style({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '3px',
+  gridColumn: '1 / -1',
+  color: '#aeb3b5',
+  fontSize: '9px',
+});
+
 export const select = style({
   minWidth: 0,
   maxWidth: '120px',
@@ -101,6 +128,34 @@ export const instanceHeader = style({
 export const instanceActions = style({
   display: 'flex',
   gap: '2px',
+});
+
+export const runtimeBadge = style({
+  padding: '1px 3px',
+  borderRadius: '2px',
+  backgroundColor: '#171a1c',
+  color: '#8fd8a5',
+  fontFamily: '"Consolas", "SFMono-Regular", monospace',
+  fontSize: '8px',
+  selectors: {
+    '&[data-status="failed"], &[data-status="missing"]': { color: '#f09a8c' },
+    '&[data-status="bypassed"]': { color: '#b3b7b9' },
+  },
+});
+
+export const runtimeReason = style({
+  color: '#f09a8c',
+  fontSize: '9px',
+  lineHeight: 1.3,
+});
+
+export const settingRow = style({
+  display: 'grid',
+  gridTemplateColumns: '52px minmax(80px, 1fr)',
+  alignItems: 'center',
+  gap: '4px',
+  color: '#aeb3b5',
+  fontSize: '9px',
 });
 
 export const parameter = style({

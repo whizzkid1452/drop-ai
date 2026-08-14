@@ -22,6 +22,7 @@ import type { IAudioMonitorQuery } from '../../../queries/audio-monitor-query';
 import type { AudioMonitorState } from '../../../shared/types/audio-monitor-state';
 import type { IMidiRecordingQuery } from '../../../queries/midi-recording-query';
 import type { MidiRecordingRuntimeState } from '../../../shared/types/midi-recording';
+import type { IPluginRuntimeQuery } from '../../../queries/plugin-runtime-query';
 
 export function useAudioRuntimeCapabilities(): AudioRuntimeCapabilities {
   return useLayer().audioRuntimeCapabilities;
@@ -126,6 +127,10 @@ export function useAudioMonitorState(): AudioMonitorState {
 
 export function useProjectCatalog(): IProjectCatalogQuery {
   return useLayer().projectCatalog;
+}
+
+export function usePluginRuntimeQuery(): IPluginRuntimeQuery {
+  return useLayer().pluginRuntime;
 }
 
 export function useSession<T>(selector: (state: SessionState) => T): T {
