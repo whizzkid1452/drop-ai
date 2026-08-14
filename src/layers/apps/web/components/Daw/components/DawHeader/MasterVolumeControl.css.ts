@@ -1,6 +1,7 @@
 import { style } from '@vanilla-extract/css';
 
 export const form = style({
+  minWidth: '210px',
   height: '30px',
   padding: '3px 5px',
   display: 'flex',

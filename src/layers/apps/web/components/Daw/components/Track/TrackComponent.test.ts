@@ -19,6 +19,15 @@ vi.mock('./RegionComponent', () => ({
   RegionComponent: () => null,
 }));
 
+vi.mock('../AudioLevelMeter/AudioLevelMeter', () => ({
+  AudioLevelMeter: ({ label }: { label: string }) => createElement('div', { 'data-meter-label': label }),
+}));
+
+vi.mock('../LiveInputControls/TrackInputMonitoringControl', () => ({
+  TrackInputMonitoringControl: ({ trackName }: { trackName: string }) =>
+    createElement('button', { 'aria-label': `${trackName} 입력 모니터링` }),
+}));
+
 vi.mock('./Track.css.ts', () => ({
   actionControls: 'actionControls',
   muteButtonActive: 'muteButtonActive',
@@ -133,6 +142,8 @@ describe('TrackComponent 제어', () => {
 
     expect(host.querySelector(`article[aria-label="Track ${track.name}"]`)).not.toBeNull();
     expect(host.querySelector(`[aria-label="${track.name} timeline"]`)).not.toBeNull();
+    expect(host.querySelector(`[aria-label="${track.name} 입력 모니터링"]`)).not.toBeNull();
+    expect(host.querySelector('[data-meter-label="Track"]')).not.toBeNull();
   });
 
   it('Track 행을 누르면 선택을 요청하고 선택 상태를 표시한다', () => {

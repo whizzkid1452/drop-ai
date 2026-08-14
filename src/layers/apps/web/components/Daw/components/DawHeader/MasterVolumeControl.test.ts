@@ -24,6 +24,10 @@ vi.mock('./MasterVolumeControl.css.ts', () => ({
   label: 'label',
 }));
 
+vi.mock('../AudioLevelMeter/AudioLevelMeter', () => ({
+  AudioLevelMeter: () => createElement('div', { 'data-testid': 'master-meter' }),
+}));
+
 const mountedRoots: Root[] = [];
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -102,6 +106,7 @@ describe('MasterVolumeControl', () => {
       type: AudioCommandType.SET_MASTER_VOLUME,
       volume: 0.4,
     });
+    expect(form.querySelector('[data-testid="master-meter"]')).not.toBeNull();
   });
 
   it('잘못된 값은 실행하지 않고 Session 값으로 되돌린다', async () => {

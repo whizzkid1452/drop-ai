@@ -211,7 +211,7 @@ export const transportBar = style({
   minHeight: '48px',
   padding: '5px 8px',
   display: 'grid',
-  gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)',
+  gridTemplateColumns: 'auto auto minmax(0, 1fr)',
   alignItems: 'center',
   gap: '12px',
   background: 'linear-gradient(180deg, #303436 0%, #292d2f 100%)',
@@ -249,6 +249,7 @@ export const musicalPositionClock = style({
 
 export const statusSection = style({
   display: 'flex',
+  flexWrap: 'wrap',
   alignItems: 'center',
   justifyContent: 'flex-end',
   gap: '6px',
