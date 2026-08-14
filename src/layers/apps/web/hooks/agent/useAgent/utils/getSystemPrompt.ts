@@ -88,6 +88,16 @@ const COMMAND_REFERENCE = {
   [AudioCommandType.CLEAR_LOOP_SLOT]:
     '{"type":"CLEAR_LOOP_SLOT","trackId":"<existing Track UUID>","slotId":"<existing Loop Slot UUID>"} - 루프 슬롯 비우기',
   [AudioCommandType.STOP_ALL_LOOPS]: '{"type":"STOP_ALL_LOOPS"} - 모든 루프 정지 예약',
+  [AudioCommandType.SET_CLIP_SLOT_SETTINGS]:
+    '{"type":"SET_CLIP_SLOT_SETTINGS","trackId":"<Track UUID>","slotId":"<Slot UUID>","name":"<name>","gain":<0..1>,"sourceStartTimeSeconds":0,"sourceEndTimeSeconds":null,"launchMode":"trigger|gate|toggle|repeat","quantizationBars":<1|2|4|8>,"followAction":{"type":"none|next|stop","afterBars":<1|2|4|8>}} - Clip 설정 변경',
+  [AudioCommandType.START_CUE_RECORDING]: '{"type":"START_CUE_RECORDING"} - Cue 연주 기록 시작',
+  [AudioCommandType.STOP_CUE_RECORDING]: '{"type":"STOP_CUE_RECORDING","name":"<name>"} - Cue 연주 기록 저장',
+  [AudioCommandType.CANCEL_CUE_RECORDING]: '{"type":"CANCEL_CUE_RECORDING"} - Cue 연주 기록 취소',
+  [AudioCommandType.SET_CUE_STATE]: '{"type":"SET_CUE_STATE","cue":{"performances":[]}} - Cue 상태 교체',
+  [AudioCommandType.DELETE_CUE_PERFORMANCE]:
+    '{"type":"DELETE_CUE_PERFORMANCE","performanceId":"<Cue Performance UUID>"} - Cue 연주 삭제',
+  [AudioCommandType.CONVERT_CUE_TO_ARRANGEMENT]:
+    '{"type":"CONVERT_CUE_TO_ARRANGEMENT","performanceId":"<Cue Performance UUID>"} - Cue 연주를 Timeline Region으로 변환',
   [AudioCommandType.UNDO]: '{"type":"UNDO"} - 마지막 편집 실행 취소',
   [AudioCommandType.REDO]: '{"type":"REDO"} - 마지막으로 취소한 편집 다시 실행',
   [AudioCommandType.ADD_TRACK]:

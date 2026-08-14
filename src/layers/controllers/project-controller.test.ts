@@ -731,7 +731,15 @@ describe('ProjectController', () => {
       expect.objectContaining({
         tracks: [
           expect.objectContaining({
-            loops: [{ slotId: LOOP_SLOT_ID, url: 'blob:project-source-1' }],
+            loops: [
+              {
+                gain: 1,
+                slotId: LOOP_SLOT_ID,
+                sourceEndTimeSeconds: null,
+                sourceStartTimeSeconds: 0,
+                url: 'blob:project-source-1',
+              },
+            ],
           }),
         ],
       })

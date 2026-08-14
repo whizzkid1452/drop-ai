@@ -18,6 +18,7 @@ import {
 import type {
   ExportRequest,
   ArmLoopRequest,
+  ConfigureLoopRequest,
   AuditionAudioSourceRequest,
   IAudioEngine,
   InstallAudioPluginRequest,
@@ -352,6 +353,10 @@ export class MockAudioEngine implements IAudioEngine {
   clearLoop(address: LoopSlotAddress): void {
     this.mockLoopStates.delete(this.createLoopKey(address));
     this.emitLoopEvent({ ...address, state: 'empty', type: 'STATE_CHANGED' });
+  }
+
+  configureLoop(request: ConfigureLoopRequest): void {
+    this.getTrack(request.trackId);
   }
 
   stopAllLoops(_request: StopAllLoopsRequest): void {

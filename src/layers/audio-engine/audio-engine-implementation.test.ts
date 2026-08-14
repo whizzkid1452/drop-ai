@@ -540,6 +540,7 @@ import { AudioEngine } from './audio-engine';
 import { AudioEngineErrorCode } from './errors';
 import type {
   ArmLoopRuntimeRequest,
+  ConfigureLoopRequest,
   ILoopAudioRuntime,
   LoadLoopRuntimeRequest,
   LoopRuntimeListener,
@@ -597,6 +598,10 @@ class LoopRuntimeStub implements ILoopAudioRuntime {
 
   clearTrack(_trackId: string): void {
     void _trackId;
+  }
+
+  configure(_request: ConfigureLoopRequest): void {
+    void _request;
   }
 
   async load(_request: LoadLoopRuntimeRequest): Promise<void> {

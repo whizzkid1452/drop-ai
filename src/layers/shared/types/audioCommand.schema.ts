@@ -6,6 +6,8 @@ import {
   ProjectAutomationPointSchema,
   ProjectMidiTrackV14Schema,
   ProjectCompSegmentSchema,
+  ProjectClipFollowActionSchema,
+  ProjectCueStateSchema,
   ProjectRoutingGraphSchema,
   ProjectRoutingRouteTargetSchema,
   ProjectTempoChangeSchema,
@@ -13,6 +15,7 @@ import {
   ProjectTimelineRangeSchema,
   ValidatedProjectExportSettingsSchema,
 } from './project-document.schema';
+import { CLIP_LAUNCH_MODES } from './clip-cue-state';
 import { RECORD_MODES } from './multitrack-recording';
 import { ROUTING_CHANNEL_COUNTS, ROUTING_SEND_TAP_POINTS, ROUTING_TRACK_KINDS } from './routing-state';
 import { MIDI_RECORD_MODES } from './midi-state';
@@ -44,6 +47,13 @@ export const AudioCommandType = {
   STOP_LOOP_SLOT: 'STOP_LOOP_SLOT',
   CLEAR_LOOP_SLOT: 'CLEAR_LOOP_SLOT',
   STOP_ALL_LOOPS: 'STOP_ALL_LOOPS',
+  SET_CLIP_SLOT_SETTINGS: 'SET_CLIP_SLOT_SETTINGS',
+  START_CUE_RECORDING: 'START_CUE_RECORDING',
+  STOP_CUE_RECORDING: 'STOP_CUE_RECORDING',
+  CANCEL_CUE_RECORDING: 'CANCEL_CUE_RECORDING',
+  SET_CUE_STATE: 'SET_CUE_STATE',
+  DELETE_CUE_PERFORMANCE: 'DELETE_CUE_PERFORMANCE',
+  CONVERT_CUE_TO_ARRANGEMENT: 'CONVERT_CUE_TO_ARRANGEMENT',
   SET_TEMPO: 'SET_TEMPO',
   SET_TIMELINE_MAP: 'SET_TIMELINE_MAP',
   SET_TIMELINE_MARKERS: 'SET_TIMELINE_MARKERS',
@@ -441,6 +451,40 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.STOP_ALL_LOOPS),
+  }),
+  z
+    .strictObject({
+      type: z.literal(AudioCommandType.SET_CLIP_SLOT_SETTINGS),
+      ...loopSlotAddressSchema,
+      followAction: ProjectClipFollowActionSchema,
+      gain: z.number().min(0).max(1),
+      launchMode: z.enum(CLIP_LAUNCH_MODES),
+      name: z.string().trim().min(1).max(255),
+      quantizationBars: loopLengthBarsSchema,
+      sourceEndTimeSeconds: z.number().finite().positive().nullable(),
+      sourceStartTimeSeconds: z.number().finite().nonnegative(),
+    })
+    .refine(
+      command => command.sourceEndTimeSeconds === null || command.sourceEndTimeSeconds > command.sourceStartTimeSeconds,
+      { message: 'Clip Source end must be greater than start', path: ['sourceEndTimeSeconds'] }
+    ),
+  z.strictObject({ type: z.literal(AudioCommandType.START_CUE_RECORDING) }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.STOP_CUE_RECORDING),
+    name: z.string().trim().min(1).max(120),
+  }),
+  z.strictObject({ type: z.literal(AudioCommandType.CANCEL_CUE_RECORDING) }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_CUE_STATE),
+    cue: ProjectCueStateSchema,
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.DELETE_CUE_PERFORMANCE),
+    performanceId: z.uuid('Invalid Cue Performance ID format'),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.CONVERT_CUE_TO_ARRANGEMENT),
+    performanceId: z.uuid('Invalid Cue Performance ID format'),
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.SET_TEMPO),

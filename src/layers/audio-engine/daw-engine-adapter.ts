@@ -12,6 +12,7 @@ import {
 } from '@daw-engine-source/browser-adapter';
 import type {
   ArmLoopRequest,
+  ConfigureLoopRequest,
   AuditionAudioSourceRequest,
   AudioMonitorState,
   AudioMonitorStateListener,
@@ -274,6 +275,10 @@ export class DawEngineAdapter implements IAudioEngine {
 
   clearLoop(address: LoopSlotAddress): void {
     this.#runtime.clearLoop(address);
+  }
+
+  configureLoop(request: ConfigureLoopRequest): void {
+    this.#runtime.configureLoop(request);
   }
 
   stopAllLoops(request: StopAllLoopsRequest): void {

@@ -8,7 +8,7 @@ import type {
   ScheduledPcmCapture,
   StartPcmCaptureRequest,
 } from '../live-input/live-pcm-capture';
-import type { ILoopPlaybackAdapter, ILoopPlayer } from './loop-playback-adapter';
+import type { CreateLoopPlayerRequest, ILoopPlaybackAdapter, ILoopPlayer } from './loop-playback-adapter';
 import { QuantizedLoopRuntime } from './quantized-loop-runtime';
 
 interface Deferred<T> {
@@ -70,6 +70,7 @@ class LivePcmCaptureStub implements ILivePcmCapture {
 }
 
 class LoopPlayerStub implements ILoopPlayer {
+  readonly configure = vi.fn();
   readonly dispose = vi.fn();
   readonly startAt = vi.fn();
   readonly stopAt = vi.fn();
@@ -79,6 +80,7 @@ class LoopPlaybackAdapterStub implements ILoopPlaybackAdapter {
   contextTimeSeconds = 20;
   transportTimeSeconds = 1;
   readonly players: LoopPlayerStub[] = [];
+  readonly createPlayerRequests: CreateLoopPlayerRequest[] = [];
   readonly setMonitoring = vi.fn();
   readonly prepare = vi.fn(async () => undefined);
   readonly decodeAudioData = vi.fn(async () => ({}) as AudioBuffer);
@@ -95,7 +97,8 @@ class LoopPlaybackAdapterStub implements ILoopPlaybackAdapter {
     return {} as AudioWorkletNode;
   }
 
-  createPlayer(): ILoopPlayer {
+  createPlayer(request: CreateLoopPlayerRequest): ILoopPlayer {
+    this.createPlayerRequests.push(request);
     const player = new LoopPlayerStub();
     this.players.push(player);
     return player;
@@ -134,6 +137,46 @@ const destination = {} as AudioNode;
 const address = { slotId: 'slot-1', trackId: 'track-1' };
 
 describe('QuantizedLoopRuntime', () => {
+  it('불러온 Clip에 gain과 Source 범위를 적용한다', async () => {
+    const { playback, runtime } = createRuntime();
+
+    await runtime.load({
+      ...address,
+      destination,
+      gain: 0.5,
+      sourceEndTimeSeconds: 1.5,
+      sourceStartTimeSeconds: 0.25,
+      url: 'data:audio/wav;base64,AA==',
+    });
+
+    expect(playback.createPlayerRequests[0]).toMatchObject({
+      gain: 0.5,
+      sourceEndTimeSeconds: 1.5,
+      sourceStartTimeSeconds: 0.25,
+    });
+  });
+
+  it('재생 중 Clip 설정을 모든 overdub Player에 반영한다', async () => {
+    const { playback, runtime } = createRuntime();
+    await runtime.load({ ...address, destination, url: 'data:audio/wav;base64,AA==' });
+    await runtime.load({ ...address, destination, url: 'data:audio/wav;base64,AA==' });
+
+    runtime.configure({
+      ...address,
+      gain: 0.25,
+      sourceEndTimeSeconds: 1,
+      sourceStartTimeSeconds: 0.5,
+    });
+
+    playback.players.forEach(player => {
+      expect(player.configure).toHaveBeenLastCalledWith({
+        gain: 0.25,
+        sourceEndTimeSeconds: 1,
+        sourceStartTimeSeconds: 0.5,
+      });
+    });
+  });
+
   it('Track별 채널을 독립 캡처하고 한 Track의 실패를 다른 결과와 분리한다', async () => {
     const { pcmCapture, runtime } = createRuntime();
 
