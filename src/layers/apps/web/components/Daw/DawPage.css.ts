@@ -256,6 +256,15 @@ export const statusSection = style({
   minWidth: 0,
 });
 
+export const editorBar = style({
+  minHeight: '34px',
+  padding: '4px 8px',
+  overflowX: 'auto',
+  overflowY: 'hidden',
+  borderTop: '1px solid #171a1c',
+  background: '#24282a',
+});
+
 export const headerRight = style({
   display: 'flex',
   alignItems: 'center',

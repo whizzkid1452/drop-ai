@@ -11,6 +11,26 @@ export const regionContainer = style({
   boxShadow: 'inset 0 1px 0 rgba(255, 143, 232, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.25)',
 });
 
+export const selectedRegion = style({
+  borderColor: '#fff2a8',
+  boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 0 2px rgba(255, 211, 77, 0.5)',
+});
+
+export const trimHandle = style({
+  position: 'absolute',
+  top: 0,
+  bottom: 0,
+  zIndex: 2,
+  width: '8px',
+  padding: 0,
+  border: 0,
+  background: 'rgba(255, 242, 168, 0.32)',
+  cursor: 'ew-resize',
+});
+
+export const startTrimHandle = style({ left: 0 });
+export const endTrimHandle = style({ right: 0 });
+
 export const waveformContainer = style({
   height: '100%',
 });

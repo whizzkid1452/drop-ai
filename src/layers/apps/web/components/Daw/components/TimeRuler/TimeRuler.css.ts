@@ -51,6 +51,9 @@ export const interactionZone = style({
   left: 0,
   right: 0,
   zIndex: 10,
+  padding: 0,
+  border: 0,
+  background: 'transparent',
   cursor: 'pointer',
   ':hover': {
     backgroundColor: 'rgba(255, 255, 255, 0.025)',

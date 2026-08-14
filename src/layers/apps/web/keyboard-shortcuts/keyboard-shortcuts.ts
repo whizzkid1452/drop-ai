@@ -4,8 +4,14 @@ const KEYBOARD_SHORTCUT_EVENT_NAME = 'drop-ai:keyboard-shortcut';
 
 export const KeyboardShortcutAction = {
   CLEAR_EXPORT_RANGE: 'CLEAR_EXPORT_RANGE',
+  COPY_REGIONS: 'COPY_REGIONS',
+  CUT_REGIONS: 'CUT_REGIONS',
+  DUPLICATE_REGIONS: 'DUPLICATE_REGIONS',
   EXPORT_AUDIO: 'EXPORT_AUDIO',
   OPEN_PROJECT: 'OPEN_PROJECT',
+  NUDGE_REGIONS_BACKWARD: 'NUDGE_REGIONS_BACKWARD',
+  NUDGE_REGIONS_FORWARD: 'NUDGE_REGIONS_FORWARD',
+  PASTE_REGIONS: 'PASTE_REGIONS',
   REDO: 'REDO',
   REFRESH_PROJECT_LIST: 'REFRESH_PROJECT_LIST',
   RESET_ZOOM: 'RESET_ZOOM',
@@ -28,8 +34,14 @@ export type KeyboardShortcutAction = (typeof KeyboardShortcutAction)[keyof typeo
 
 export const KEYBOARD_SHORTCUT_LABELS: Readonly<Record<KeyboardShortcutAction, string>> = {
   [KeyboardShortcutAction.CLEAR_EXPORT_RANGE]: 'Esc',
+  [KeyboardShortcutAction.COPY_REGIONS]: 'Ctrl/⌘+C',
+  [KeyboardShortcutAction.CUT_REGIONS]: 'Ctrl/⌘+X',
+  [KeyboardShortcutAction.DUPLICATE_REGIONS]: 'Ctrl/⌘+D',
   [KeyboardShortcutAction.EXPORT_AUDIO]: 'Ctrl/⌘+Shift+E',
   [KeyboardShortcutAction.OPEN_PROJECT]: 'Ctrl/⌘+O',
+  [KeyboardShortcutAction.NUDGE_REGIONS_BACKWARD]: 'Alt+←',
+  [KeyboardShortcutAction.NUDGE_REGIONS_FORWARD]: 'Alt+→',
+  [KeyboardShortcutAction.PASTE_REGIONS]: 'Ctrl/⌘+V',
   [KeyboardShortcutAction.REDO]: 'Ctrl/⌘+Shift+Z · Ctrl/⌘+Y',
   [KeyboardShortcutAction.REFRESH_PROJECT_LIST]: 'Ctrl/⌘+Shift+O',
   [KeyboardShortcutAction.RESET_ZOOM]: '0',
@@ -64,6 +76,8 @@ const REPEATABLE_ACTIONS = new Set<KeyboardShortcutAction>([
   KeyboardShortcutAction.SEEK_BACKWARD_LARGE,
   KeyboardShortcutAction.SEEK_FORWARD,
   KeyboardShortcutAction.SEEK_FORWARD_LARGE,
+  KeyboardShortcutAction.NUDGE_REGIONS_BACKWARD,
+  KeyboardShortcutAction.NUDGE_REGIONS_FORWARD,
   KeyboardShortcutAction.ZOOM_IN,
   KeyboardShortcutAction.ZOOM_OUT,
 ]);
@@ -83,6 +97,16 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
 }
 
 function resolvePrimaryModifierAction(event: KeyboardShortcutEvent): KeyboardShortcutAction | null {
+  const editorActionByCode: Readonly<Record<string, KeyboardShortcutAction | undefined>> = {
+    KeyC: KeyboardShortcutAction.COPY_REGIONS,
+    KeyD: KeyboardShortcutAction.DUPLICATE_REGIONS,
+    KeyV: KeyboardShortcutAction.PASTE_REGIONS,
+    KeyX: KeyboardShortcutAction.CUT_REGIONS,
+  };
+  const editorAction = editorActionByCode[event.code];
+  if (editorAction && !event.shiftKey) {
+    return editorAction;
+  }
   if (event.code === 'KeyZ') {
     return event.shiftKey ? KeyboardShortcutAction.REDO : KeyboardShortcutAction.UNDO;
   }
@@ -132,13 +156,22 @@ function resolvePlainAction(event: KeyboardShortcutEvent): KeyboardShortcutActio
 }
 
 export function resolveKeyboardShortcutAction(event: KeyboardShortcutEvent): KeyboardShortcutAction | null {
-  if (event.isComposing || event.altKey || isInteractiveTarget(event.target)) {
+  if (event.isComposing || isInteractiveTarget(event.target)) {
     return null;
   }
 
   const hasPrimaryModifier = event.ctrlKey || event.metaKey;
   if (event.ctrlKey && event.metaKey) {
     return null;
+  }
+  if (event.altKey) {
+    if (hasPrimaryModifier || event.shiftKey) {
+      return null;
+    }
+    if (event.code === 'ArrowLeft') {
+      return KeyboardShortcutAction.NUDGE_REGIONS_BACKWARD;
+    }
+    return event.code === 'ArrowRight' ? KeyboardShortcutAction.NUDGE_REGIONS_FORWARD : null;
   }
   if (hasPrimaryModifier) {
     return resolvePrimaryModifierAction(event);
