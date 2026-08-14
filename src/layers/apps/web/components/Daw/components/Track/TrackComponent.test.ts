@@ -394,6 +394,31 @@ describe('TrackComponent 제어', () => {
     expect(onTrimRegion).toHaveBeenCalledWith(selectedRegion.id, trimRequest);
   });
 
+  it('높은 Layer Region을 나중에 그려 겹침 우선순위를 시각적으로 유지한다', () => {
+    const lowerRegion = {
+      ...createDefaultRegionProcessingState(1),
+      duration: 2,
+      endTime: 3,
+      id: '22222222-2222-4222-8222-222222222222',
+      sourceId: '33333333-3333-4333-8333-333333333333',
+      sourceStartTime: 0,
+      startTime: 1,
+      status: [],
+    };
+    const upperRegion = {
+      ...lowerRegion,
+      id: '44444444-4444-4444-8444-444444444444',
+      layer: 4,
+    };
+
+    renderTrack({ track: { ...track, regions: [upperRegion, lowerRegion] } });
+
+    expect(renderRegionComponent.mock.calls.map(([props]) => (props as { region: { id: string } }).region.id)).toEqual([
+      lowerRegion.id,
+      upperRegion.id,
+    ]);
+  });
+
   it('빈 Timeline 드래그를 초 단위 Range 선택으로 전달하고 미리보기를 표시한다', () => {
     const onRangeSelect = vi.fn();
     const host = renderTrack({ onRangeSelect });

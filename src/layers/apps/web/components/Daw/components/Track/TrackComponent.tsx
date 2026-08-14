@@ -206,6 +206,8 @@ export const TrackComponent = memo(function TrackComponent({
     track.midi?.regions.some(region => region.id === requestedMidiRegionId) === true
       ? requestedMidiRegionId
       : (track.midi?.regions[0]?.id ?? null);
+  // 낮은 Layer를 먼저 그려 높은 Layer가 DOM paint order상 위에 보이게 한다.
+  const regionsInPaintOrder = [...track.regions].sort((left, right) => left.layer - right.layer);
 
   return (
     <article
@@ -303,7 +305,7 @@ export const TrackComponent = memo(function TrackComponent({
             }}
           />
         ) : null}
-        {track.regions.map(region => (
+        {regionsInPaintOrder.map(region => (
           <RegionComponent
             key={region.id}
             region={region}
