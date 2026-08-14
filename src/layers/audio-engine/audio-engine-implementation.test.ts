@@ -621,6 +621,22 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     });
   });
 
+  it('선형 녹음 runtime 연결 전에는 상태만 읽고 변경은 명시적으로 거부한다', async () => {
+    const engine = new AudioEngine();
+
+    expect(engine.getRecordingState()).toEqual({
+      armedTrackId: null,
+      phase: 'idle',
+      recordStartTimeSeconds: null,
+    });
+    expect(() => engine.setTrackRecordArm({ armed: true, trackId: 'track-1' })).toThrow(
+      expect.objectContaining({ code: AudioEngineErrorCode.UNSUPPORTED_FEATURE })
+    );
+    await expect(
+      engine.startRecording({ recordStartTimeSeconds: 0, startDelaySeconds: 0, trackId: 'track-1' })
+    ).rejects.toMatchObject({ code: AudioEngineErrorCode.UNSUPPORTED_FEATURE });
+  });
+
   it('선택한 입력 장치와 monitoring Track을 runtime 상태로 유지한다', async () => {
     const loopRuntime = new LoopRuntimeStub();
     const engine = new AudioEngine({ loopRuntime });

@@ -17,6 +17,9 @@ import type {
   LoopSlotAddress,
   MeterFrame,
   MeterTarget,
+  RecordedTake,
+  RecordingRuntimeListener,
+  RecordingRuntimeState,
   MoveAudioPluginRequest,
   IPreparedAudioProjectGraph,
   IRetiredAudioProjectGraph,
@@ -28,6 +31,8 @@ import type {
   SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
   SetLiveInputMonitoringRequest,
+  SetTrackRecordArmRequest,
+  StartLinearRecordingRequest,
   StopAllLoopsRequest,
   TriggerLoopRequest,
 } from './i-audio-engine';
@@ -68,6 +73,12 @@ export class MockAudioEngine implements IAudioEngine {
   private mockMeterFrames = new Map<string, MeterFrame>();
   private mockLiveInputDevices: LiveAudioInputDevice[] = [];
   private mockMonitoringTrackId: string | null = null;
+  private mockRecordingState: RecordingRuntimeState = {
+    armedTrackId: null,
+    phase: 'idle',
+    recordStartTimeSeconds: null,
+  };
+  private readonly recordingStateListeners = new Set<RecordingRuntimeListener>();
   private readonly liveInputStateListeners = new Set<LiveInputRuntimeListener>();
 
   getFeatureSupport(): AudioRuntimeFeatureSupport {
@@ -232,6 +243,55 @@ export class MockAudioEngine implements IAudioEngine {
   subscribeLoopEvents(listener: LoopRuntimeListener): () => void {
     this.loopListeners.add(listener);
     return () => this.loopListeners.delete(listener);
+  }
+
+  getRecordingState(): RecordingRuntimeState {
+    return { ...this.mockRecordingState };
+  }
+
+  subscribeRecordingState(listener: RecordingRuntimeListener): () => void {
+    this.recordingStateListeners.add(listener);
+    return () => this.recordingStateListeners.delete(listener);
+  }
+
+  setTrackRecordArm(request: SetTrackRecordArmRequest): void {
+    if (request.armed) {
+      this.getTrack(request.trackId);
+    }
+    this.setMockRecordingState({ armedTrackId: request.armed ? request.trackId : null });
+  }
+
+  async startRecording(request: StartLinearRecordingRequest): Promise<void> {
+    this.getTrack(request.trackId);
+    this.setMockRecordingState({
+      armedTrackId: request.trackId,
+      phase: request.startDelaySeconds > 0 ? 'scheduled' : 'recording',
+      recordStartTimeSeconds: request.recordStartTimeSeconds,
+    });
+  }
+
+  async stopRecording(): Promise<RecordedTake> {
+    const state = this.mockRecordingState;
+    if (!state.armedTrackId || state.recordStartTimeSeconds === null || state.phase === 'idle') {
+      throw new Error('진행 중인 선형 녹음이 없습니다.');
+    }
+    this.setMockRecordingState({ phase: 'idle', recordStartTimeSeconds: null });
+    return {
+      blob: new Blob([], { type: 'audio/wav' }),
+      durationSeconds: 0,
+      sampleRate: 48_000,
+      startedAtSeconds: state.recordStartTimeSeconds,
+      trackId: state.armedTrackId,
+    };
+  }
+
+  cancelRecording(): void {
+    this.setMockRecordingState({ phase: 'idle', recordStartTimeSeconds: null });
+  }
+
+  private setMockRecordingState(updates: Partial<RecordingRuntimeState>): void {
+    this.mockRecordingState = { ...this.mockRecordingState, ...updates };
+    this.recordingStateListeners.forEach(listener => listener(this.getRecordingState()));
   }
 
   emitLoopEvent(event: LoopRuntimeEvent): void {

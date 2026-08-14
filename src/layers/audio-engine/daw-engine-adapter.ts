@@ -22,6 +22,9 @@ import type {
   LoopSlotAddress,
   MeterFrame,
   MeterTarget,
+  RecordedTake,
+  RecordingRuntimeListener,
+  RecordingRuntimeState,
   MoveAudioPluginRequest,
   PrepareAudioProjectGraphRequest,
   RegionData,
@@ -31,6 +34,8 @@ import type {
   SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
   SetLiveInputMonitoringRequest,
+  SetTrackRecordArmRequest,
+  StartLinearRecordingRequest,
   StopAllLoopsRequest,
   TriggerLoopRequest,
 } from './i-audio-engine';
@@ -251,6 +256,30 @@ export class DawEngineAdapter implements IAudioEngine {
 
   subscribeLoopEvents(listener: LoopRuntimeListener): () => void {
     return this.#runtime.subscribeLoopEvents(listener);
+  }
+
+  getRecordingState(): RecordingRuntimeState {
+    return this.#runtime.getRecordingState();
+  }
+
+  subscribeRecordingState(listener: RecordingRuntimeListener): () => void {
+    return this.#runtime.subscribeRecordingState(listener);
+  }
+
+  setTrackRecordArm(request: SetTrackRecordArmRequest): void {
+    this.#runtime.setTrackRecordArm(request);
+  }
+
+  startRecording(request: StartLinearRecordingRequest): Promise<void> {
+    return this.#runtime.startRecording(request);
+  }
+
+  stopRecording(): Promise<RecordedTake> {
+    return this.#runtime.stopRecording();
+  }
+
+  cancelRecording(): void {
+    this.#runtime.cancelRecording();
   }
 
   setMasterVolume(volume: number): void {
