@@ -14,7 +14,14 @@ interface AudioRouteConnection {
 }
 
 interface AudioSendConnection extends AudioRouteConnection {
+  readonly configuredGain: number;
   readonly gain: Tone.Gain;
+  readonly sendId: string;
+}
+
+interface AudioSendDescriptor extends AudioRouteConnection {
+  readonly configuredGain: number;
+  readonly sendId: string;
 }
 
 export class AudioRoutingRuntime {
@@ -36,35 +43,56 @@ export class AudioRoutingRuntime {
       graph.routes.map(route => route.trackId)
     );
     const nextRoutes = graph.routes.flatMap(route => this.createRouteConnection(route, trackNodes, masterOutput));
-    const nextSends = graph.sends
+    const nextSendDescriptors = graph.sends
       .filter(send => send.isEnabled)
       .map(send => {
         const source = this.getSignalTrackNodes(trackNodes, send.sourceTrackId);
         const destination = this.getSignalTrackNodes(trackNodes, send.destinationTrackId).input;
-        const gain = new Tone.Gain({ gain: send.gain });
         return {
+          configuredGain: send.gain,
           destination,
-          gain,
+          sendId: send.id,
           source: send.tapPoint === 'preFader' ? source.preFaderOutput : source.postFaderOutput,
         };
       });
+    const previousRoutes = [...this.routeConnections];
+    const routesToConnect: AudioRouteConnection[] = [];
+    const nextRouteConnections = nextRoutes.map(connection => {
+      const reusableIndex = previousRoutes.findIndex(previous => this.isSameRoute(previous, connection));
+      if (reusableIndex >= 0) {
+        return previousRoutes.splice(reusableIndex, 1)[0];
+      }
+      routesToConnect.push(connection);
+      return connection;
+    });
+    const previousSends = [...this.sendConnections];
+    const sendsToConnect: AudioSendConnection[] = [];
+    const nextSendConnections = nextSendDescriptors.map(descriptor => {
+      const reusableIndex = previousSends.findIndex(previous => this.isSameSend(previous, descriptor));
+      if (reusableIndex >= 0) {
+        return previousSends.splice(reusableIndex, 1)[0];
+      }
+      const connection = { ...descriptor, gain: new Tone.Gain({ gain: descriptor.configuredGain }) };
+      sendsToConnect.push(connection);
+      return connection;
+    });
 
     try {
-      nextRoutes.forEach(connection => connection.source.connect(connection.destination));
-      nextSends.forEach(connection => {
+      routesToConnect.forEach(connection => connection.source.connect(connection.destination));
+      sendsToConnect.forEach(connection => {
         connection.gain.connect(connection.destination);
         connection.source.connect(connection.gain);
       });
     } catch (cause) {
-      nextRoutes.forEach(connection => this.disconnect(connection));
-      nextSends.forEach(connection => this.disposeSend(connection));
+      routesToConnect.forEach(connection => this.disconnect(connection));
+      sendsToConnect.forEach(connection => this.disposeSend(connection));
       throw cause;
     }
 
-    this.routeConnections.forEach(connection => this.disconnect(connection));
-    this.sendConnections.forEach(connection => this.disposeSend(connection));
-    this.routeConnections = nextRoutes;
-    this.sendConnections = nextSends;
+    previousRoutes.forEach(connection => this.disconnect(connection));
+    previousSends.forEach(connection => this.disposeSend(connection));
+    this.routeConnections = nextRouteConnections;
+    this.sendConnections = nextSendConnections;
     this.graph = cloneRoutingGraphSnapshot(graph);
   }
 
@@ -99,6 +127,16 @@ export class AudioRoutingRuntime {
       throw new Error(`신호 Route의 Track node가 없습니다: ${trackId}`);
     }
     return nodes;
+  }
+
+  private isSameRoute(left: AudioRouteConnection, right: AudioRouteConnection): boolean {
+    return left.source === right.source && left.destination === right.destination;
+  }
+
+  private isSameSend(left: AudioSendConnection, right: AudioSendDescriptor): boolean {
+    return (
+      left.sendId === right.sendId && left.configuredGain === right.configuredGain && this.isSameRoute(left, right)
+    );
   }
 
   private disconnect(connection: AudioRouteConnection): void {

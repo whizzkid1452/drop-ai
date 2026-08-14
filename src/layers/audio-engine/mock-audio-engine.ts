@@ -4,6 +4,7 @@ import {
   cloneAudioMonitorState,
   DEFAULT_AUDIO_MONITOR_STATE,
   type AudioMonitorState,
+  type AudioMonitorStateListener,
 } from '../shared/types/audio-monitor-state';
 import { insertArrayEntry, moveArrayEntry } from '../shared/array-order';
 import type { TimelineRange } from '../shared/types/project-document.schema';
@@ -96,6 +97,7 @@ export class MockAudioEngine implements IAudioEngine {
     recordStartTimeSeconds: null,
   };
   private readonly recordingStateListeners = new Set<RecordingRuntimeListener>();
+  private readonly monitorStateListeners = new Set<AudioMonitorStateListener>();
   private readonly liveInputStateListeners = new Set<LiveInputRuntimeListener>();
   private mockAudioRegionPeak = 0.5;
 
@@ -342,9 +344,15 @@ export class MockAudioEngine implements IAudioEngine {
     return cloneAudioMonitorState(this.mockMonitorState);
   }
 
+  subscribeMonitorState(listener: AudioMonitorStateListener): () => void {
+    this.monitorStateListeners.add(listener);
+    return () => this.monitorStateListeners.delete(listener);
+  }
+
   setMonitorState(state: AudioMonitorState): void {
     this.mockMonitorState = cloneAudioMonitorState(state);
     this.graphRevision += 1;
+    this.monitorStateListeners.forEach(listener => listener(this.getMonitorState()));
   }
 
   getRoutingGraph(): RoutingGraphSnapshot {

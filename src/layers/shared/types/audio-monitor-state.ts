@@ -4,6 +4,8 @@ export interface AudioMonitorState {
   readonly isMono: boolean;
 }
 
+export type AudioMonitorStateListener = (state: AudioMonitorState) => void;
+
 export const DEFAULT_AUDIO_MONITOR_STATE: AudioMonitorState = {
   isCut: false,
   isDimmed: false,

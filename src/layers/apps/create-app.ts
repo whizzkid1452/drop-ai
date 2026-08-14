@@ -27,6 +27,7 @@ import { MeterQuery, type IMeterQuery } from '../queries/meter-query';
 import { LiveInputQuery, type ILiveInputQuery } from '../queries/live-input-query';
 import { RecordingQuery, type IRecordingQuery } from '../queries/recording-query';
 import { EditorQuery, type IEditorQuery } from '../queries/editor-query';
+import { AudioMonitorQuery, type IAudioMonitorQuery } from '../queries/audio-monitor-query';
 import { ProjectCatalogQuery, type IProjectCatalogQuery } from '../queries/project-catalog-query';
 import type { ILocalFirstProjectRepository } from '../project-repository/i-project-repository';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
@@ -72,6 +73,7 @@ export interface AppInstance {
   liveInput: ILiveInputQuery;
   recording: IRecordingQuery;
   editor: IEditorQuery;
+  audioMonitor: IAudioMonitorQuery;
   projectCatalog: IProjectCatalogQuery;
 }
 
@@ -261,6 +263,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   const liveInput = new LiveInputQuery(controller.liveInput);
   const recording = new RecordingQuery(controller.recording);
   const editor = new EditorQuery(controller.editor);
+  const audioMonitor = new AudioMonitorQuery(audioEngine);
   const projectCatalog = new ProjectCatalogQuery(projectRepository, projectSync);
   const audioRuntimeEnvironment = options.audioRuntimeEnvironment ?? readAudioRuntimeEnvironment();
   const audioRuntimeCapabilities = resolveAudioRuntimeCapabilities(
@@ -285,6 +288,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     liveInput,
     recording,
     editor,
+    audioMonitor,
     playbackClock,
     projectCatalog,
   };

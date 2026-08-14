@@ -16,7 +16,12 @@ vi.mock('@/layers/apps/web/context/layer-hooks', () => ({
 }));
 
 vi.mock('./components/DawHeader/DawHeader', () => ({
-  DawHeader: () => null,
+  DawHeader: ({ onViewChange }: { onViewChange: (view: 'editor' | 'mixer') => void }) =>
+    createElement('button', { 'aria-label': 'Open Mixer', onClick: () => onViewChange('mixer') }, 'Mixer'),
+}));
+
+vi.mock('./components/MixerView/MixerView', () => ({
+  MixerView: () => createElement('div', { 'data-testid': 'mixer-view' }),
 }));
 
 vi.mock('./components/TrackList/TrackList', () => ({
@@ -202,5 +207,22 @@ describe('DawPage Terminal 리사이즈', () => {
     });
 
     expect(terminalToggle.classList.contains('cliToggleButtonResizing')).toBe(true);
+  });
+});
+
+describe('DawPage 작업 화면 전환', () => {
+  it('Header의 Mixer 선택 뒤 Timeline 대신 Mixer를 표시한다', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    mountedRoots.push(root);
+
+    act(() => root.render(createElement(DawPage)));
+    expect(host.querySelector('[data-testid="mixer-view"]')).toBeNull();
+
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Open Mixer"]')?.click());
+
+    expect(host.querySelector('[data-testid="mixer-view"]')).not.toBeNull();
+    expect(host.querySelector('.timelineHeader')).toBeNull();
   });
 });
