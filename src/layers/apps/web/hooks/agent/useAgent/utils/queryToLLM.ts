@@ -3,22 +3,25 @@ import { getSystemPrompt, type AgentPromptPlugin, type AgentPromptTrack } from '
 import { createAgentUserPrompt } from './create-agent-user-prompt';
 import type { MLCEngine } from '@/types/webllm.types';
 import { AGENT_AUDIO_COMMAND_BATCH_JSON_SCHEMA } from '@/types/audioCommand.schema';
+import type { AudioRuntimeCapabilities } from '@/layers/shared/utils/audio-runtime-capabilities';
 import { throwIfAgentRequestCancelled } from './agent-request-cancelled-error';
 
 export async function queryToLLM({
+  capabilities,
   engine,
   plugins,
   signal,
   tracks,
   userInput,
 }: {
+  capabilities?: AudioRuntimeCapabilities;
   engine: MLCEngine;
   plugins: readonly AgentPromptPlugin[];
   signal?: AbortSignal;
   tracks: readonly AgentPromptTrack[];
   userInput: string;
 }) {
-  const systemPrompt = getSystemPrompt({ plugins, tracks });
+  const systemPrompt = getSystemPrompt({ capabilities, plugins, tracks });
   const agentUserPrompt = createAgentUserPrompt(userInput);
 
   try {

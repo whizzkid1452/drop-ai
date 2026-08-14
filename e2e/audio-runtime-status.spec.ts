@@ -24,6 +24,13 @@ test('기능별 runtime 지원 상태를 확인한다', async ({ page }) => {
   await expect(capabilityPanel.locator('[data-feature="metering"]')).toContainText('사용 가능');
   await expect(capabilityPanel.locator('[data-feature="linearRecording"]')).toContainText('사용 가능');
   await expect(capabilityPanel.locator('[data-feature="regionProcessing"]')).toContainText('사용 가능');
+  await expect(capabilityPanel.locator('[data-feature="routing"]')).toContainText('사용 가능');
+  await expect(capabilityPanel.locator('[data-feature="midi"]')).toContainText('사용 가능');
+  await expect(capabilityPanel.locator('[data-feature="editor"]')).toContainText('사용 가능');
+  await expect(capabilityPanel.locator('[data-feature="automation"]')).toContainText('사용 가능');
+  await expect(capabilityPanel.locator('[data-feature="clipCue"]')).toContainText('사용 가능');
+  await expect(capabilityPanel.locator('[data-feature="timelineNavigation"]')).toContainText('사용 가능');
+  await expect(capabilityPanel.locator('[data-feature="advancedExport"]')).toContainText('미구현');
 });
 
 test('Loop 범위와 Metronome을 Transport에서 바로 제어한다', async ({ page }) => {

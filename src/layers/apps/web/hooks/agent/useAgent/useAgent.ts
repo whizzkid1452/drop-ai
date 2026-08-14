@@ -3,6 +3,7 @@ import type { AgentRunStatus, AgentStatus, Message } from '@/types/agent';
 import { useWebLLM } from '@/layers/apps/web/hooks/agent/useWebLLM';
 import {
   useAgentRuntimeCommands,
+  useAudioRuntimeCapabilities,
   useAudioSourceResolver,
   useCommandExecutor,
   useSession,
@@ -92,6 +93,7 @@ export function useAgent() {
   const status = useSession(state => state.agentStatus);
   const agentRuntimeCommands = useAgentRuntimeCommands();
   const commandExecutor = useCommandExecutor();
+  const audioRuntimeCapabilities = useAudioRuntimeCapabilities();
   const activeAgentRequestRef = useRef<ActiveAgentRequest | null>(null);
 
   const tracks = useMemo(() => createAgentPromptTracks(trackMap, audioSourceResolver), [audioSourceResolver, trackMap]);
@@ -197,6 +199,7 @@ export function useAgent() {
         executionResults,
         commandOutputs,
       } = await handleAIResponse({
+        capabilities: audioRuntimeCapabilities,
         engine,
         plugins,
         tracks,

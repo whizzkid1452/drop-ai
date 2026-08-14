@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MLCEngine } from '@/types/webllm.types';
 import { queryToLLM } from './queryToLLM';
+import {
+  AudioRuntimeFeature,
+  CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
+  PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT,
+  resolveAudioRuntimeCapabilities,
+} from '@/layers/shared/utils/audio-runtime-capabilities';
 
 function createEngine(createCompletion: ReturnType<typeof vi.fn>): MLCEngine {
   return {
@@ -47,5 +53,27 @@ describe('queryToLLM', () => {
       role: 'user',
       content: 'export 0 seconds to 90 seconds',
     });
+  });
+
+  it('사용 불가 기능 명령을 시스템 Prompt에서 제외한다', async () => {
+    const createCompletion = vi.fn().mockResolvedValue({
+      choices: [{ message: { content: '[]' } }],
+    });
+    const capabilities = resolveAudioRuntimeCapabilities(PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT, {
+      ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
+      [AudioRuntimeFeature.MIDI]: false,
+    });
+
+    await queryToLLM({
+      capabilities,
+      engine: createEngine(createCompletion),
+      plugins: [],
+      tracks: [],
+      userInput: 'play',
+    });
+
+    const request = createCompletion.mock.calls[0][0];
+    expect(request.messages[0].content).not.toContain('- ADD_MIDI_TRACK:');
+    expect(request.messages[0].content).toContain('- PLAY:');
   });
 });

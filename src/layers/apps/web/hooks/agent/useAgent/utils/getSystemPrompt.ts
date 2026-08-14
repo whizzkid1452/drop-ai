@@ -1,8 +1,11 @@
+import { AudioCommandType, type AudioCommand } from '@/types/audioCommand.schema';
+import { isAudioCommandCapabilityAllowed } from '@/layers/shared/utils/audio-command-capability-guard';
 import {
-  AudioCommandType,
-  type AudioCommand,
-  type AudioCommandType as AudioCommandName,
-} from '@/types/audioCommand.schema';
+  CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
+  PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT,
+  resolveAudioRuntimeCapabilities,
+  type AudioRuntimeCapabilities,
+} from '@/layers/shared/utils/audio-runtime-capabilities';
 import type { PluginCatalogEntry, PluginInstanceState, PluginParameterDefinition } from '@/types/plugin-state';
 import type { LoopSlotState } from '@/layers/session/session';
 
@@ -263,7 +266,7 @@ const COMMAND_REFERENCE = {
   [AudioCommandType.SAVE_PROJECT]: '{"type":"SAVE_PROJECT"} - 현재 프로젝트와 오디오 원본 저장',
   [AudioCommandType.LOAD_PROJECT]:
     '{"type":"LOAD_PROJECT","projectId":"<user-provided Project UUID>"} - 저장된 프로젝트 불러오기',
-} satisfies Record<AudioCommandName, string>;
+} satisfies Record<AudioCommandType, string>;
 
 export const AGENT_PROMPT_EXAMPLES = [
   {
@@ -506,10 +509,20 @@ function createPluginContext(plugins: readonly AgentPromptPlugin[]): AgentPlugin
   return { text: lines.join('\n'), visiblePlugins };
 }
 
-function renderCommandReference(): string {
+const DEFAULT_AGENT_PROMPT_CAPABILITIES = resolveAudioRuntimeCapabilities(
+  PERMISSIVE_AUDIO_RUNTIME_ENVIRONMENT,
+  CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT
+);
+
+function renderCommandReference(capabilities: AudioRuntimeCapabilities): string {
   return Object.values(AudioCommandType)
+    .filter(commandType => isAudioCommandCapabilityAllowed(commandType, capabilities))
     .map(commandType => `- ${commandType}: ${COMMAND_REFERENCE[commandType]}`)
     .join('\n');
+}
+
+function areExampleCommandsAllowed(example: AgentPromptExample, capabilities: AudioRuntimeCapabilities): boolean {
+  return example.commands.every(command => isAudioCommandCapabilityAllowed(command.type, capabilities));
 }
 
 function createTargetExamples(tracks: readonly AgentPromptTrack[]): AgentPromptExample[] {
@@ -702,13 +715,18 @@ function createLoopExamples(tracks: readonly AgentPromptTrack[]): AgentPromptExa
   return examples;
 }
 
-function renderExamples(tracks: readonly AgentPromptTrack[], plugins: readonly AgentPromptPlugin[]): string {
+function renderExamples(
+  tracks: readonly AgentPromptTrack[],
+  plugins: readonly AgentPromptPlugin[],
+  capabilities: AudioRuntimeCapabilities
+): string {
   return [
     ...AGENT_PROMPT_EXAMPLES,
     ...createTargetExamples(tracks),
     ...createPluginExamples(tracks, plugins),
     ...createLoopExamples(tracks),
   ]
+    .filter(example => areExampleCommandsAllowed(example, capabilities))
     .map(example => `"${example.request}" → ${JSON.stringify(example.commands)}`)
     .join('\n');
 }
@@ -745,9 +763,11 @@ function createPluginSafetyRules(
 }
 
 export function getSystemPrompt({
+  capabilities = DEFAULT_AGENT_PROMPT_CAPABILITIES,
   plugins = [],
   tracks = [],
 }: {
+  capabilities?: AudioRuntimeCapabilities;
   plugins?: readonly AgentPromptPlugin[];
   tracks?: readonly AgentPromptTrack[];
 }) {
@@ -765,7 +785,7 @@ ${projectContext.text}
 ${pluginContext.text}
 
 # 지원 명령
-${renderCommandReference()}
+${renderCommandReference(capabilities)}
 
 # 출력과 안전 규칙
 1. 설명, Markdown, 코드 블록 없이 JSON 배열만 반환한다. 각 객체에는 명령 정의에 있는 필드만 넣는다.
@@ -784,9 +804,9 @@ ${renderCommandReference()}
 ${pluginSafetyRules.text}
 ${pluginSafetyRules.nextRuleNumber}. Loop Slot 명령은 위 목록에 표시된 trackId와 slotId만 사용한다. 빈 슬롯만 ARM_LOOP_SLOT으로 녹음하고, stopped 슬롯만 TRIGGER_LOOP_SLOT으로 재생하며, playing 슬롯만 ARM_LOOP_OVERDUB으로 오버더빙한다.
 ${pluginSafetyRules.nextRuleNumber + 1}. SET_AUDIO_INPUT_DEVICE는 사용자가 브라우저 장치 ID 또는 default를 명시했을 때만 사용한다. default는 deviceId=null로 쓴다.
-${pluginSafetyRules.nextRuleNumber + 2}. 요청을 안전하게 실행할 정보가 부족하면 []를 반환한다. 지원하지 않는 요청도 []를 반환한다.
+${pluginSafetyRules.nextRuleNumber + 2}. 요청을 안전하게 실행할 정보가 부족하면 []를 반환한다. 지원 명령 목록에 없는 타입은 사용하지 않고, 지원하지 않는 요청도 []를 반환한다.
 
 # 예시
-${renderExamples(projectContext.visibleTracks, pluginContext.visiblePlugins)}
+${renderExamples(projectContext.visibleTracks, pluginContext.visiblePlugins, capabilities)}
 `;
 }

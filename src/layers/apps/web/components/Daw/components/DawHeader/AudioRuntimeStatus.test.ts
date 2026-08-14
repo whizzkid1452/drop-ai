@@ -147,6 +147,13 @@ describe('AudioRuntimeStatus', () => {
     expect(liveInput?.textContent).toContain('오디오 입력 요청 API');
     expect(metering?.textContent).toContain('사용 가능');
     expect(playback?.textContent).toContain('사용 가능');
+    expect(document.querySelector('[data-feature="routing"]')?.textContent).toContain('사용 가능');
+    expect(document.querySelector('[data-feature="midi"]')?.textContent).toContain('사용 가능');
+    expect(document.querySelector('[data-feature="editor"]')?.textContent).toContain('사용 가능');
+    expect(document.querySelector('[data-feature="automation"]')?.textContent).toContain('사용 가능');
+    expect(document.querySelector('[data-feature="clipCue"]')?.textContent).toContain('환경 차단');
+    expect(document.querySelector('[data-feature="timelineNavigation"]')?.textContent).toContain('사용 가능');
+    expect(document.querySelector('[data-feature="advancedExport"]')?.textContent).toContain('미구현');
   });
 
   it('세 전제조건을 충족하면 판정 범위를 명시하고 상세 설명을 연결한다', () => {
