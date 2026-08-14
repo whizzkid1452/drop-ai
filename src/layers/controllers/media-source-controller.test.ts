@@ -26,6 +26,17 @@ function createRegistration(sourceId: string): AudioSourceRegistration {
   };
 }
 
+function createDerivedRegistration(sourceId: string, parentSourceId: string): AudioSourceRegistration {
+  const registration = createRegistration(sourceId);
+  return {
+    ...registration,
+    metadata: {
+      ...registration.metadata,
+      derivation: { operation: 'bounce', parameters: {}, sourceId: parentSourceId },
+    },
+  };
+}
+
 function createTestContext() {
   const audioEngine = new MockAudioEngine();
   const audioSourceRegistry = new AudioSourceRegistry({
@@ -75,6 +86,19 @@ describe('MediaSourceController', () => {
     expect(audioSourceRegistry.resolve(USED_SOURCE_ID)).not.toBeNull();
     expect(audioSourceRegistry.resolve(UNUSED_SOURCE_ID)).toBeNull();
     expect(audioSourceRepository.delete).toHaveBeenCalledWith(UNUSED_SOURCE_ID);
+  });
+
+  it('파생 Source가 참조하는 원본 Source는 직접 Region 참조가 없어도 유지한다', async () => {
+    const { audioSourceRegistry, audioSourceRepository, controller } = createTestContext();
+    audioSourceRegistry.restoreCommitted(createRegistration(USED_SOURCE_ID));
+    audioSourceRegistry.restoreCommitted(createDerivedRegistration(UNUSED_SOURCE_ID, USED_SOURCE_ID));
+    audioSourceRegistry.attach({ regionId: REGION_ID, sourceId: UNUSED_SOURCE_ID });
+
+    const result = await controller.cleanupUnusedSources();
+
+    expect(result.removedSourceIds).toEqual([]);
+    expect(audioSourceRegistry.resolve(USED_SOURCE_ID)).not.toBeNull();
+    expect(audioSourceRepository.delete).not.toHaveBeenCalled();
   });
 
   it('저장소 삭제 실패 시 제거한 runtime Source를 복구한다', async () => {

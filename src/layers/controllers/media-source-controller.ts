@@ -54,9 +54,15 @@ export class MediaSourceController {
   }
 
   async cleanupUnusedSources(): Promise<CleanupUnusedSourcesResult> {
-    const unusedRegistrations = this.#audioSourceRegistry
-      .listCommittedRegistrations()
-      .filter(registration => this.isUnused(registration.metadata.id));
+    const committedRegistrations = this.#audioSourceRegistry.listCommittedRegistrations();
+    const derivedParentSourceIds = new Set(
+      committedRegistrations.flatMap(registration =>
+        registration.metadata.derivation ? [registration.metadata.derivation.sourceId] : []
+      )
+    );
+    const unusedRegistrations = committedRegistrations.filter(registration =>
+      this.isUnused(registration.metadata.id, derivedParentSourceIds)
+    );
     if (unusedRegistrations.length === 0) {
       return { removedSourceIds: [] };
     }
@@ -84,9 +90,14 @@ export class MediaSourceController {
     return [...new Set(tags.map(tag => tag.trim()).filter(tag => tag.length > 0))];
   }
 
-  private isUnused(sourceId: string): boolean {
+  private isUnused(sourceId: string, derivedParentSourceIds: ReadonlySet<string>): boolean {
     const source = this.#audioSourceRegistry.resolve(sourceId);
-    return Boolean(source && source.regionIds.length === 0 && (source.loopSlotIds?.length ?? 0) === 0);
+    return Boolean(
+      source &&
+        source.regionIds.length === 0 &&
+        (source.loopSlotIds?.length ?? 0) === 0 &&
+        !derivedParentSourceIds.has(sourceId)
+    );
   }
 
   private async purgeRuntimeRegistrations(

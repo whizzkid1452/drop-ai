@@ -173,5 +173,9 @@ describe('DawHeader', () => {
     const mixerViewButton = host.querySelector<HTMLButtonElement>('[aria-label="Open Mixer"]');
     act(() => mixerViewButton?.click());
     expect(onViewChange).toHaveBeenCalledWith('mixer');
+
+    const mediaViewButton = host.querySelector<HTMLButtonElement>('[aria-label="Open Media"]');
+    act(() => mediaViewButton?.click());
+    expect(onViewChange).toHaveBeenCalledWith('media');
   });
 });
