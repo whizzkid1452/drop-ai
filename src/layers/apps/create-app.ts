@@ -249,7 +249,10 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   const playbackClock = new PlaybackClockQuery(controller.playback);
   const projectCatalog = new ProjectCatalogQuery(projectRepository, projectSync);
   const audioRuntimeEnvironment = options.audioRuntimeEnvironment ?? readAudioRuntimeEnvironment();
-  const audioRuntimeCapabilities = resolveAudioRuntimeCapabilities(audioRuntimeEnvironment);
+  const audioRuntimeCapabilities = resolveAudioRuntimeCapabilities(
+    audioRuntimeEnvironment,
+    audioEngine.getFeatureSupport()
+  );
   const midiInput = options.midiInput ?? new BrowserMidiInput();
   const authClient = options.authClient ?? new UnavailableAuthClient();
   const billingClient = options.billingClient ?? new UnavailableBillingClient();

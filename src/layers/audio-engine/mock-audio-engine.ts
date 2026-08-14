@@ -25,6 +25,10 @@ import type {
   TriggerLoopRequest,
 } from './i-audio-engine';
 import type { PluginParameterValue } from '../shared/types/plugin-state';
+import {
+  CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
+  type AudioRuntimeFeatureSupport,
+} from '../shared/utils/audio-runtime-capabilities';
 
 interface MockTrackState {
   muted: boolean;
@@ -49,6 +53,10 @@ export class MockAudioEngine implements IAudioEngine {
   private mockInputDeviceId: string | null = null;
   private mockLoopStates = new Map<string, LoopRuntimeState>();
   private readonly loopListeners = new Set<LoopRuntimeListener>();
+
+  getFeatureSupport(): AudioRuntimeFeatureSupport {
+    return CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT;
+  }
 
   async play(): Promise<void> {
     console.log('[MockAudioEngine] Playing...');

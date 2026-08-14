@@ -1,8 +1,41 @@
 import { describe, expect, it } from 'vitest';
-import { DawEngineAdapter } from './daw-engine-adapter';
+import { DAW_AUDIO_PROVIDER_SUPPORT, DawAudioProviderBridge, DawEngineAdapter } from './daw-engine-adapter';
+import { AudioEngineErrorCode, UnsupportedAudioFeatureError } from './errors';
 import { MockAudioEngine } from './mock-audio-engine';
 
 describe('DawEngineAdapter', () => {
+  it('AudioProvider 메서드를 runtime 위임, adapter 처리, 미지원으로 분류한다', () => {
+    expect(new Set(Object.values(DAW_AUDIO_PROVIDER_SUPPORT))).toEqual(
+      new Set(['adapter-handled', 'runtime-delegated', 'unsupported'])
+    );
+    expect(DAW_AUDIO_PROVIDER_SUPPORT.start).toBe('runtime-delegated');
+    expect(DAW_AUDIO_PROVIDER_SUPPORT.connectIO).toBe('adapter-handled');
+    expect(DAW_AUDIO_PROVIDER_SUPPORT.getMeterData).toBe('unsupported');
+  });
+
+  it('미지원 Provider 메서드를 기능 식별자가 있는 오류로 거부한다', () => {
+    const provider = new DawAudioProviderBridge(new MockAudioEngine()).audioProvider;
+
+    expect(() => provider.getMeterData('track-1')).toThrowError(UnsupportedAudioFeatureError);
+
+    try {
+      provider.getMeterData('track-1');
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: AudioEngineErrorCode.UNSUPPORTED_FEATURE,
+        details: { feature: 'metering', method: 'getMeterData' },
+      });
+    }
+  });
+
+  it('Adapter가 소유한 route와 tempo projection은 오류 없이 처리한다', () => {
+    const provider = new DawAudioProviderBridge(new MockAudioEngine()).audioProvider;
+
+    expect(() => provider.connectIO('route-output', 'master-input')).not.toThrow();
+    expect(() => provider.disconnectIO('route-output', 'master-input')).not.toThrow();
+    expect(() => provider.setTempo(120)).not.toThrow();
+  });
+
   it('Track mixer 변경을 DAW domain과 기존 Tone runtime에 함께 반영한다', async () => {
     const runtime = new MockAudioEngine();
     const engine = new DawEngineAdapter({ runtime });

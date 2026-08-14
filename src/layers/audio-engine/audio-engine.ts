@@ -1,6 +1,11 @@
 import * as Tone from 'tone';
 import { insertArrayEntry, moveArrayEntry } from '../shared/array-order';
 import { COMPLETE_RESOURCE_CLEANUP, type ResourceCleanupResult } from '../shared/types/resource-cleanup';
+import {
+  AudioRuntimeFeature,
+  CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
+  type AudioRuntimeFeatureSupport,
+} from '../shared/utils/audio-runtime-capabilities';
 import { startPlayer } from './config/player-config';
 import { encodeAudioBufferToWav } from './encoders/wav-encoder';
 import { AudioEngineError, AudioEngineErrorCode, ERROR_MESSAGES } from './errors';
@@ -136,6 +141,7 @@ export class AudioEngine implements IAudioEngine {
   private disabledPluginInstanceIds: Map<string, Set<string>> = new Map();
   private readonly pluginRuntimeFactories: ReadonlyMap<string, IAudioPluginRuntimeFactory>;
   private readonly loopRuntime: ILoopAudioRuntime;
+  private readonly featureSupport: AudioRuntimeFeatureSupport;
   private graphRevision = 0;
   private readonly mutedOutputs = new WeakSet<Tone.Gain>();
   private readonly disconnectedOutputs = new WeakSet<Tone.Gain>();
@@ -161,13 +167,20 @@ export class AudioEngine implements IAudioEngine {
   private readonly pendingPluginChainRecovery = new Map<string, PluginChainRecoveryState>();
   private pendingTransportRecovery: TransportSnapshot | null = null;
 
-  constructor({
-    loopRuntime = new UnavailableLoopAudioRuntime(),
-    pluginRuntimeFactories = [],
-  }: AudioEngineOptions = {}) {
-    this.loopRuntime = loopRuntime;
+  constructor(options: AudioEngineOptions = {}) {
+    const { loopRuntime, pluginRuntimeFactories = [] } = options;
+    this.loopRuntime = loopRuntime ?? new UnavailableLoopAudioRuntime();
+    this.featureSupport = {
+      ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
+      [AudioRuntimeFeature.LIVE_INPUT]: loopRuntime !== undefined,
+      [AudioRuntimeFeature.LIVE_LOOP]: loopRuntime !== undefined,
+    };
     this.pluginRuntimeFactories = createPluginRuntimeFactoryMap(pluginRuntimeFactories);
     this.output = this.createGraphOutput({ initialGain: 1, unmutedGain: 1 });
+  }
+
+  getFeatureSupport(): AudioRuntimeFeatureSupport {
+    return this.featureSupport;
   }
 
   async play(): Promise<void> {

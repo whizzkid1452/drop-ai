@@ -28,11 +28,104 @@ import type {
   StopAllLoopsRequest,
   TriggerLoopRequest,
 } from './i-audio-engine';
+import { UnsupportedAudioFeatureError } from './errors';
+import {
+  AudioRuntimeFeature,
+  type AudioRuntimeFeature as AudioRuntimeFeatureName,
+} from '../shared/utils/audio-runtime-capabilities';
 
 const DAW_SAMPLE_RATE = 44_100;
 const MINIMUM_REGION_FRAMES = 1;
 const FADER_PROCESSOR_TYPE = 'Fader';
 const PANNER_PROCESSOR_TYPE = 'Panner';
+
+type AudioProviderSupport = 'adapter-handled' | 'runtime-delegated' | 'unsupported';
+
+export const DAW_AUDIO_PROVIDER_SUPPORT = {
+  addAudioBuffer: 'adapter-handled',
+  addMasterProcessor: 'adapter-handled',
+  addProcessor: 'adapter-handled',
+  addSendBus: 'unsupported',
+  addSource: 'adapter-handled',
+  auditionRegion: 'unsupported',
+  cacheBlob: 'adapter-handled',
+  connectIO: 'adapter-handled',
+  createAuxTrack: 'runtime-delegated',
+  createBusTrack: 'runtime-delegated',
+  createMidiTrack: 'unsupported',
+  createTrack: 'runtime-delegated',
+  deleteTrack: 'runtime-delegated',
+  disconnectIO: 'adapter-handled',
+  enableLoop: 'unsupported',
+  enableMetronome: 'unsupported',
+  enablePunchRecording: 'unsupported',
+  exportAudio: 'unsupported',
+  getAnalyserNode: 'unsupported',
+  getAudioBuffer: 'unsupported',
+  getCurrentFrame: 'runtime-delegated',
+  getCurrentTime: 'runtime-delegated',
+  getEngineType: 'adapter-handled',
+  getInputLatencyMs: 'unsupported',
+  getMasterMeterData: 'unsupported',
+  getMasterStereoMeterData: 'unsupported',
+  getMeterData: 'unsupported',
+  getMeterLevel: 'unsupported',
+  initialize: 'adapter-handled',
+  midiPanic: 'unsupported',
+  normalizeRegion: 'unsupported',
+  pause: 'runtime-delegated',
+  prepareRecording: 'unsupported',
+  registerMasterIO: 'adapter-handled',
+  removeMasterProcessor: 'adapter-handled',
+  removeMidiRegion: 'unsupported',
+  removeProcessor: 'adapter-handled',
+  removeRegion: 'runtime-delegated',
+  removeSendBus: 'unsupported',
+  renderRegionsToBuffer: 'unsupported',
+  reverseRegionBuffer: 'unsupported',
+  scheduleMidiRegion: 'unsupported',
+  scheduleRegion: 'runtime-delegated',
+  seek: 'runtime-delegated',
+  setMasterGain: 'runtime-delegated',
+  setMasterProcessorParameter: 'adapter-handled',
+  setLoopRange: 'unsupported',
+  setMetronomeVolume: 'unsupported',
+  setMidiInstrument: 'unsupported',
+  setMonitor: 'unsupported',
+  setMonitorMode: 'unsupported',
+  setMonitorWithEffects: 'unsupported',
+  setProcessorAutomation: 'unsupported',
+  setProcessorParameter: 'runtime-delegated',
+  setPunchRange: 'unsupported',
+  setRecordingMuted: 'unsupported',
+  setSendBusActive: 'unsupported',
+  setSendBusLevel: 'unsupported',
+  setSendBusPreFader: 'unsupported',
+  setTempo: 'adapter-handled',
+  setTrackGain: 'runtime-delegated',
+  setTrackMute: 'runtime-delegated',
+  setTrackPan: 'runtime-delegated',
+  setTrackSolo: 'runtime-delegated',
+  setTrackSoloIsolate: 'unsupported',
+  setTrackSoloSafe: 'unsupported',
+  start: 'runtime-delegated',
+  startRecording: 'unsupported',
+  stop: 'runtime-delegated',
+  stopAudition: 'unsupported',
+  stopRecording: 'unsupported',
+  stripSilence: 'unsupported',
+  updateRegions: 'runtime-delegated',
+} as const satisfies Readonly<Record<keyof AudioProvider, AudioProviderSupport>>;
+
+function createUnsupportedAudioProviderMethod<MethodName extends keyof AudioProvider>(
+  feature: AudioRuntimeFeatureName,
+  method: MethodName
+): AudioProvider[MethodName] {
+  return ((...parameters: unknown[]) => {
+    void parameters;
+    throw new UnsupportedAudioFeatureError({ feature, method: String(method) });
+  }) as AudioProvider[MethodName];
+}
 
 interface DawEngineAdapterOptions {
   readonly runtime: IAudioEngine;
@@ -67,6 +160,10 @@ export class DawEngineAdapter implements IAudioEngine {
 
   getCurrentTime(): number {
     return this.#engine.getCurrentTime();
+  }
+
+  getFeatureSupport() {
+    return this.#runtime.getFeatureSupport();
   }
 
   setLiveInputDevice(deviceId: string | null): Promise<string | null> {
@@ -244,7 +341,7 @@ interface RegionAddress {
   readonly trackId: string;
 }
 
-class DawAudioProviderBridge {
+export class DawAudioProviderBridge {
   readonly audioProvider: AudioProvider;
   readonly #runtime: IAudioEngine;
   readonly #processorTypes = new Map<string, Map<string, string>>();
@@ -303,11 +400,6 @@ class DawAudioProviderBridge {
   }
 
   #createAudioProvider(): AudioProvider {
-    const unsupported = (): never => {
-      throw new Error('drop-ai adapter에서 지원하지 않는 DAW Engine AudioProvider 기능입니다.');
-    };
-    const noOperation = (): void => undefined;
-
     return {
       initialize: async () => undefined,
       start: () => this.#runUnlessSuppressed(() => this.#runtime.play()),
@@ -318,77 +410,132 @@ class DawAudioProviderBridge {
       createAuxTrack: trackId => this.#createTrack(trackId),
       createBusTrack: trackId => this.#createTrack(trackId),
       deleteTrack: trackId => this.#runUnlessSuppressed(() => this.#runtime.removeTrack(trackId)),
-      // drop-ai runtime이 Track 내부 graph를 조립하므로 DAW Route IO 식별자는 전달하지 않는다.
-      connectIO: noOperation,
-      disconnectIO: noOperation,
+      // 실제 연결 graph는 product runtime이 소유하므로 DAW Route 연결은 projection으로만 유지한다.
+      connectIO: (sourceId, destinationId) => {
+        void sourceId;
+        void destinationId;
+      },
+      disconnectIO: (sourceId, destinationId) => {
+        void sourceId;
+        void destinationId;
+      },
       addProcessor: (trackId, processorId, type) => this.#rememberProcessor(trackId, processorId, type),
-      removeProcessor: noOperation,
+      removeProcessor: (trackId, processorId) => this.#forgetProcessor(trackId, processorId),
       setProcessorParameter: (trackId, processorId, parameter, value) =>
         this.#setProcessorParameter({ parameter, processorId, trackId, value }),
-      setProcessorAutomation: noOperation,
+      setProcessorAutomation: createUnsupportedAudioProviderMethod(
+        AudioRuntimeFeature.AUTOMATION,
+        'setProcessorAutomation'
+      ),
       setTrackGain: (trackId, gain) =>
         this.#runUnlessSuppressed(() => this.#runtime.setTrackVolume(trackId, decibelsToLinearGain(gain))),
       setTrackPan: (trackId, pan) => this.#runUnlessSuppressed(() => this.#runtime.setTrackPan(trackId, pan)),
-      setMonitor: noOperation,
+      setMonitor: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.LIVE_INPUT, 'setMonitor'),
       setTrackMute: (trackId, muted) => this.#runUnlessSuppressed(() => this.#runtime.setTrackMute(trackId, muted)),
       setTrackSolo: (trackId, soloed) => this.#runUnlessSuppressed(() => this.#runtime.setTrackSolo(trackId, soloed)),
-      setTrackSoloIsolate: noOperation,
-      setTrackSoloSafe: noOperation,
-      setMonitorMode: noOperation,
+      setTrackSoloIsolate: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.ROUTING, 'setTrackSoloIsolate'),
+      setTrackSoloSafe: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.ROUTING, 'setTrackSoloSafe'),
+      setMonitorMode: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.LIVE_INPUT, 'setMonitorMode'),
       scheduleRegion: (trackId, region) => this.#scheduleRegion(trackId, region),
       updateRegions: (trackId, regions) => this.#updateRegionStarts(trackId, regions),
       removeRegion: (trackId, regionId) =>
         this.#runUnlessSuppressed(() => this.#runtime.removeRegion(trackId, regionId)),
-      getMeterLevel: unsupported,
-      getMeterData: unsupported,
-      getMasterMeterData: unsupported,
-      getAnalyserNode: () => null,
-      getAudioBuffer: async () => null,
-      addAudioBuffer: noOperation,
-      prepareRecording: unsupported,
-      startRecording: unsupported,
-      stopRecording: unsupported,
-      enablePunchRecording: noOperation,
-      setPunchRange: noOperation,
-      setRecordingMuted: noOperation,
-      setMonitorWithEffects: noOperation,
-      getInputLatencyMs: () => 0,
+      getMeterLevel: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.METERING, 'getMeterLevel'),
+      getMeterData: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.METERING, 'getMeterData'),
+      getMasterMeterData: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.METERING, 'getMasterMeterData'),
+      getAnalyserNode: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.METERING, 'getAnalyserNode'),
+      getAudioBuffer: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.REGION_PROCESSING, 'getAudioBuffer'),
+      addAudioBuffer: (sourceId, buffer) => {
+        void sourceId;
+        void buffer;
+      },
+      prepareRecording: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.LINEAR_RECORDING, 'prepareRecording'),
+      startRecording: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.LINEAR_RECORDING, 'startRecording'),
+      stopRecording: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.LINEAR_RECORDING, 'stopRecording'),
+      enablePunchRecording: createUnsupportedAudioProviderMethod(
+        AudioRuntimeFeature.LINEAR_RECORDING,
+        'enablePunchRecording'
+      ),
+      setPunchRange: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.LINEAR_RECORDING, 'setPunchRange'),
+      setRecordingMuted: createUnsupportedAudioProviderMethod(
+        AudioRuntimeFeature.LINEAR_RECORDING,
+        'setRecordingMuted'
+      ),
+      setMonitorWithEffects: createUnsupportedAudioProviderMethod(
+        AudioRuntimeFeature.LIVE_INPUT,
+        'setMonitorWithEffects'
+      ),
+      getInputLatencyMs: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.LIVE_INPUT, 'getInputLatencyMs'),
       getCurrentFrame: () => secondsToFrames(this.#runtime.getCurrentTime()),
       getCurrentTime: () => this.#runtime.getCurrentTime(),
-      setTempo: noOperation,
-      cacheBlob: async () => undefined,
-      enableMetronome: noOperation,
-      setMetronomeVolume: noOperation,
+      // Tempo runtime이 연결되기 전까지 DAW domain의 초기 projection만 수용한다.
+      setTempo: tempoBpm => {
+        void tempoBpm;
+      },
+      cacheBlob: async (url, blob) => {
+        void url;
+        void blob;
+      },
+      enableMetronome: createUnsupportedAudioProviderMethod(
+        AudioRuntimeFeature.TEMPO_LOOP_METRONOME,
+        'enableMetronome'
+      ),
+      setMetronomeVolume: createUnsupportedAudioProviderMethod(
+        AudioRuntimeFeature.TEMPO_LOOP_METRONOME,
+        'setMetronomeVolume'
+      ),
       addSource: source => {
         this.#sourceUrls.set(source.id, source.url);
         return Promise.resolve();
       },
       getEngineType: () => 'ToneFallback',
-      exportAudio: unsupported,
-      renderRegionsToBuffer: unsupported,
+      exportAudio: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.ADVANCED_EXPORT, 'exportAudio'),
+      renderRegionsToBuffer: createUnsupportedAudioProviderMethod(
+        AudioRuntimeFeature.REGION_PROCESSING,
+        'renderRegionsToBuffer'
+      ),
       setMasterGain: gain => this.#runUnlessSuppressed(() => this.#runtime.setMasterVolume(decibelsToLinearGain(gain))),
-      addMasterProcessor: noOperation,
-      removeMasterProcessor: noOperation,
-      setMasterProcessorParameter: noOperation,
-      registerMasterIO: noOperation,
-      addSendBus: noOperation,
-      removeSendBus: noOperation,
-      setSendBusLevel: noOperation,
-      setSendBusPreFader: noOperation,
-      setSendBusActive: noOperation,
-      auditionRegion: unsupported,
-      stopAudition: noOperation,
-      stripSilence: unsupported,
-      normalizeRegion: unsupported,
-      createMidiTrack: unsupported,
-      scheduleMidiRegion: unsupported,
-      removeMidiRegion: unsupported,
-      setMidiInstrument: unsupported,
-      enableLoop: noOperation,
-      setLoopRange: noOperation,
-      midiPanic: noOperation,
-      getMasterStereoMeterData: unsupported,
-      reverseRegionBuffer: unsupported,
+      addMasterProcessor: (processorId, type, index) => {
+        void processorId;
+        void type;
+        void index;
+      },
+      removeMasterProcessor: processorId => {
+        void processorId;
+      },
+      setMasterProcessorParameter: (processorId, parameter, value) => {
+        void processorId;
+        void parameter;
+        void value;
+      },
+      registerMasterIO: (inputId, outputId) => {
+        void inputId;
+        void outputId;
+      },
+      addSendBus: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.ROUTING, 'addSendBus'),
+      removeSendBus: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.ROUTING, 'removeSendBus'),
+      setSendBusLevel: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.ROUTING, 'setSendBusLevel'),
+      setSendBusPreFader: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.ROUTING, 'setSendBusPreFader'),
+      setSendBusActive: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.ROUTING, 'setSendBusActive'),
+      auditionRegion: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.REGION_PROCESSING, 'auditionRegion'),
+      stopAudition: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.REGION_PROCESSING, 'stopAudition'),
+      stripSilence: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.REGION_PROCESSING, 'stripSilence'),
+      normalizeRegion: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.REGION_PROCESSING, 'normalizeRegion'),
+      createMidiTrack: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.MIDI, 'createMidiTrack'),
+      scheduleMidiRegion: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.MIDI, 'scheduleMidiRegion'),
+      removeMidiRegion: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.MIDI, 'removeMidiRegion'),
+      setMidiInstrument: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.MIDI, 'setMidiInstrument'),
+      enableLoop: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.TEMPO_LOOP_METRONOME, 'enableLoop'),
+      setLoopRange: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.TEMPO_LOOP_METRONOME, 'setLoopRange'),
+      midiPanic: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.MIDI, 'midiPanic'),
+      getMasterStereoMeterData: createUnsupportedAudioProviderMethod(
+        AudioRuntimeFeature.METERING,
+        'getMasterStereoMeterData'
+      ),
+      reverseRegionBuffer: createUnsupportedAudioProviderMethod(
+        AudioRuntimeFeature.REGION_PROCESSING,
+        'reverseRegionBuffer'
+      ),
     };
   }
 
@@ -410,6 +557,14 @@ class DawAudioProviderBridge {
     const trackProcessors = this.#processorTypes.get(trackId) ?? new Map<string, string>();
     trackProcessors.set(processorId, type);
     this.#processorTypes.set(trackId, trackProcessors);
+  }
+
+  #forgetProcessor(trackId: string, processorId: string): void {
+    const trackProcessors = this.#processorTypes.get(trackId);
+    trackProcessors?.delete(processorId);
+    if (trackProcessors?.size === 0) {
+      this.#processorTypes.delete(trackId);
+    }
   }
 
   #setProcessorParameter({
