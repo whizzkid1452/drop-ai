@@ -1,10 +1,22 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+} from 'react';
 import type { TrackState } from '@/layers/session/session';
 import {
   AUTOMATION_INTERPOLATIONS,
+  AUTOMATION_MODES,
   getAutomationTargetKey,
   type AutomationInterpolation,
   type AutomationLaneState,
+  type AutomationMode,
+  type AutomationPointState,
   type AutomationTarget,
 } from '@/layers/shared/types/automation-state';
 import type { PluginCatalogEntry } from '@/layers/shared/types/plugin-state';
@@ -24,7 +36,19 @@ import * as styles from './AutomationLaneEditor.css.ts';
 const AUTOMATION_LANE_HEIGHT = 80;
 const KEYBOARD_TIME_STEP_SECONDS = 0.1;
 const KEYBOARD_VALUE_STEP = 0.01;
+const AUTOMATION_WRITE_PREVIEW_INTERVAL_MS = 50;
+const MINIMUM_WRITE_PASS_DURATION_SECONDS = 0.001;
 const AUTOMATABLE_PLUGIN_MANIFEST_IDS = new Set(['builtin.gain']);
+const AUTOMATION_WRITE_KEYS = new Set([
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'End',
+  'Home',
+  'PageDown',
+  'PageUp',
+]);
 const EMPTY_AUTOMATION_LANES: readonly AutomationLaneState[] = [];
 
 interface AutomationTargetOption {
@@ -37,12 +61,22 @@ interface AutomationLaneEditorProps {
   readonly coordinateMapper: TimelineCoordinateMapper;
   readonly createId?: () => string;
   readonly editPointSeconds: number;
+  readonly getCurrentTime: () => number;
   readonly onChange: (automationLanes: readonly AutomationLaneState[]) => Promise<void>;
+  readonly onWriteCancel: (laneId: string) => Promise<void>;
+  readonly onWriteCommit: (request: AutomationWritePassDraft) => Promise<void>;
+  readonly onWritePreview: (request: AutomationWritePassDraft) => Promise<void>;
   readonly pluginCatalog: ReadonlyMap<string, PluginCatalogEntry>;
   readonly routingGraph: RoutingGraphSnapshot;
   readonly selectedRange: { readonly endTimeSeconds: number; readonly startTimeSeconds: number } | null;
   readonly track: TrackState;
   readonly trackNamesById: ReadonlyMap<string, string>;
+}
+
+export interface AutomationWritePassDraft {
+  readonly laneId: string;
+  readonly passRange: { readonly endTimeSeconds: number; readonly startTimeSeconds: number };
+  readonly samples: readonly AutomationPointState[];
 }
 
 interface PointDragState {
@@ -52,11 +86,24 @@ interface PointDragState {
   readonly pointerId: number;
 }
 
+interface AutomationWriteGesture {
+  readonly fixedPassRange: { readonly endTimeSeconds: number; readonly startTimeSeconds: number } | null;
+  readonly laneId: string;
+  readonly pointerId: number | null;
+  readonly samples: readonly AutomationPointState[];
+  readonly startTimeSeconds: number;
+  readonly value: number;
+}
+
 export function AutomationLaneEditor({
   coordinateMapper,
   createId = () => globalThis.crypto.randomUUID(),
   editPointSeconds,
+  getCurrentTime,
   onChange,
+  onWriteCancel,
+  onWriteCommit,
+  onWritePreview,
   pluginCatalog,
   routingGraph,
   selectedRange,
@@ -76,12 +123,18 @@ export function AutomationLaneEditor({
   const [isPending, setIsPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [previewLane, setPreviewLane] = useState<AutomationLaneState | null>(null);
+  const [writeValue, setWriteValue] = useState(0.5);
   const laneElementRef = useRef<HTMLDivElement>(null);
   const pointDragRef = useRef<PointDragState | null>(null);
+  const writeGestureRef = useRef<AutomationWriteGesture | null>(null);
+  const writePreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onWriteCancelRef = useRef(onWriteCancel);
 
   const selectedLane = automationLanes.find(lane => getAutomationTargetKey(lane.target) === selectedTargetKey);
   const displayedLane = previewLane?.id === selectedLane?.id ? previewLane : selectedLane;
   const selectedTarget = targetOptions.find(option => option.key === selectedTargetKey);
+
+  onWriteCancelRef.current = onWriteCancel;
 
   useEffect(() => {
     if (targetOptions.some(option => option.key === selectedTargetKey)) {
@@ -94,6 +147,19 @@ export function AutomationLaneEditor({
     const availablePointIds = new Set(selectedLane?.points.map(point => point.id) ?? []);
     setSelectedPointIds(currentIds => new Set([...currentIds].filter(pointId => availablePointIds.has(pointId))));
   }, [selectedLane]);
+
+  useEffect(
+    () => () => {
+      if (writePreviewTimerRef.current !== null) {
+        clearTimeout(writePreviewTimerRef.current);
+      }
+      const activeGesture = writeGestureRef.current;
+      if (activeGesture) {
+        void onWriteCancelRef.current(activeGesture.laneId);
+      }
+    },
+    []
+  );
 
   const commitAutomationLanes = async (nextLanes: readonly AutomationLaneState[]) => {
     if (isPending) {
@@ -208,6 +274,177 @@ export function AutomationLaneEditor({
     });
   };
 
+  const resolveWriteTime = (fixedPassRange: AutomationWriteGesture['fixedPassRange']): number => {
+    const currentTime = getCurrentTime();
+    const finiteCurrentTime = Number.isFinite(currentTime) ? Math.max(0, currentTime) : 0;
+    if (!fixedPassRange) {
+      return finiteCurrentTime;
+    }
+    return Math.min(fixedPassRange.endTimeSeconds, Math.max(fixedPassRange.startTimeSeconds, finiteCurrentTime));
+  };
+
+  const appendWriteSample = (gesture: AutomationWriteGesture, value: number): AutomationWriteGesture => {
+    const timeSeconds = resolveWriteTime(gesture.fixedPassRange);
+    const previousSample = gesture.samples.at(-1);
+    if (previousSample && timeSeconds <= previousSample.timeSeconds) {
+      return {
+        ...gesture,
+        samples: [...gesture.samples.slice(0, -1), { ...previousSample, value }],
+        value,
+      };
+    }
+    return {
+      ...gesture,
+      samples: [...gesture.samples, { id: createId(), interpolation: 'linear', timeSeconds, value }],
+      value,
+    };
+  };
+
+  const createWritePassDraft = (gesture: AutomationWriteGesture): AutomationWritePassDraft => {
+    const lastSampleTimeSeconds = gesture.samples.at(-1)?.timeSeconds ?? gesture.startTimeSeconds;
+    return {
+      laneId: gesture.laneId,
+      passRange: gesture.fixedPassRange ?? {
+        endTimeSeconds: Math.max(lastSampleTimeSeconds, gesture.startTimeSeconds + MINIMUM_WRITE_PASS_DURATION_SECONDS),
+        startTimeSeconds: gesture.startTimeSeconds,
+      },
+      samples: gesture.samples.map(sample => ({ ...sample })),
+    };
+  };
+
+  const clearWritePreviewTimer = () => {
+    if (writePreviewTimerRef.current === null) {
+      return;
+    }
+    clearTimeout(writePreviewTimerRef.current);
+    writePreviewTimerRef.current = null;
+  };
+
+  const scheduleWritePreview = () => {
+    if (writePreviewTimerRef.current !== null) {
+      return;
+    }
+    writePreviewTimerRef.current = setTimeout(() => {
+      writePreviewTimerRef.current = null;
+      const activeGesture = writeGestureRef.current;
+      if (!activeGesture) {
+        return;
+      }
+      const previewGesture = appendWriteSample(activeGesture, activeGesture.value);
+      writeGestureRef.current = previewGesture;
+      void onWritePreview(createWritePassDraft(previewGesture)).catch(error => {
+        setErrorMessage(error instanceof Error ? error.message : String(error));
+      });
+    }, AUTOMATION_WRITE_PREVIEW_INTERVAL_MS);
+  };
+
+  const startWriteGesture = (pointerId: number | null): boolean => {
+    if (!selectedLane || !selectedLane.isEnabled || selectedLane.mode === 'read' || writeGestureRef.current) {
+      return false;
+    }
+    const fixedPassRange =
+      selectedRange && selectedRange.endTimeSeconds > selectedRange.startTimeSeconds ? selectedRange : null;
+    const startTimeSeconds = resolveWriteTime(fixedPassRange);
+    writeGestureRef.current = {
+      fixedPassRange,
+      laneId: selectedLane.id,
+      pointerId,
+      samples: [{ id: createId(), interpolation: 'linear', timeSeconds: startTimeSeconds, value: writeValue }],
+      startTimeSeconds,
+      value: writeValue,
+    };
+    setErrorMessage(null);
+    scheduleWritePreview();
+    return true;
+  };
+
+  const updateWriteGesture = (value: number) => {
+    const activeGesture = writeGestureRef.current;
+    if (!activeGesture) {
+      return;
+    }
+    writeGestureRef.current = { ...activeGesture, value };
+    scheduleWritePreview();
+  };
+
+  const commitWriteGesture = async () => {
+    const activeGesture = writeGestureRef.current;
+    if (!activeGesture) {
+      return;
+    }
+    const completedGesture = appendWriteSample(activeGesture, activeGesture.value);
+    writeGestureRef.current = null;
+    clearWritePreviewTimer();
+    setIsPending(true);
+    setErrorMessage(null);
+    try {
+      await onWriteCommit(createWritePassDraft(completedGesture));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+      await onWriteCancel(completedGesture.laneId).catch(() => undefined);
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  const cancelWriteGesture = async () => {
+    const activeGesture = writeGestureRef.current;
+    if (!activeGesture) {
+      return;
+    }
+    writeGestureRef.current = null;
+    clearWritePreviewTimer();
+    try {
+      await onWriteCancel(activeGesture.laneId);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const handleWriteInput = (event: FormEvent<HTMLInputElement>) => {
+    const nextValue = Number(event.currentTarget.value);
+    setWriteValue(nextValue);
+    updateWriteGesture(nextValue);
+  };
+
+  const handleWritePointerDown = (event: PointerEvent<HTMLInputElement>) => {
+    if (event.button !== 0 || !event.isPrimary || !startWriteGesture(event.pointerId)) {
+      return;
+    }
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handleWritePointerUp = async (event: PointerEvent<HTMLInputElement>) => {
+    if (writeGestureRef.current?.pointerId !== event.pointerId) {
+      return;
+    }
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    }
+    await commitWriteGesture();
+  };
+
+  const handleWritePointerCancel = async (event: PointerEvent<HTMLInputElement>) => {
+    if (writeGestureRef.current?.pointerId !== event.pointerId) {
+      return;
+    }
+    await cancelWriteGesture();
+  };
+
+  const handleWriteKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (!AUTOMATION_WRITE_KEYS.has(event.key) || event.repeat) {
+      return;
+    }
+    startWriteGesture(null);
+  };
+
+  const handleWriteKeyUp = async (event: KeyboardEvent<HTMLInputElement>) => {
+    if (!AUTOMATION_WRITE_KEYS.has(event.key) || writeGestureRef.current?.pointerId !== null) {
+      return;
+    }
+    await commitWriteGesture();
+  };
+
   const handlePointKeyboard = async (event: KeyboardEvent<HTMLButtonElement>, pointId: string) => {
     if (!selectedLane) {
       return;
@@ -306,6 +543,21 @@ export function AutomationLaneEditor({
           </select>
           {selectedLane ? (
             <>
+              <select
+                aria-label={`${track.name} Automation mode`}
+                className={styles.automationControl}
+                disabled={isPending}
+                onChange={event =>
+                  void commitSelectedLane({ ...selectedLane, mode: event.currentTarget.value as AutomationMode })
+                }
+                value={selectedLane.mode}
+              >
+                {AUTOMATION_MODES.map(mode => (
+                  <option key={mode} value={mode}>
+                    {mode.toUpperCase()}
+                  </option>
+                ))}
+              </select>
               <button
                 aria-label={`${track.name} Automation Lane 활성화`}
                 aria-pressed={selectedLane.isEnabled}
@@ -314,7 +566,7 @@ export function AutomationLaneEditor({
                 onClick={() => void commitSelectedLane({ ...selectedLane, isEnabled: !selectedLane.isEnabled })}
                 type="button"
               >
-                {selectedLane.isEnabled ? 'READ' : 'OFF'}
+                {selectedLane.isEnabled ? 'ON' : 'OFF'}
               </button>
               <button
                 aria-label={`${track.name} Automation Lane 삭제`}
@@ -339,6 +591,26 @@ export function AutomationLaneEditor({
           )}
         </div>
         <div className={styles.automationToolbar}>
+          <label className={styles.automationWriteControl}>
+            <span>WRITE</span>
+            <input
+              aria-label={`${track.name} Automation write value`}
+              className={styles.automationWriteInput}
+              disabled={isPending || !selectedLane?.isEnabled || selectedLane.mode === 'read'}
+              max="1"
+              min="0"
+              onInput={handleWriteInput}
+              onKeyDown={handleWriteKeyDown}
+              onKeyUp={event => void handleWriteKeyUp(event)}
+              onPointerCancel={event => void handleWritePointerCancel(event)}
+              onPointerDown={handleWritePointerDown}
+              onPointerUp={event => void handleWritePointerUp(event)}
+              step="0.01"
+              type="range"
+              value={writeValue}
+            />
+            <output className={styles.automationWriteOutput}>{writeValue.toFixed(2)}</output>
+          </label>
           <button
             aria-label={`${track.name} Automation 점 추가`}
             className={styles.automationControl}

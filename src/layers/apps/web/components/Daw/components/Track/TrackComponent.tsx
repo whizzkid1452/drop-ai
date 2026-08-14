@@ -12,7 +12,7 @@ import { snapTimelineSeconds, type TimelineGridSettings } from '../../timeline-g
 import { AudioLevelMeter } from '../AudioLevelMeter/AudioLevelMeter';
 import { TrackInputMonitoringControl } from '../LiveInputControls/TrackInputMonitoringControl';
 import { TrackRecordArmControl } from './components/TrackRecordArmControl';
-import { AutomationLaneEditor } from './AutomationLaneEditor';
+import { AutomationLaneEditor, type AutomationWritePassDraft } from './AutomationLaneEditor';
 import type { AutomationLaneState } from '@/layers/shared/types/automation-state';
 import type { PluginCatalogEntry } from '@/layers/shared/types/plugin-state';
 import type { RoutingGraphSnapshot } from '@/layers/shared/types/routing-state';
@@ -37,6 +37,10 @@ export const TrackComponent = memo(function TrackComponent({
   routingGraph,
   trackNamesById,
   onAutomationChange,
+  getAutomationTime,
+  onAutomationWriteCancel,
+  onAutomationWriteCommit,
+  onAutomationWritePreview,
   onReady,
   onFadeChange,
   onMuteChange,
@@ -59,6 +63,10 @@ export const TrackComponent = memo(function TrackComponent({
   routingGraph: RoutingGraphSnapshot;
   trackNamesById: ReadonlyMap<string, string>;
   onAutomationChange: (automationLanes: readonly AutomationLaneState[]) => Promise<void>;
+  getAutomationTime: () => number;
+  onAutomationWriteCancel: (laneId: string) => Promise<void>;
+  onAutomationWriteCommit: (request: AutomationWritePassDraft) => Promise<void>;
+  onAutomationWritePreview: (request: AutomationWritePassDraft) => Promise<void>;
   onReady: (event: RegionWaveSurferReadyEvent) => void;
   onFadeChange: (regionId: string, edge: 'in' | 'out', durationSeconds: number) => Promise<void>;
   onMuteChange: (muted: boolean) => Promise<TrackToggleResult>;
@@ -280,7 +288,11 @@ export const TrackComponent = memo(function TrackComponent({
         <AutomationLaneEditor
           coordinateMapper={coordinateMapper}
           editPointSeconds={editPointSeconds}
+          getCurrentTime={getAutomationTime}
           onChange={onAutomationChange}
+          onWriteCancel={onAutomationWriteCancel}
+          onWriteCommit={onAutomationWriteCommit}
+          onWritePreview={onAutomationWritePreview}
           pluginCatalog={pluginCatalog}
           routingGraph={routingGraph}
           selectedRange={selectedRange}

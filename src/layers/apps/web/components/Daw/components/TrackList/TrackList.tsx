@@ -1,6 +1,7 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
 import { TrackComponent, type RegionWaveSurferReadyEvent } from '../Track/TrackComponent';
+import type { AutomationWritePassDraft } from '../Track/AutomationLaneEditor';
 import {
   createRegionWaveSurferKey,
   pruneWaveSurferInstances,
@@ -13,6 +14,7 @@ import {
   useAudioSourceResolver,
   useCommandExecutor,
   useEditorRuntimeState,
+  usePlaybackClock,
   useSession,
 } from '@/layers/apps/web/context/layer-hooks';
 import { executeTrackMuteChange, executeTrackSoloChange } from '@/layers/apps/web/hooks/track-mute-solo-commands';
@@ -50,6 +52,7 @@ export function TrackList({
   const routingGraph = useSession(state => state.routingGraph);
   const trackArray = useMemo(() => Array.from(tracks.values()), [tracks]);
   const commandExecutor = useCommandExecutor();
+  const playbackClock = usePlaybackClock();
   const editorRuntime = useEditorRuntimeState();
   const audioSourceResolver = useAudioSourceResolver();
   const automationCapability = useAudioRuntimeCapabilities().features[AudioRuntimeFeature.AUTOMATION];
@@ -212,6 +215,41 @@ export function TrackList({
     [commandExecutor]
   );
 
+  const handleAutomationWritePreview = useCallback(
+    async (trackId: string, request: AutomationWritePassDraft) => {
+      await commandExecutor.execute({
+        ...request,
+        samples: request.samples.map(sample => ({ ...sample })),
+        trackId,
+        type: AudioCommandType.PREVIEW_AUTOMATION_WRITE_PASS,
+      });
+    },
+    [commandExecutor]
+  );
+
+  const handleAutomationWriteCommit = useCallback(
+    async (trackId: string, request: AutomationWritePassDraft) => {
+      await commandExecutor.execute({
+        ...request,
+        samples: request.samples.map(sample => ({ ...sample })),
+        trackId,
+        type: AudioCommandType.COMMIT_AUTOMATION_WRITE_PASS,
+      });
+    },
+    [commandExecutor]
+  );
+
+  const handleAutomationWriteCancel = useCallback(
+    async (trackId: string, laneId: string) => {
+      await commandExecutor.execute({
+        laneId,
+        trackId,
+        type: AudioCommandType.CANCEL_AUTOMATION_WRITE_PREVIEW,
+      });
+    },
+    [commandExecutor]
+  );
+
   const handleRangeSelect = useCallback(
     async (trackId: string, startTimeSeconds: number, endTimeSeconds: number) => {
       try {
@@ -256,7 +294,11 @@ export function TrackList({
             pluginCatalog={pluginCatalog}
             routingGraph={routingGraph}
             trackNamesById={trackNamesById}
+            getAutomationTime={() => playbackClock.getCurrentTime()}
             onAutomationChange={automationLanes => handleAutomationChange(track.id, automationLanes)}
+            onAutomationWriteCancel={laneId => handleAutomationWriteCancel(track.id, laneId)}
+            onAutomationWriteCommit={request => handleAutomationWriteCommit(track.id, request)}
+            onAutomationWritePreview={request => handleAutomationWritePreview(track.id, request)}
             onReady={handleReady}
             onFadeChange={(regionId, edge, durationSeconds) =>
               handleFadeChange(track.id, regionId, edge, durationSeconds)

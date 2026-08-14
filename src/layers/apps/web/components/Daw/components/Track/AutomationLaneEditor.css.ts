@@ -34,7 +34,7 @@ export const automationHeader = style({
 
 export const automationControls = style({
   display: 'grid',
-  gridTemplateColumns: 'minmax(0, 1fr) auto auto',
+  gridTemplateColumns: 'minmax(0, 1fr) auto auto auto',
   gap: '3px',
 });
 
@@ -43,6 +43,25 @@ export const automationToolbar = style({
   flexWrap: 'wrap',
   gap: '3px',
 });
+
+export const automationWriteControl = style({
+  display: 'grid',
+  gridTemplateColumns: 'auto 64px 25px',
+  alignItems: 'center',
+  height: '20px',
+  gap: '3px',
+  color: '#d8dcde',
+  fontFamily: '"Consolas", "SFMono-Regular", monospace',
+  fontSize: '8px',
+});
+
+export const automationWriteInput = style({
+  minWidth: 0,
+  width: '64px',
+  accentColor: '#ff68dc',
+});
+
+export const automationWriteOutput = style({ textAlign: 'right' });
 
 export const automationError = style({
   overflow: 'hidden',
