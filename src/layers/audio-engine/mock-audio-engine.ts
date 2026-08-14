@@ -56,7 +56,7 @@ import type {
   StopAllLoopsRequest,
   TriggerLoopRequest,
 } from './i-audio-engine';
-import type { PluginParameterValue } from '../shared/types/plugin-state';
+import type { PluginParameterValue, PluginRuntimeState } from '../shared/types/plugin-state';
 import {
   CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
   type AudioRuntimeFeatureSupport,
@@ -108,6 +108,19 @@ export class MockAudioEngine implements IAudioEngine {
   private mockAudioRegionPeak = 0.5;
   private mockAutomationLanes = new Map<string, SetAutomationLanesRequest['automationLanes']>();
   private mockMidiTracks = new Map<string, MidiTrackState>();
+
+  listAvailablePluginManifestIds(): readonly string[] {
+    return ['builtin.gain', 'builtin.saturation'];
+  }
+
+  readPluginRuntimeStates(trackId: string): readonly PluginRuntimeState[] {
+    return [...(this.mockPlugins.get(trackId) ?? new Map())].map(([instanceId, plugin]) => ({
+      instanceId,
+      latencySamples: 0,
+      reason: null,
+      status: plugin.isEnabled ? 'active' : 'bypassed',
+    }));
+  }
 
   getFeatureSupport(): AudioRuntimeFeatureSupport {
     return { ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT, metering: true, midi: true, tempoLoopMetronome: true };

@@ -208,16 +208,15 @@ describe('ProjectDocument v2 mapper', () => {
     expect(restored.session.tracks.get(TRACK_ID)?.pluginInstances).toEqual([]);
   });
 
-  it('문서의 Plugin manifest가 catalog에 없으면 ProjectDocument 오류로 거부한다', () => {
-    const error = expectMappingError(
-      () => createProjectRestoreSnapshotFromDocumentV2({ document: createProjectDocumentV2(), pluginCatalog: [] }),
-      ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT
-    );
+  it('문서의 Plugin manifest가 catalog에 없으면 비활성 placeholder로 복원한다', () => {
+    const restored = createProjectRestoreSnapshotFromDocumentV2({
+      document: createProjectDocumentV2(),
+      pluginCatalog: [],
+    });
 
-    expect(error.details).toMatchObject({
-      reason: 'PLUGIN_COMPATIBILITY_FAILED',
-      trackId: TRACK_ID,
-      issues: [{ code: ProjectPluginCompatibilityIssueCode.MANIFEST_NOT_FOUND }],
+    expect(restored.session.tracks.get(TRACK_ID)?.pluginInstances[0]).toMatchObject({
+      availability: 'missing',
+      isEnabled: false,
     });
   });
 

@@ -90,6 +90,7 @@ import { ToneAutomationRuntime } from './automation/tone-automation-runtime';
 import { createMappedAutomationTarget } from './automation/tone-automation-target';
 import { ToneMidiRuntime } from './midi/tone-midi-runtime';
 import { BUILTIN_MIDI_INSTRUMENT_ID } from '../shared/types/midi-state';
+import type { PluginRuntimeState } from '../shared/types/plugin-state';
 
 interface RegionPlayerEntry {
   players: Tone.Player[];
@@ -121,6 +122,7 @@ interface AudioProjectGraphState {
   readonly players: Map<string, Map<string, RegionPlayerEntry>>;
   readonly pluginRuntimes: Map<string, IAudioPluginRuntime[]>;
   readonly disabledPluginInstanceIds: Map<string, Set<string>>;
+  readonly pluginRuntimeStates: Map<string, PluginRuntimeState[]>;
   readonly routingRuntime: AudioRoutingRuntime;
   readonly midiRuntime: ToneMidiRuntime;
 }
@@ -141,6 +143,11 @@ interface CreateGraphOutputRequest {
 interface CreatePreparedPluginRuntimesRequest {
   readonly trackId: string;
   readonly pluginInstances: readonly AudioProjectGraphPluginInstance[];
+}
+
+interface PreparedPluginRuntimeResult {
+  readonly runtimes: IAudioPluginRuntime[];
+  readonly states: PluginRuntimeState[];
 }
 
 interface OfflineExportTrackRuntime {
@@ -217,6 +224,7 @@ export class AudioEngine implements IAudioEngine {
   private players: Map<string, Map<string, RegionPlayerEntry>> = new Map();
   private pluginRuntimes: Map<string, IAudioPluginRuntime[]> = new Map();
   private disabledPluginInstanceIds: Map<string, Set<string>> = new Map();
+  private pluginRuntimeStates: Map<string, PluginRuntimeState[]> = new Map();
   private routingRuntime = new AudioRoutingRuntime();
   private midiRuntime = new ToneMidiRuntime();
   private readonly pluginRuntimeFactories: ReadonlyMap<string, IAudioPluginRuntimeFactory>;
@@ -266,6 +274,14 @@ export class AudioEngine implements IAudioEngine {
     recordStartTimeSeconds: null,
   };
   private activeRecordingRequest: StartLinearRecordingRequest | null = null;
+
+  listAvailablePluginManifestIds(): readonly string[] {
+    return [...this.pluginRuntimeFactories.keys()];
+  }
+
+  readPluginRuntimeStates(trackId: string) {
+    return (this.pluginRuntimeStates.get(trackId) ?? []).map(state => ({ ...state }));
+  }
 
   constructor(options: AudioEngineOptions = {}) {
     const {
@@ -729,6 +745,7 @@ export class AudioEngine implements IAudioEngine {
       ?.forEach(runtime => this.disposePluginRuntimeSafely(runtime, '제거한 Track의 Plugin 정리에 실패했습니다.'));
     this.pluginRuntimes.delete(trackId);
     this.disabledPluginInstanceIds.delete(trackId);
+    this.pluginRuntimeStates.delete(trackId);
 
     const meterRuntime = this.trackMeterRuntimes.get(trackId);
     if (meterRuntime) {
@@ -889,7 +906,8 @@ export class AudioEngine implements IAudioEngine {
     const input = this.getExistingInput(request.trackId);
     const destination = this.getExistingPreFaderOutput(request.trackId);
     const currentRuntimes = this.getTrackPluginRuntimes(request.trackId);
-    if (currentRuntimes.some(runtime => runtime.instanceId === request.instanceId)) {
+    const currentRuntimeStates = this.pluginRuntimeStates.get(request.trackId) ?? [];
+    if (currentRuntimeStates.some(state => state.instanceId === request.instanceId)) {
       throw new AudioEngineError(
         AudioEngineErrorCode.PLUGIN_INSTANCE_ID_CONFLICT,
         ERROR_MESSAGES.PLUGIN_INSTANCE_ID_CONFLICT,
@@ -897,8 +915,8 @@ export class AudioEngine implements IAudioEngine {
       );
     }
 
-    const targetIndex = request.targetIndex ?? currentRuntimes.length;
-    this.validatePluginTargetIndex({ ...request, targetIndex, maximumIndex: currentRuntimes.length });
+    const targetIndex = request.targetIndex ?? currentRuntimeStates.length;
+    this.validatePluginTargetIndex({ ...request, targetIndex, maximumIndex: currentRuntimeStates.length });
 
     const factory = this.pluginRuntimeFactories.get(request.manifestId);
     if (!factory) {
@@ -910,7 +928,15 @@ export class AudioEngine implements IAudioEngine {
     }
 
     const runtime = this.createPluginRuntime(factory, request);
-    const nextRuntimes = insertArrayEntry({ entries: currentRuntimes, entry: runtime, targetIndex });
+    const precedingInstanceIds = new Set(currentRuntimeStates.slice(0, targetIndex).map(state => state.instanceId));
+    const runtimeTargetIndex = currentRuntimes.filter(candidate =>
+      precedingInstanceIds.has(candidate.instanceId)
+    ).length;
+    const nextRuntimes = insertArrayEntry({
+      entries: currentRuntimes,
+      entry: runtime,
+      targetIndex: runtimeTargetIndex,
+    });
     const currentDisabledIds = this.getTrackDisabledPluginInstanceIds(request.trackId);
     const nextDisabledIds = new Set(currentDisabledIds);
     if (request.isEnabled === false) {
@@ -926,6 +952,19 @@ export class AudioEngine implements IAudioEngine {
     });
     this.pluginRuntimes.set(request.trackId, nextRuntimes);
     this.disabledPluginInstanceIds.set(request.trackId, nextDisabledIds);
+    this.pluginRuntimeStates.set(
+      request.trackId,
+      insertArrayEntry({
+        entries: currentRuntimeStates,
+        entry: {
+          instanceId: request.instanceId,
+          latencySamples: runtime.latencySamples ?? 0,
+          reason: null,
+          status: request.isEnabled === false ? 'bypassed' : 'active',
+        },
+        targetIndex,
+      })
+    );
     this.graphRevision += 1;
   }
 
@@ -934,13 +973,23 @@ export class AudioEngine implements IAudioEngine {
     const input = this.getExistingInput(trackId);
     const destination = this.getExistingPreFaderOutput(trackId);
     const currentRuntimes = this.getTrackPluginRuntimes(trackId);
-    const runtimeIndex = currentRuntimes.findIndex(runtime => runtime.instanceId === instanceId);
-    if (runtimeIndex < 0) {
+    const runtimeStates = this.pluginRuntimeStates.get(trackId) ?? [];
+    if (!runtimeStates.some(state => state.instanceId === instanceId)) {
       throw new AudioEngineError(
         AudioEngineErrorCode.PLUGIN_INSTANCE_NOT_FOUND,
         ERROR_MESSAGES.PLUGIN_INSTANCE_NOT_FOUND,
         { instanceId, trackId }
       );
+    }
+    const runtimeIndex = currentRuntimes.findIndex(runtime => runtime.instanceId === instanceId);
+    if (runtimeIndex < 0) {
+      this.pluginRuntimeStates.set(
+        trackId,
+        runtimeStates.filter(state => state.instanceId !== instanceId)
+      );
+      this.getTrackDisabledPluginInstanceIds(trackId).delete(instanceId);
+      this.graphRevision += 1;
+      return;
     }
 
     const runtime = currentRuntimes[runtimeIndex];
@@ -958,6 +1007,10 @@ export class AudioEngine implements IAudioEngine {
     });
     this.pluginRuntimes.set(trackId, nextRuntimes);
     this.disabledPluginInstanceIds.set(trackId, nextDisabledIds);
+    this.pluginRuntimeStates.set(
+      trackId,
+      (this.pluginRuntimeStates.get(trackId) ?? []).filter(state => state.instanceId !== instanceId)
+    );
     this.graphRevision += 1;
     if (runtime) {
       this.disposePluginRuntimeSafely(runtime, '제거한 Plugin runtime 정리에 실패했습니다.');
@@ -969,7 +1022,8 @@ export class AudioEngine implements IAudioEngine {
     const input = this.getExistingInput(request.trackId);
     const destination = this.getExistingPreFaderOutput(request.trackId);
     const currentRuntimes = this.getTrackPluginRuntimes(request.trackId);
-    const sourceIndex = currentRuntimes.findIndex(runtime => runtime.instanceId === request.instanceId);
+    const currentRuntimeStates = this.pluginRuntimeStates.get(request.trackId) ?? [];
+    const sourceIndex = currentRuntimeStates.findIndex(state => state.instanceId === request.instanceId);
     if (sourceIndex < 0) {
       throw new AudioEngineError(
         AudioEngineErrorCode.PLUGIN_INSTANCE_NOT_FOUND,
@@ -977,12 +1031,21 @@ export class AudioEngine implements IAudioEngine {
         { instanceId: request.instanceId, trackId: request.trackId }
       );
     }
-    this.validatePluginTargetIndex({ ...request, maximumIndex: currentRuntimes.length - 1 });
+    this.validatePluginTargetIndex({ ...request, maximumIndex: currentRuntimeStates.length - 1 });
     if (sourceIndex === request.targetIndex) {
       return;
     }
 
-    const nextRuntimes = moveArrayEntry({ entries: currentRuntimes, sourceIndex, targetIndex: request.targetIndex });
+    const nextRuntimeStates = moveArrayEntry({
+      entries: currentRuntimeStates,
+      sourceIndex,
+      targetIndex: request.targetIndex,
+    });
+    const runtimesById = new Map(currentRuntimes.map(runtime => [runtime.instanceId, runtime]));
+    const nextRuntimes = nextRuntimeStates.flatMap(state => {
+      const runtime = runtimesById.get(state.instanceId);
+      return runtime ? [runtime] : [];
+    });
     const disabledInstanceIds = this.getTrackDisabledPluginInstanceIds(request.trackId);
     this.replacePluginChainConnections({
       trackId: request.trackId,
@@ -993,6 +1056,7 @@ export class AudioEngine implements IAudioEngine {
       runtimesToDisposeOnRollback: [],
     });
     this.pluginRuntimes.set(request.trackId, nextRuntimes);
+    this.pluginRuntimeStates.set(request.trackId, nextRuntimeStates);
     this.graphRevision += 1;
   }
 
@@ -1061,6 +1125,14 @@ export class AudioEngine implements IAudioEngine {
       runtimesToDisposeOnRollback: [],
     });
     this.disabledPluginInstanceIds.set(request.trackId, nextDisabledIds);
+    this.pluginRuntimeStates.set(
+      request.trackId,
+      (this.pluginRuntimeStates.get(request.trackId) ?? []).map(state =>
+        state.instanceId === request.instanceId
+          ? { ...state, status: request.isEnabled ? ('active' as const) : ('bypassed' as const) }
+          : state
+      )
+    );
     this.graphRevision += 1;
   }
 
@@ -1450,7 +1522,11 @@ export class AudioEngine implements IAudioEngine {
     request: InstallAudioPluginRequest
   ): IAudioPluginRuntime {
     try {
-      return factory.create({ instanceId: request.instanceId, parameterValues: request.parameterValues });
+      return factory.create({
+        instanceId: request.instanceId,
+        parameterValues: request.parameterValues,
+        stateBlob: request.stateBlob,
+      });
     } catch (cause) {
       throw new AudioEngineError(
         AudioEngineErrorCode.PLUGIN_RUNTIME_CREATE_FAILED,
@@ -1468,9 +1544,10 @@ export class AudioEngine implements IAudioEngine {
   private createPreparedPluginRuntimes({
     trackId,
     pluginInstances,
-  }: CreatePreparedPluginRuntimesRequest): IAudioPluginRuntime[] {
+  }: CreatePreparedPluginRuntimesRequest): PreparedPluginRuntimeResult {
     const instanceIds = new Set<string>();
     const runtimes: IAudioPluginRuntime[] = [];
+    const states: PluginRuntimeState[] = [];
 
     try {
       for (const instance of pluginInstances) {
@@ -1485,24 +1562,41 @@ export class AudioEngine implements IAudioEngine {
 
         const factory = this.pluginRuntimeFactories.get(instance.manifestId);
         if (!factory) {
-          throw new AudioEngineError(
-            AudioEngineErrorCode.PLUGIN_FACTORY_NOT_FOUND,
-            ERROR_MESSAGES.PLUGIN_FACTORY_NOT_FOUND,
-            { manifestId: instance.manifestId }
-          );
+          states.push({
+            instanceId: instance.instanceId,
+            latencySamples: 0,
+            reason: `Plugin runtime을 찾을 수 없습니다: ${instance.manifestId}`,
+            status: 'missing',
+          });
+          continue;
         }
 
-        runtimes.push(
-          this.createPluginRuntime(factory, {
+        try {
+          const runtime = this.createPluginRuntime(factory, {
             trackId,
             instanceId: instance.instanceId,
             manifestId: instance.manifestId,
             parameterValues: instance.parameterValues,
-          })
-        );
+            stateBlob: instance.stateBlob,
+          });
+          runtimes.push(runtime);
+          states.push({
+            instanceId: instance.instanceId,
+            latencySamples: runtime.latencySamples ?? 0,
+            reason: null,
+            status: instance.isEnabled ? 'active' : 'bypassed',
+          });
+        } catch (cause) {
+          states.push({
+            instanceId: instance.instanceId,
+            latencySamples: 0,
+            reason: this.describeError(cause),
+            status: 'failed',
+          });
+        }
       }
 
-      return runtimes;
+      return { runtimes, states };
     } catch (error) {
       runtimes.forEach(runtime =>
         this.disposePluginRuntimeSafely(runtime, '프로젝트 준비 중 만든 Plugin runtime 정리에 실패했습니다.')
@@ -1662,6 +1756,7 @@ export class AudioEngine implements IAudioEngine {
     this.players.set(trackId, new Map());
     this.pluginRuntimes.set(trackId, []);
     this.disabledPluginInstanceIds.set(trackId, new Set());
+    this.pluginRuntimeStates.set(trackId, []);
     const nextRoutingGraph = {
       ...this.routingRuntime.getSnapshot(),
       routes: [
@@ -1683,6 +1778,7 @@ export class AudioEngine implements IAudioEngine {
       this.players.delete(trackId);
       this.pluginRuntimes.delete(trackId);
       this.disabledPluginInstanceIds.delete(trackId);
+      this.pluginRuntimeStates.delete(trackId);
       this.disposeMeterRuntimeSafely(meterRuntime, 'Route 연결에 실패한 Track Meter 정리에 실패했습니다.');
       this.disposeTrackInputSafely(input, 'Route 연결에 실패한 Track input 정리에 실패했습니다.');
       this.disposeTrackInputSafely(preFaderOutput, 'Route 연결에 실패한 Track pre-fader 출력 정리에 실패했습니다.');
@@ -1726,11 +1822,13 @@ export class AudioEngine implements IAudioEngine {
         graph.preFaderOutputs.set(track.id, preFaderOutput);
         graph.postFaderOutputs.set(track.id, postFaderOutput);
         graph.channels.set(track.id, channel);
-        const pluginRuntimes = this.createPreparedPluginRuntimes({
+        const preparedPlugins = this.createPreparedPluginRuntimes({
           trackId: track.id,
           pluginInstances: track.pluginInstances,
         });
+        const pluginRuntimes = preparedPlugins.runtimes;
         graph.pluginRuntimes.set(track.id, pluginRuntimes);
+        graph.pluginRuntimeStates.set(track.id, preparedPlugins.states);
         const disabledPluginInstanceIds = new Set(
           track.pluginInstances.filter(instance => !instance.isEnabled).map(instance => instance.instanceId)
         );
@@ -1848,6 +1946,7 @@ export class AudioEngine implements IAudioEngine {
       players: new Map(),
       pluginRuntimes: new Map(),
       disabledPluginInstanceIds: new Map(),
+      pluginRuntimeStates: new Map(),
       routingRuntime: new AudioRoutingRuntime(),
       midiRuntime: new ToneMidiRuntime(),
     };
@@ -1871,6 +1970,7 @@ export class AudioEngine implements IAudioEngine {
       players: this.players,
       pluginRuntimes: this.pluginRuntimes,
       disabledPluginInstanceIds: this.disabledPluginInstanceIds,
+      pluginRuntimeStates: this.pluginRuntimeStates,
       routingRuntime: this.routingRuntime,
       midiRuntime: this.midiRuntime,
     };
@@ -1893,6 +1993,7 @@ export class AudioEngine implements IAudioEngine {
     this.players = graph.players;
     this.pluginRuntimes = graph.pluginRuntimes;
     this.disabledPluginInstanceIds = graph.disabledPluginInstanceIds;
+    this.pluginRuntimeStates = graph.pluginRuntimeStates;
     this.routingRuntime = graph.routingRuntime;
     this.midiRuntime = graph.midiRuntime;
   }
@@ -1946,6 +2047,7 @@ export class AudioEngine implements IAudioEngine {
       if (remainingRuntimes.length === 0) {
         graph.pluginRuntimes.delete(trackId);
         graph.disabledPluginInstanceIds.delete(trackId);
+        graph.pluginRuntimeStates.delete(trackId);
         return;
       }
       graph.pluginRuntimes.set(trackId, remainingRuntimes);
@@ -2532,7 +2634,22 @@ export class AudioEngine implements IAudioEngine {
     graph.automationLanes.forEach((automationLanes, trackId) => {
       automationLanes
         .filter(lane => lane.isEnabled && lane.points.length > 0)
-        .forEach(lane => this.resolveAutomationTarget(graph, { target: lane.target, trackId }));
+        .forEach(lane => {
+          const target = lane.target;
+          if (
+            target.kind === 'pluginParameter' &&
+            graph.pluginRuntimeStates
+              .get(trackId)
+              ?.some(
+                state =>
+                  state.instanceId === target.pluginInstanceId &&
+                  (state.status === 'failed' || state.status === 'missing')
+              )
+          ) {
+            return;
+          }
+          this.resolveAutomationTarget(graph, { target, trackId });
+        });
     });
   }
 
@@ -2955,10 +3072,11 @@ export class AudioEngine implements IAudioEngine {
       const input = new Tone.Gain({ gain: 1 });
       const preFaderOutput = new Tone.Gain({ gain: 1 });
       const postFaderOutput = new Tone.Gain({ gain: 1 });
-      const pluginRuntimes = this.createPreparedPluginRuntimes({
+      const preparedPlugins = this.createPreparedPluginRuntimes({
         trackId: track.id,
         pluginInstances: track.pluginInstances,
       });
+      const pluginRuntimes = preparedPlugins.runtimes;
       const disabledPluginInstanceIds = new Set(
         track.pluginInstances.filter(instance => !instance.isEnabled).map(instance => instance.instanceId)
       );

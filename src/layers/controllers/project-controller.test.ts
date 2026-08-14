@@ -236,7 +236,7 @@ describe('ProjectController', () => {
     expect(context.audioSourceRepository.create).toHaveBeenCalledWith(registration);
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        schemaVersion: 14,
+        schemaVersion: 15,
         project: INITIAL_PROJECT_METADATA,
         audioSources: [registration.metadata],
       })
@@ -258,7 +258,7 @@ describe('ProjectController', () => {
 
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        schemaVersion: 14,
+        schemaVersion: 15,
         tracks: [
           expect.objectContaining({
             id: TRACK_ID,
@@ -269,6 +269,9 @@ describe('ProjectController', () => {
                 manifestVersion: gainPluginManifest.version,
                 isEnabled: true,
                 parameters: [{ id: gainPluginManifest.parameters[0].id, value: 0.75 }],
+                presetId: null,
+                sidechainSourceTrackId: null,
+                stateBlob: null,
               },
             ],
           }),
@@ -313,7 +316,7 @@ describe('ProjectController', () => {
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         audioSources: [registration.metadata],
-        schemaVersion: 14,
+        schemaVersion: 15,
         tracks: [
           expect.objectContaining({
             loopSlots: [expect.objectContaining({ id: LOOP_SLOT_ID, overdubSourceIds: [], sourceId: SOURCE_ID })],
@@ -334,7 +337,7 @@ describe('ProjectController', () => {
     expect(context.projectRepository.save).toHaveBeenCalledWith({
       document: expect.objectContaining({
         project: existingDocument.project,
-        schemaVersion: 14,
+        schemaVersion: 15,
       }),
       expectedRevision: 0,
     });
@@ -639,6 +642,7 @@ describe('ProjectController', () => {
 
     expect(context.sessionStore.getState().tracks.get(TRACK_ID)?.pluginInstances).toEqual([
       {
+        availability: 'available',
         id: PLUGIN_INSTANCE_ID,
         manifestSummary: {
           id: gainPluginManifest.id,
@@ -647,6 +651,9 @@ describe('ProjectController', () => {
         },
         isEnabled: true,
         parameters: [{ id: gainPluginManifest.parameters[0].id, value: 0.75 }],
+        presetId: null,
+        sidechainSourceTrackId: null,
+        stateBlob: null,
       },
     ]);
     expect(prepareProjectGraph).toHaveBeenCalledWith({
@@ -673,6 +680,8 @@ describe('ProjectController', () => {
               manifestId: gainPluginManifest.id,
               isEnabled: true,
               parameterValues: new Map([[gainPluginManifest.parameters[0].id, 0.75]]),
+              sidechainSourceTrackId: null,
+              stateBlob: null,
             },
           ],
         }),

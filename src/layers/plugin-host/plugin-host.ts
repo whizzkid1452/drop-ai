@@ -46,6 +46,9 @@ function clonePluginManifest(manifest: PluginManifest): PluginManifest {
   return {
     ...manifest,
     parameters: manifest.parameters.map(clonePluginParameter),
+    ...(manifest.presets
+      ? { presets: manifest.presets.map(preset => ({ ...preset, parameterValues: { ...preset.parameterValues } })) }
+      : {}),
     dsp: { ...manifest.dsp },
     ui: {
       controls: manifest.ui.controls.map(control => ({ ...control })),

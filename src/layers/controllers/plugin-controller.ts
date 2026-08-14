@@ -90,10 +90,14 @@ export class PluginController {
     const parameters = this.createParameterStates({ manifest, parameterValues: request.parameterValues });
     const isEnabled = request.isEnabled ?? true;
     const instance: PluginInstanceState = {
+      availability: 'available',
       id: request.instanceId,
       manifestSummary: createPluginManifestSummary(manifest),
       isEnabled,
       parameters,
+      presetId: null,
+      sidechainSourceTrackId: null,
+      stateBlob: null,
     };
     this.audioEngine.installPlugin({
       trackId: request.trackId,

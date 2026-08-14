@@ -2351,38 +2351,91 @@ describe('AudioEngine 실시간 상태 일관성', () => {
     const engine = createPluginAudioEngine();
     await engine.addTrack('current-track');
 
-    await expect(
-      engine.prepareProjectGraph({
-        tracks: [
-          {
-            id: 'replacement-track',
-            volume: 1,
-            pan: 0,
-            isMuted: false,
-            isSoloed: false,
-            pluginInstances: [
-              {
-                instanceId: 'plugin-1',
-                manifestId: 'builtin.gain',
-                isEnabled: true,
-                parameterValues: new Map(),
-              },
-              {
-                instanceId: 'plugin-2',
-                manifestId: 'builtin.missing',
-                isEnabled: true,
-                parameterValues: new Map(),
-              },
-            ],
-            regions: [],
-          },
-        ],
-      })
-    ).rejects.toMatchObject({ code: AudioEngineErrorCode.PLUGIN_FACTORY_NOT_FOUND });
+    const replacement = await engine.prepareProjectGraph({
+      tracks: [
+        {
+          id: 'replacement-track',
+          volume: 1,
+          pan: 0,
+          isMuted: false,
+          isSoloed: false,
+          pluginInstances: [
+            {
+              instanceId: 'plugin-1',
+              manifestId: 'builtin.gain',
+              isEnabled: true,
+              parameterValues: new Map(),
+            },
+            {
+              instanceId: 'plugin-2',
+              manifestId: 'builtin.missing',
+              isEnabled: true,
+              parameterValues: new Map(),
+            },
+          ],
+          regions: [],
+        },
+      ],
+    });
 
     expect(engine.getTrackParams('current-track')).not.toBeNull();
     expect(engine.getTrackParams('replacement-track')).toBeNull();
-    expect(toneMocks.gains[4]?.disposed).toBe(true);
+    replacement.activate();
+    expect(engine.readPluginRuntimeStates('replacement-track')).toEqual([
+      expect.objectContaining({ instanceId: 'plugin-1', status: 'active' }),
+      expect.objectContaining({ instanceId: 'plugin-2', status: 'missing' }),
+    ]);
+  });
+
+  it('누락 Plugin을 포함한 저장 체인 index로 설치·이동·제거한다', async () => {
+    const engine = createPluginAudioEngine();
+    const replacement = await engine.prepareProjectGraph({
+      tracks: [
+        {
+          id: 'replacement-track',
+          volume: 1,
+          pan: 0,
+          isMuted: false,
+          isSoloed: false,
+          pluginInstances: [
+            {
+              instanceId: 'missing-plugin',
+              manifestId: 'builtin.missing',
+              isEnabled: false,
+              parameterValues: new Map(),
+            },
+            {
+              instanceId: 'existing-plugin',
+              manifestId: 'builtin.gain',
+              isEnabled: true,
+              parameterValues: new Map(),
+            },
+          ],
+          regions: [],
+        },
+      ],
+    });
+    replacement.activate();
+
+    engine.installPlugin({
+      trackId: 'replacement-track',
+      instanceId: 'new-plugin',
+      manifestId: 'builtin.gain',
+      parameterValues: new Map(),
+      targetIndex: 1,
+    });
+    engine.movePlugin({ trackId: 'replacement-track', instanceId: 'missing-plugin', targetIndex: 2 });
+    expect(engine.readPluginRuntimeStates('replacement-track').map(state => state.instanceId)).toEqual([
+      'new-plugin',
+      'existing-plugin',
+      'missing-plugin',
+    ]);
+
+    engine.removePlugin('replacement-track', 'missing-plugin');
+    expect(engine.readPluginRuntimeStates('replacement-track').map(state => state.instanceId)).toEqual([
+      'new-plugin',
+      'existing-plugin',
+    ]);
   });
 
   it('프로젝트 Plugin 연결 실패 시 후보 chain을 정리하고 기존 그래프를 유지한다', async () => {
@@ -3321,6 +3374,35 @@ describe('AudioEngine Export 회귀', () => {
         range: { startTime: 0, endTime: 1 },
         sampleRate: 44100,
       })
-    ).rejects.toMatchObject({ code: AudioEngineErrorCode.PLUGIN_FACTORY_NOT_FOUND });
+    ).resolves.toBeInstanceOf(Blob);
+  });
+
+  it('Plugin runtime 생성 실패를 해당 instance만 bypass하고 프로젝트를 연다', async () => {
+    const engine = createPluginAudioEngine();
+    const replacement = await engine.prepareProjectGraph({
+      tracks: [
+        {
+          id: 'replacement-track',
+          volume: 1,
+          pan: 0,
+          isMuted: false,
+          isSoloed: false,
+          pluginInstances: [
+            {
+              instanceId: 'plugin-1',
+              manifestId: 'builtin.gain',
+              isEnabled: true,
+              parameterValues: new Map([['gain', 3]]),
+            },
+          ],
+          regions: [],
+        },
+      ],
+    });
+
+    replacement.activate();
+    expect(engine.readPluginRuntimeStates('replacement-track')).toEqual([
+      expect.objectContaining({ instanceId: 'plugin-1', status: 'failed' }),
+    ]);
   });
 });

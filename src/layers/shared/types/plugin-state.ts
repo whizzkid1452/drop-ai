@@ -40,7 +40,16 @@ export type PluginParameterDefinition =
   | PluginEnumParameterDefinition;
 
 export interface PluginCatalogEntry extends PluginManifestSummary {
+  readonly category?: string;
   readonly parameters: readonly PluginParameterDefinition[];
+  readonly presets?: readonly PluginPresetDefinition[];
+  readonly supportsSidechain?: boolean;
+}
+
+export interface PluginPresetDefinition {
+  readonly id: string;
+  readonly name: string;
+  readonly parameterValues: Readonly<Record<string, PluginParameterValue>>;
 }
 
 export interface PluginParameterState {
@@ -53,6 +62,17 @@ export interface PluginInstanceState {
   readonly manifestSummary: PluginManifestSummary;
   readonly isEnabled: boolean;
   readonly parameters: readonly PluginParameterState[];
+  readonly presetId?: string | null;
+  readonly sidechainSourceTrackId?: string | null;
+  readonly stateBlob?: string | null;
+  readonly availability?: 'available' | 'missing';
+}
+
+export interface PluginRuntimeState {
+  readonly instanceId: string;
+  readonly latencySamples: number;
+  readonly status: 'active' | 'bypassed' | 'failed' | 'missing';
+  readonly reason: string | null;
 }
 
 export interface PluginValidationIssue {
