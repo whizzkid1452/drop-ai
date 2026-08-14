@@ -16,6 +16,7 @@ import { ProjectMutationCompensationError } from './project-mutation-compensatio
 import { ProjectStateError, ProjectStateErrorCode } from './project-state-error';
 import { calculateSplitRegions } from './utils/split-region';
 import type { ReplaceEditorTrackRegionsRequest } from '../shared/types/editor-runtime';
+import { createDefaultRegionProcessingState } from '../shared/types/region-processing';
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
 
 interface RegionPlacementFields {
@@ -423,7 +424,12 @@ export class RegionController {
         return {
           duration: region.durationSeconds,
           endTime,
+          fadeIn: { ...region.fadeIn },
+          fadeOut: { ...region.fadeOut },
+          gain: region.gain,
           id: region.id,
+          isOpaque: region.isOpaque,
+          layer: region.layer,
           sourceId: region.sourceId,
           sourceStartTime: region.sourceStartTimeSeconds,
           startTime: region.startTimeSeconds,
@@ -655,6 +661,7 @@ export class RegionController {
   private createSessionRegion(regionData: RegionPlacementFields, preparedRegion: PreparedRegionAddition): RegionState {
     const { source, endTime } = preparedRegion;
     const commonRegion = {
+      ...createDefaultRegionProcessingState(),
       id: regionData.id,
       startTime: regionData.startTime,
       endTime,

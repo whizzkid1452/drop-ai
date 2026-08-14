@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { RegionState } from '../../session/session';
+import { createDefaultRegionProcessingState } from '../../shared/types/region-processing';
 import { calculateSplitRegions } from './split-region';
 
 const region: RegionState = {
+  ...createDefaultRegionProcessingState(),
   id: 'region-1',
   startTime: 2,
   endTime: 12,
@@ -52,6 +54,38 @@ describe('calculateSplitRegions', () => {
     expect(result?.right).toMatchObject({
       id: 'right-source-region',
       sourceId: region.sourceId,
+    });
+  });
+
+  it('바깥쪽 Fade와 Region 처리값을 보존하고 분할 경계 Fade는 제거한다', () => {
+    const processedRegion: RegionState = {
+      ...region,
+      fadeIn: { crossfadeId: null, curve: 'equalPower', durationSeconds: 2 },
+      fadeOut: { crossfadeId: null, curve: 'linear', durationSeconds: 3 },
+      gain: 1.5,
+      isOpaque: true,
+      layer: 4,
+    };
+    const ids = ['left-region', 'right-region'];
+    const result = calculateSplitRegions({
+      region: processedRegion,
+      splitTime: 7,
+      createId: () => ids.shift() ?? '',
+    });
+
+    expect(result?.left).toMatchObject({
+      fadeIn: processedRegion.fadeIn,
+      fadeOut: { crossfadeId: null, curve: 'linear', durationSeconds: 0 },
+      gain: 1.5,
+      isOpaque: true,
+      layer: 4,
+    });
+    expect(result?.right).toMatchObject({
+      fadeIn: { crossfadeId: null, curve: 'equalPower', durationSeconds: 0 },
+      fadeOut: processedRegion.fadeOut,
+      gain: 1.5,
+      isOpaque: true,
+      layer: 4,
     });
   });
 });

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { createSessionStore, type RegionState, type SessionStore } from './session';
+import { createDefaultRegionProcessingState } from '../shared/types/region-processing';
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
 const INITIAL_PROJECT_METADATA = { id: PROJECT_ID, name: '새 프로젝트', revision: 0 };
@@ -7,6 +8,7 @@ const INITIAL_PROJECT_METADATA = { id: PROJECT_ID, name: '새 프로젝트', rev
 describe('RegionState 오디오 식별자 계약', () => {
   it('sourceId 방식의 오디오 소스를 가진다', () => {
     const region: RegionState = {
+      ...createDefaultRegionProcessingState(),
       id: 'region-1',
       startTime: 0,
       endTime: 5,
@@ -27,6 +29,11 @@ describe('RegionState 오디오 식별자 계약', () => {
       endTime: number;
       sourceStartTime: number;
       duration: number;
+      fadeIn: RegionState['fadeIn'];
+      fadeOut: RegionState['fadeOut'];
+      gain: number;
+      isOpaque: boolean;
+      layer: number;
       status: [];
     };
 
@@ -426,6 +433,7 @@ describe('Session Store - Phase 1 검증', () => {
               ],
               regions: [
                 {
+                  ...createDefaultRegionProcessingState(),
                   id: regionId,
                   sourceId: '55555555-5555-4555-8555-555555555555',
                   startTime: 0,
@@ -721,6 +729,7 @@ describe('Session Store - Phase 1 검증', () => {
 
     it('TrackState에 regions 배열이 있어야 함', () => {
       const region1 = {
+        ...createDefaultRegionProcessingState(),
         id: 'region-1',
         startTime: 0,
         endTime: 5.0,

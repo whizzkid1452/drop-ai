@@ -17,6 +17,7 @@ import {
   readProjectDocumentV5,
   readProjectDocumentV6,
   readProjectDocumentV7,
+  readProjectDocumentV8,
 } from '../shared/types/project-document-reader';
 import {
   PROJECT_DOCUMENT_SCHEMA_VERSION,
@@ -26,6 +27,7 @@ import {
   PROJECT_DOCUMENT_SCHEMA_VERSION_V5,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V6,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V7,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V8,
   ProjectDocumentSchema,
   ProjectDocumentV2Schema,
   ProjectDocumentV3Schema,
@@ -33,6 +35,7 @@ import {
   ProjectDocumentV5Schema,
   ProjectDocumentV6Schema,
   ProjectDocumentV7Schema,
+  ProjectDocumentV8Schema,
   type ProjectAudioSource,
   type ProjectDocument,
   type ProjectDocumentV2,
@@ -41,15 +44,18 @@ import {
   type ProjectDocumentV5,
   type ProjectDocumentV6,
   type ProjectDocumentV7,
+  type ProjectDocumentV8,
   type ProjectDocumentSnapshot,
   type ProjectLoopSlot,
   type ProjectLoopSlotV4,
   type ProjectPluginInstance,
   type ProjectRegion,
+  type ProjectRegionV8,
   type ProjectTrack,
   type ProjectTrackV2,
   type ProjectTrackV3,
   type ProjectTrackV4,
+  type ProjectTrackV8,
 } from '../shared/types/project-document.schema';
 import { ProjectDocumentMappingError, ProjectDocumentMappingErrorCode } from './errors';
 
@@ -69,6 +75,7 @@ export type CreateProjectDocumentV4FromSessionOptions = CreateProjectDocumentV2F
 export type CreateProjectDocumentV5FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 export type CreateProjectDocumentV6FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 export type CreateProjectDocumentV7FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
+export type CreateProjectDocumentV8FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 
 export interface ProjectRestoreSnapshot {
   readonly session: SessionProjectSnapshot;
@@ -89,6 +96,7 @@ export type CreateProjectRestoreSnapshotFromDocumentV4Options = CreateProjectRes
 export type CreateProjectRestoreSnapshotFromDocumentV5Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 export type CreateProjectRestoreSnapshotFromDocumentV6Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 export type CreateProjectRestoreSnapshotFromDocumentV7Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
+export type CreateProjectRestoreSnapshotFromDocumentV8Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 
 interface SessionTrackEntry {
   readonly mapKey: string;
@@ -101,6 +109,7 @@ interface SessionTrackV2Entry extends SessionTrackEntry {
 
 type SessionTrackV3Entry = SessionTrackV2Entry;
 type SessionTrackV4Entry = SessionTrackV2Entry;
+type SessionTrackV8Entry = SessionTrackV2Entry;
 
 interface ValidatePluginInstanceForMappingOptions {
   readonly instance: ProjectPluginInstance;
@@ -302,6 +311,43 @@ export function createProjectDocumentV7FromSession({
   return parseSessionDocumentCandidateV7(documentCandidate);
 }
 
+export function createProjectDocumentV8FromSession({
+  session,
+  audioSources,
+  pluginCatalog,
+}: CreateProjectDocumentV8FromSessionOptions): ProjectDocumentV8 {
+  const tempoChanges = session.tempoChanges ?? [{ quarterNotePosition: 0, bpm: session.tempo }];
+  const meterChanges = session.meterChanges ?? [{ quarterNotePosition: 0, beatsPerBar: 4, beatUnit: 4 }];
+  const loopRange = session.loopRange ? { ...session.loopRange } : null;
+  const documentCandidate = {
+    documentType: 'drop-ai-project',
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V8,
+    project: { ...session.project },
+    timeline: {
+      timeUnit: 'seconds',
+      tempoBpm: tempoChanges[0]?.bpm ?? session.tempo,
+      tempoChanges: tempoChanges.map(change => ({ ...change })),
+      meterChanges: meterChanges.map(change => ({ ...change })),
+      markers: (session.timelineMarkers ?? []).map(marker => ({ ...marker })),
+      loop: {
+        isEnabled: session.isLoopEnabled === true && loopRange !== null,
+        range: loopRange,
+      },
+      metronome: {
+        isEnabled: session.isMetronomeEnabled ?? false,
+        volume: session.metronomeVolume ?? DEFAULT_METRONOME_VOLUME,
+      },
+    },
+    mixer: { masterVolume: session.masterVolume },
+    exportRange: createExportRange(session),
+    audioSources: audioSources.map(source => ({ ...source })),
+    tracks: [...session.tracks.entries()].map(([mapKey, track]) =>
+      createProjectTrackV8({ mapKey, track, pluginCatalog })
+    ),
+  };
+  return parseSessionDocumentCandidateV8(documentCandidate);
+}
+
 export function createProjectRestoreSnapshotFromDocument(document: ProjectDocument): ProjectRestoreSnapshot {
   const validatedDocument = readDocumentForMapping(document);
   const tracks = new Map<string, TrackState>();
@@ -476,6 +522,36 @@ export function createProjectRestoreSnapshotFromDocumentV7({
   };
 }
 
+export function createProjectRestoreSnapshotFromDocumentV8({
+  document,
+  pluginCatalog,
+}: CreateProjectRestoreSnapshotFromDocumentV8Options): ProjectRestoreSnapshot {
+  const validatedDocument = readDocumentV8ForMapping(document);
+  const tracks = new Map<string, TrackState>();
+  validatedDocument.tracks.forEach(track => {
+    tracks.set(track.id, createSessionTrackV8({ track, pluginCatalog }));
+  });
+
+  return {
+    session: {
+      project: { ...validatedDocument.project },
+      tempo: validatedDocument.timeline.tempoBpm,
+      tempoChanges: validatedDocument.timeline.tempoChanges.map(change => ({ ...change })),
+      meterChanges: validatedDocument.timeline.meterChanges.map(change => ({ ...change })),
+      timelineMarkers: validatedDocument.timeline.markers.map(marker => ({ ...marker })),
+      loopRange: validatedDocument.timeline.loop.range ? { ...validatedDocument.timeline.loop.range } : null,
+      isLoopEnabled: validatedDocument.timeline.loop.isEnabled,
+      isMetronomeEnabled: validatedDocument.timeline.metronome.isEnabled,
+      metronomeVolume: validatedDocument.timeline.metronome.volume,
+      masterVolume: validatedDocument.mixer.masterVolume,
+      exportStartTime: validatedDocument.exportRange?.startTimeSeconds ?? null,
+      exportEndTime: validatedDocument.exportRange?.endTimeSeconds ?? null,
+      tracks,
+    },
+    audioSources: validatedDocument.audioSources.map(source => ({ ...source })),
+  };
+}
+
 function createExportRange(session: SessionProjectSnapshot): ProjectDocument['exportRange'] {
   const { exportStartTime, exportEndTime } = session;
   if (exportStartTime === null && exportEndTime === null) {
@@ -546,6 +622,15 @@ function createProjectTrackV4({ mapKey, track, pluginCatalog }: SessionTrackV4En
   return {
     ...projectTrackV2,
     loopSlots: (track.loopSlots ?? createDefaultLoopSlots()).map(createProjectLoopSlotV4),
+  };
+}
+
+function createProjectTrackV8({ mapKey, track, pluginCatalog }: SessionTrackV8Entry): ProjectTrackV8 {
+  const projectTrackV4 = createProjectTrackV4({ mapKey, track, pluginCatalog });
+
+  return {
+    ...projectTrackV4,
+    regions: track.regions.map(createProjectRegionV8),
   };
 }
 
@@ -632,6 +717,17 @@ function createProjectRegion(region: RegionState): ProjectRegion {
     startTimeSeconds: region.startTime,
     sourceStartTimeSeconds: region.sourceStartTime,
     durationSeconds: region.duration,
+  };
+}
+
+function createProjectRegionV8(region: RegionState): ProjectRegionV8 {
+  return {
+    ...createProjectRegion(region),
+    fadeIn: { ...region.fadeIn },
+    fadeOut: { ...region.fadeOut },
+    gain: region.gain,
+    isOpaque: region.isOpaque,
+    layer: region.layer,
   };
 }
 
@@ -870,6 +966,31 @@ function parseSessionDocumentCandidateV7(documentCandidate: unknown): ProjectDoc
   }
 }
 
+function parseSessionDocumentCandidateV8(documentCandidate: unknown): ProjectDocumentV8 {
+  try {
+    const result = ProjectDocumentV8Schema.safeParse(documentCandidate);
+    if (result.success) {
+      return result.data;
+    }
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
+      message: 'Session 프로젝트 상태를 유효한 ProjectDocument v8로 변환할 수 없습니다.',
+      details: { issues: result.error.issues, reason: 'PROJECT_DOCUMENT_SCHEMA_VIOLATION' },
+      cause: result.error,
+    });
+  } catch (cause) {
+    if (cause instanceof ProjectDocumentMappingError) {
+      throw cause;
+    }
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
+      message: 'Session 프로젝트 상태를 읽을 수 없습니다.',
+      details: { reason: 'PROJECT_DOCUMENT_SCHEMA_VIOLATION' },
+      cause,
+    });
+  }
+}
+
 function readDocumentForMapping(document: ProjectDocument): ProjectDocument {
   try {
     return readProjectDocument(document);
@@ -955,6 +1076,19 @@ function readDocumentV7ForMapping(document: ProjectDocumentSnapshot): ProjectDoc
     throw new ProjectDocumentMappingError({
       code: ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT,
       message: '복원할 ProjectDocument v7이 유효하지 않습니다.',
+      details: { reason: 'PROJECT_DOCUMENT_READ_FAILED' },
+      cause,
+    });
+  }
+}
+
+function readDocumentV8ForMapping(document: ProjectDocumentSnapshot): ProjectDocumentV8 {
+  try {
+    return readProjectDocumentV8(document);
+  } catch (cause) {
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT,
+      message: '복원할 ProjectDocument v8이 유효하지 않습니다.',
       details: { reason: 'PROJECT_DOCUMENT_READ_FAILED' },
       cause,
     });
@@ -1047,6 +1181,22 @@ function createSessionTrackV4({
   };
 }
 
+function createSessionTrackV8({
+  track,
+  pluginCatalog,
+}: {
+  readonly track: ProjectTrackV8;
+  readonly pluginCatalog: readonly PluginCatalogEntry[];
+}): TrackState {
+  const sessionTrackV2 = createSessionTrackV2({ track, pluginCatalog });
+
+  return {
+    ...sessionTrackV2,
+    loopSlots: track.loopSlots.length === 0 ? createDefaultLoopSlots() : track.loopSlots.map(createSessionLoopSlotV4),
+    regions: track.regions.map(createSessionRegion),
+  };
+}
+
 function createSessionLoopSlotV4(loopSlot: ProjectLoopSlotV4): LoopSlotState {
   return {
     errorMessage: null,
@@ -1085,7 +1235,7 @@ function validatePluginInstanceForMapping({
   });
 }
 
-function createSessionRegion(region: ProjectRegion): RegionState {
+function createSessionRegion(region: ProjectRegion | ProjectRegionV8): RegionState {
   const endTime = calculateFiniteRegionEndTime({
     startTime: region.startTimeSeconds,
     duration: region.durationSeconds,
@@ -1102,7 +1252,12 @@ function createSessionRegion(region: ProjectRegion): RegionState {
   }
 
   return {
+    fadeIn: 'fadeIn' in region ? { ...region.fadeIn } : { crossfadeId: null, curve: 'linear', durationSeconds: 0 },
+    fadeOut: 'fadeOut' in region ? { ...region.fadeOut } : { crossfadeId: null, curve: 'linear', durationSeconds: 0 },
+    gain: 'gain' in region ? region.gain : 1,
     id: region.id,
+    isOpaque: 'isOpaque' in region ? region.isOpaque : false,
+    layer: 'layer' in region ? region.layer : 0,
     sourceId: region.sourceId,
     startTime: region.startTimeSeconds,
     endTime,

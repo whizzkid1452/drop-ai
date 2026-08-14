@@ -7,6 +7,7 @@ import {
   PROJECT_DOCUMENT_SCHEMA_VERSION_V5,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V6,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V7,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V8,
   ProjectDocumentSchema,
   ProjectDocumentV2Schema,
   ProjectDocumentV3Schema,
@@ -14,6 +15,7 @@ import {
   ProjectDocumentV5Schema,
   ProjectDocumentV6Schema,
   ProjectDocumentV7Schema,
+  ProjectDocumentV8Schema,
   type ProjectDocument,
   type ProjectDocumentSnapshot,
   type ProjectDocumentV2,
@@ -22,6 +24,7 @@ import {
   type ProjectDocumentV5,
   type ProjectDocumentV6,
   type ProjectDocumentV7,
+  type ProjectDocumentV8,
 } from './project-document.schema';
 
 export const ProjectDocumentReadErrorCode = {
@@ -67,6 +70,10 @@ export const PROJECT_DOCUMENT_V7_MIGRATION_INPUT_VERSIONS = [
   ...PROJECT_DOCUMENT_V6_MIGRATION_INPUT_VERSIONS,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V7,
 ] as const;
+export const PROJECT_DOCUMENT_V8_MIGRATION_INPUT_VERSIONS = [
+  ...PROJECT_DOCUMENT_V7_MIGRATION_INPUT_VERSIONS,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V8,
+] as const;
 export const PROJECT_DOCUMENT_SNAPSHOT_SCHEMA_VERSIONS = [
   PROJECT_DOCUMENT_SCHEMA_VERSION,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
@@ -75,6 +82,7 @@ export const PROJECT_DOCUMENT_SNAPSHOT_SCHEMA_VERSIONS = [
   PROJECT_DOCUMENT_SCHEMA_VERSION_V5,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V6,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V7,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V8,
 ] as const;
 
 const ProjectDocumentSchemaVersionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
@@ -362,6 +370,23 @@ function parseProjectDocumentV7(input: unknown, schemaVersion: number): ProjectD
   throw createInvalidDocumentError(schemaVersion, parseFailure);
 }
 
+function parseProjectDocumentV8(input: unknown, schemaVersion: number): ProjectDocumentV8 {
+  const clonedInput = cloneProjectDocumentInput(input, schemaVersion);
+  let parseFailure: unknown;
+
+  try {
+    const documentResult = ProjectDocumentV8Schema.safeParse(clonedInput);
+    if (documentResult.success) {
+      return documentResult.data;
+    }
+    parseFailure = documentResult.error;
+  } catch (cause) {
+    parseFailure = cause;
+  }
+
+  throw createInvalidDocumentError(schemaVersion, parseFailure);
+}
+
 function readProjectDocumentSchemaVersion(input: unknown): number {
   const topLevelObject = readTopLevelObject(input);
   const documentTypeProperty = readOwnDataProperty({
@@ -562,6 +587,44 @@ function migrateValidatedProjectDocumentV6ToV7(document: ProjectDocumentV6): Pro
   });
 }
 
+function migrateValidatedProjectDocumentV7ToV8(document: ProjectDocumentV7): ProjectDocumentV8 {
+  return ProjectDocumentV8Schema.parse({
+    ...document,
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V8,
+    timeline: {
+      ...document.timeline,
+      loop: {
+        isEnabled: document.timeline.loop.isEnabled,
+        range: document.timeline.loop.range ? { ...document.timeline.loop.range } : null,
+      },
+      markers: document.timeline.markers.map(marker => ({ ...marker })),
+      metronome: { ...document.timeline.metronome },
+      tempoChanges: document.timeline.tempoChanges.map(change => ({ ...change })),
+      meterChanges: document.timeline.meterChanges.map(change => ({ ...change })),
+    },
+    tracks: document.tracks.map(track => ({
+      ...track,
+      loopSlots: track.loopSlots.map(loopSlot => ({ ...loopSlot, overdubSourceIds: [...loopSlot.overdubSourceIds] })),
+      pluginInstances: track.pluginInstances.map(instance => ({
+        ...instance,
+        parameters: instance.parameters.map(parameter => ({ ...parameter })),
+      })),
+      regions: track.regions.map((region, layer) => ({
+        ...region,
+        fadeIn: { crossfadeId: null, curve: 'linear', durationSeconds: 0 },
+        fadeOut: { crossfadeId: null, curve: 'linear', durationSeconds: 0 },
+        gain: 1,
+        isOpaque: false,
+        layer,
+      })),
+    })),
+    audioSources: document.audioSources.map(source => ({ ...source })),
+    exportRange: document.exportRange ? { ...document.exportRange } : null,
+    mixer: { ...document.mixer },
+    project: { ...document.project },
+  });
+}
+
 function parseProjectDocumentJsonInput(json: string): unknown {
   try {
     return JSON.parse(json) as unknown;
@@ -735,6 +798,25 @@ export function readProjectDocumentV7(input: unknown): ProjectDocumentV7 {
   });
 }
 
+export function migrateProjectDocumentV7ToV8(document: ProjectDocumentV7): ProjectDocumentV8 {
+  return migrateValidatedProjectDocumentV7ToV8(readProjectDocumentV7(document));
+}
+
+export function readProjectDocumentV8(input: unknown): ProjectDocumentV8 {
+  const schemaVersion = readProjectDocumentSchemaVersion(input);
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V8) {
+    return parseProjectDocumentV8(input, schemaVersion);
+  }
+  if (PROJECT_DOCUMENT_V7_MIGRATION_INPUT_VERSIONS.some(version => version === schemaVersion)) {
+    return migrateValidatedProjectDocumentV7ToV8(readProjectDocumentV7(input));
+  }
+
+  throw createUnsupportedSchemaVersionError({
+    schemaVersion,
+    supportedSchemaVersions: PROJECT_DOCUMENT_V8_MIGRATION_INPUT_VERSIONS,
+  });
+}
+
 export function readProjectDocumentSnapshot(input: unknown): ProjectDocumentSnapshot {
   const schemaVersion = readProjectDocumentSchemaVersion(input);
   if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION) {
@@ -757,6 +839,9 @@ export function readProjectDocumentSnapshot(input: unknown): ProjectDocumentSnap
   }
   if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V7) {
     return parseProjectDocumentV7(input, schemaVersion);
+  }
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V8) {
+    return parseProjectDocumentV8(input, schemaVersion);
   }
 
   throw createUnsupportedSchemaVersionError({
@@ -791,4 +876,8 @@ export function readProjectDocumentJsonV6(json: string): ProjectDocumentV6 {
 
 export function readProjectDocumentJsonV7(json: string): ProjectDocumentV7 {
   return readProjectDocumentV7(parseProjectDocumentJsonInput(json));
+}
+
+export function readProjectDocumentJsonV8(json: string): ProjectDocumentV8 {
+  return readProjectDocumentV8(parseProjectDocumentJsonInput(json));
 }

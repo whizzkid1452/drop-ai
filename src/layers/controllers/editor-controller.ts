@@ -136,7 +136,12 @@ export class EditorController {
     const selectedTrackId = this.#state.selection.trackIds.length === 1 ? this.#state.selection.trackIds[0] : null;
     const additions = entries.map(entry => ({
       durationSeconds: entry.durationSeconds,
+      fadeIn: { ...entry.fadeIn },
+      fadeOut: { ...entry.fadeOut },
+      gain: entry.gain,
       id: this.#createRegionId(),
+      isOpaque: entry.isOpaque,
+      layer: entry.layer,
       sourceId: entry.sourceId,
       sourceStartTimeSeconds: entry.sourceStartTimeSeconds,
       startTimeSeconds: this.#state.selection.editPointSeconds + entry.relativeStartTimeSeconds,
@@ -172,7 +177,12 @@ export class EditorController {
       const region = this.getRegion(selection);
       return {
         durationSeconds: region.duration,
+        fadeIn: { ...region.fadeIn },
+        fadeOut: { ...region.fadeOut },
+        gain: region.gain,
         id: this.#createRegionId(),
+        isOpaque: region.isOpaque,
+        layer: region.layer,
         sourceId: region.sourceId,
         sourceStartTimeSeconds: region.sourceStartTime,
         startTimeSeconds: region.startTime + offsetSeconds,
@@ -247,7 +257,11 @@ export class EditorController {
     const selection = this.validateSelection(state.selection);
     this.publish({
       clipboard: {
-        entries: state.clipboard.entries.map(entry => ({ ...entry })),
+        entries: state.clipboard.entries.map(entry => ({
+          ...entry,
+          fadeIn: { ...entry.fadeIn },
+          fadeOut: { ...entry.fadeOut },
+        })),
         pasteCount: state.clipboard.pasteCount,
       },
       selection,
@@ -316,6 +330,11 @@ export class EditorController {
     const originTimeSeconds = Math.min(...selectedRegions.map(({ region }) => region.startTime));
     return selectedRegions.map(({ selection, region }) => ({
       durationSeconds: region.duration,
+      fadeIn: { ...region.fadeIn },
+      fadeOut: { ...region.fadeOut },
+      gain: region.gain,
+      isOpaque: region.isOpaque,
+      layer: region.layer,
       relativeStartTimeSeconds: region.startTime - originTimeSeconds,
       sourceId: region.sourceId,
       sourceStartTimeSeconds: region.sourceStartTime,
@@ -375,7 +394,12 @@ export class EditorController {
   private toRegionSnapshot(region: RegionState): EditorRegionSnapshot {
     return {
       durationSeconds: region.duration,
+      fadeIn: { ...region.fadeIn },
+      fadeOut: { ...region.fadeOut },
+      gain: region.gain,
       id: region.id,
+      isOpaque: region.isOpaque,
+      layer: region.layer,
       sourceId: region.sourceId,
       sourceStartTimeSeconds: region.sourceStartTime,
       startTimeSeconds: region.startTime,
@@ -385,7 +409,12 @@ export class EditorController {
   private toAddedRegionSnapshot(region: EditorRegionSnapshot & { readonly trackId: string }): EditorRegionSnapshot {
     return {
       durationSeconds: region.durationSeconds,
+      fadeIn: { ...region.fadeIn },
+      fadeOut: { ...region.fadeOut },
+      gain: region.gain,
       id: region.id,
+      isOpaque: region.isOpaque,
+      layer: region.layer,
       sourceId: region.sourceId,
       sourceStartTimeSeconds: region.sourceStartTimeSeconds,
       startTimeSeconds: region.startTimeSeconds,

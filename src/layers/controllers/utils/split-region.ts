@@ -29,6 +29,11 @@ export function calculateSplitRegions({
       id: createId(),
       endTime: splitTime,
       duration: leftDuration,
+      fadeIn: {
+        ...region.fadeIn,
+        durationSeconds: Math.min(region.fadeIn.durationSeconds, leftDuration),
+      },
+      fadeOut: { crossfadeId: null, curve: region.fadeOut.curve, durationSeconds: 0 },
       status: [...region.status],
     },
     right: {
@@ -38,6 +43,11 @@ export function calculateSplitRegions({
       endTime: splitTime + rightDuration,
       sourceStartTime: region.sourceStartTime + leftDuration,
       duration: rightDuration,
+      fadeIn: { crossfadeId: null, curve: region.fadeIn.curve, durationSeconds: 0 },
+      fadeOut: {
+        ...region.fadeOut,
+        durationSeconds: Math.min(region.fadeOut.durationSeconds, rightDuration),
+      },
       status: [...region.status],
     },
   };

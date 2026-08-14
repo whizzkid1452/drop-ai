@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeAudioSource } from '@/layers/audio-source-registry/i-audio-source-registry';
 import type { RegionState } from '@/layers/session/session';
+import { createDefaultRegionProcessingState } from '@/layers/shared/types/region-processing';
 import { RegionComponent } from './RegionComponent';
 import { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
 import type { TimelineGridSettings } from '../../timeline-grid';
@@ -84,6 +85,7 @@ const coordinateMapper = new TimelineCoordinateMapper({
 const gridSettings = { division: 'beat', snapMode: 'off' } as const;
 const sourceId = '41e673bf-5467-4d36-a716-2d80a76ac82f';
 const sourceBackedRegion: RegionState = {
+  ...createDefaultRegionProcessingState(),
   id: 'region-1',
   startTime: 2,
   endTime: 5,

@@ -139,7 +139,16 @@ function areRegionArraysEqual(left: readonly RegionState[], right: readonly Regi
         candidate.sourceId === region.sourceId &&
         candidate.startTime === region.startTime &&
         candidate.sourceStartTime === region.sourceStartTime &&
-        candidate.duration === region.duration
+        candidate.duration === region.duration &&
+        candidate.gain === region.gain &&
+        candidate.layer === region.layer &&
+        candidate.isOpaque === region.isOpaque &&
+        candidate.fadeIn.crossfadeId === region.fadeIn.crossfadeId &&
+        candidate.fadeIn.curve === region.fadeIn.curve &&
+        candidate.fadeIn.durationSeconds === region.fadeIn.durationSeconds &&
+        candidate.fadeOut.crossfadeId === region.fadeOut.crossfadeId &&
+        candidate.fadeOut.curve === region.fadeOut.curve &&
+        candidate.fadeOut.durationSeconds === region.fadeOut.durationSeconds
       );
     })
   );
@@ -161,7 +170,12 @@ function createRegionSnapshotsForChangedTracks({
       {
         regions: track.regions.map(region => ({
           durationSeconds: region.duration,
+          fadeIn: { ...region.fadeIn },
+          fadeOut: { ...region.fadeOut },
+          gain: region.gain,
           id: region.id,
+          isOpaque: region.isOpaque,
+          layer: region.layer,
           sourceId: region.sourceId,
           sourceStartTimeSeconds: region.sourceStartTime,
           startTimeSeconds: region.startTime,

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { RegionState, TrackState } from '@/layers/session/session';
+import { createDefaultRegionProcessingState } from '@/layers/shared/types/region-processing';
 import { getMaxDuration } from './get-max-duration';
 
 function createRegion(id: string, startTime: number, duration: number): RegionState {
   return {
+    ...createDefaultRegionProcessingState(),
     id,
     sourceId: `source-${id}`,
     startTime,

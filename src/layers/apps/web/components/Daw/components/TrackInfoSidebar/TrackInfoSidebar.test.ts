@@ -4,6 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LoopSlotState, TrackState } from '@/layers/session/session';
+import { createDefaultRegionProcessingState } from '@/layers/shared/types/region-processing';
 import { AudioCommandType } from '@/types/audioCommand.schema';
 import { TrackInfoSidebar } from './TrackInfoSidebar';
 
@@ -95,6 +96,7 @@ const selectedTrack: TrackState = {
   pluginInstances: [],
   regions: [
     {
+      ...createDefaultRegionProcessingState(),
       id: '22222222-2222-4222-8222-222222222222',
       sourceId: '44444444-4444-4444-8444-444444444444',
       startTime: 0,

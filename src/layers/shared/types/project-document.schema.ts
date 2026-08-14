@@ -10,6 +10,7 @@ export const PROJECT_DOCUMENT_SCHEMA_VERSION_V4 = 4 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V5 = 5 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V6 = 6 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V7 = 7 as const;
+export const PROJECT_DOCUMENT_SCHEMA_VERSION_V8 = 8 as const;
 
 const MAX_NAME_LENGTH = 255;
 const MAX_MIME_TYPE_LENGTH = 255;
@@ -62,6 +63,25 @@ export const ProjectRegionSchema = z
       path: ['durationSeconds'],
     }
   );
+
+export const ProjectRegionFadeSchema = z
+  .strictObject({
+    crossfadeId: z.uuid('Invalid Crossfade ID format').nullable(),
+    curve: z.union([z.literal('linear'), z.literal('equalPower')]),
+    durationSeconds: z.number().finite().nonnegative(),
+  })
+  .refine(fade => fade.crossfadeId === null || fade.durationSeconds > 0, {
+    message: 'A Crossfade requires a positive fade duration',
+    path: ['durationSeconds'],
+  });
+
+export const ProjectRegionV8Schema = ProjectRegionSchema.safeExtend({
+  fadeIn: ProjectRegionFadeSchema,
+  fadeOut: ProjectRegionFadeSchema,
+  gain: z.number().finite().nonnegative(),
+  isOpaque: z.boolean(),
+  layer: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+});
 
 export const ProjectTrackSchema = z.strictObject({
   id: z.uuid('Invalid Track ID format'),
@@ -145,6 +165,10 @@ export const ProjectLoopSlotV4Schema = ProjectLoopSlotSchema.safeExtend({
 
 export const ProjectTrackV4Schema = ProjectTrackV3Schema.safeExtend({
   loopSlots: z.array(ProjectLoopSlotV4Schema).max(MAX_LOOP_SLOTS),
+});
+
+export const ProjectTrackV8Schema = ProjectTrackV4Schema.safeExtend({
+  regions: z.array(ProjectRegionV8Schema),
 });
 
 export const ProjectTimelineRangeSchema = z
@@ -343,6 +367,11 @@ const ProjectDocumentV7BaseSchema = z.strictObject({
   tracks: z.array(ProjectTrackV4Schema),
 });
 
+const ProjectDocumentV8BaseSchema = ProjectDocumentV7BaseSchema.omit({ schemaVersion: true, tracks: true }).extend({
+  schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V8),
+  tracks: z.array(ProjectTrackV8Schema),
+});
+
 interface IdentifiedDocumentPath {
   id: string;
   path: Array<string | number>;
@@ -361,12 +390,14 @@ type RefinableProjectDocument =
   | z.infer<typeof ProjectDocumentV4BaseSchema>
   | z.infer<typeof ProjectDocumentV5BaseSchema>
   | z.infer<typeof ProjectDocumentV6BaseSchema>
-  | z.infer<typeof ProjectDocumentV7BaseSchema>;
+  | z.infer<typeof ProjectDocumentV7BaseSchema>
+  | z.infer<typeof ProjectDocumentV8BaseSchema>;
 type RefinableProjectTrack =
   | z.infer<typeof ProjectTrackSchema>
   | z.infer<typeof ProjectTrackV2Schema>
   | z.infer<typeof ProjectTrackV3Schema>
-  | z.infer<typeof ProjectTrackV4Schema>;
+  | z.infer<typeof ProjectTrackV4Schema>
+  | z.infer<typeof ProjectTrackV8Schema>;
 
 function isProjectTrackWithLoopSlots(
   track: RefinableProjectTrack
@@ -491,7 +522,8 @@ function validatePluginState(
     | z.infer<typeof ProjectDocumentV4BaseSchema>
     | z.infer<typeof ProjectDocumentV5BaseSchema>
     | z.infer<typeof ProjectDocumentV6BaseSchema>
-    | z.infer<typeof ProjectDocumentV7BaseSchema>,
+    | z.infer<typeof ProjectDocumentV7BaseSchema>
+    | z.infer<typeof ProjectDocumentV8BaseSchema>,
   context: z.RefinementCtx
 ): void {
   const instanceEntries = document.tracks.flatMap((track, trackIndex) =>
@@ -557,12 +589,108 @@ export const ProjectDocumentV7Schema = ProjectDocumentV7BaseSchema.superRefine((
     context,
   });
 });
+export const ProjectDocumentV8Schema = ProjectDocumentV8BaseSchema.superRefine((document, context) => {
+  validateProjectRelations(document, context);
+  validatePluginState(document, context);
+  validateTimelineMap(document, context);
+  addDuplicateIdIssues({
+    entries: document.timeline.markers.map((marker, index) => ({
+      id: marker.id,
+      path: ['timeline', 'markers', index, 'id'],
+    })),
+    label: 'Timeline marker',
+    context,
+  });
+  validateRegionProcessing(document, context);
+});
+
+interface CrossfadeEndpoint {
+  readonly crossfadeId: string;
+  readonly direction: 'in' | 'out';
+  readonly durationSeconds: number;
+  readonly curve: 'linear' | 'equalPower';
+  readonly region: z.infer<typeof ProjectRegionV8Schema>;
+  readonly path: Array<string | number>;
+}
+
+function validateRegionProcessing(
+  document: z.infer<typeof ProjectDocumentV8BaseSchema>,
+  context: z.RefinementCtx
+): void {
+  document.tracks.forEach((track, trackIndex) => {
+    const crossfadeEndpoints = new Map<string, CrossfadeEndpoint[]>();
+
+    track.regions.forEach((region, regionIndex) => {
+      for (const direction of ['in', 'out'] as const) {
+        const fade = direction === 'in' ? region.fadeIn : region.fadeOut;
+        const path = ['tracks', trackIndex, 'regions', regionIndex, direction === 'in' ? 'fadeIn' : 'fadeOut'];
+        if (fade.durationSeconds > region.durationSeconds) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Fade duration must not exceed Region duration',
+            path: [...path, 'durationSeconds'],
+          });
+        }
+        if (fade.crossfadeId === null) {
+          continue;
+        }
+
+        const endpoint: CrossfadeEndpoint = {
+          crossfadeId: fade.crossfadeId,
+          curve: fade.curve,
+          direction,
+          durationSeconds: fade.durationSeconds,
+          path,
+          region,
+        };
+        const endpoints = crossfadeEndpoints.get(fade.crossfadeId) ?? [];
+        endpoints.push(endpoint);
+        crossfadeEndpoints.set(fade.crossfadeId, endpoints);
+      }
+    });
+
+    crossfadeEndpoints.forEach(endpoints => validateCrossfadeEndpoints(endpoints, context));
+  });
+}
+
+function validateCrossfadeEndpoints(endpoints: readonly CrossfadeEndpoint[], context: z.RefinementCtx): void {
+  const fadeIn = endpoints.find(endpoint => endpoint.direction === 'in');
+  const fadeOut = endpoints.find(endpoint => endpoint.direction === 'out');
+  if (endpoints.length !== 2 || !fadeIn || !fadeOut || fadeIn.region.id === fadeOut.region.id) {
+    endpoints.forEach(endpoint =>
+      context.addIssue({
+        code: 'custom',
+        message: 'A Crossfade must connect one fade-out and one fade-in on different Regions',
+        path: [...endpoint.path, 'crossfadeId'],
+      })
+    );
+    return;
+  }
+
+  const fadeOutWindowStart = fadeOut.region.startTimeSeconds + fadeOut.region.durationSeconds - fadeOut.durationSeconds;
+  const fadeOutWindowEnd = fadeOut.region.startTimeSeconds + fadeOut.region.durationSeconds;
+  const fadeInWindowStart = fadeIn.region.startTimeSeconds;
+  const fadeInWindowEnd = fadeIn.region.startTimeSeconds + fadeIn.durationSeconds;
+  const hasMatchingWindow = fadeOutWindowStart === fadeInWindowStart && fadeOutWindowEnd === fadeInWindowEnd;
+  if (hasMatchingWindow && fadeIn.curve === fadeOut.curve) {
+    return;
+  }
+
+  endpoints.forEach(endpoint =>
+    context.addIssue({
+      code: 'custom',
+      message: 'Crossfade endpoints must use the same time window and curve',
+      path: [...endpoint.path, 'crossfadeId'],
+    })
+  );
+}
 
 function validateTimelineMap(
   document:
     | z.infer<typeof ProjectDocumentV5BaseSchema>
     | z.infer<typeof ProjectDocumentV6BaseSchema>
-    | z.infer<typeof ProjectDocumentV7BaseSchema>,
+    | z.infer<typeof ProjectDocumentV7BaseSchema>
+    | z.infer<typeof ProjectDocumentV8BaseSchema>,
   context: z.RefinementCtx
 ): void {
   validateTimelineMarkerPositions(document.timeline.tempoChanges, 'tempoChanges', context);
@@ -631,6 +759,10 @@ export type ProjectTimelineMarker = z.infer<typeof ProjectTimelineMarkerSchema>;
 export type ProjectDocumentV6 = z.infer<typeof ProjectDocumentV6Schema>;
 export type TimelineRange = z.infer<typeof ProjectTimelineRangeSchema>;
 export type ProjectDocumentV7 = z.infer<typeof ProjectDocumentV7Schema>;
+export type ProjectRegionFade = z.infer<typeof ProjectRegionFadeSchema>;
+export type ProjectRegionV8 = z.infer<typeof ProjectRegionV8Schema>;
+export type ProjectTrackV8 = z.infer<typeof ProjectTrackV8Schema>;
+export type ProjectDocumentV8 = z.infer<typeof ProjectDocumentV8Schema>;
 export type ProjectDocumentSnapshot =
   | ProjectDocument
   | ProjectDocumentV2
@@ -638,4 +770,5 @@ export type ProjectDocumentSnapshot =
   | ProjectDocumentV4
   | ProjectDocumentV5
   | ProjectDocumentV6
-  | ProjectDocumentV7;
+  | ProjectDocumentV7
+  | ProjectDocumentV8;

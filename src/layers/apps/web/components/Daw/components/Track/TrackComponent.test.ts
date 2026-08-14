@@ -4,6 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TrackState } from '@/layers/session/session';
+import { createDefaultRegionProcessingState } from '@/layers/shared/types/region-processing';
 import type { TrackToggleResult } from '@/layers/apps/web/hooks/track-mute-solo-commands';
 import { TrackComponent } from './TrackComponent';
 import { TimelineCoordinateMapper } from '@/layers/shared/timeline-coordinate-mapper';
@@ -234,6 +235,7 @@ describe('TrackComponent 제어', () => {
 
   it('Region 선택 상태와 trim 요청을 Region UI에 연결한다', async () => {
     const selectedRegion = {
+      ...createDefaultRegionProcessingState(),
       duration: 2,
       endTime: 3,
       id: '22222222-2222-4222-8222-222222222222',

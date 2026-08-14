@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { IAudioSourceResolver, RuntimeAudioSource } from '@/layers/audio-source-registry/i-audio-source-registry';
 import type { TrackState } from '@/layers/session/session';
+import { createDefaultRegionProcessingState } from '@/layers/shared/types/region-processing';
 import { createAgentPromptPlugins, createAgentPromptTracks } from './useAgent';
 
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
@@ -41,6 +42,7 @@ function createTrackMap(): ReadonlyMap<string, TrackState> {
         pluginInstances: [],
         regions: [
           {
+            ...createDefaultRegionProcessingState(),
             id: ATTACHED_REGION_ID,
             sourceId: ATTACHED_SOURCE_ID,
             startTime: 0,
@@ -50,6 +52,7 @@ function createTrackMap(): ReadonlyMap<string, TrackState> {
             status: [],
           },
           {
+            ...createDefaultRegionProcessingState(),
             id: DETACHED_REGION_ID,
             sourceId: DETACHED_SOURCE_ID,
             startTime: 1,
@@ -59,6 +62,7 @@ function createTrackMap(): ReadonlyMap<string, TrackState> {
             status: [],
           },
           {
+            ...createDefaultRegionProcessingState(),
             id: MISSING_REGION_ID,
             sourceId: MISSING_SOURCE_ID,
             startTime: 2,

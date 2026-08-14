@@ -3,12 +3,14 @@ import { createSessionStore, type RegionState, type TrackState } from '../sessio
 import { ProjectStateError } from './project-state-error';
 import { EditorController } from './editor-controller';
 import type { IEditorRegionRuntime, ReplaceEditorTrackRegionsRequest } from '../shared/types/editor-runtime';
+import { createDefaultRegionProcessingState } from '../shared/types/region-processing';
 
 const TRACK_ID = '11111111-1111-4111-8111-111111111111';
 const REGION_ID = '22222222-2222-4222-8222-222222222222';
 
 function createRegion(overrides: Partial<RegionState> = {}): RegionState {
   return {
+    ...createDefaultRegionProcessingState(),
     duration: 2,
     endTime: 6,
     id: REGION_ID,
@@ -42,7 +44,12 @@ function createController() {
         regions: snapshot.regions.map(region => ({
           duration: region.durationSeconds,
           endTime: region.startTimeSeconds + region.durationSeconds,
+          fadeIn: { ...region.fadeIn },
+          fadeOut: { ...region.fadeOut },
+          gain: region.gain,
           id: region.id,
+          isOpaque: region.isOpaque,
+          layer: region.layer,
           sourceId: region.sourceId,
           sourceStartTime: region.sourceStartTimeSeconds,
           startTime: region.startTimeSeconds,
@@ -112,6 +119,7 @@ describe('EditorController runtime 상태', () => {
     expect(controller.getState().clipboard).toEqual({
       entries: [
         {
+          ...createDefaultRegionProcessingState(),
           durationSeconds: 2,
           relativeStartTimeSeconds: 0,
           sourceId: '33333333-3333-4333-8333-333333333333',
@@ -119,6 +127,7 @@ describe('EditorController runtime 상태', () => {
           sourceTrackId: TRACK_ID,
         },
         {
+          ...createDefaultRegionProcessingState(),
           durationSeconds: 2,
           relativeStartTimeSeconds: 4,
           sourceId: '33333333-3333-4333-8333-333333333333',
@@ -166,6 +175,7 @@ describe('EditorController Region 편집', () => {
         {
           regions: [
             {
+              ...createDefaultRegionProcessingState(),
               durationSeconds: 2,
               id: '55555555-5555-4555-8555-555555555555',
               sourceId: '33333333-3333-4333-8333-333333333333',
@@ -210,6 +220,7 @@ describe('EditorController Region 편집', () => {
     await controller.pasteRegions();
 
     expect(replaceTrackRegions.mock.calls[0]?.[0].tracks[0]?.regions.at(-1)).toEqual({
+      ...createDefaultRegionProcessingState(),
       durationSeconds: 2,
       id: '66666666-6666-4666-8666-666666666666',
       sourceId: '33333333-3333-4333-8333-333333333333',

@@ -1,4 +1,5 @@
 import type { TimelineRange } from './project-document.schema';
+import type { RegionProcessingState } from './region-processing';
 
 export interface EditorRegionSelection {
   readonly regionId: string;
@@ -23,7 +24,7 @@ export interface SetEditorSelectionRequest {
   readonly trackIds: readonly string[];
 }
 
-export interface EditorClipboardEntry {
+export interface EditorClipboardEntry extends RegionProcessingState {
   readonly durationSeconds: number;
   readonly relativeStartTimeSeconds: number;
   readonly sourceId: string;
@@ -43,7 +44,7 @@ export interface EditorRuntimeState {
 
 export type EditorRuntimeListener = (state: EditorRuntimeState) => void;
 
-export interface EditorRegionSnapshot {
+export interface EditorRegionSnapshot extends RegionProcessingState {
   readonly durationSeconds: number;
   readonly id: string;
   readonly sourceId: string;
