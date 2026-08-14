@@ -60,6 +60,19 @@ export const recordingButtonActive = style({
   color: '#fff5f6',
 });
 
+export const punchButtonActive = style({
+  borderColor: '#805d13',
+  background: '#8a671d',
+  color: '#fff5d2',
+});
+
+export const rangeStatus = style({
+  minWidth: '64px',
+  color: '#e4c466',
+  fontFamily: '"Consolas", "SFMono-Regular", monospace',
+  fontSize: '8px',
+});
+
 export const status = style({
   minWidth: '48px',
   color: '#aeb3b5',

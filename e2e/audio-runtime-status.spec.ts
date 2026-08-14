@@ -118,6 +118,66 @@ test('단일 Track을 녹음하고 저장된 waveform Region을 다시 불러온
   await expect.poll(async () => Number(await restoredTrackMeter.getAttribute('data-peak-dbfs'))).toBeGreaterThan(-60);
 });
 
+test('두 Track의 Punch 녹음과 Take·Comp 편집을 UI에서 확인한다', async ({ page }) => {
+  await page.goto('/');
+  const fixturePath = ensureFakeAudioInputFixture();
+  await page.locator('input[type="file"]').setInputFiles(fixturePath);
+  await page.waitForURL('**/daw');
+  await page.getByLabel('새 Track 오디오 파일 선택').setInputFiles(fixturePath);
+
+  const tracks = page.getByRole('article', { name: /^Track / });
+  await expect(tracks).toHaveCount(2);
+  await tracks.nth(1).locator('select[aria-label$="녹음 모드"]').selectOption('soundOnSound');
+  await expect(tracks.nth(1).locator('select[aria-label$="녹음 모드"]')).toHaveValue('soundOnSound');
+
+  const firstTimeline = tracks.nth(0).locator('[aria-label$="timeline"]');
+  const timelineBox = await firstTimeline.boundingBox();
+  if (!timelineBox) {
+    throw new Error('첫 Track Timeline 위치를 확인하지 못했습니다.');
+  }
+  await page.mouse.move(timelineBox.x + 420, timelineBox.y + timelineBox.height - 8);
+  await page.mouse.down();
+  await page.mouse.move(timelineBox.x + 520, timelineBox.y + timelineBox.height - 8);
+  await page.mouse.up();
+  await expect(page.getByTestId('range-selection')).toBeVisible();
+  await page.getByRole('button', { name: '선택 범위를 Punch로 설정' }).click();
+  await expect(page.getByRole('button', { name: 'Punch 녹음 끄기' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Timeline edit point' }).click({ position: { x: 420, y: 10 } });
+
+  const armButtons = page.getByRole('button', { name: /녹음 arm$/ });
+  await armButtons.nth(0).click();
+  await armButtons.nth(1).click();
+  await expect(armButtons.nth(0)).toHaveAttribute('aria-pressed', 'true');
+  await expect(armButtons.nth(1)).toHaveAttribute('aria-pressed', 'true');
+
+  await page.getByRole('button', { name: '녹음 시작' }).click();
+  await expect(page.getByRole('button', { name: '녹음 중지' })).toBeVisible();
+  await page.waitForTimeout(1_500);
+  await page.getByRole('button', { name: '녹음 중지' }).click();
+  await expect(page.getByRole('button', { name: '녹음 시작' })).toBeVisible();
+
+  const takeSelectors = page.locator('select[aria-label$="Take"]');
+  await expect(takeSelectors).toHaveCount(2);
+  await expect(takeSelectors.nth(0).locator('option')).toHaveCount(1);
+  await expect(takeSelectors.nth(1).locator('option')).toHaveCount(1);
+  await page
+    .getByRole('button', { name: /선택 Take 전체 적용/ })
+    .first()
+    .click();
+
+  const compButton = page.getByRole('button', { name: /선택 범위를 Comp에 적용/ }).first();
+  await expect(compButton).toBeEnabled();
+  await compButton.click();
+
+  await page.getByTitle(/^Save/).click();
+  await expect(page.getByText('Save completed', { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: '불러오기' }).click();
+  await expect(page.getByRole('article', { name: /^Track / })).toHaveCount(2);
+  await expect(page.locator('select[aria-label$="Take"]')).toHaveCount(2);
+  await expect(page.getByRole('button', { name: 'Punch 녹음 끄기' })).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('Region을 선택해 복제하고 Undo·Redo·저장·복원한다', async ({ page }) => {
   await page.goto('/');
   await page.locator('input[type="file"]').setInputFiles(ensureFakeAudioInputFixture());

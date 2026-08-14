@@ -40,7 +40,7 @@ export const trackRow = style({
   display: 'grid',
   gridTemplateColumns: `${TRACK_HEADER_WIDTH} minmax(${TIMELINE_CONTENT_WIDTH}, 1fr)`,
   minWidth: `calc(${TRACK_HEADER_WIDTH} + ${TIMELINE_CONTENT_WIDTH})`,
-  minHeight: '76px',
+  minHeight: '98px',
   borderBottom: '1px solid #090b0c',
   backgroundColor: '#1c1f21',
 });
@@ -69,7 +69,7 @@ export const trackHeaderSelected = style({
 export const trackTimeline = style({
   position: 'relative',
   minWidth: 0,
-  minHeight: '76px',
+  minHeight: '98px',
   overflow: 'hidden',
   backgroundColor: '#202426',
   backgroundImage:
@@ -90,9 +90,44 @@ export const rangeSelection = style({
 
 export const actionControls = style({
   display: 'flex',
+  flexWrap: 'wrap',
   alignItems: 'center',
   gap: '4px',
   minWidth: 0,
+});
+
+export const recordingOptions = style({
+  order: 2,
+  flexBasis: '100%',
+  display: 'grid',
+  gridTemplateColumns: '34px 54px 40px 30px 32px',
+  minWidth: 0,
+  alignItems: 'center',
+  gap: '2px',
+  color: '#9ea4a6',
+  fontFamily: '"Consolas", "SFMono-Regular", monospace',
+  fontSize: '8px',
+});
+
+export const recordingSelect = style({
+  minWidth: 0,
+  height: '20px',
+  border: '1px solid #111416',
+  borderRadius: '1px',
+  backgroundColor: '#171a1c',
+  color: '#d6d8d9',
+  fontSize: '8px',
+  selectors: {
+    '&:disabled': { opacity: 0.4 },
+  },
+});
+
+export const recordingError = style({
+  gridColumn: '1 / -1',
+  overflow: 'hidden',
+  color: '#ff9d9d',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
 });
 
 export const trackActionButton = style([controlButton]);
