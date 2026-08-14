@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useCommandExecutor } from '@/layers/apps/web/context/layer-hooks';
+import { useAudioRuntimeCapabilities, useCommandExecutor } from '@/layers/apps/web/context/layer-hooks';
+import { describeAudioRuntimeFeatureCapability } from '@/layers/apps/web/utils/audio-runtime-capability-labels';
 import {
   createLoopOverdubAction,
   createLoopSlotAction,
@@ -9,6 +10,7 @@ import {
 import { MAX_LOOP_OVERDUB_LAYERS, type LoopLengthBars } from '@/layers/shared/loop-time';
 import type { LoopSlotState } from '@/layers/session/session';
 import { AudioCommandType } from '@/layers/shared/types/audioCommand.schema';
+import { AudioRuntimeFeature } from '@/layers/shared/utils/audio-runtime-capabilities';
 import * as styles from './LoopSlotControls.css';
 
 const LOOP_BAR_OPTIONS: readonly LoopLengthBars[] = [1, 2, 4, 8];
@@ -16,10 +18,14 @@ const LOOP_BAR_OPTIONS: readonly LoopLengthBars[] = [1, 2, 4, 8];
 function LoopSlotControl({
   index,
   loopSlot,
+  loopUnavailableReason,
+  isLoopAvailable,
   trackId,
 }: {
   readonly index: number;
+  readonly isLoopAvailable: boolean;
   readonly loopSlot: LoopSlotState;
+  readonly loopUnavailableReason: string;
   readonly trackId: string;
 }) {
   const commandExecutor = useCommandExecutor();
@@ -29,7 +35,7 @@ function LoopSlotControl({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const execute = async (command: Parameters<typeof commandExecutor.execute>[0]) => {
-    if (isPending) {
+    if (isPending || !isLoopAvailable) {
       return;
     }
     setIsPending(true);
@@ -62,7 +68,8 @@ function LoopSlotControl({
         <button
           type="button"
           className={styles.primaryButton}
-          disabled={isPending}
+          disabled={isPending || !isLoopAvailable}
+          title={isLoopAvailable ? undefined : loopUnavailableReason}
           onClick={() => void handlePrimaryAction()}
         >
           {isPending ? '…' : getLoopSlotActionLabel(loopSlot.state)}
@@ -71,7 +78,8 @@ function LoopSlotControl({
           <button
             type="button"
             className={styles.overdubButton}
-            disabled={isPending}
+            disabled={isPending || !isLoopAvailable}
+            title={isLoopAvailable ? undefined : loopUnavailableReason}
             onClick={() => void execute(createLoopOverdubAction({ loopSlotId: loopSlot.id, trackId }))}
           >
             DUB
@@ -81,7 +89,8 @@ function LoopSlotControl({
           <button
             type="button"
             className={styles.clearButton}
-            disabled={isPending}
+            disabled={isPending || !isLoopAvailable}
+            title={isLoopAvailable ? undefined : loopUnavailableReason}
             onClick={() => void execute({ slotId: loopSlot.id, trackId, type: AudioCommandType.CLEAR_LOOP_SLOT })}
           >
             ×
@@ -94,7 +103,7 @@ function LoopSlotControl({
           <select
             aria-label={`Loop ${index + 1} length`}
             className={styles.settingSelect}
-            disabled={loopSlot.state !== 'empty' || isPending}
+            disabled={loopSlot.state !== 'empty' || isPending || !isLoopAvailable}
             value={lengthBars}
             onChange={event => setLengthBars(Number(event.target.value) as LoopLengthBars)}
           >
@@ -110,7 +119,7 @@ function LoopSlotControl({
           <select
             aria-label={`Loop ${index + 1} quantization`}
             className={styles.settingSelect}
-            disabled={loopSlot.state !== 'empty' || isPending}
+            disabled={loopSlot.state !== 'empty' || isPending || !isLoopAvailable}
             value={quantizationBars}
             onChange={event => setQuantizationBars(Number(event.target.value) as LoopLengthBars)}
           >
@@ -139,9 +148,20 @@ export function LoopSlotControls({
   readonly trackId: string;
 }) {
   const commandExecutor = useCommandExecutor();
+  const capabilities = useAudioRuntimeCapabilities();
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [isInputPending, setIsInputPending] = useState(false);
   const [inputErrorMessage, setInputErrorMessage] = useState<string | null>(null);
+  const liveInputCapability = capabilities.features[AudioRuntimeFeature.LIVE_INPUT];
+  const liveLoopCapability = capabilities.features[AudioRuntimeFeature.LIVE_LOOP];
+  const isLiveInputAvailable = liveInputCapability.status === 'available';
+  const isLiveLoopAvailable = liveLoopCapability.status === 'available';
+  const liveInputUnavailableReason = describeAudioRuntimeFeatureCapability(liveInputCapability);
+  const liveLoopUnavailableReason = describeAudioRuntimeFeatureCapability(liveLoopCapability);
+  const unavailableReasons = [
+    isLiveInputAvailable ? null : `실시간 입력: ${liveInputUnavailableReason}`,
+    isLiveLoopAvailable ? null : `라이브 Loop: ${liveLoopUnavailableReason}`,
+  ].filter((reason): reason is string => reason !== null);
 
   const handleDefaultInput = async () => {
     setIsInputPending(true);
@@ -170,12 +190,18 @@ export function LoopSlotControls({
   };
 
   return (
-    <section className={styles.container} aria-label="Live loop controls">
+    <section
+      aria-disabled={!isLiveInputAvailable || !isLiveLoopAvailable}
+      aria-label="Live loop controls"
+      className={styles.container}
+      title={unavailableReasons.join(' / ') || undefined}
+    >
       <div className={styles.inputControls}>
         <button
           type="button"
           className={styles.inputButton}
-          disabled={isInputPending}
+          disabled={isInputPending || !isLiveInputAvailable}
+          title={isLiveInputAvailable ? undefined : liveInputUnavailableReason}
           onClick={() => void handleDefaultInput()}
         >
           DEFAULT INPUT
@@ -184,7 +210,8 @@ export function LoopSlotControls({
           type="button"
           aria-pressed={isMonitoring}
           className={`${styles.inputButton} ${isMonitoring ? styles.monitoringActive : ''}`}
-          disabled={isInputPending}
+          disabled={isInputPending || !isLiveInputAvailable}
+          title={isLiveInputAvailable ? undefined : liveInputUnavailableReason}
           onClick={() => void handleMonitoring()}
         >
           MON {isMonitoring ? 'ON' : 'OFF'}
@@ -192,7 +219,14 @@ export function LoopSlotControls({
       </div>
       <div className={styles.slotGrid}>
         {loopSlots.map((loopSlot, index) => (
-          <LoopSlotControl key={loopSlot.id} index={index} loopSlot={loopSlot} trackId={trackId} />
+          <LoopSlotControl
+            index={index}
+            isLoopAvailable={isLiveLoopAvailable}
+            key={loopSlot.id}
+            loopSlot={loopSlot}
+            loopUnavailableReason={liveLoopUnavailableReason}
+            trackId={trackId}
+          />
         ))}
       </div>
       {inputErrorMessage ? <span className={styles.error}>{inputErrorMessage}</span> : null}

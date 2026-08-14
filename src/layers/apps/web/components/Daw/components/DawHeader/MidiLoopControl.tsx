@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react';
-import { useCommandExecutor, useMidiInput, useSession } from '@/layers/apps/web/context/layer-hooks';
+import {
+  useAudioRuntimeCapabilities,
+  useCommandExecutor,
+  useMidiInput,
+  useSession,
+} from '@/layers/apps/web/context/layer-hooks';
 import { useLayer } from '@/layers/apps/web/context/layer-context';
+import { describeAudioRuntimeFeatureCapability } from '@/layers/apps/web/utils/audio-runtime-capability-labels';
 import type { MidiInputDevice } from '@/layers/midi-input/i-midi-input';
 import { createMidiLoopCommand } from '@/layers/apps/web/midi/create-midi-loop-command';
+import { AudioRuntimeFeature } from '@/layers/shared/utils/audio-runtime-capabilities';
 import * as styles from './MidiLoopControl.css';
 
 type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'error';
@@ -13,6 +20,7 @@ function describeError(error: unknown): string {
 
 export function MidiLoopControl() {
   const app = useLayer();
+  const capabilities = useAudioRuntimeCapabilities();
   const commandExecutor = useCommandExecutor();
   const midiInput = useMidiInput();
   const tracks = useSession(state => state.tracks);
@@ -23,9 +31,15 @@ export function MidiLoopControl() {
   const [requestedTrackId, setRequestedTrackId] = useState('');
   const firstTrackId = tracks.values().next().value?.id ?? '';
   const targetTrackId = tracks.has(requestedTrackId) ? requestedTrackId : firstTrackId;
+  const liveLoopCapability = capabilities.features[AudioRuntimeFeature.LIVE_LOOP];
+  const isLiveLoopAvailable = liveLoopCapability.status === 'available';
+  const liveLoopUnavailableReason = describeAudioRuntimeFeatureCapability(liveLoopCapability);
 
   useEffect(() => {
     return midiInput.subscribe(event => {
+      if (!isLiveLoopAvailable) {
+        return;
+      }
       if (midiChannel !== 0 && event.channel !== midiChannel) {
         return;
       }
@@ -42,11 +56,14 @@ export function MidiLoopControl() {
         setErrorMessage(describeError(error));
       });
     });
-  }, [app.session, commandExecutor, midiChannel, midiInput, targetTrackId]);
+  }, [app.session, commandExecutor, isLiveLoopAvailable, midiChannel, midiInput, targetTrackId]);
 
   useEffect(() => () => midiInput.disconnect(), [midiInput]);
 
   const handleConnection = async (): Promise<void> => {
+    if (!isLiveLoopAvailable) {
+      return;
+    }
     if (connectionStatus === 'connected') {
       midiInput.disconnect();
       setConnectionStatus('disconnected');
@@ -73,12 +90,15 @@ export function MidiLoopControl() {
       : '노트 36–39: 슬롯 · 40: 전체 정지';
 
   return (
-    <div className={styles.container} title={errorMessage ?? deviceLabel}>
+    <div
+      className={styles.container}
+      title={isLiveLoopAvailable ? (errorMessage ?? deviceLabel) : liveLoopUnavailableReason}
+    >
       <span className={styles.label}>MIDI LOOP</span>
       <select
         aria-label="MIDI 대상 트랙"
         className={styles.select}
-        disabled={tracks.size === 0}
+        disabled={tracks.size === 0 || !isLiveLoopAvailable}
         onChange={event => setRequestedTrackId(event.target.value)}
         value={targetTrackId}
       >
@@ -92,6 +112,7 @@ export function MidiLoopControl() {
       <select
         aria-label="MIDI 채널"
         className={styles.channelSelect}
+        disabled={!isLiveLoopAvailable}
         onChange={event => setMidiChannel(Number(event.target.value))}
         value={midiChannel}
       >
@@ -104,14 +125,15 @@ export function MidiLoopControl() {
       </select>
       <button
         className={connectionStatus === 'connected' ? styles.connectedButton : styles.button}
-        disabled={connectionStatus === 'connecting'}
+        disabled={connectionStatus === 'connecting' || !isLiveLoopAvailable}
         onClick={() => void handleConnection()}
+        title={isLiveLoopAvailable ? undefined : liveLoopUnavailableReason}
         type="button"
       >
         {connectionStatus === 'connecting' ? 'CONNECTING' : connectionStatus === 'connected' ? 'DISCONNECT' : 'CONNECT'}
       </button>
       <span aria-live="polite" className={styles.hint}>
-        {errorMessage ?? deviceLabel}
+        {isLiveLoopAvailable ? (errorMessage ?? deviceLabel) : liveLoopUnavailableReason}
       </span>
     </div>
   );

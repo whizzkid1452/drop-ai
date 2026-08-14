@@ -7,6 +7,7 @@ import { createCliTestApp, type AppInstance } from '@/layers/apps/create-app';
 import { LayerProvider } from '@/layers/apps/web/context/layer-provider';
 import type { IMidiInput, MidiNoteOnEvent, MidiNoteOnListener } from '@/layers/midi-input/i-midi-input';
 import { AudioCommandType } from '@/layers/shared/types/audioCommand.schema';
+import { AudioRuntimeFeature } from '@/layers/shared/utils/audio-runtime-capabilities';
 import { MidiLoopControl } from './MidiLoopControl';
 
 vi.mock('./MidiLoopControl.css', () => ({
@@ -48,11 +49,45 @@ afterEach(() => {
 });
 
 describe('MidiLoopControl', () => {
+  it('루프 runtime이 지원되지 않으면 MIDI 연결을 비활성화한다', () => {
+    const baseApp = createCliTestApp();
+    const app: AppInstance = {
+      ...baseApp,
+      audioRuntimeCapabilities: {
+        ...baseApp.audioRuntimeCapabilities,
+        features: {
+          ...baseApp.audioRuntimeCapabilities.features,
+          [AudioRuntimeFeature.LIVE_LOOP]: { blockers: [], status: 'unsupported' },
+        },
+      },
+    };
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    mountedRoots.push(root);
+
+    act(() => root.render(createElement(LayerProvider, { app }, createElement(MidiLoopControl))));
+
+    const connectButton = [...host.querySelectorAll('button')].find(button => button.textContent === 'CONNECT');
+    expect(connectButton?.disabled).toBe(true);
+    expect(connectButton?.title).toContain('현재 runtime에 구현되지 않음');
+  });
+
   it('연결 후 Note On을 선택 트랙의 루프 명령으로 실행한다', async () => {
     const baseApp = createCliTestApp();
     await baseApp.commandExecutor.execute({ type: AudioCommandType.ADD_TRACK, trackId: TRACK_ID });
     const midiInput = new FakeMidiInput();
-    const app: AppInstance = { ...baseApp, midiInput };
+    const app: AppInstance = {
+      ...baseApp,
+      audioRuntimeCapabilities: {
+        ...baseApp.audioRuntimeCapabilities,
+        features: {
+          ...baseApp.audioRuntimeCapabilities.features,
+          [AudioRuntimeFeature.LIVE_LOOP]: { blockers: [], status: 'available' },
+        },
+      },
+      midiInput,
+    };
     const execute = vi.spyOn(app.commandExecutor, 'execute').mockResolvedValue(undefined);
     const host = document.createElement('div');
     document.body.append(host);
