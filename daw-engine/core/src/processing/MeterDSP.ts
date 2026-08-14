@@ -208,7 +208,8 @@ export class MeterDSP {
   private _shortTermLen: number; // number of 100ms blocks in 3s
   private _blockSize100ms: number; // samples in 100ms
   private _lufsBlockAccum: Float64Array; // accumulator per channel for current 100ms block
-  private _lufsBlockSampleCount: number;
+  private _lufsBlockSampleCounts: Uint32Array;
+  private _completedLufsBlockPowers: number[][];
   private _momentaryWriteIdx: number;
   private _shortTermWriteIdx: number;
   private _momentaryFilled: number; // how many blocks have been written
@@ -264,11 +265,15 @@ export class MeterDSP {
     this._momentaryBuffer = [];
     this._shortTermBuffer = [];
     this._lufsBlockAccum = new Float64Array(channelCount);
+    this._lufsBlockSampleCounts = new Uint32Array(channelCount);
+    this._completedLufsBlockPowers = Array.from(
+      { length: channelCount },
+      () => [],
+    );
     for (let ch = 0; ch < channelCount; ch++) {
       this._momentaryBuffer.push(new Float64Array(this._momentaryLen));
       this._shortTermBuffer.push(new Float64Array(this._shortTermLen));
     }
-    this._lufsBlockSampleCount = 0;
     this._momentaryWriteIdx = 0;
     this._shortTermWriteIdx = 0;
     this._momentaryFilled = 0;
@@ -500,7 +505,8 @@ export class MeterDSP {
     let offset = 0;
 
     while (remaining > 0) {
-      const spaceInBlock = this._blockSize100ms - this._lufsBlockSampleCount;
+      const spaceInBlock =
+        this._blockSize100ms - this._lufsBlockSampleCounts[channel];
       const toProcess = Math.min(remaining, spaceInBlock);
 
       let sumSq = 0;
@@ -515,31 +521,42 @@ export class MeterDSP {
 
       offset += toProcess;
       remaining -= toProcess;
+      this._lufsBlockSampleCounts[channel] += toProcess;
 
-      // Only advance the block counter on channel 0 to keep channels in sync
-      if (channel === 0) {
-        this._lufsBlockSampleCount += toProcess;
+      if (this._lufsBlockSampleCounts[channel] === this._blockSize100ms) {
+        this._completedLufsBlockPowers[channel].push(
+          this._lufsBlockAccum[channel] / this._blockSize100ms,
+        );
+        this._lufsBlockAccum[channel] = 0;
+        this._lufsBlockSampleCounts[channel] = 0;
+        this._commitCompletedLufsBlocks();
+      }
+    }
+  }
+
+  private _commitCompletedLufsBlocks(): void {
+    while (this._completedLufsBlockPowers.every((blocks) => blocks.length > 0)) {
+      const channelMeanSquares = new Float64Array(this._channelCount);
+
+      // 채널별 호출 시점이 달라도 같은 100ms 구간의 에너지만 함께 반영한다.
+      for (let channel = 0; channel < this._channelCount; channel++) {
+        channelMeanSquares[channel] =
+          this._completedLufsBlockPowers[channel].shift() ?? 0;
       }
 
-      // If this is the last channel and the block is full, commit
-      if (
-        channel === this._channelCount - 1 &&
-        this._lufsBlockSampleCount >= this._blockSize100ms
-      ) {
-        this._commitLufsBlock();
-      }
+      this._commitLufsBlock(channelMeanSquares);
     }
   }
 
   /**
    * Commit a completed 100ms block into the ring buffers and perform gating.
    */
-  private _commitLufsBlock(): void {
+  private _commitLufsBlock(channelMeanSquares: Float64Array): void {
     const numCh = this._channelCount;
 
     // Write per-channel mean-square into ring buffers
     for (let ch = 0; ch < numCh; ch++) {
-      const meanSq = this._lufsBlockAccum[ch] / this._blockSize100ms;
+      const meanSq = channelMeanSquares[ch];
       this._momentaryBuffer[ch][this._momentaryWriteIdx] = meanSq;
       this._shortTermBuffer[ch][this._shortTermWriteIdx] = meanSq;
     }
@@ -555,15 +572,12 @@ export class MeterDSP {
     let blockPower = 0;
     for (let ch = 0; ch < numCh; ch++) {
       const w = this._channelWeight(ch);
-      blockPower += w * (this._lufsBlockAccum[ch] / this._blockSize100ms);
+      blockPower += w * channelMeanSquares[ch];
     }
     const blockLoudness =
       blockPower > 0 ? -0.691 + 10 * Math.log10(blockPower) : -Infinity;
     this._gatingBlocks.push(blockLoudness);
 
-    // Reset accumulators
-    this._lufsBlockAccum.fill(0);
-    this._lufsBlockSampleCount = 0;
   }
 
   /**
@@ -789,10 +803,11 @@ export class MeterDSP {
       this._momentaryBuffer[ch].fill(0);
       this._shortTermBuffer[ch].fill(0);
       this._lufsBlockAccum[ch] = 0;
+      this._lufsBlockSampleCounts[ch] = 0;
+      this._completedLufsBlockPowers[ch].length = 0;
       this._tpHistory[ch].fill(0);
     }
 
-    this._lufsBlockSampleCount = 0;
     this._momentaryWriteIdx = 0;
     this._shortTermWriteIdx = 0;
     this._momentaryFilled = 0;
