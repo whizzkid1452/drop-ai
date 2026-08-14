@@ -16,6 +16,7 @@ import {
   PROJECT_DOCUMENT_SCHEMA_VERSION_V14,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V15,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V16,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V17,
   ProjectDocumentSchema,
   ProjectDocumentV2Schema,
   ProjectDocumentV3Schema,
@@ -32,6 +33,7 @@ import {
   ProjectDocumentV14Schema,
   ProjectDocumentV15Schema,
   ProjectDocumentV16Schema,
+  ProjectDocumentV17Schema,
   type ProjectDocument,
   type ProjectDocumentSnapshot,
   type ProjectDocumentV2,
@@ -49,10 +51,12 @@ import {
   type ProjectDocumentV14,
   type ProjectDocumentV15,
   type ProjectDocumentV16,
+  type ProjectDocumentV17,
   type ProjectAudioSource,
 } from './project-document.schema';
 import { createDefaultProjectRecordingState, createDefaultTrackRecordingState } from './multitrack-recording';
 import { createDefaultRoutingGraphSnapshot } from './routing-state';
+import { createDefaultProjectExportState } from './export-state';
 
 export const ProjectDocumentReadErrorCode = {
   INVALID_DOCUMENT: 'INVALID_DOCUMENT',
@@ -133,6 +137,10 @@ export const PROJECT_DOCUMENT_V16_MIGRATION_INPUT_VERSIONS = [
   ...PROJECT_DOCUMENT_V15_MIGRATION_INPUT_VERSIONS,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V16,
 ] as const;
+export const PROJECT_DOCUMENT_V17_MIGRATION_INPUT_VERSIONS = [
+  ...PROJECT_DOCUMENT_V16_MIGRATION_INPUT_VERSIONS,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V17,
+] as const;
 export const PROJECT_DOCUMENT_SNAPSHOT_SCHEMA_VERSIONS = [
   PROJECT_DOCUMENT_SCHEMA_VERSION,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V2,
@@ -150,6 +158,7 @@ export const PROJECT_DOCUMENT_SNAPSHOT_SCHEMA_VERSIONS = [
   PROJECT_DOCUMENT_SCHEMA_VERSION_V14,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V15,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V16,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V17,
 ] as const;
 
 const ProjectDocumentSchemaVersionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
@@ -562,6 +571,19 @@ function parseProjectDocumentV16(input: unknown, schemaVersion: number): Project
   }
 }
 
+function parseProjectDocumentV17(input: unknown, schemaVersion: number): ProjectDocumentV17 {
+  const clonedInput = cloneProjectDocumentInput(input, schemaVersion);
+  try {
+    const documentResult = ProjectDocumentV17Schema.safeParse(clonedInput);
+    if (documentResult.success) {
+      return documentResult.data as unknown as ProjectDocumentV17;
+    }
+    throw documentResult.error;
+  } catch (parseFailure) {
+    throw createInvalidDocumentError(schemaVersion, parseFailure);
+  }
+}
+
 function readProjectDocumentSchemaVersion(input: unknown): number {
   const topLevelObject = readTopLevelObject(input);
   const documentTypeProperty = readOwnDataProperty({
@@ -960,6 +982,28 @@ function migrateValidatedProjectDocumentV15ToV16(document: ProjectDocumentV15): 
   });
 }
 
+function migrateValidatedProjectDocumentV16ToV17(document: ProjectDocumentV16): ProjectDocumentV17 {
+  const schema = ProjectDocumentV17Schema as unknown as { parse(input: unknown): ProjectDocumentV17 };
+  const exportSettings = createDefaultProjectExportState();
+  return schema.parse({
+    ...document,
+    exportSettings: {
+      ...exportSettings,
+      ranges: document.exportRange
+        ? [
+            {
+              endTimeSeconds: document.exportRange.endTimeSeconds,
+              id: '00000000-0000-4000-8000-000000000017',
+              name: 'Export 1',
+              startTimeSeconds: document.exportRange.startTimeSeconds,
+            },
+          ]
+        : [],
+    },
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V17,
+  });
+}
+
 function parseProjectDocumentJsonInput(json: string): unknown {
   try {
     return JSON.parse(json) as unknown;
@@ -1304,6 +1348,25 @@ export function readProjectDocumentV16(input: unknown): ProjectDocumentV16 {
   });
 }
 
+export function migrateProjectDocumentV16ToV17(document: ProjectDocumentV16): ProjectDocumentV17 {
+  return migrateValidatedProjectDocumentV16ToV17(readProjectDocumentV16(document));
+}
+
+export function readProjectDocumentV17(input: unknown): ProjectDocumentV17 {
+  const schemaVersion = readProjectDocumentSchemaVersion(input);
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V17) {
+    return parseProjectDocumentV17(input, schemaVersion);
+  }
+  if (PROJECT_DOCUMENT_V16_MIGRATION_INPUT_VERSIONS.some(version => version === schemaVersion)) {
+    return migrateValidatedProjectDocumentV16ToV17(readProjectDocumentV16(input));
+  }
+
+  throw createUnsupportedSchemaVersionError({
+    schemaVersion,
+    supportedSchemaVersions: PROJECT_DOCUMENT_V17_MIGRATION_INPUT_VERSIONS,
+  });
+}
+
 export function readProjectDocumentSnapshot(input: unknown): ProjectDocumentSnapshot {
   const schemaVersion = readProjectDocumentSchemaVersion(input);
   if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION) {
@@ -1353,6 +1416,9 @@ export function readProjectDocumentSnapshot(input: unknown): ProjectDocumentSnap
   }
   if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V16) {
     return parseProjectDocumentV16(input, schemaVersion);
+  }
+  if (schemaVersion === PROJECT_DOCUMENT_SCHEMA_VERSION_V17) {
+    return parseProjectDocumentV17(input, schemaVersion);
   }
 
   throw createUnsupportedSchemaVersionError({
@@ -1423,4 +1489,8 @@ export function readProjectDocumentJsonV15(json: string): ProjectDocumentV15 {
 
 export function readProjectDocumentJsonV16(json: string): ProjectDocumentV16 {
   return readProjectDocumentV16(parseProjectDocumentJsonInput(json));
+}
+
+export function readProjectDocumentJsonV17(json: string): ProjectDocumentV17 {
+  return readProjectDocumentV17(parseProjectDocumentJsonInput(json));
 }

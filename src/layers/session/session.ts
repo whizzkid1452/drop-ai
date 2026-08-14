@@ -30,6 +30,11 @@ import type { TimelineMeterChange, TimelineTempoChange } from '../shared/timelin
 import type { TimelineMarker } from '../shared/timeline-marker';
 import { cloneAutomationLaneState, type AutomationLaneState } from '../shared/types/automation-state';
 import { cloneMidiTrackState, type MidiTrackState } from '../shared/types/midi-state';
+import {
+  cloneProjectExportState,
+  createDefaultProjectExportState,
+  type ProjectExportState,
+} from '../shared/types/export-state';
 
 export const DEFAULT_LOOP_SLOT_COUNT = 4;
 export const DEFAULT_METRONOME_VOLUME = 0.8;
@@ -122,6 +127,7 @@ export interface ProjectSessionState {
   readonly recording?: ProjectRecordingState;
   readonly exportStartTime: number | null;
   readonly exportEndTime: number | null;
+  readonly exportSettings?: ProjectExportState;
   readonly tracks: ReadonlyMap<string, TrackState>;
 }
 
@@ -192,6 +198,7 @@ export interface SessionState {
   recording: ProjectRecordingState;
   exportStartTime: number | null;
   exportEndTime: number | null;
+  exportSettings: ProjectExportState;
   tracks: Map<string, TrackState>;
   pluginCatalog: Map<string, PluginCatalogEntry>;
   pluginValidationResults: Map<string, PluginValidationResult>;
@@ -231,6 +238,7 @@ export interface SessionState {
   setRoutingGraph: (routingGraph: RoutingGraphSnapshot) => void;
   setRecording: (recording: ProjectRecordingState) => void;
   setExportRange: (startTime: number | null, endTime: number | null) => void;
+  setExportSettings: (exportSettings: ProjectExportState) => void;
   replaceProjectMetadata: (project: ProjectMetadata) => void;
   replaceProjectState: (projectState: ProjectSessionState) => void;
 
@@ -284,6 +292,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     recording: createDefaultProjectRecordingState(),
     exportStartTime: null,
     exportEndTime: null,
+    exportSettings: createDefaultProjectExportState(),
     tracks: new Map(),
     pluginCatalog: new Map(),
     pluginValidationResults: new Map(),
@@ -333,6 +342,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     setRoutingGraph: routingGraph => set({ routingGraph: cloneRoutingGraphSnapshot(routingGraph) }),
     setRecording: recording => set({ recording: cloneProjectRecordingState(recording) }),
     setExportRange: (startTime, endTime) => set({ exportStartTime: startTime, exportEndTime: endTime }),
+    setExportSettings: exportSettings => set({ exportSettings: cloneProjectExportState(exportSettings) }),
     replaceProjectMetadata: project => set({ project: { ...project } }),
     replaceProjectState: projectState =>
       set({
@@ -356,6 +366,7 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
         recording: cloneProjectRecordingState(projectState.recording ?? createDefaultProjectRecordingState()),
         exportStartTime: projectState.exportStartTime,
         exportEndTime: projectState.exportEndTime,
+        exportSettings: cloneProjectExportState(projectState.exportSettings ?? createDefaultProjectExportState()),
         tracks: cloneProjectTracks(projectState.tracks),
         isPlaying: false,
         currentTime: 0,

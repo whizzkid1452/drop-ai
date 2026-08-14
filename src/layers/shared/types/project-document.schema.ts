@@ -6,6 +6,13 @@ import { calculateFiniteRegionEndTime } from '../region-timeline';
 import { ROUTING_CHANNEL_COUNTS, ROUTING_SEND_TAP_POINTS, ROUTING_TRACK_KINDS } from './routing-state';
 import { AUTOMATION_INTERPOLATIONS, AUTOMATION_MODES, getAutomationTargetKey } from './automation-state';
 import { MIDI_RECORD_MODES } from './midi-state';
+import {
+  EXPORT_CHANNEL_MODES,
+  EXPORT_DITHER_MODES,
+  EXPORT_FORMATS,
+  EXPORT_MODES,
+  EXPORT_SAMPLE_FORMATS,
+} from './export-state';
 
 export const PROJECT_DOCUMENT_SCHEMA_VERSION = 1 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V2 = 2 as const;
@@ -23,6 +30,7 @@ export const PROJECT_DOCUMENT_SCHEMA_VERSION_V13 = 13 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V14 = 14 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V15 = 15 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V16 = 16 as const;
+export const PROJECT_DOCUMENT_SCHEMA_VERSION_V17 = 17 as const;
 
 const MAX_NAME_LENGTH = 255;
 const MAX_MIME_TYPE_LENGTH = 255;
@@ -39,6 +47,8 @@ const MAX_MIDI_CONTROL_LANES = 128;
 const MAX_MIDI_CONTROL_POINTS = 100_000;
 const MAX_PLUGIN_STATE_BLOB_LENGTH = 1_000_000;
 const MAX_SOURCE_TAGS = 32;
+const MAX_EXPORT_PRESETS = 64;
+const MAX_EXPORT_RANGES = 256;
 const MAX_TRANSIENT_POSITIONS = 100_000;
 const MAX_BWF_TEXT_LENGTH = 65_535;
 const nonBlankNameSchema = z.string().trim().min(1).max(MAX_NAME_LENGTH);
@@ -734,6 +744,47 @@ const ProjectDocumentV16BaseSchema = ProjectDocumentV15BaseSchema.omit({
   schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V16),
 });
 
+export const ProjectExportNormalizationSchema = z.discriminatedUnion('mode', [
+  z.strictObject({ mode: z.literal('none') }),
+  z.strictObject({ mode: z.literal('peak'), targetDbfs: z.number().finite().min(-60).max(0) }),
+  z.strictObject({ mode: z.literal('lufs'), targetLufs: z.number().finite().min(-70).max(0) }),
+]);
+
+export const ProjectExportPresetSchema = z.strictObject({
+  channelMode: z.enum(EXPORT_CHANNEL_MODES),
+  dither: z.enum(EXPORT_DITHER_MODES),
+  exportMode: z.enum(EXPORT_MODES),
+  format: z.enum(EXPORT_FORMATS),
+  id: pluginTextSchema,
+  name: nonBlankNameSchema,
+  normalization: ProjectExportNormalizationSchema,
+  sampleFormat: z.enum(EXPORT_SAMPLE_FORMATS),
+  sampleRate: z.number().int().min(8_000).max(192_000),
+});
+
+export const ProjectExportRangeSchema = z
+  .strictObject({
+    endTimeSeconds: z.number().finite().positive(),
+    id: z.uuid('Invalid Export Range ID format'),
+    name: nonBlankNameSchema,
+    startTimeSeconds: z.number().finite().nonnegative(),
+  })
+  .refine(range => range.endTimeSeconds > range.startTimeSeconds, {
+    message: 'Export Range end must be greater than start',
+    path: ['endTimeSeconds'],
+  });
+
+export const ProjectExportSettingsSchema = z.strictObject({
+  activePresetId: pluginTextSchema,
+  presets: z.array(ProjectExportPresetSchema).min(1).max(MAX_EXPORT_PRESETS),
+  ranges: z.array(ProjectExportRangeSchema).max(MAX_EXPORT_RANGES),
+});
+
+const ProjectDocumentV17BaseSchema = ProjectDocumentV16BaseSchema.omit({ schemaVersion: true }).extend({
+  exportSettings: ProjectExportSettingsSchema,
+  schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V17),
+});
+
 interface IdentifiedDocumentPath {
   id: string;
   path: Array<string | number>;
@@ -1115,7 +1166,10 @@ export const ProjectDocumentV15Schema = ProjectDocumentV15BaseSchema.superRefine
   validatePluginSidechains(document as unknown as PluginSidechainDocument, context);
 });
 
-export const ProjectDocumentV16Schema = ProjectDocumentV16BaseSchema.superRefine((document, context) => {
+function validateProjectDocumentV16State(
+  document: z.infer<typeof ProjectDocumentV16BaseSchema>,
+  context: z.RefinementCtx
+): void {
   const v15CompatibleDocument = document as unknown as z.infer<typeof ProjectDocumentV15BaseSchema>;
   const v14CompatibleDocument = document as unknown as z.infer<typeof ProjectDocumentV14BaseSchema>;
   validateProjectRelations(v14CompatibleDocument, context);
@@ -1136,6 +1190,38 @@ export const ProjectDocumentV16Schema = ProjectDocumentV16BaseSchema.superRefine
   validateMidiState(v14CompatibleDocument, context);
   validatePluginSidechains(v15CompatibleDocument as unknown as PluginSidechainDocument, context);
   validateAudioSourceManagement(document, context);
+}
+
+export const ProjectDocumentV16Schema = ProjectDocumentV16BaseSchema.superRefine(validateProjectDocumentV16State);
+
+export const ProjectDocumentV17Schema = ProjectDocumentV17BaseSchema.superRefine((document, context) => {
+  validateProjectDocumentV16State(document as unknown as z.infer<typeof ProjectDocumentV16BaseSchema>, context);
+  const presetEntries = document.exportSettings.presets.map((preset, index) => ({
+    id: preset.id,
+    path: ['exportSettings', 'presets', index, 'id'],
+  }));
+  const rangeEntries = document.exportSettings.ranges.map((range, index) => ({
+    id: range.id,
+    path: ['exportSettings', 'ranges', index, 'id'],
+  }));
+  addDuplicateIdIssues({ entries: presetEntries, label: 'Export Preset', context });
+  addDuplicateIdIssues({ entries: rangeEntries, label: 'Export Range', context });
+  if (!document.exportSettings.presets.some(preset => preset.id === document.exportSettings.activePresetId)) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Active Export Preset must exist',
+      path: ['exportSettings', 'activePresetId'],
+    });
+  }
+  document.exportSettings.presets.forEach((preset, index) => {
+    if (preset.sampleFormat === 'float32' && preset.dither !== 'none') {
+      context.addIssue({
+        code: 'custom',
+        message: '32-bit float Export must not use dither',
+        path: ['exportSettings', 'presets', index, 'dither'],
+      });
+    }
+  });
 });
 
 function validateAudioSourceManagement(
@@ -1884,6 +1970,11 @@ export interface ProjectDocumentV16 extends Omit<ProjectDocumentV15, 'audioSourc
   readonly audioSources: ProjectAudioSourceV16[];
   readonly schemaVersion: typeof PROJECT_DOCUMENT_SCHEMA_VERSION_V16;
 }
+export type ProjectExportSettings = z.infer<typeof ProjectExportSettingsSchema>;
+export interface ProjectDocumentV17 extends Omit<ProjectDocumentV16, 'schemaVersion'> {
+  readonly exportSettings: ProjectExportSettings;
+  readonly schemaVersion: typeof PROJECT_DOCUMENT_SCHEMA_VERSION_V17;
+}
 export type ProjectDocumentSnapshot =
   | ProjectDocument
   | ProjectDocumentV2
@@ -1900,4 +1991,5 @@ export type ProjectDocumentSnapshot =
   | ProjectDocumentV13
   | ProjectDocumentV14
   | ProjectDocumentV15
-  | ProjectDocumentV16;
+  | ProjectDocumentV16
+  | ProjectDocumentV17;
