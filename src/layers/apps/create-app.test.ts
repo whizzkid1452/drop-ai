@@ -206,9 +206,12 @@ describe('createApp', () => {
 
     await app.commandExecutor.execute({ type: AudioCommandType.SAVE_PROJECT });
 
-    expect(audioSourceRepository.create).toHaveBeenCalledWith(registration);
+    expect(audioSourceRepository.create).toHaveBeenCalledWith({
+      blob: registration.blob,
+      metadata: expect.objectContaining(registration.metadata),
+    });
     await expect(projectRepository.load(initialProjectMetadata.id)).resolves.toMatchObject({
-      audioSources: [registration.metadata],
+      audioSources: [expect.objectContaining(registration.metadata)],
       tracks: [expect.objectContaining({ id: trackId })],
     });
     expect('projectRepository' in app).toBe(false);

@@ -38,6 +38,10 @@ describe('stageWebAudioSource', () => {
         mimeType: audioFileMetadata.type,
         byteLength: audioFileMetadata.size,
         durationSeconds: audioFileMetadata.duration ?? null,
+        bwfMetadata: null,
+        derivation: null,
+        tags: [],
+        transientPositionsSeconds: [],
       },
       objectUrl: OBJECT_URL,
       isCommitted: false,
@@ -58,6 +62,10 @@ describe('stageWebAudioSource', () => {
         mimeType: 'audio/wav',
         byteLength: 5,
         durationSeconds: 3.5,
+        bwfMetadata: null,
+        derivation: null,
+        tags: [],
+        transientPositionsSeconds: [],
       },
     });
     expect(result).toEqual({

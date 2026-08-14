@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ProjectAudioSource } from '../shared/types/project-document.schema';
+import type { ProjectAudioSource, ProjectAudioSourceV16 } from '../shared/types/project-document.schema';
 import { AudioSourceRegistry } from './audio-source-registry';
 import { BrowserObjectUrlAdapter } from './browser-object-url-adapter';
 import { AudioSourceRegistryError, type AudioSourceRegistryErrorCode } from './errors';
@@ -36,6 +36,10 @@ function createRegistration(sourceId = SOURCE_ID): AudioSourceRegistration {
       mimeType: blob.type,
       byteLength: blob.size,
       durationSeconds: 1,
+      bwfMetadata: null,
+      derivation: null,
+      tags: [],
+      transientPositionsSeconds: [],
     },
     blob,
   };
@@ -95,6 +99,10 @@ describe('AudioSourceRegistry', () => {
         mimeType: 'audio/wav',
         byteLength: 4,
         durationSeconds: 1,
+        bwfMetadata: null,
+        derivation: null,
+        tags: [],
+        transientPositionsSeconds: [],
       },
       objectUrl: 'blob:test-1',
       isCommitted: false,
@@ -313,6 +321,33 @@ describe('AudioSourceRegistry', () => {
     (metadata as ProjectAudioSource[]).push(createRegistration(SECOND_SOURCE_ID).metadata);
 
     expect(registry.listCommittedMetadata()).toEqual([createRegistration().metadata]);
+  });
+
+  it('Source 관리 metadata를 갱신하고 배열 참조를 외부와 공유하지 않는다', () => {
+    const registration = createRegistration();
+    registry.restoreCommitted(registration);
+
+    const updated = registry.updateMetadata({
+      ...registration.metadata,
+      tags: ['dialogue'],
+      transientPositionsSeconds: [0.25],
+    });
+    ((updated.metadata as ProjectAudioSourceV16).tags as string[]).push('external-change');
+
+    expect(registry.resolve(SOURCE_ID)?.metadata).toMatchObject({
+      tags: ['dialogue'],
+      transientPositionsSeconds: [0.25],
+    });
+  });
+
+  it('Source Blob과 연결된 불변 metadata 변경을 거부한다', () => {
+    const registration = createRegistration();
+    registry.restoreCommitted(registration);
+
+    expectRegistryError(
+      () => registry.updateMetadata({ ...registration.metadata, byteLength: registration.metadata.byteLength + 1 }),
+      'SOURCE_IMMUTABLE_METADATA_CHANGED'
+    );
   });
 
   it('명시적 purge는 연결이 없는 committed Source만 제거한다', () => {

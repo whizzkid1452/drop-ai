@@ -31,6 +31,7 @@ import { EditorQuery, type IEditorQuery } from '../queries/editor-query';
 import { AudioMonitorQuery, type IAudioMonitorQuery } from '../queries/audio-monitor-query';
 import { ProjectCatalogQuery, type IProjectCatalogQuery } from '../queries/project-catalog-query';
 import { PluginRuntimeQuery, type IPluginRuntimeQuery } from '../queries/plugin-runtime-query';
+import { createBrowserCanPlayType, MediaSourceQuery, type IMediaSourceQuery } from '../queries/media-source-query';
 import type { ILocalFirstProjectRepository } from '../project-repository/i-project-repository';
 import { InMemoryProjectRepository } from '../project-repository/in-memory-project-repository';
 import { IndexedDbProjectRepository } from '../project-repository/indexed-db-project-repository';
@@ -79,6 +80,7 @@ export interface AppInstance {
   audioMonitor: IAudioMonitorQuery;
   projectCatalog: IProjectCatalogQuery;
   pluginRuntime: IPluginRuntimeQuery;
+  mediaSource: IMediaSourceQuery;
 }
 
 interface ProjectSyncDependencies {
@@ -278,6 +280,10 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   const audioMonitor = new AudioMonitorQuery(audioEngine);
   const projectCatalog = new ProjectCatalogQuery(projectRepository, projectSync);
   const pluginRuntime = new PluginRuntimeQuery(audioEngine);
+  const mediaSource = new MediaSourceQuery({
+    audioSourceResolver: audioSourceCapabilities.audioSourceResolver,
+    canPlayType: createBrowserCanPlayType(),
+  });
   const audioRuntimeEnvironment = options.audioRuntimeEnvironment ?? readAudioRuntimeEnvironment();
   const audioRuntimeCapabilities = resolveAudioRuntimeCapabilities(
     audioRuntimeEnvironment,
@@ -305,6 +311,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     playbackClock,
     projectCatalog,
     pluginRuntime,
+    mediaSource,
   };
 }
 

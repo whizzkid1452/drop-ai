@@ -1,3 +1,6 @@
+import type { ProjectBwfMetadata } from './project-document.schema';
+import type { AudioCodec } from '../utils/audio/audio-source-file-metadata';
+
 export interface AudioFile {
   file: File;
   name: string;
@@ -7,4 +10,6 @@ export interface AudioFile {
   duration?: number;
   formattedDuration?: string; // 포맷팅된 재생 시간 (예: "2:05")
   volume?: number;
+  bwfMetadata?: ProjectBwfMetadata | null;
+  detectedCodec?: AudioCodec;
 }

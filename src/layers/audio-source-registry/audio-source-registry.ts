@@ -1,11 +1,17 @@
 import { z } from 'zod';
 import { COMPLETE_RESOURCE_CLEANUP, type ResourceCleanupResult } from '../shared/types/resource-cleanup';
-import { ProjectAudioSourceSchema, type ProjectAudioSource } from '../shared/types/project-document.schema';
+import {
+  ProjectAudioSourceSchema,
+  ProjectAudioSourceV16Schema,
+  type ProjectAudioSourceV16,
+} from '../shared/types/project-document.schema';
 import { AudioSourceRegistryError } from './errors';
 import type {
   AudioSourceAttachment,
   AudioSourceLoopSlotAttachment,
   AudioSourceRegistration,
+  AudioSourceMetadata,
+  CommittedAudioSourceRegistration,
   IAudioSourceRegistry,
   IPreparedAudioSourceRegistryReplacement,
   IRetiredAudioSourceRegistry,
@@ -17,7 +23,7 @@ const RegionIdSchema = z.uuid('Invalid Region ID format');
 const LoopSlotIdSchema = z.uuid('Invalid Loop Slot ID format');
 
 interface StoredAudioSource {
-  readonly metadata: ProjectAudioSource;
+  metadata: ProjectAudioSourceV16;
   readonly blob: Blob;
   readonly objectUrl: string;
   isCommitted: boolean;
@@ -143,14 +149,16 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
     return source ? this.createRuntimeSource(source) : null;
   }
 
-  listCommittedMetadata(): ReadonlyArray<Readonly<ProjectAudioSource>> {
-    return [...this.sources.values()].filter(source => source.isCommitted).map(source => ({ ...source.metadata }));
-  }
-
-  listCommittedRegistrations(): ReadonlyArray<Readonly<AudioSourceRegistration>> {
+  listCommittedMetadata(): ReadonlyArray<Readonly<AudioSourceMetadata>> {
     return [...this.sources.values()]
       .filter(source => source.isCommitted)
-      .map(source => ({ metadata: { ...source.metadata }, blob: source.blob }));
+      .map(source => this.cloneMetadata(source.metadata));
+  }
+
+  listCommittedRegistrations(): ReadonlyArray<Readonly<CommittedAudioSourceRegistration>> {
+    return [...this.sources.values()]
+      .filter(source => source.isCommitted)
+      .map(source => ({ metadata: this.cloneMetadata(source.metadata), blob: source.blob }));
   }
 
   attach({ sourceId, regionId }: AudioSourceAttachment): void {
@@ -269,6 +277,26 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
     this.mutationRevision += 1;
   }
 
+  updateMetadata(metadata: AudioSourceMetadata): RuntimeAudioSource {
+    const nextMetadata = this.parseMetadata(metadata);
+    const source = this.getRequiredSource(nextMetadata.id);
+    if (
+      source.metadata.byteLength !== nextMetadata.byteLength ||
+      source.metadata.durationSeconds !== nextMetadata.durationSeconds ||
+      source.metadata.fileName !== nextMetadata.fileName ||
+      source.metadata.mimeType !== nextMetadata.mimeType
+    ) {
+      throw new AudioSourceRegistryError({
+        code: 'SOURCE_IMMUTABLE_METADATA_CHANGED',
+        message: `Source 파일 metadata는 교체할 수 없습니다: ${nextMetadata.id}`,
+        details: { sourceId: nextMetadata.id },
+      });
+    }
+    source.metadata = this.cloneMetadata(nextMetadata);
+    this.mutationRevision += 1;
+    return this.createRuntimeSource(source);
+  }
+
   clear(): void {
     this.retryPendingCleanup();
     const sources = [...this.sources.entries()];
@@ -330,7 +358,7 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
 
     const objectUrl = this.createObjectUrl(registration.blob, metadata.id);
     const source: StoredAudioSource = {
-      metadata: { ...metadata },
+      metadata: this.cloneMetadata(metadata),
       blob: registration.blob,
       objectUrl,
       isCommitted,
@@ -342,17 +370,26 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
     return this.createRuntimeSource(source);
   }
 
-  private parseMetadata(metadata: ProjectAudioSource): ProjectAudioSource {
-    const result = ProjectAudioSourceSchema.safeParse(metadata);
-    if (!result.success) {
+  private parseMetadata(metadata: AudioSourceMetadata): ProjectAudioSourceV16 {
+    const managedResult = ProjectAudioSourceV16Schema.safeParse(metadata);
+    if (managedResult.success) {
+      return managedResult.data;
+    }
+    const legacyResult = ProjectAudioSourceSchema.safeParse(metadata);
+    if (!legacyResult.success) {
       throw new AudioSourceRegistryError({
         code: 'INVALID_SOURCE_METADATA',
         message: '오디오 Source metadata가 유효하지 않습니다.',
-        details: { issues: result.error.issues },
+        details: { issues: managedResult.error.issues },
       });
     }
-
-    return result.data;
+    return {
+      ...legacyResult.data,
+      bwfMetadata: null,
+      derivation: null,
+      tags: [],
+      transientPositionsSeconds: [],
+    };
   }
 
   private assertValidBlob(blob: unknown): asserts blob is Blob {
@@ -393,11 +430,23 @@ export class AudioSourceRegistry implements IAudioSourceRegistry {
 
   private createRuntimeSource(source: StoredAudioSource): RuntimeAudioSource {
     return {
-      metadata: { ...source.metadata },
+      metadata: this.cloneMetadata(source.metadata),
       objectUrl: source.objectUrl,
       isCommitted: source.isCommitted,
       regionIds: [...source.regionIds],
       loopSlotIds: [...source.loopSlotIds],
+    };
+  }
+
+  private cloneMetadata(metadata: ProjectAudioSourceV16): ProjectAudioSourceV16 {
+    return {
+      ...metadata,
+      bwfMetadata: metadata.bwfMetadata ? { ...metadata.bwfMetadata } : null,
+      derivation: metadata.derivation
+        ? { ...metadata.derivation, parameters: { ...metadata.derivation.parameters } }
+        : null,
+      tags: [...metadata.tags],
+      transientPositionsSeconds: [...metadata.transientPositionsSeconds],
     };
   }
 

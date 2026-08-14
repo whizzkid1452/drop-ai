@@ -13,8 +13,8 @@ import type {
   IRetiredAudioSourceRegistry,
 } from '../audio-source-registry/i-audio-source-registry';
 import {
-  createProjectDocumentV15FromSession,
-  createProjectRestoreSnapshotFromDocumentV15,
+  createProjectDocumentV16FromSession,
+  createProjectRestoreSnapshotFromDocumentV16,
   type ProjectRestoreSnapshot,
 } from '../project-document-mapper/project-document-mapper';
 import type { ILocalFirstProjectRepository, IProjectRepository } from '../project-repository/i-project-repository';
@@ -23,7 +23,7 @@ import type { SessionState, SessionStore } from '../session/session';
 import type {
   ProjectAudioSource,
   ProjectDocumentSnapshot,
-  ProjectDocumentV15,
+  ProjectDocumentV16,
 } from '../shared/types/project-document.schema';
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
 import { cloneMidiTrackState } from '../shared/types/midi-state';
@@ -95,7 +95,7 @@ export class ProjectController {
   private async saveProjectOnce(): Promise<void> {
     const registrations = this.dependencies.audioSourceRegistry.listCommittedRegistrations();
     const sessionState = this.dependencies.sessionStore.getState();
-    const document = createProjectDocumentV15FromSession({
+    const document = createProjectDocumentV16FromSession({
       session: sessionState,
       audioSources: registrations.map(registration => registration.metadata),
       pluginCatalog: [...sessionState.pluginCatalog.values()],
@@ -251,7 +251,7 @@ export class ProjectController {
     readonly expectedProjectId: string;
   }): ProjectRestoreSnapshot {
     const sessionState = this.dependencies.sessionStore.getState();
-    const snapshot = createProjectRestoreSnapshotFromDocumentV15({
+    const snapshot = createProjectRestoreSnapshotFromDocumentV16({
       document,
       pluginCatalog: [...sessionState.pluginCatalog.values()],
     });
@@ -566,7 +566,7 @@ export class ProjectController {
     }
   }
 
-  private async saveDocument(document: ProjectDocumentV15): Promise<ProjectDocumentSnapshot> {
+  private async saveDocument(document: ProjectDocumentV16): Promise<ProjectDocumentSnapshot> {
     const storedDocument = await this.dependencies.projectRepository.load(document.project.id);
     if (!storedDocument) {
       return this.dependencies.projectRepository.create(document);

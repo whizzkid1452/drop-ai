@@ -26,6 +26,7 @@ import {
   readProjectDocumentV13,
   readProjectDocumentV14,
   readProjectDocumentV15,
+  readProjectDocumentV16,
 } from '../shared/types/project-document-reader';
 import {
   PROJECT_DOCUMENT_SCHEMA_VERSION,
@@ -43,6 +44,7 @@ import {
   PROJECT_DOCUMENT_SCHEMA_VERSION_V13,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V14,
   PROJECT_DOCUMENT_SCHEMA_VERSION_V15,
+  PROJECT_DOCUMENT_SCHEMA_VERSION_V16,
   ProjectDocumentSchema,
   ProjectDocumentV2Schema,
   ProjectDocumentV3Schema,
@@ -58,6 +60,7 @@ import {
   ProjectDocumentV13Schema,
   ProjectDocumentV14Schema,
   ProjectDocumentV15Schema,
+  ProjectDocumentV16Schema,
   type ProjectAudioSource,
   type ProjectDocument,
   type ProjectDocumentV2,
@@ -74,6 +77,7 @@ import {
   type ProjectDocumentV13,
   type ProjectDocumentV14,
   type ProjectDocumentV15,
+  type ProjectDocumentV16,
   type ProjectDocumentSnapshot,
   type ProjectLoopSlot,
   type ProjectLoopSlotV4,
@@ -91,6 +95,7 @@ import {
   type ProjectTrackV13,
   type ProjectTrackV14,
   type ProjectTrackV15,
+  type ProjectAudioSourceV16,
 } from '../shared/types/project-document.schema';
 import { cloneAutomationLaneState } from '../shared/types/automation-state';
 import { cloneMidiTrackState } from '../shared/types/midi-state';
@@ -127,6 +132,7 @@ export type CreateProjectDocumentV12FromSessionOptions = CreateProjectDocumentV2
 export type CreateProjectDocumentV13FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 export type CreateProjectDocumentV14FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 export type CreateProjectDocumentV15FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
+export type CreateProjectDocumentV16FromSessionOptions = CreateProjectDocumentV2FromSessionOptions;
 
 export interface ProjectRestoreSnapshot {
   readonly session: SessionProjectSnapshot;
@@ -155,6 +161,7 @@ export type CreateProjectRestoreSnapshotFromDocumentV12Options = CreateProjectRe
 export type CreateProjectRestoreSnapshotFromDocumentV13Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 export type CreateProjectRestoreSnapshotFromDocumentV14Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 export type CreateProjectRestoreSnapshotFromDocumentV15Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
+export type CreateProjectRestoreSnapshotFromDocumentV16Options = CreateProjectRestoreSnapshotFromDocumentV3Options;
 
 interface SessionTrackEntry {
   readonly mapKey: string;
@@ -627,6 +634,32 @@ export function createProjectDocumentV15FromSession({
   });
 }
 
+export function createProjectDocumentV16FromSession({
+  session,
+  audioSources,
+  pluginCatalog,
+}: CreateProjectDocumentV16FromSessionOptions): ProjectDocumentV16 {
+  const sourceMetadataById = new Map(audioSources.map(source => [source.id, source]));
+  const v15Document = createProjectDocumentV15FromSession({
+    audioSources: audioSources.map(source => ({
+      byteLength: source.byteLength,
+      durationSeconds: source.durationSeconds,
+      fileName: source.fileName,
+      id: source.id,
+      mimeType: source.mimeType,
+    })),
+    pluginCatalog,
+    session,
+  });
+  return parseSessionDocumentCandidateV16({
+    ...v15Document,
+    audioSources: v15Document.audioSources.map(source =>
+      toProjectAudioSourceV16(sourceMetadataById.get(source.id) ?? source)
+    ),
+    schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V16,
+  });
+}
+
 export function createProjectRestoreSnapshotFromDocument(document: ProjectDocument): ProjectRestoreSnapshot {
   const validatedDocument = readDocumentForMapping(document);
   const tracks = new Map<string, TrackState>();
@@ -759,15 +792,21 @@ export function createProjectRestoreSnapshotFromDocumentV6({
     session: {
       project: { ...validatedDocument.project },
       tempo: validatedDocument.timeline.tempoBpm,
-      tempoChanges: validatedDocument.timeline.tempoChanges.map(change => ({ ...change })),
-      meterChanges: validatedDocument.timeline.meterChanges.map(change => ({ ...change })),
-      timelineMarkers: validatedDocument.timeline.markers.map(marker => ({ ...marker })),
+      tempoChanges: validatedDocument.timeline.tempoChanges.map(
+        (change: NonNullable<SessionProjectSnapshot['tempoChanges']>[number]) => ({ ...change })
+      ),
+      meterChanges: validatedDocument.timeline.meterChanges.map(
+        (change: NonNullable<SessionProjectSnapshot['meterChanges']>[number]) => ({ ...change })
+      ),
+      timelineMarkers: validatedDocument.timeline.markers.map(
+        (marker: NonNullable<SessionProjectSnapshot['timelineMarkers']>[number]) => ({ ...marker })
+      ),
       masterVolume: validatedDocument.mixer.masterVolume,
       exportStartTime: validatedDocument.exportRange?.startTimeSeconds ?? null,
       exportEndTime: validatedDocument.exportRange?.endTimeSeconds ?? null,
       tracks,
     },
-    audioSources: validatedDocument.audioSources.map(source => ({ ...source })),
+    audioSources: validatedDocument.audioSources.map((source: ProjectAudioSource) => ({ ...source })),
   };
 }
 
@@ -1036,6 +1075,44 @@ export function createProjectRestoreSnapshotFromDocumentV15({
     session: {
       project: { ...validatedDocument.project },
       tempo: validatedDocument.timeline.tempoBpm,
+      tempoChanges: validatedDocument.timeline.tempoChanges.map(
+        (change: NonNullable<SessionProjectSnapshot['tempoChanges']>[number]) => ({ ...change })
+      ),
+      meterChanges: validatedDocument.timeline.meterChanges.map(
+        (change: NonNullable<SessionProjectSnapshot['meterChanges']>[number]) => ({ ...change })
+      ),
+      timelineMarkers: validatedDocument.timeline.markers.map(
+        (marker: NonNullable<SessionProjectSnapshot['timelineMarkers']>[number]) => ({ ...marker })
+      ),
+      loopRange: validatedDocument.timeline.loop.range ? { ...validatedDocument.timeline.loop.range } : null,
+      isLoopEnabled: validatedDocument.timeline.loop.isEnabled,
+      isMetronomeEnabled: validatedDocument.timeline.metronome.isEnabled,
+      metronomeVolume: validatedDocument.timeline.metronome.volume,
+      masterVolume: validatedDocument.mixer.masterVolume,
+      routingGraph: cloneRoutingGraphSnapshot(validatedDocument.mixer.routing),
+      recording: cloneProjectRecordingState(validatedDocument.recording),
+      exportStartTime: validatedDocument.exportRange?.startTimeSeconds ?? null,
+      exportEndTime: validatedDocument.exportRange?.endTimeSeconds ?? null,
+      tracks,
+    },
+    audioSources: validatedDocument.audioSources.map((source: ProjectAudioSource) => ({ ...source })),
+  };
+}
+
+export function createProjectRestoreSnapshotFromDocumentV16({
+  document,
+  pluginCatalog,
+}: CreateProjectRestoreSnapshotFromDocumentV16Options): ProjectRestoreSnapshot {
+  const validatedDocument = readDocumentV16ForMapping(document);
+  const tracks = new Map<string, TrackState>();
+  validatedDocument.tracks.forEach(track => {
+    tracks.set(track.id, createSessionTrackV15({ track, pluginCatalog }));
+  });
+
+  return {
+    session: {
+      project: { ...validatedDocument.project },
+      tempo: validatedDocument.timeline.tempoBpm,
       tempoChanges: validatedDocument.timeline.tempoChanges.map(change => ({ ...change })),
       meterChanges: validatedDocument.timeline.meterChanges.map(change => ({ ...change })),
       timelineMarkers: validatedDocument.timeline.markers.map(marker => ({ ...marker })),
@@ -1050,7 +1127,13 @@ export function createProjectRestoreSnapshotFromDocumentV15({
       exportEndTime: validatedDocument.exportRange?.endTimeSeconds ?? null,
       tracks,
     },
-    audioSources: validatedDocument.audioSources.map(source => ({ ...source })),
+    audioSources: validatedDocument.audioSources.map(source => ({
+      ...source,
+      bwfMetadata: source.bwfMetadata ? { ...source.bwfMetadata } : null,
+      derivation: source.derivation ? { ...source.derivation, parameters: { ...source.derivation.parameters } } : null,
+      tags: [...source.tags],
+      transientPositionsSeconds: [...source.transientPositionsSeconds],
+    })),
   };
 }
 
@@ -1699,6 +1782,25 @@ function parseSessionDocumentCandidateV15(documentCandidate: unknown): ProjectDo
   }
 }
 
+function parseSessionDocumentCandidateV16(documentCandidate: unknown): ProjectDocumentV16 {
+  const schema = ProjectDocumentV16Schema as unknown as {
+    safeParse(
+      input: unknown
+    ):
+      | { readonly success: true; readonly data: ProjectDocumentV16 }
+      | { readonly success: false; readonly error: { readonly issues: unknown } };
+  };
+  const result = schema.safeParse(documentCandidate);
+  if (result.success) {
+    return result.data;
+  }
+  throw new ProjectDocumentMappingError({
+    code: ProjectDocumentMappingErrorCode.INVALID_SESSION_PROJECT_STATE,
+    message: 'Session 상태를 ProjectDocument v16으로 변환할 수 없습니다.',
+    details: { issues: result.error.issues },
+  });
+}
+
 function readDocumentForMapping(document: ProjectDocument): ProjectDocument {
   try {
     return readProjectDocument(document);
@@ -1892,6 +1994,34 @@ function readDocumentV15ForMapping(document: ProjectDocumentSnapshot): ProjectDo
       cause,
     });
   }
+}
+
+function readDocumentV16ForMapping(document: ProjectDocumentSnapshot): ProjectDocumentV16 {
+  try {
+    return readProjectDocumentV16(document);
+  } catch (cause) {
+    throw new ProjectDocumentMappingError({
+      code: ProjectDocumentMappingErrorCode.INVALID_PROJECT_DOCUMENT,
+      message: '복원할 ProjectDocument v16이 유효하지 않습니다.',
+      details: { reason: 'PROJECT_DOCUMENT_READ_FAILED' },
+      cause,
+    });
+  }
+}
+
+function toProjectAudioSourceV16(source: Readonly<ProjectAudioSource>): ProjectAudioSourceV16 {
+  const managedSource = source as Partial<ProjectAudioSourceV16>;
+  return {
+    ...source,
+    bwfMetadata: managedSource.bwfMetadata ? { ...managedSource.bwfMetadata } : null,
+    derivation: managedSource.derivation
+      ? { ...managedSource.derivation, parameters: { ...managedSource.derivation.parameters } }
+      : null,
+    tags: managedSource.tags ? [...managedSource.tags] : [],
+    transientPositionsSeconds: managedSource.transientPositionsSeconds
+      ? [...managedSource.transientPositionsSeconds]
+      : [],
+  };
 }
 
 function createSessionTrack(track: ProjectTrack): TrackState {

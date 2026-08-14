@@ -22,6 +22,7 @@ export const PROJECT_DOCUMENT_SCHEMA_VERSION_V12 = 12 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V13 = 13 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V14 = 14 as const;
 export const PROJECT_DOCUMENT_SCHEMA_VERSION_V15 = 15 as const;
+export const PROJECT_DOCUMENT_SCHEMA_VERSION_V16 = 16 as const;
 
 const MAX_NAME_LENGTH = 255;
 const MAX_MIME_TYPE_LENGTH = 255;
@@ -37,6 +38,9 @@ const MAX_MIDI_NOTES = 100_000;
 const MAX_MIDI_CONTROL_LANES = 128;
 const MAX_MIDI_CONTROL_POINTS = 100_000;
 const MAX_PLUGIN_STATE_BLOB_LENGTH = 1_000_000;
+const MAX_SOURCE_TAGS = 32;
+const MAX_TRANSIENT_POSITIONS = 100_000;
+const MAX_BWF_TEXT_LENGTH = 65_535;
 const nonBlankNameSchema = z.string().trim().min(1).max(MAX_NAME_LENGTH);
 const pluginTextSchema = z
   .string()
@@ -56,6 +60,35 @@ export const ProjectAudioSourceSchema = z.strictObject({
   mimeType: z.string().max(MAX_MIME_TYPE_LENGTH),
   byteLength: z.number().int().nonnegative(),
   durationSeconds: z.number().nonnegative().nullable(),
+});
+
+const ProjectAudioSourceTagSchema = z
+  .string()
+  .min(1)
+  .max(MAX_NAME_LENGTH)
+  .refine(value => value.trim() === value, 'Source tag must not have surrounding whitespace');
+
+export const ProjectBwfMetadataSchema = z.strictObject({
+  codingHistory: z.string().max(MAX_BWF_TEXT_LENGTH),
+  description: z.string().max(256),
+  originationDate: z.string().max(10),
+  originationTime: z.string().max(8),
+  originator: z.string().max(32),
+  originatorReference: z.string().max(32),
+  timeReferenceSamples: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+});
+
+export const ProjectAudioSourceDerivationSchema = z.strictObject({
+  operation: z.enum(['reverse', 'stripSilence', 'timeStretch', 'pitchShift', 'transientAnalysis', 'bounce', 'freeze']),
+  parameters: z.record(z.string(), z.number().finite()),
+  sourceId: z.uuid('Invalid parent Source ID format'),
+});
+
+export const ProjectAudioSourceV16Schema = ProjectAudioSourceSchema.safeExtend({
+  bwfMetadata: ProjectBwfMetadataSchema.nullable(),
+  derivation: ProjectAudioSourceDerivationSchema.nullable(),
+  tags: z.array(ProjectAudioSourceTagSchema).max(MAX_SOURCE_TAGS),
+  transientPositionsSeconds: z.array(z.number().finite().nonnegative()).max(MAX_TRANSIENT_POSITIONS),
 });
 
 export const ProjectRegionSchema = z
@@ -693,6 +726,14 @@ const ProjectDocumentV15BaseSchema = ProjectDocumentV14BaseSchema.omit({ schemaV
   tracks: z.array(ProjectTrackV15Schema),
 });
 
+const ProjectDocumentV16BaseSchema = ProjectDocumentV15BaseSchema.omit({
+  schemaVersion: true,
+  audioSources: true,
+}).extend({
+  audioSources: z.array(ProjectAudioSourceV16Schema),
+  schemaVersion: z.literal(PROJECT_DOCUMENT_SCHEMA_VERSION_V16),
+});
+
 interface IdentifiedDocumentPath {
   id: string;
   path: Array<string | number>;
@@ -1073,6 +1114,69 @@ export const ProjectDocumentV15Schema = ProjectDocumentV15BaseSchema.superRefine
   validateMidiState(v14CompatibleDocument, context);
   validatePluginSidechains(document as unknown as PluginSidechainDocument, context);
 });
+
+export const ProjectDocumentV16Schema = ProjectDocumentV16BaseSchema.superRefine((document, context) => {
+  const v15CompatibleDocument = document as unknown as z.infer<typeof ProjectDocumentV15BaseSchema>;
+  const v14CompatibleDocument = document as unknown as z.infer<typeof ProjectDocumentV14BaseSchema>;
+  validateProjectRelations(v14CompatibleDocument, context);
+  validatePluginState(v14CompatibleDocument, context);
+  validateTimelineMap(v14CompatibleDocument, context);
+  addDuplicateIdIssues({
+    entries: document.timeline.markers.map((marker, index) => ({
+      id: marker.id,
+      path: ['timeline', 'markers', index, 'id'],
+    })),
+    label: 'Timeline marker',
+    context,
+  });
+  validateRegionProcessing(v14CompatibleDocument, context);
+  validateRoutingGraph(v14CompatibleDocument, context);
+  validateRecordingState(v14CompatibleDocument, context);
+  validateAutomationState(v14CompatibleDocument, context);
+  validateMidiState(v14CompatibleDocument, context);
+  validatePluginSidechains(v15CompatibleDocument as unknown as PluginSidechainDocument, context);
+  validateAudioSourceManagement(document, context);
+});
+
+function validateAudioSourceManagement(
+  document: z.infer<typeof ProjectDocumentV16BaseSchema>,
+  context: z.RefinementCtx
+): void {
+  const sourceIds = new Set(document.audioSources.map(source => source.id));
+  document.audioSources.forEach((source, sourceIndex) => {
+    if (new Set(source.tags).size !== source.tags.length) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Source tags must be unique',
+        path: ['audioSources', sourceIndex, 'tags'],
+      });
+    }
+    if (source.derivation && (!sourceIds.has(source.derivation.sourceId) || source.derivation.sourceId === source.id)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Derived Source must reference another Source in the project',
+        path: ['audioSources', sourceIndex, 'derivation', 'sourceId'],
+      });
+    }
+    source.transientPositionsSeconds.forEach((position, positionIndex) => {
+      const previousPosition = source.transientPositionsSeconds[positionIndex - 1];
+      if (previousPosition !== undefined && position <= previousPosition) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Transient positions must be strictly increasing',
+          path: ['audioSources', sourceIndex, 'transientPositionsSeconds', positionIndex],
+        });
+      }
+      if (source.durationSeconds !== null && position > source.durationSeconds) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Transient position exceeds Source duration',
+          path: ['audioSources', sourceIndex, 'transientPositionsSeconds', positionIndex],
+        });
+      }
+    });
+  });
+}
 
 interface PluginSidechainDocument {
   readonly tracks: readonly {
@@ -1708,6 +1812,9 @@ function validateTimelineMarkerPositions(
 }
 
 export type ProjectAudioSource = z.infer<typeof ProjectAudioSourceSchema>;
+export type ProjectAudioSourceV16 = z.infer<typeof ProjectAudioSourceV16Schema>;
+export type ProjectBwfMetadata = z.infer<typeof ProjectBwfMetadataSchema>;
+export type ProjectAudioSourceDerivation = z.infer<typeof ProjectAudioSourceDerivationSchema>;
 export type ProjectRegion = z.infer<typeof ProjectRegionSchema>;
 export type ProjectTrack = z.infer<typeof ProjectTrackSchema>;
 export type ProjectDocument = z.infer<typeof ProjectDocumentSchema>;
@@ -1773,6 +1880,10 @@ export interface ProjectDocumentV15 extends Omit<ProjectDocumentV14, 'schemaVers
   readonly schemaVersion: typeof PROJECT_DOCUMENT_SCHEMA_VERSION_V15;
   readonly tracks: ProjectTrackV15[];
 }
+export interface ProjectDocumentV16 extends Omit<ProjectDocumentV15, 'audioSources' | 'schemaVersion'> {
+  readonly audioSources: ProjectAudioSourceV16[];
+  readonly schemaVersion: typeof PROJECT_DOCUMENT_SCHEMA_VERSION_V16;
+}
 export type ProjectDocumentSnapshot =
   | ProjectDocument
   | ProjectDocumentV2
@@ -1788,4 +1899,5 @@ export type ProjectDocumentSnapshot =
   | ProjectDocumentV12
   | ProjectDocumentV13
   | ProjectDocumentV14
-  | ProjectDocumentV15;
+  | ProjectDocumentV15
+  | ProjectDocumentV16;
