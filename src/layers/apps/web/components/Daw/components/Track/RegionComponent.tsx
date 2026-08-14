@@ -94,6 +94,7 @@ export const RegionComponent = ({
     fadePreview?.edge === 'in' ? fadePreview.durationSeconds : region.fadeIn.durationSeconds;
   const displayedFadeOutDuration =
     fadePreview?.edge === 'out' ? fadePreview.durationSeconds : region.fadeOut.durationSeconds;
+  const layerPlaybackLabel = region.isOpaque ? '아래 Layer 가림' : '아래 Layer와 함께 재생';
   const left = coordinateMapper.secondsToPixels(displayedStartTime);
   const width = coordinateMapper.durationToPixels({
     startSeconds: displayedStartTime,
@@ -402,7 +403,9 @@ export const RegionComponent = ({
 
   return (
     <div
-      className={`${styles.regionContainer} ${selected ? styles.selectedRegion : ''}`}
+      className={`${styles.regionContainer} ${region.isOpaque ? '' : styles.mixingRegion} ${selected ? styles.selectedRegion : ''}`}
+      data-layer={region.layer}
+      data-opaque={region.isOpaque}
       data-region-id={region.id}
       data-selected={selected}
       aria-label={`Region ${region.id}`}
@@ -423,6 +426,9 @@ export const RegionComponent = ({
       onPointerCancel={handlePointerCancel}
       onKeyDown={handleKeyDown}
     >
+      <span aria-label={`Region Layer ${region.layer}, ${layerPlaybackLabel}`} className={styles.layerBadge}>
+        L{region.layer} · {region.isOpaque ? 'OPAQUE' : 'MIX'}
+      </span>
       {displayedFadeInDuration > 0 ? (
         <div
           className={`${styles.fadeRamp} ${styles.fadeInRamp}`}

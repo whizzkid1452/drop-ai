@@ -16,6 +16,29 @@ export const selectedRegion = style({
   boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 0 2px rgba(255, 211, 77, 0.5)',
 });
 
+export const mixingRegion = style({
+  borderStyle: 'dashed',
+  background: 'linear-gradient(180deg, rgba(81, 32, 65, 0.82) 0%, rgba(59, 24, 48, 0.82) 100%)',
+});
+
+export const layerBadge = style({
+  position: 'absolute',
+  top: '4px',
+  left: '12px',
+  zIndex: 3,
+  padding: '1px 4px',
+  border: '1px solid rgba(255, 196, 242, 0.32)',
+  borderRadius: '2px',
+  backgroundColor: 'rgba(28, 18, 26, 0.78)',
+  color: '#ffc4f2',
+  fontFamily: '"Consolas", "SFMono-Regular", monospace',
+  fontSize: '8px',
+  fontWeight: 700,
+  letterSpacing: '0.03em',
+  lineHeight: 1.4,
+  pointerEvents: 'none',
+});
+
 export const fadeRamp = style({
   position: 'absolute',
   top: 0,

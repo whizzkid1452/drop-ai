@@ -42,10 +42,12 @@ vi.mock('./RegionComponent.css.ts', () => ({
   fadeOutHandle: 'fadeOutHandle',
   fadeOutRamp: 'fadeOutRamp',
   fadeRamp: 'fadeRamp',
+  layerBadge: 'layerBadge',
   regionContainer: 'regionContainer',
   removeButton: 'removeButton',
   selectedRegion: 'selectedRegion',
   startTrimHandle: 'startTrimHandle',
+  mixingRegion: 'mixingRegion',
   trimHandle: 'trimHandle',
 }));
 
@@ -191,6 +193,18 @@ afterEach(() => {
 });
 
 describe('RegionComponent 오디오 소스', () => {
+  it('Region의 Layer 번호와 아래 Layer 재생 정책을 표시한다', () => {
+    const { host, regionElement } = renderRegion({
+      region: { ...sourceBackedRegion, isOpaque: false, layer: 3 },
+      onMove: vi.fn().mockResolvedValue(undefined),
+    });
+
+    expect(regionElement.dataset.layer).toBe('3');
+    expect(regionElement.dataset.opaque).toBe('false');
+    expect(regionElement.classList.contains('mixingRegion')).toBe(true);
+    expect(host.querySelector('[aria-label="Region Layer 3, 아래 Layer와 함께 재생"]')?.textContent).toBe('L3 · MIX');
+  });
+
   it('원본 시작점이 이동한 Region도 오류 문구를 파형 offset 밖에 표시한다', () => {
     const { host, regionElement } = renderRegion({
       region: { ...sourceBackedRegion, sourceStartTime: 2 },
