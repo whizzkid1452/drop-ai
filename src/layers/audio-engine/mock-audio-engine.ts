@@ -1,6 +1,7 @@
 import { AudioEngineError, AudioEngineErrorCode, ERROR_MESSAGES } from './errors';
 import { COMPLETE_RESOURCE_CLEANUP } from '../shared/types/resource-cleanup';
 import { insertArrayEntry, moveArrayEntry } from '../shared/array-order';
+import type { TimelineRange } from '../shared/types/project-document.schema';
 import type {
   ExportRequest,
   ArmLoopRequest,
@@ -18,6 +19,7 @@ import type {
   RegionData,
   ReplaceRegionRequest,
   RescheduleRegionRequest,
+  SetAudioTempoMapRequest,
   SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
   SetLiveInputMonitoringRequest,
@@ -53,9 +55,14 @@ export class MockAudioEngine implements IAudioEngine {
   private mockInputDeviceId: string | null = null;
   private mockLoopStates = new Map<string, LoopRuntimeState>();
   private readonly loopListeners = new Set<LoopRuntimeListener>();
+  private mockTempoChanges: SetAudioTempoMapRequest['changes'] = [{ bpm: 120, quarterNotePosition: 0 }];
+  private mockLoopRange: TimelineRange | null = null;
+  private mockLoopEnabled = false;
+  private mockMetronomeEnabled = false;
+  private mockMetronomeVolume = 0.8;
 
   getFeatureSupport(): AudioRuntimeFeatureSupport {
-    return CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT;
+    return { ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT, tempoLoopMetronome: true };
   }
 
   async play(): Promise<void> {
@@ -78,6 +85,42 @@ export class MockAudioEngine implements IAudioEngine {
 
   getCurrentTime(): number {
     return this.mockTime;
+  }
+
+  setTempoMap(request: SetAudioTempoMapRequest): void {
+    this.mockTempoChanges = request.changes.map(change => ({ ...change }));
+  }
+
+  setLoopRange(range: TimelineRange | null): void {
+    this.mockLoopRange = range ? { ...range } : null;
+    if (range === null) {
+      this.mockLoopEnabled = false;
+    }
+  }
+
+  setLoopEnabled(isEnabled: boolean): void {
+    if (isEnabled && this.mockLoopRange === null) {
+      throw new RangeError('Loop를 활성화하려면 범위를 먼저 설정해야 합니다.');
+    }
+    this.mockLoopEnabled = isEnabled;
+  }
+
+  setMetronomeEnabled(isEnabled: boolean): void {
+    this.mockMetronomeEnabled = isEnabled;
+  }
+
+  setMetronomeVolume(volume: number): void {
+    this.mockMetronomeVolume = volume;
+  }
+
+  getMockTransportState() {
+    return {
+      isLoopEnabled: this.mockLoopEnabled,
+      isMetronomeEnabled: this.mockMetronomeEnabled,
+      loopRange: this.mockLoopRange ? { ...this.mockLoopRange } : null,
+      metronomeVolume: this.mockMetronomeVolume,
+      tempoChanges: this.mockTempoChanges.map(change => ({ ...change })),
+    };
   }
 
   async setLiveInputDevice(deviceId: string | null): Promise<string | null> {

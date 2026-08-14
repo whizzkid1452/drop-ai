@@ -115,12 +115,41 @@ describe('Controllers - Phase 3 검증', () => {
       expect(() => controller.playback.handleSeek(5.5)).not.toThrow();
     });
 
-    it('handleSetTempo는 절대 초 단위 Session tempo만 변경한다', () => {
-      expect('setTempo' in engine).toBe(false);
-
+    it('handleSetTempo는 AudioEngine Tempo Map과 Session을 함께 변경한다', () => {
       expect(() => controller.playback.handleSetTempo(140)).not.toThrow();
 
       expect(session.getState().tempo).toBe(140);
+      expect(engine.getMockTransportState().tempoChanges[0]?.bpm).toBe(140);
+    });
+
+    it('Loop 활성화 적용이 실패하면 runtime 범위를 이전 상태로 복구한다', () => {
+      const runtimeFailure = new Error('Loop 활성화 실패');
+      vi.spyOn(engine, 'setLoopEnabled').mockImplementationOnce(() => {
+        throw runtimeFailure;
+      });
+
+      expect(() => controller.playback.handleSetLoopRange({ startTimeSeconds: 1, endTimeSeconds: 3 }, true)).toThrow(
+        runtimeFailure
+      );
+
+      expect(engine.getMockTransportState()).toMatchObject({ isLoopEnabled: false, loopRange: null });
+      expect(session.getState()).toMatchObject({ isLoopEnabled: false, loopRange: null });
+    });
+
+    it('Metronome 활성화 적용이 실패하면 runtime 볼륨을 이전 상태로 복구한다', () => {
+      const runtimeFailure = new Error('Metronome 활성화 실패');
+      const previousVolume = session.getState().metronomeVolume;
+      vi.spyOn(engine, 'setMetronomeEnabled').mockImplementationOnce(() => {
+        throw runtimeFailure;
+      });
+
+      expect(() => controller.playback.handleSetMetronome({ isEnabled: true, volume: 0.25 })).toThrow(runtimeFailure);
+
+      expect(engine.getMockTransportState()).toMatchObject({
+        isMetronomeEnabled: false,
+        metronomeVolume: previousVolume,
+      });
+      expect(session.getState()).toMatchObject({ isMetronomeEnabled: false, metronomeVolume: previousVolume });
     });
 
     it('getCurrentTime 반환값 확인', () => {

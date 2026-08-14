@@ -1,6 +1,7 @@
 import * as Tone from 'tone';
 import { insertArrayEntry, moveArrayEntry } from '../shared/array-order';
 import { COMPLETE_RESOURCE_CLEANUP, type ResourceCleanupResult } from '../shared/types/resource-cleanup';
+import type { TimelineRange } from '../shared/types/project-document.schema';
 import {
   AudioRuntimeFeature,
   CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
@@ -26,6 +27,7 @@ import type {
   RegionData,
   ReplaceRegionRequest,
   RescheduleRegionRequest,
+  SetAudioTempoMapRequest,
   SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
   SetLiveInputMonitoringRequest,
@@ -42,6 +44,7 @@ import { UnavailableLoopAudioRuntime } from './loop-runtime/unavailable-loop-aud
 import type { IAudioPluginRuntime, IAudioPluginRuntimeFactory } from './plugins/audio-plugin-runtime';
 import { AudioPluginRuntimeError } from './plugins/errors';
 import { RegionRenderer, type RegionRenderParams } from './renderers/region-renderer';
+import { ToneTransportRuntime } from './transport-runtime/tone-transport-runtime';
 
 interface RegionPlayerEntry {
   player: Tone.Player;
@@ -142,6 +145,7 @@ export class AudioEngine implements IAudioEngine {
   private readonly pluginRuntimeFactories: ReadonlyMap<string, IAudioPluginRuntimeFactory>;
   private readonly loopRuntime: ILoopAudioRuntime;
   private readonly featureSupport: AudioRuntimeFeatureSupport;
+  private readonly transportRuntime = new ToneTransportRuntime();
   private graphRevision = 0;
   private readonly mutedOutputs = new WeakSet<Tone.Gain>();
   private readonly disconnectedOutputs = new WeakSet<Tone.Gain>();
@@ -174,6 +178,7 @@ export class AudioEngine implements IAudioEngine {
       ...CURRENT_AUDIO_RUNTIME_FEATURE_SUPPORT,
       [AudioRuntimeFeature.LIVE_INPUT]: loopRuntime !== undefined,
       [AudioRuntimeFeature.LIVE_LOOP]: loopRuntime !== undefined,
+      [AudioRuntimeFeature.TEMPO_LOOP_METRONOME]: true,
     };
     this.pluginRuntimeFactories = createPluginRuntimeFactoryMap(pluginRuntimeFactories);
     this.output = this.createGraphOutput({ initialGain: 1, unmutedGain: 1 });
@@ -210,6 +215,31 @@ export class AudioEngine implements IAudioEngine {
   getCurrentTime(): number {
     this.ensureRuntimeReady();
     return Tone.getTransport().seconds;
+  }
+
+  setTempoMap(request: SetAudioTempoMapRequest): void {
+    this.ensureRuntimeReady();
+    this.transportRuntime.setTempoMap(request);
+  }
+
+  setLoopRange(range: TimelineRange | null): void {
+    this.ensureRuntimeReady();
+    this.transportRuntime.setLoopRange(range);
+  }
+
+  setLoopEnabled(isEnabled: boolean): void {
+    this.ensureRuntimeReady();
+    this.transportRuntime.setLoopEnabled(isEnabled);
+  }
+
+  setMetronomeEnabled(isEnabled: boolean): void {
+    this.ensureRuntimeReady();
+    this.transportRuntime.setMetronomeEnabled(isEnabled);
+  }
+
+  setMetronomeVolume(volume: number): void {
+    this.ensureRuntimeReady();
+    this.transportRuntime.setMetronomeVolume(volume);
   }
 
   setLiveInputDevice(deviceId: string | null): Promise<string | null> {

@@ -22,12 +22,14 @@ import type {
   RegionData,
   ReplaceRegionRequest,
   RescheduleRegionRequest,
+  SetAudioTempoMapRequest,
   SetAudioPluginEnabledRequest,
   SetAudioPluginParameterRequest,
   SetLiveInputMonitoringRequest,
   StopAllLoopsRequest,
   TriggerLoopRequest,
 } from './i-audio-engine';
+import type { TimelineRange } from '../shared/types/project-document.schema';
 import { UnsupportedAudioFeatureError } from './errors';
 import {
   AudioRuntimeFeature,
@@ -56,8 +58,8 @@ export const DAW_AUDIO_PROVIDER_SUPPORT = {
   createTrack: 'runtime-delegated',
   deleteTrack: 'runtime-delegated',
   disconnectIO: 'adapter-handled',
-  enableLoop: 'unsupported',
-  enableMetronome: 'unsupported',
+  enableLoop: 'adapter-handled',
+  enableMetronome: 'adapter-handled',
   enablePunchRecording: 'unsupported',
   exportAudio: 'unsupported',
   getAnalyserNode: 'unsupported',
@@ -88,8 +90,8 @@ export const DAW_AUDIO_PROVIDER_SUPPORT = {
   seek: 'runtime-delegated',
   setMasterGain: 'runtime-delegated',
   setMasterProcessorParameter: 'adapter-handled',
-  setLoopRange: 'unsupported',
-  setMetronomeVolume: 'unsupported',
+  setLoopRange: 'adapter-handled',
+  setMetronomeVolume: 'adapter-handled',
   setMidiInstrument: 'unsupported',
   setMonitor: 'unsupported',
   setMonitorMode: 'unsupported',
@@ -164,6 +166,26 @@ export class DawEngineAdapter implements IAudioEngine {
 
   getFeatureSupport() {
     return this.#runtime.getFeatureSupport();
+  }
+
+  setTempoMap(request: SetAudioTempoMapRequest): void {
+    this.#runtime.setTempoMap(request);
+  }
+
+  setLoopRange(range: TimelineRange | null): void {
+    this.#runtime.setLoopRange(range);
+  }
+
+  setLoopEnabled(isEnabled: boolean): void {
+    this.#runtime.setLoopEnabled(isEnabled);
+  }
+
+  setMetronomeEnabled(isEnabled: boolean): void {
+    this.#runtime.setMetronomeEnabled(isEnabled);
+  }
+
+  setMetronomeVolume(volume: number): void {
+    this.#runtime.setMetronomeVolume(volume);
   }
 
   setLiveInputDevice(deviceId: string | null): Promise<string | null> {
@@ -468,7 +490,7 @@ export class DawAudioProviderBridge {
       getInputLatencyMs: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.LIVE_INPUT, 'getInputLatencyMs'),
       getCurrentFrame: () => secondsToFrames(this.#runtime.getCurrentTime()),
       getCurrentTime: () => this.#runtime.getCurrentTime(),
-      // Tempo runtime이 연결되기 전까지 DAW domain의 초기 projection만 수용한다.
+      // 제품 Tempo Map이 단일 기준이므로 DAW Session의 단일 BPM projection이 전체 Map을 덮어쓰지 않게 한다.
       setTempo: tempoBpm => {
         void tempoBpm;
       },
@@ -476,14 +498,13 @@ export class DawAudioProviderBridge {
         void url;
         void blob;
       },
-      enableMetronome: createUnsupportedAudioProviderMethod(
-        AudioRuntimeFeature.TEMPO_LOOP_METRONOME,
-        'enableMetronome'
-      ),
-      setMetronomeVolume: createUnsupportedAudioProviderMethod(
-        AudioRuntimeFeature.TEMPO_LOOP_METRONOME,
-        'setMetronomeVolume'
-      ),
+      // 제품 Transport 명령이 runtime을 갱신하므로 DAW Session projection의 중복 호출은 수용만 한다.
+      enableMetronome: isEnabled => {
+        void isEnabled;
+      },
+      setMetronomeVolume: volume => {
+        void volume;
+      },
       addSource: source => {
         this.#sourceUrls.set(source.id, source.url);
         return Promise.resolve();
@@ -525,8 +546,13 @@ export class DawAudioProviderBridge {
       scheduleMidiRegion: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.MIDI, 'scheduleMidiRegion'),
       removeMidiRegion: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.MIDI, 'removeMidiRegion'),
       setMidiInstrument: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.MIDI, 'setMidiInstrument'),
-      enableLoop: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.TEMPO_LOOP_METRONOME, 'enableLoop'),
-      setLoopRange: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.TEMPO_LOOP_METRONOME, 'setLoopRange'),
+      enableLoop: isEnabled => {
+        void isEnabled;
+      },
+      setLoopRange: (startTime, endTime) => {
+        void startTime;
+        void endTime;
+      },
       midiPanic: createUnsupportedAudioProviderMethod(AudioRuntimeFeature.MIDI, 'midiPanic'),
       getMasterStereoMeterData: createUnsupportedAudioProviderMethod(
         AudioRuntimeFeature.METERING,

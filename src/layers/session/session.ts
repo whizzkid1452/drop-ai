@@ -187,8 +187,10 @@ export interface SessionState {
   setTimelineMarkers: (markers: readonly TimelineMarker[]) => void;
   setLoopRange: (range: TimelineRange | null) => void;
   setLoopEnabled: (isEnabled: boolean) => void;
+  setLoopState: (state: { readonly range: TimelineRange | null; readonly isEnabled: boolean }) => void;
   setMetronomeEnabled: (isEnabled: boolean) => void;
   setMetronomeVolume: (volume: number) => void;
+  setMetronomeState: (state: { readonly isEnabled: boolean; readonly volume: number }) => void;
   setMasterVolume: (volume: number) => void;
   setExportRange: (startTime: number | null, endTime: number | null) => void;
   replaceProjectMetadata: (project: ProjectMetadata) => void;
@@ -278,8 +280,11 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
         isLoopEnabled: loopRange === null ? false : state.isLoopEnabled,
       })),
     setLoopEnabled: isLoopEnabled => set(state => ({ isLoopEnabled: isLoopEnabled && state.loopRange !== null })),
+    setLoopState: ({ range, isEnabled }) =>
+      set({ loopRange: range ? { ...range } : null, isLoopEnabled: isEnabled && range !== null }),
     setMetronomeEnabled: isMetronomeEnabled => set({ isMetronomeEnabled }),
     setMetronomeVolume: metronomeVolume => set({ metronomeVolume }),
+    setMetronomeState: ({ isEnabled, volume }) => set({ isMetronomeEnabled: isEnabled, metronomeVolume: volume }),
     setMasterVolume: volume => set({ masterVolume: volume }),
     setExportRange: (startTime, endTime) => set({ exportStartTime: startTime, exportEndTime: endTime }),
     replaceProjectMetadata: project => set({ project: { ...project } }),

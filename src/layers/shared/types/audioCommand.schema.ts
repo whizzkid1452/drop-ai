@@ -23,6 +23,10 @@ export const AudioCommandType = {
   SET_TEMPO: 'SET_TEMPO',
   SET_TIMELINE_MAP: 'SET_TIMELINE_MAP',
   SET_TIMELINE_MARKERS: 'SET_TIMELINE_MARKERS',
+  SET_LOOP_RANGE: 'SET_LOOP_RANGE',
+  CLEAR_LOOP_RANGE: 'CLEAR_LOOP_RANGE',
+  SET_LOOP_ENABLED: 'SET_LOOP_ENABLED',
+  SET_METRONOME: 'SET_METRONOME',
   SET_MASTER_VOLUME: 'SET_MASTER_VOLUME',
   SET_TRACK_NAME: 'SET_TRACK_NAME',
   SET_TRACK_VOLUME: 'SET_TRACK_VOLUME',
@@ -207,6 +211,29 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
     meterChanges: z.array(timelineMeterChangeCommandSchema).min(1).max(256),
   }),
   setTimelineMarkersCommandSchema,
+  z
+    .strictObject({
+      type: z.literal(AudioCommandType.SET_LOOP_RANGE),
+      startTimeSeconds: z.number().nonnegative(),
+      endTimeSeconds: z.number().nonnegative(),
+      isEnabled: z.boolean().optional(),
+    })
+    .refine(command => command.endTimeSeconds > command.startTimeSeconds, {
+      message: 'Loop end time must be greater than start time',
+      path: ['endTimeSeconds'],
+    }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.CLEAR_LOOP_RANGE),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_LOOP_ENABLED),
+    isEnabled: z.boolean(),
+  }),
+  z.strictObject({
+    type: z.literal(AudioCommandType.SET_METRONOME),
+    isEnabled: z.boolean(),
+    volume: z.number().min(0).max(1),
+  }),
   z.strictObject({
     type: z.literal(AudioCommandType.SET_MASTER_VOLUME),
     volume: z.number().min(0).max(1),

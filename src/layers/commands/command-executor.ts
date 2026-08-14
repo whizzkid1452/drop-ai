@@ -210,6 +210,28 @@ export class CommandExecutor {
         this.controller.timeline.setMarkers(validatedCommand.markers);
         return;
 
+      case AudioCommandType.SET_LOOP_RANGE:
+        this.controller.playback.handleSetLoopRange(
+          {
+            endTimeSeconds: validatedCommand.endTimeSeconds,
+            startTimeSeconds: validatedCommand.startTimeSeconds,
+          },
+          validatedCommand.isEnabled
+        );
+        return;
+
+      case AudioCommandType.CLEAR_LOOP_RANGE:
+        this.controller.playback.handleSetLoopRange(null);
+        return;
+
+      case AudioCommandType.SET_LOOP_ENABLED:
+        this.controller.playback.handleSetLoopEnabled(validatedCommand.isEnabled);
+        return;
+
+      case AudioCommandType.SET_METRONOME:
+        this.controller.playback.handleSetMetronome(validatedCommand);
+        return;
+
       case AudioCommandType.SET_MASTER_VOLUME:
         this.controller.mixer.setMasterVolume(validatedCommand.volume);
         return;
@@ -412,6 +434,10 @@ function shouldPersistProjectAfterCommand(command: AudioCommand): boolean {
     case AudioCommandType.SET_TEMPO:
     case AudioCommandType.SET_TIMELINE_MAP:
     case AudioCommandType.SET_TIMELINE_MARKERS:
+    case AudioCommandType.SET_LOOP_RANGE:
+    case AudioCommandType.CLEAR_LOOP_RANGE:
+    case AudioCommandType.SET_LOOP_ENABLED:
+    case AudioCommandType.SET_METRONOME:
     case AudioCommandType.SET_MASTER_VOLUME:
     case AudioCommandType.SET_TRACK_NAME:
     case AudioCommandType.SET_TRACK_VOLUME:

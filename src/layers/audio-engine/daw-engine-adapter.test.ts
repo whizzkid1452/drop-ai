@@ -60,6 +60,29 @@ describe('DawEngineAdapter', () => {
     expect(runtime.getCurrentTime()).toBe(3.5);
   });
 
+  it('Tempo Map·Loop·Metronome을 제품 runtime에 위임한다', () => {
+    const runtime = new MockAudioEngine();
+    const engine = new DawEngineAdapter({ runtime });
+    const changes = [
+      { bpm: 120, quarterNotePosition: 0 },
+      { bpm: 90, quarterNotePosition: 4 },
+    ];
+
+    engine.setTempoMap({ changes });
+    engine.setLoopRange({ endTimeSeconds: 8, startTimeSeconds: 2 });
+    engine.setLoopEnabled(true);
+    engine.setMetronomeVolume(0.5);
+    engine.setMetronomeEnabled(true);
+
+    expect(runtime.getMockTransportState()).toEqual({
+      isLoopEnabled: true,
+      isMetronomeEnabled: true,
+      loopRange: { endTimeSeconds: 8, startTimeSeconds: 2 },
+      metronomeVolume: 0.5,
+      tempoChanges: changes,
+    });
+  });
+
   it('Region 추가를 DAW playlist signal을 통해 runtime에 예약한다', async () => {
     const runtime = new MockAudioEngine();
     const engine = new DawEngineAdapter({ runtime });
