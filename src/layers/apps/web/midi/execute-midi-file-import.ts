@@ -1,6 +1,7 @@
 import { CommandBatchExecutionError, type CommandExecutor } from '@/layers/commands/command-executor';
 import { AudioCommandType, type AudioCommand } from '@/layers/shared/types/audioCommand.schema';
 import { parseStandardMidiFile } from '@/layers/midi-file/midi-file-codec';
+import { cloneMidiTrackState } from '@/layers/shared/types/midi-state';
 
 export class MidiFileImportCompensationError extends Error {
   readonly compensationFailures: readonly { cause: unknown; step: string }[];
@@ -31,13 +32,7 @@ function createTrackCommands({
     { trackId, type: AudioCommandType.ADD_MIDI_TRACK },
     { name, trackId, type: AudioCommandType.SET_TRACK_NAME },
     {
-      midi: {
-        instrumentId: midi.instrumentId,
-        regions: midi.regions.map(region => ({
-          ...region,
-          notes: region.notes.map(note => ({ ...note })),
-        })),
-      },
+      midi: cloneMidiTrackState(midi),
       trackId,
       type: AudioCommandType.SET_MIDI_TRACK_STATE,
     },

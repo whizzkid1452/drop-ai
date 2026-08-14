@@ -1123,8 +1123,10 @@ describe('CommandExecutor', () => {
     const { audioEngine, commandExecutor, session } = createTestContext();
     const midi = {
       instrumentId: 'builtin.poly-synth',
+      recordMode: 'replace' as const,
       regions: [
         {
+          controlLanes: [],
           durationSeconds: 2,
           id: REGION_ID,
           name: 'Verse',

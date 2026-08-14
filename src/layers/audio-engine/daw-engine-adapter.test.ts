@@ -89,8 +89,10 @@ describe('DawEngineAdapter', () => {
     const engine = new DawEngineAdapter({ runtime });
     const midi = {
       instrumentId: 'builtin.poly-synth',
+      recordMode: 'replace' as const,
       regions: [
         {
+          controlLanes: [],
           durationSeconds: 2,
           id: '11111111-1111-4111-8111-111111111111',
           name: 'Verse',

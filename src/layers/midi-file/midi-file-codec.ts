@@ -65,8 +65,10 @@ export function parseStandardMidiFile({ createId, data }: ParseStandardMidiFileR
         {
           midi: {
             instrumentId: BUILTIN_MIDI_INSTRUMENT_ID,
+            recordMode: 'replace' as const,
             regions: [
               {
+                controlLanes: [],
                 durationSeconds,
                 id: createId(),
                 name: track.name,

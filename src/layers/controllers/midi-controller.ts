@@ -67,7 +67,7 @@ export class MidiController {
       isMuted: false,
       isSoloed: false,
       loopSlots: createDefaultLoopSlots(),
-      midi: { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, regions: [] },
+      midi: { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, recordMode: 'replace', regions: [] },
       name: `MIDI Track ${trackId}`,
       pan: 0,
       pluginInstances: [],

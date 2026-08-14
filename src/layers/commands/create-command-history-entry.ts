@@ -2,7 +2,7 @@ import type { RegionState, SessionState, TrackState } from '../session/session';
 import type { PluginInstanceState } from '../shared/types/plugin-state';
 import type { TimelineMeterChange, TimelineTempoChange } from '../shared/timeline-coordinate-mapper';
 import type { TimelineMarker } from '../shared/timeline-marker';
-import type { MidiTrackState } from '../shared/types/midi-state';
+import { cloneMidiTrackState, type MidiTrackState } from '../shared/types/midi-state';
 import { AudioCommandType, type AudioCommand } from '../shared/types/audioCommand.schema';
 import { cloneRoutingGraphSnapshot } from '../shared/types/routing-state';
 import type { CommandHistoryEntry } from './command-history';
@@ -103,13 +103,7 @@ function areMidiTrackStatesEqual(left: MidiTrackState, right: MidiTrackState): b
 }
 
 function cloneMidiTrackForCommand(midi: MidiTrackState) {
-  return {
-    instrumentId: midi.instrumentId,
-    regions: midi.regions.map(region => ({
-      ...region,
-      notes: region.notes.map(note => ({ ...note })),
-    })),
-  };
+  return cloneMidiTrackState(midi);
 }
 
 function findRegion(session: SessionState, regionId: string, trackId?: string): LocatedRegion | null {

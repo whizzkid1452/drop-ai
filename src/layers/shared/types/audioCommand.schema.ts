@@ -4,7 +4,7 @@ import { calculateFiniteRegionEndTime } from '../region-timeline';
 import {
   ProjectAutomationLaneV12Schema,
   ProjectAutomationPointSchema,
-  ProjectMidiTrackSchema,
+  ProjectMidiTrackV14Schema,
   ProjectCompSegmentSchema,
   ProjectRoutingGraphSchema,
   ProjectRoutingRouteTargetSchema,
@@ -521,7 +521,7 @@ export const StrictAudioCommandSchema = z.discriminatedUnion('type', [
   }),
   z.strictObject({
     type: z.literal(AudioCommandType.SET_MIDI_TRACK_STATE),
-    midi: ProjectMidiTrackSchema,
+    midi: ProjectMidiTrackV14Schema,
     trackId: z.uuid('Invalid MIDI Track ID format'),
   }),
   z.strictObject({ type: z.literal(AudioCommandType.MIDI_PANIC) }),

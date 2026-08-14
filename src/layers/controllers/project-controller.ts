@@ -13,8 +13,8 @@ import type {
   IRetiredAudioSourceRegistry,
 } from '../audio-source-registry/i-audio-source-registry';
 import {
-  createProjectDocumentV13FromSession,
-  createProjectRestoreSnapshotFromDocumentV13,
+  createProjectDocumentV14FromSession,
+  createProjectRestoreSnapshotFromDocumentV14,
   type ProjectRestoreSnapshot,
 } from '../project-document-mapper/project-document-mapper';
 import type { ILocalFirstProjectRepository, IProjectRepository } from '../project-repository/i-project-repository';
@@ -23,9 +23,10 @@ import type { SessionState, SessionStore } from '../session/session';
 import type {
   ProjectAudioSource,
   ProjectDocumentSnapshot,
-  ProjectDocumentV13,
+  ProjectDocumentV14,
 } from '../shared/types/project-document.schema';
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
+import { cloneMidiTrackState } from '../shared/types/midi-state';
 import { ProjectLoadError, ProjectLoadErrorCode } from './project-load-error';
 import {
   ProjectMutationCompensationError,
@@ -94,7 +95,7 @@ export class ProjectController {
   private async saveProjectOnce(): Promise<void> {
     const registrations = this.dependencies.audioSourceRegistry.listCommittedRegistrations();
     const sessionState = this.dependencies.sessionStore.getState();
-    const document = createProjectDocumentV13FromSession({
+    const document = createProjectDocumentV14FromSession({
       session: sessionState,
       audioSources: registrations.map(registration => registration.metadata),
       pluginCatalog: [...sessionState.pluginCatalog.values()],
@@ -250,7 +251,7 @@ export class ProjectController {
     readonly expectedProjectId: string;
   }): ProjectRestoreSnapshot {
     const sessionState = this.dependencies.sessionStore.getState();
-    const snapshot = createProjectRestoreSnapshotFromDocumentV13({
+    const snapshot = createProjectRestoreSnapshotFromDocumentV14({
       document,
       pluginCatalog: [...sessionState.pluginCatalog.values()],
     });
@@ -318,15 +319,7 @@ export class ProjectController {
         points: lane.points.map(point => ({ ...point })),
         target: { ...lane.target },
       })),
-      midi: track.midi
-        ? {
-            instrumentId: track.midi.instrumentId,
-            regions: track.midi.regions.map(region => ({
-              ...region,
-              notes: region.notes.map(note => ({ ...note })),
-            })),
-          }
-        : track.midi,
+      midi: track.midi ? cloneMidiTrackState(track.midi) : track.midi,
       loops: (track.loopSlots ?? []).flatMap(loopSlot => {
         if (loopSlot.sourceId === null) {
           return [];
@@ -571,7 +564,7 @@ export class ProjectController {
     }
   }
 
-  private async saveDocument(document: ProjectDocumentV13): Promise<ProjectDocumentSnapshot> {
+  private async saveDocument(document: ProjectDocumentV14): Promise<ProjectDocumentSnapshot> {
     const storedDocument = await this.dependencies.projectRepository.load(document.project.id);
     if (!storedDocument) {
       return this.dependencies.projectRepository.create(document);

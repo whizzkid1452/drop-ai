@@ -11,8 +11,10 @@ const NOTE_ID = '33333333-3333-4333-8333-333333333333';
 
 const MIDI_STATE: MidiTrackState = {
   instrumentId: BUILTIN_MIDI_INSTRUMENT_ID,
+  recordMode: 'replace',
   regions: [
     {
+      controlLanes: [],
       durationSeconds: 2,
       id: REGION_ID,
       name: 'Verse',
@@ -53,10 +55,12 @@ describe('MidiController', () => {
 
     expect(audioEngine.getMockMidiTrackState(TRACK_ID)).toEqual({
       instrumentId: BUILTIN_MIDI_INSTRUMENT_ID,
+      recordMode: 'replace',
       regions: [],
     });
     expect(sessionStore.getState().tracks.get(TRACK_ID)?.midi).toEqual({
       instrumentId: BUILTIN_MIDI_INSTRUMENT_ID,
+      recordMode: 'replace',
       regions: [],
     });
   });
@@ -82,7 +86,7 @@ describe('MidiController', () => {
       'session update failed'
     );
     expect(setMidiTrackState).toHaveBeenLastCalledWith({
-      midi: { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, regions: [] },
+      midi: { instrumentId: BUILTIN_MIDI_INSTRUMENT_ID, recordMode: 'replace', regions: [] },
       trackId: TRACK_ID,
     });
   });

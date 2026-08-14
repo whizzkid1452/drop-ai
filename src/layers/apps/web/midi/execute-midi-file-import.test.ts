@@ -18,8 +18,10 @@ function createMidiFile(): File {
       {
         midi: {
           instrumentId: 'builtin.poly-synth',
+          recordMode: 'replace',
           regions: [
             {
+              controlLanes: [],
               durationSeconds: 1,
               id: REGION_ID,
               name: 'Verse',

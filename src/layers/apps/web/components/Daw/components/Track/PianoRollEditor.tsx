@@ -26,6 +26,7 @@ function clamp(value: number, minimum: number, maximum: number): number {
 function cloneWithRegion(midi: MidiTrackState, nextRegion: MidiRegionState): MidiTrackState {
   return {
     instrumentId: midi.instrumentId,
+    recordMode: midi.recordMode,
     regions: midi.regions.map(region => (region.id === nextRegion.id ? nextRegion : region)),
   };
 }
@@ -59,6 +60,7 @@ export function PianoRollEditor({ editPointSeconds, midi, onChange, regionId, tr
     if (!region) {
       const startOffsetSeconds = Math.max(0, editPointSeconds);
       const newRegion: MidiRegionState = {
+        controlLanes: [],
         durationSeconds: Math.max(DEFAULT_REGION_DURATION_SECONDS, startOffsetSeconds + DEFAULT_NOTE_DURATION_SECONDS),
         id: crypto.randomUUID(),
         name: 'MIDI Region',
@@ -75,7 +77,11 @@ export function PianoRollEditor({ editPointSeconds, midi, onChange, regionId, tr
         startTimeSeconds: 0,
       };
       setSelectedNoteId(noteId);
-      await commit({ instrumentId: midi.instrumentId, regions: [...midi.regions, newRegion] });
+      await commit({
+        instrumentId: midi.instrumentId,
+        recordMode: midi.recordMode,
+        regions: [...midi.regions, newRegion],
+      });
       return;
     }
 

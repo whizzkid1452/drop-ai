@@ -3,6 +3,7 @@ import {
   readProjectDocumentV5,
   readProjectDocumentV9,
   readProjectDocumentV13,
+  readProjectDocumentV14,
 } from '../shared/types/project-document-reader';
 import type {
   ProjectDocument,
@@ -72,6 +73,53 @@ function createSnapshotPeers(baseDocument: ProjectDocumentSnapshot): [ProjectCrd
 }
 
 describe('ProjectCrdtDocument', () => {
+  it('v14 MIDI 제어 포인트를 ID 기반 collection으로 동기화한다', () => {
+    const baseDocument = readProjectDocumentV14(createProjectDocument());
+    baseDocument.tracks[0].midi = {
+      instrumentId: 'builtin.poly-synth',
+      recordMode: 'overdub',
+      regions: [
+        {
+          controlLanes: [
+            {
+              channel: 1,
+              controllerNumber: 74,
+              id: '77777777-7777-4777-8777-777777777777',
+              points: [
+                {
+                  id: '88888888-8888-4888-8888-888888888888',
+                  timeOffsetSeconds: 0.5,
+                  value: 64,
+                },
+              ],
+              type: 'controlChange',
+            },
+          ],
+          durationSeconds: 2,
+          id: '55555555-5555-4555-8555-555555555555',
+          name: 'Control',
+          notes: [],
+          startTimeSeconds: 0,
+        },
+      ],
+    };
+    const [firstPeer, secondPeer] = createSnapshotPeers(baseDocument);
+    const nextDocument = structuredClone(baseDocument);
+    const point = nextDocument.tracks[0].midi?.regions[0]?.controlLanes[0]?.points[0];
+    if (!point) {
+      throw new Error('수정할 MIDI 제어 포인트가 없습니다.');
+    }
+    point.value = 96;
+    nextDocument.project.revision = 1;
+
+    const update = firstPeer.applyProjectChange({ baseDocument, nextDocument });
+    secondPeer.applyUpdate(update);
+
+    expect(secondPeer.toProjectDocument().tracks[0]).toMatchObject({
+      midi: { regions: [{ controlLanes: [{ points: [{ id: point.id, value: 96 }] }] }] },
+    });
+  });
+
   it('v13 MIDI Note를 ID 기반 collection으로 동기화한다', () => {
     const baseDocument = readProjectDocumentV13(createProjectDocument());
     baseDocument.tracks[0].midi = {

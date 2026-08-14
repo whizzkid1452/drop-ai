@@ -17,8 +17,10 @@ describe('MIDI 명령 계약', () => {
     const command = {
       midi: {
         instrumentId: 'builtin.poly-synth',
+        recordMode: 'replace',
         regions: [
           {
+            controlLanes: [],
             durationSeconds: 2,
             id: REGION_ID,
             name: 'Verse',
