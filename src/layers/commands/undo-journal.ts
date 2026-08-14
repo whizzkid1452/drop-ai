@@ -1,5 +1,5 @@
 import { readProjectDocumentV17 } from '../shared/types/project-document-reader';
-import { PROJECT_DOCUMENT_SCHEMA_VERSION_V18, type ProjectDocumentV17 } from '../shared/types/project-document.schema';
+import { PROJECT_DOCUMENT_SCHEMA_VERSION_V19, type ProjectDocumentV17 } from '../shared/types/project-document.schema';
 
 const STORAGE_KEY = 'drop-ai:undo-journals:v1';
 const MAX_JOURNAL_ENTRIES = 20;
@@ -18,7 +18,7 @@ export interface UndoJournalSnapshot {
 interface StoredUndoJournal extends UndoJournalSnapshot {
   readonly projectId: string;
   readonly projectRevision: number;
-  readonly schemaVersion: typeof PROJECT_DOCUMENT_SCHEMA_VERSION_V18;
+  readonly schemaVersion: typeof PROJECT_DOCUMENT_SCHEMA_VERSION_V19;
 }
 
 export interface IUndoJournal {
@@ -46,7 +46,7 @@ export class BrowserUndoJournal implements IUndoJournal {
     if (!journal) {
       return emptySnapshot();
     }
-    if (journal.schemaVersion !== PROJECT_DOCUMENT_SCHEMA_VERSION_V18 || journal.projectRevision !== projectRevision) {
+    if (journal.schemaVersion !== PROJECT_DOCUMENT_SCHEMA_VERSION_V19 || journal.projectRevision !== projectRevision) {
       this.clear(projectId);
       return emptySnapshot();
     }
@@ -68,7 +68,7 @@ export class BrowserUndoJournal implements IUndoJournal {
       projectId,
       projectRevision,
       redoEntries: [],
-      schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V18,
+      schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V19,
       undoEntries,
     });
     this.writeStorage();

@@ -9,14 +9,19 @@ const SLOT_ID = '22222222-2222-4222-8222-222222222222';
 function createLoopSlot(state: LoopSlotState['state']): LoopSlotState {
   return {
     errorMessage: null,
+    followAction: { afterBars: 1, type: 'none' },
     gain: 1,
     id: SLOT_ID,
+    launchMode: 'trigger',
     lengthBars: 1,
+    name: 'Clip 1',
     overdubSourceIds: [],
     quantizationBars: 1,
     recordedTempoBpm: state === 'empty' ? null : 120,
     scheduledTimeSeconds: null,
     sourceId: state === 'empty' ? null : '33333333-3333-4333-8333-333333333333',
+    sourceEndTimeSeconds: null,
+    sourceStartTimeSeconds: 0,
     state,
   };
 }

@@ -239,7 +239,7 @@ describe('ProjectController', () => {
     });
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        schemaVersion: 18,
+        schemaVersion: 19,
         project: INITIAL_PROJECT_METADATA,
         audioSources: [expect.objectContaining(registration.metadata)],
       })
@@ -261,7 +261,7 @@ describe('ProjectController', () => {
 
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        schemaVersion: 18,
+        schemaVersion: 19,
         tracks: [
           expect.objectContaining({
             id: TRACK_ID,
@@ -295,14 +295,19 @@ describe('ProjectController', () => {
       loopSlots: [
         {
           errorMessage: null,
+          followAction: { afterBars: 1, type: 'none' },
           gain: 1,
           id: LOOP_SLOT_ID,
+          launchMode: 'trigger',
           lengthBars: 1,
+          name: 'Clip 1',
           overdubSourceIds: [],
           quantizationBars: 1,
           recordedTempoBpm: 120,
           scheduledTimeSeconds: null,
           sourceId: SOURCE_ID,
+          sourceEndTimeSeconds: null,
+          sourceStartTimeSeconds: 0,
           state: 'stopped',
         },
       ],
@@ -319,7 +324,7 @@ describe('ProjectController', () => {
     expect(context.projectRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         audioSources: [expect.objectContaining(registration.metadata)],
-        schemaVersion: 18,
+        schemaVersion: 19,
         tracks: [
           expect.objectContaining({
             loopSlots: [expect.objectContaining({ id: LOOP_SLOT_ID, overdubSourceIds: [], sourceId: SOURCE_ID })],
@@ -340,7 +345,7 @@ describe('ProjectController', () => {
     expect(context.projectRepository.save).toHaveBeenCalledWith({
       document: expect.objectContaining({
         project: existingDocument.project,
-        schemaVersion: 18,
+        schemaVersion: 19,
       }),
       expectedRevision: 0,
     });
@@ -705,14 +710,19 @@ describe('ProjectController', () => {
     expect(context.sessionStore.getState().tracks.get(TRACK_ID)?.loopSlots).toEqual([
       {
         errorMessage: null,
+        followAction: { afterBars: 1, type: 'none' },
         gain: 1,
         id: LOOP_SLOT_ID,
+        launchMode: 'trigger',
         lengthBars: 1,
+        name: 'Clip 1',
         overdubSourceIds: [],
         quantizationBars: 1,
         recordedTempoBpm: 140,
         scheduledTimeSeconds: null,
         sourceId: SOURCE_ID,
+        sourceEndTimeSeconds: null,
+        sourceStartTimeSeconds: 0,
         state: 'stopped',
       },
     ]);

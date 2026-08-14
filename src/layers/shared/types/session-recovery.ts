@@ -1,11 +1,11 @@
-import { PROJECT_DOCUMENT_SCHEMA_VERSION_V18, type ProjectMetadata } from './project-document.schema';
+import { PROJECT_DOCUMENT_SCHEMA_VERSION_V19, type ProjectMetadata } from './project-document.schema';
 
 export interface SessionRecoveryCheckpoint {
   readonly projectId: string;
   readonly projectName: string;
   readonly projectRevision: number;
   readonly savedAtEpochMilliseconds: number;
-  readonly schemaVersion: typeof PROJECT_DOCUMENT_SCHEMA_VERSION_V18;
+  readonly schemaVersion: typeof PROJECT_DOCUMENT_SCHEMA_VERSION_V19;
 }
 
 export interface ISessionRecoveryQuery {

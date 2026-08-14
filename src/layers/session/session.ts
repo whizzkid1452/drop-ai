@@ -36,6 +36,16 @@ import {
   type ProjectExportState,
 } from '../shared/types/export-state';
 import { cloneProjectLifecycleState, createDefaultProjectLifecycleState } from '../shared/types/session-lifecycle';
+import {
+  cloneCueRecordingRuntimeState,
+  cloneCueState,
+  createDefaultCueRecordingRuntimeState,
+  createDefaultCueState,
+  type ClipFollowAction,
+  type ClipLaunchMode,
+  type CueRecordingRuntimeState,
+  type CueState,
+} from '../shared/types/clip-cue-state';
 
 export const DEFAULT_LOOP_SLOT_COUNT = 4;
 export const DEFAULT_METRONOME_VOLUME = 0.8;
@@ -48,6 +58,11 @@ export interface LoopSlotState {
   readonly quantizationBars: LoopLengthBars;
   readonly recordedTempoBpm: number | null;
   readonly gain: number;
+  readonly name: string;
+  readonly sourceStartTimeSeconds: number;
+  readonly sourceEndTimeSeconds: number | null;
+  readonly launchMode: ClipLaunchMode;
+  readonly followAction: ClipFollowAction;
   readonly state: LoopSlotRuntimeState;
   readonly scheduledTimeSeconds: number | null;
   readonly errorMessage: string | null;
@@ -62,16 +77,21 @@ export function createDefaultLoopSlots({
   count = DEFAULT_LOOP_SLOT_COUNT,
   createId = () => globalThis.crypto.randomUUID(),
 }: CreateDefaultLoopSlotsOptions = {}): LoopSlotState[] {
-  return Array.from({ length: count }, () => ({
+  return Array.from({ length: count }, (_, index) => ({
     errorMessage: null,
     gain: 1,
+    followAction: { afterBars: 1, type: 'none' },
     id: createId(),
     lengthBars: 1,
+    launchMode: 'trigger',
+    name: `Clip ${index + 1}`,
     overdubSourceIds: [],
     quantizationBars: 1,
     recordedTempoBpm: null,
     scheduledTimeSeconds: null,
     sourceId: null,
+    sourceEndTimeSeconds: null,
+    sourceStartTimeSeconds: 0,
     state: 'empty',
   }));
 }
@@ -130,6 +150,7 @@ export interface ProjectSessionState {
   readonly exportEndTime: number | null;
   readonly exportSettings?: ProjectExportState;
   readonly lifecycle?: ProjectLifecycleState;
+  readonly cue?: CueState;
   readonly tracks: ReadonlyMap<string, TrackState>;
 }
 
@@ -202,6 +223,8 @@ export interface SessionState {
   exportEndTime: number | null;
   exportSettings: ProjectExportState;
   lifecycle: ProjectLifecycleState;
+  cue: CueState;
+  cueRecording: CueRecordingRuntimeState;
   tracks: Map<string, TrackState>;
   pluginCatalog: Map<string, PluginCatalogEntry>;
   pluginValidationResults: Map<string, PluginValidationResult>;
@@ -243,6 +266,8 @@ export interface SessionState {
   setExportRange: (startTime: number | null, endTime: number | null) => void;
   setExportSettings: (exportSettings: ProjectExportState) => void;
   setLifecycle: (lifecycle: ProjectLifecycleState) => void;
+  setCueState: (cue: CueState) => void;
+  setCueRecording: (cueRecording: CueRecordingRuntimeState) => void;
   replaceProjectMetadata: (project: ProjectMetadata) => void;
   replaceProjectState: (projectState: ProjectSessionState) => void;
 
@@ -298,6 +323,8 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     exportEndTime: null,
     exportSettings: createDefaultProjectExportState(),
     lifecycle: createDefaultProjectLifecycleState(),
+    cue: createDefaultCueState(),
+    cueRecording: createDefaultCueRecordingRuntimeState(),
     tracks: new Map(),
     pluginCatalog: new Map(),
     pluginValidationResults: new Map(),
@@ -349,6 +376,8 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
     setExportRange: (startTime, endTime) => set({ exportStartTime: startTime, exportEndTime: endTime }),
     setExportSettings: exportSettings => set({ exportSettings: cloneProjectExportState(exportSettings) }),
     setLifecycle: lifecycle => set({ lifecycle: cloneProjectLifecycleState(lifecycle) }),
+    setCueState: cue => set({ cue: cloneCueState(cue) }),
+    setCueRecording: cueRecording => set({ cueRecording: cloneCueRecordingRuntimeState(cueRecording) }),
     replaceProjectMetadata: project => set({ project: { ...project } }),
     replaceProjectState: projectState =>
       set({
@@ -374,6 +403,8 @@ export function createSessionStore({ initialProjectMetadata }: CreateSessionStor
         exportEndTime: projectState.exportEndTime,
         exportSettings: cloneProjectExportState(projectState.exportSettings ?? createDefaultProjectExportState()),
         lifecycle: cloneProjectLifecycleState(projectState.lifecycle ?? createDefaultProjectLifecycleState()),
+        cue: cloneCueState(projectState.cue ?? createDefaultCueState()),
+        cueRecording: createDefaultCueRecordingRuntimeState(),
         tracks: cloneProjectTracks(projectState.tracks),
         isPlaying: false,
         currentTime: 0,
@@ -578,7 +609,11 @@ function cloneTrackState(track: TrackState): TrackState {
       fadeOut: { ...region.fadeOut },
       status: [...region.status],
     })),
-    loopSlots: track.loopSlots?.map(slot => ({ ...slot, overdubSourceIds: [...slot.overdubSourceIds] })),
+    loopSlots: track.loopSlots?.map(slot => ({
+      ...slot,
+      followAction: { ...slot.followAction },
+      overdubSourceIds: [...slot.overdubSourceIds],
+    })),
     recording: track.recording ? cloneTrackRecordingState(track.recording) : undefined,
     automationLanes: track.automationLanes?.map(cloneAutomationLaneState),
     midi: track.midi ? cloneMidiTrackState(track.midi) : track.midi,

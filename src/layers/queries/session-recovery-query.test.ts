@@ -13,7 +13,7 @@ describe('BrowserSessionRecoveryStore', () => {
       projectName: 'Session',
       projectRevision: 3,
       savedAtEpochMilliseconds: 1234,
-      schemaVersion: 18,
+      schemaVersion: 19,
     });
     expect(listener).toHaveBeenCalledOnce();
   });

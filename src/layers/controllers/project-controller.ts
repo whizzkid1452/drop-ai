@@ -14,11 +14,11 @@ import type {
 } from '../audio-source-registry/i-audio-source-registry';
 import {
   createProjectDocumentV17FromSession,
-  createProjectDocumentV18FromSession,
-  createProjectRestoreSnapshotFromDocumentV18,
+  createProjectDocumentV19FromSession,
+  createProjectRestoreSnapshotFromDocumentV19,
   type ProjectRestoreSnapshot,
 } from '../project-document-mapper/project-document-mapper';
-import { readProjectDocumentV18 } from '../shared/types/project-document-reader';
+import { readProjectDocumentV19 } from '../shared/types/project-document-reader';
 import { createProjectArchiveBlob, readProjectArchiveBlob } from '../shared/types/project-archive';
 import type { ILocalFirstProjectRepository, IProjectRepository } from '../project-repository/i-project-repository';
 import type { IProjectSyncService } from '../project-sync/i-project-sync';
@@ -27,7 +27,7 @@ import type {
   ProjectAudioSource,
   ProjectDocumentSnapshot,
   ProjectDocumentV17,
-  ProjectDocumentV18,
+  ProjectDocumentV19,
 } from '../shared/types/project-document.schema';
 import type { ResourceCleanupResult } from '../shared/types/resource-cleanup';
 import { cloneMidiTrackState } from '../shared/types/midi-state';
@@ -70,6 +70,7 @@ interface ProjectSessionVersion {
   readonly exportEndTime: SessionState['exportEndTime'];
   readonly exportSettings: SessionState['exportSettings'];
   readonly lifecycle: SessionState['lifecycle'];
+  readonly cue: SessionState['cue'];
   readonly exportStartTime: SessionState['exportStartTime'];
   readonly masterVolume: number;
   readonly routingGraph: SessionState['routingGraph'];
@@ -102,7 +103,7 @@ export class ProjectController {
   private async saveProjectOnce(): Promise<void> {
     const registrations = this.dependencies.audioSourceRegistry.listCommittedRegistrations();
     const sessionState = this.dependencies.sessionStore.getState();
-    const document = createProjectDocumentV18FromSession({
+    const document = createProjectDocumentV19FromSession({
       session: sessionState,
       audioSources: registrations.map(registration => registration.metadata),
       pluginCatalog: [...sessionState.pluginCatalog.values()],
@@ -158,9 +159,10 @@ export class ProjectController {
 
   async restoreSnapshotDocument(document: ProjectDocumentSnapshot): Promise<void> {
     const currentSession = this.dependencies.sessionStore.getState();
-    const migratedDocument = readProjectDocumentV18(document);
-    const restoreDocument = readProjectDocumentV18({
+    const migratedDocument = readProjectDocumentV19(document);
+    const restoreDocument = readProjectDocumentV19({
       ...migratedDocument,
+      cue: currentSession.cue,
       lifecycle: currentSession.lifecycle,
       project: currentSession.project,
     });
@@ -190,7 +192,7 @@ export class ProjectController {
     const session = this.dependencies.sessionStore.getState();
     const registrations = this.dependencies.audioSourceRegistry.listCommittedRegistrations();
     return createProjectArchiveBlob({
-      document: createProjectDocumentV18FromSession({
+      document: createProjectDocumentV19FromSession({
         session,
         audioSources: registrations.map(registration => registration.metadata),
         pluginCatalog: [...session.pluginCatalog.values()],
@@ -329,7 +331,7 @@ export class ProjectController {
     readonly expectedProjectId: string;
   }): ProjectRestoreSnapshot {
     const sessionState = this.dependencies.sessionStore.getState();
-    const snapshot = createProjectRestoreSnapshotFromDocumentV18({
+    const snapshot = createProjectRestoreSnapshotFromDocumentV19({
       document,
       pluginCatalog: [...sessionState.pluginCatalog.values()],
     });
@@ -563,6 +565,7 @@ export class ProjectController {
       exportEndTime: session.exportEndTime,
       exportSettings: session.exportSettings,
       lifecycle: session.lifecycle,
+      cue: session.cue,
       exportStartTime: session.exportStartTime,
       masterVolume: session.masterVolume,
       routingGraph: session.routingGraph,
@@ -587,6 +590,7 @@ export class ProjectController {
       current.exportEndTime === expected.exportEndTime &&
       current.exportSettings === expected.exportSettings &&
       current.lifecycle === expected.lifecycle &&
+      current.cue === expected.cue &&
       current.exportStartTime === expected.exportStartTime &&
       current.masterVolume === expected.masterVolume &&
       current.routingGraph === expected.routingGraph &&
@@ -648,7 +652,7 @@ export class ProjectController {
     }
   }
 
-  private async saveDocument(document: ProjectDocumentV18): Promise<ProjectDocumentSnapshot> {
+  private async saveDocument(document: ProjectDocumentV19): Promise<ProjectDocumentSnapshot> {
     const storedDocument = await this.dependencies.projectRepository.load(document.project.id);
     if (!storedDocument) {
       return this.dependencies.projectRepository.create(document);

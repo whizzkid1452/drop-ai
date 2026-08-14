@@ -1,4 +1,4 @@
-import { PROJECT_DOCUMENT_SCHEMA_VERSION_V18, type ProjectMetadata } from '../shared/types/project-document.schema';
+import { PROJECT_DOCUMENT_SCHEMA_VERSION_V19, type ProjectMetadata } from '../shared/types/project-document.schema';
 import type { ISessionRecoveryStore, SessionRecoveryCheckpoint } from '../shared/types/session-recovery';
 export type {
   ISessionRecoveryQuery,
@@ -32,7 +32,7 @@ export class BrowserSessionRecoveryStore implements ISessionRecoveryStore {
       projectName: project.name,
       projectRevision: project.revision,
       savedAtEpochMilliseconds: this.now(),
-      schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V18,
+      schemaVersion: PROJECT_DOCUMENT_SCHEMA_VERSION_V19,
     };
     this.writeStorage();
     this.publish();
@@ -57,7 +57,7 @@ export class BrowserSessionRecoveryStore implements ISessionRecoveryStore {
       ) as Partial<SessionRecoveryCheckpoint> | null;
       if (
         !candidate ||
-        candidate.schemaVersion !== PROJECT_DOCUMENT_SCHEMA_VERSION_V18 ||
+        candidate.schemaVersion !== PROJECT_DOCUMENT_SCHEMA_VERSION_V19 ||
         typeof candidate.projectId !== 'string' ||
         typeof candidate.projectRevision !== 'number'
       ) {
