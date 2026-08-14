@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import type { Message } from '@/types/agent';
+import type { AgentRunStatus, AgentStatus, Message } from '@/types/agent';
 import { useWebLLM } from '@/layers/apps/web/hooks/agent/useWebLLM';
-import { useAudioSourceResolver, useCommandExecutor, useSession } from '@/layers/apps/web/context/layer-hooks';
+import {
+  useAgentRuntimeCommands,
+  useAudioSourceResolver,
+  useCommandExecutor,
+  useSession,
+} from '@/layers/apps/web/context/layer-hooks';
 import { downloadWebAudioCommandResults } from '@/layers/apps/web/utils/execute-web-audio-command';
 import { handleAIResponse } from '@/layers/apps/web/hooks/agent/useAgent/utils/aiResponseHandler';
 import { createUserMessage, createAssistantMessage } from '@/layers/apps/web/hooks/agent/useAgent/utils/messageHelpers';
@@ -10,6 +15,7 @@ import type { AudioCommand } from '@/types/audioCommand.schema';
 import type { IAudioSourceResolver } from '@/layers/audio-source-registry/i-audio-source-registry';
 import type { RegionState, TrackState } from '@/layers/session/session';
 import type { PluginCatalogEntry, PluginInstanceState } from '@/types/plugin-state';
+import { AgentRuntimeCommandType } from '@/layers/commands/agent-runtime-command-executor';
 import type { AgentPromptPlugin, AgentPromptTrack } from './utils/getSystemPrompt';
 import { isAgentRequestCancelledError } from './utils/agent-request-cancelled-error';
 import { resolveAgentRunStatus } from './utils/resolve-agent-run-status';
@@ -84,11 +90,7 @@ export function useAgent() {
   const pluginCatalog = useSession(state => state.pluginCatalog);
   const messages = useSession(state => state.agentMessages);
   const status = useSession(state => state.agentStatus);
-  const addAgentMessage = useSession(state => state.addAgentMessage);
-  const updateAgentMessage = useSession(state => state.updateAgentMessage);
-  const setAgentStatus = useSession(state => state.setAgentStatus);
-  const setAgentRunStatus = useSession(state => state.setAgentRunStatus);
-  const markAgentResultSuccessful = useSession(state => state.markAgentResultSuccessful);
+  const agentRuntimeCommands = useAgentRuntimeCommands();
   const commandExecutor = useCommandExecutor();
   const activeAgentRequestRef = useRef<ActiveAgentRequest | null>(null);
 
@@ -102,17 +104,35 @@ export function useAgent() {
 
   const addMessage = useCallback(
     (message: Message) => {
-      addAgentMessage(message);
+      agentRuntimeCommands.execute({ message, type: AgentRuntimeCommandType.ADD_MESSAGE });
     },
-    [addAgentMessage]
+    [agentRuntimeCommands]
   );
 
   const updateMessage = useCallback(
     (id: string, content: string) => {
-      updateAgentMessage(id, content);
+      agentRuntimeCommands.execute({ content, id, type: AgentRuntimeCommandType.UPDATE_MESSAGE });
     },
-    [updateAgentMessage]
+    [agentRuntimeCommands]
   );
+
+  const setAgentStatus = useCallback(
+    (nextStatus: AgentStatus) => {
+      agentRuntimeCommands.execute({ status: nextStatus, type: AgentRuntimeCommandType.SET_STATUS });
+    },
+    [agentRuntimeCommands]
+  );
+
+  const setAgentRunStatus = useCallback(
+    (nextStatus: AgentRunStatus) => {
+      agentRuntimeCommands.execute({ status: nextStatus, type: AgentRuntimeCommandType.SET_RUN_STATUS });
+    },
+    [agentRuntimeCommands]
+  );
+
+  const markAgentResultSuccessful = useCallback(() => {
+    agentRuntimeCommands.execute({ type: AgentRuntimeCommandType.MARK_RESULT_SUCCESSFUL });
+  }, [agentRuntimeCommands]);
 
   const stopGeneration = useCallback(() => {
     const activeRequest = activeAgentRequestRef.current;

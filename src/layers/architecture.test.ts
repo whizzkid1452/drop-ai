@@ -268,6 +268,50 @@ function collectDirectWebAudioUsages(sourceText: string, filePath: string): stri
   return usages;
 }
 
+function collectInterfaceFunctionPropertyNames(filePath: string, interfaceName: string): Set<string> {
+  const sourceText = readFileSync(filePath, 'utf8');
+  const sourceFile = ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const propertyNames = new Set<string>();
+
+  sourceFile.forEachChild(node => {
+    if (!ts.isInterfaceDeclaration(node) || node.name.text !== interfaceName) {
+      return;
+    }
+
+    node.members.forEach(member => {
+      if (!ts.isPropertySignature(member) || !member.type || !ts.isFunctionTypeNode(member.type)) {
+        return;
+      }
+
+      const propertyName = member.name ? getAccessedName(member.name as ts.Expression) : undefined;
+      if (propertyName) {
+        propertyNames.add(propertyName);
+      }
+    });
+  });
+
+  return propertyNames;
+}
+
+function collectPropertyAccessNames(sourceText: string, filePath: string): string[] {
+  const sourceFile = ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const propertyNames: string[] = [];
+
+  function visit(node: ts.Node): void {
+    if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
+      const propertyName = getAccessedName(node);
+      if (propertyName) {
+        propertyNames.push(propertyName);
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return propertyNames;
+}
+
 function collectSourceImports(): SourceImport[] {
   return listSourceFiles(sourceRoot).flatMap(importerPath => {
     const sourceText = readFileSync(importerPath, 'utf8');
@@ -308,6 +352,7 @@ function formatViolations(imports: SourceImport[]): string[] {
 }
 
 const sourceImports = collectSourceImports();
+const sessionActionNames = collectInterfaceFunctionPropertyNames(path.join(sessionRoot, 'session.ts'), 'SessionState');
 
 describe('레이어 의존성 규칙', () => {
   it('Apps는 Composition Root 밖에서 Controller를 import하지 않는다', () => {
@@ -321,6 +366,21 @@ describe('레이어 의존성 규칙', () => {
     });
 
     expect(formatViolations(violations)).toEqual([]);
+  });
+
+  it('Apps는 Composition Root 밖에서 Session action을 직접 참조하지 않는다', () => {
+    const violations = listSourceFiles(appsRoot).flatMap(filePath => {
+      if (filePath === compositionRootPath || isTestFile(filePath)) {
+        return [];
+      }
+
+      const sourceText = readFileSync(filePath, 'utf8');
+      return collectPropertyAccessNames(sourceText, filePath)
+        .filter(propertyName => sessionActionNames.has(propertyName))
+        .map(propertyName => `${path.relative(sourceRoot, filePath).replaceAll('\\', '/')} -> ${propertyName}`);
+    });
+
+    expect(violations).toEqual([]);
   });
 
   it('src 루트 파일을 Apps로 분류한다', () => {

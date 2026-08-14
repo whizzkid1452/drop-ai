@@ -5,8 +5,10 @@
 3. 검증된 명령은 CommandExecutor의 단일 대기열에서 접수 순서대로 하나씩 실행한다. 실행 중인 비동기 작업을 중단하는
    `CANCEL_RENDER_JOB` 신호만 대기열을 거치지 않는다.
 4. CommandExecutor는 실행 시점의 Session을 읽고 Controllers에 작업을 위임한다.
-5. Apps는 Session을 구독해 화면을 갱신한다.
-6. Tone.js와 Web Audio API는 AudioEngine에서만 접근한다.
+5. Apps에는 action이 제거된 읽기 전용 Session Query만 노출한다. Session 변경은 Command와 Controller를 거친다.
+6. Agent 실행 상태 변경은 `AgentRuntimeCommand → AgentRuntimeCommandExecutor → AgentRuntimeController → Session`을
+   거친다.
+7. Tone.js와 Web Audio API는 AudioEngine에서만 접근한다.
 
 `SET_EXPORT_RANGE`는 `0 <= startTime <= endTime`만 허용하며, `ExportController`도 Session 변경 전에 같은 조건을
 검증한다. 실제 오디오 내보내기는 별도로 `startTime < endTime`을 요구한다.

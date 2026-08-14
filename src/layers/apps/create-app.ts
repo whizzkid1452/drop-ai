@@ -19,9 +19,14 @@ import type {
 import type { IAudioSourceRepository } from '../audio-source-repository/i-audio-source-repository';
 import { OpfsAudioSourceRepository } from '../audio-source-repository/opfs-audio-source-repository';
 import { createSessionStore, type SessionStore } from '../session/session';
+import { createSessionQuery, type ISessionQuery } from '../session/session-query';
 import { AppController } from '../controllers/app-controller';
 import { CommandExecutor } from '../commands/command-executor';
 import { CommandHistory, type ICommandHistoryQuery } from '../commands/command-history';
+import {
+  AgentRuntimeCommandExecutor,
+  type IAgentRuntimeCommandExecutor,
+} from '../commands/agent-runtime-command-executor';
 import { BrowserUndoJournal } from '../commands/undo-journal';
 import { BrowserSessionRecoveryStore, type ISessionRecoveryQuery } from '../queries/session-recovery-query';
 import { PlaybackClockQuery, type IPlaybackClockQuery } from '../queries/playback-clock-query';
@@ -72,7 +77,8 @@ export interface AppInstance {
   readonly audioSourceResolver: IAudioSourceResolver;
   readonly audioSourceStager: IAudioSourceStager;
   readonly midiInput: IMidiInput;
-  session: SessionStore;
+  readonly session: ISessionQuery;
+  readonly agentRuntimeCommands: IAgentRuntimeCommandExecutor;
   commandExecutor: CommandExecutor;
   commandHistory: ICommandHistoryQuery;
   playbackClock: IPlaybackClockQuery;
@@ -110,6 +116,7 @@ export interface CreateAppOptions {
   initialPluginManifests?: readonly unknown[];
   midiInput?: IMidiInput;
   browserStorage?: Storage;
+  sessionStore?: SessionStore;
 }
 
 interface InitialPluginRegistrationOptions {
@@ -240,8 +247,9 @@ function createDefaultAudioEngine(): IAudioEngine {
  * Core Application Factory
  */
 export function createApp(options: CreateAppOptions = {}): AppInstance {
-  const initialProjectMetadata = options.initialProjectMetadata ?? createNewProjectMetadata();
-  const session = createSessionStore({ initialProjectMetadata });
+  const initialProjectMetadata =
+    options.sessionStore?.getState().project ?? options.initialProjectMetadata ?? createNewProjectMetadata();
+  const session = options.sessionStore ?? createSessionStore({ initialProjectMetadata });
   const audioEngine = options.audioEngine ?? createDefaultAudioEngine();
   const audioSourceRegistry = options.audioSourceRegistry ?? new AudioSourceRegistry(new BrowserObjectUrlAdapter());
   const audioSourceRepository = options.audioSourceRepository ?? new OpfsAudioSourceRepository();
@@ -282,6 +290,8 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   projectSyncDelegate.setDelegate(projectSync);
   const commandHistory = new CommandHistory();
   const commandExecutor = new CommandExecutor(session, controller, commandHistory, undoJournal, sessionRecovery);
+  const agentRuntimeCommands = new AgentRuntimeCommandExecutor(controller.agentRuntime);
+  const sessionQuery = createSessionQuery(session);
   const commandHistoryQuery = createCommandHistoryQuery(commandHistory);
   const playbackClock = new PlaybackClockQuery(controller.playback);
   const meter = new MeterQuery(controller.meter);
@@ -312,7 +322,8 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     billingClient,
     audioRuntimeCapabilities,
     ...audioSourceCapabilities,
-    session,
+    session: sessionQuery,
+    agentRuntimeCommands,
     commandExecutor,
     commandHistory: commandHistoryQuery,
     midiInput,
@@ -332,6 +343,10 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   };
 }
 
-export function createCliTestApp(): AppInstance {
-  return createApp({ audioEngine: new MockAudioEngine(), projectRepository: new InMemoryProjectRepository() });
+export function createCliTestApp(options: Pick<CreateAppOptions, 'sessionStore'> = {}): AppInstance {
+  return createApp({
+    ...options,
+    audioEngine: new MockAudioEngine(),
+    projectRepository: new InMemoryProjectRepository(),
+  });
 }

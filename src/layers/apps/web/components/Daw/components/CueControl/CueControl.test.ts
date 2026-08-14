@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCliTestApp } from '@/layers/apps/create-app';
 import { LayerProvider } from '@/layers/apps/web/context/layer-provider';
 import { AudioCommandType } from '@/layers/shared/types/audioCommand.schema';
+import { createSessionStore } from '@/layers/session/session';
 import { CueControl } from './CueControl';
 
 vi.mock('./CueControl.css', () => ({
@@ -32,6 +33,17 @@ const PERFORMANCE_ID = '33333333-3333-4333-8333-333333333333';
 const EVENT_ID = '44444444-4444-4444-8444-444444444444';
 const mountedRoots: Root[] = [];
 
+function createTestApp() {
+  const sessionStore = createSessionStore({
+    initialProjectMetadata: {
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      name: '테스트 프로젝트',
+      revision: 0,
+    },
+  });
+  return { app: createCliTestApp({ sessionStore }), sessionStore };
+}
+
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 afterEach(() => {
@@ -41,13 +53,13 @@ afterEach(() => {
 
 describe('CueControl', () => {
   it('Clip 실행과 Cue 기록 명령을 UI에서 전달한다', async () => {
-    const app = createCliTestApp();
+    const { app, sessionStore } = createTestApp();
     await app.commandExecutor.execute({ trackId: TRACK_ID, type: AudioCommandType.ADD_TRACK });
     const slot = app.session.getState().tracks.get(TRACK_ID)?.loopSlots?.[0];
     if (!slot) {
       throw new Error('테스트 Clip Slot이 없습니다.');
     }
-    app.session.getState().updateLoopSlot({
+    sessionStore.getState().updateLoopSlot({
       slotId: slot.id,
       trackId: TRACK_ID,
       updates: { sourceId: SOURCE_ID, state: 'stopped' },
@@ -76,13 +88,13 @@ describe('CueControl', () => {
   });
 
   it('저장된 Cue 연주를 arrangement 변환과 삭제 명령으로 전달한다', async () => {
-    const app = createCliTestApp();
+    const { app, sessionStore } = createTestApp();
     await app.commandExecutor.execute({ trackId: TRACK_ID, type: AudioCommandType.ADD_TRACK });
     const slot = app.session.getState().tracks.get(TRACK_ID)?.loopSlots?.[0];
     if (!slot) {
       throw new Error('테스트 Clip Slot이 없습니다.');
     }
-    app.session.getState().setCueState({
+    sessionStore.getState().setCueState({
       performances: [
         {
           createdAt: '2026-08-14T00:00:00.000Z',

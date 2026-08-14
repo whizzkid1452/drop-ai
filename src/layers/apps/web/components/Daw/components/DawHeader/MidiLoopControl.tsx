@@ -5,7 +5,6 @@ import {
   useMidiInput,
   useSession,
 } from '@/layers/apps/web/context/layer-hooks';
-import { useLayer } from '@/layers/apps/web/context/layer-context';
 import { describeAudioRuntimeFeatureCapability } from '@/layers/apps/web/utils/audio-runtime-capability-labels';
 import type { MidiInputDevice } from '@/layers/midi-input/i-midi-input';
 import { createMidiLoopCommand } from '@/layers/apps/web/midi/create-midi-loop-command';
@@ -19,7 +18,6 @@ function describeError(error: unknown): string {
 }
 
 export function MidiLoopControl() {
-  const app = useLayer();
   const capabilities = useAudioRuntimeCapabilities();
   const commandExecutor = useCommandExecutor();
   const midiInput = useMidiInput();
@@ -46,7 +44,7 @@ export function MidiLoopControl() {
       if (midiChannel !== 0 && event.channel !== midiChannel) {
         return;
       }
-      const track = app.session.getState().tracks.get(targetTrackId);
+      const track = tracks.get(targetTrackId);
       if (!track && event.note !== 40) {
         return;
       }
@@ -59,7 +57,7 @@ export function MidiLoopControl() {
         setErrorMessage(describeError(error));
       });
     });
-  }, [app.session, commandExecutor, isLiveLoopAvailable, midiChannel, midiInput, targetTrackId]);
+  }, [commandExecutor, isLiveLoopAvailable, midiChannel, midiInput, targetTrackId, tracks]);
 
   useEffect(() => () => midiInput.disconnect(), [midiInput]);
 

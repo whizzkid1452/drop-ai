@@ -24,6 +24,7 @@ import { MidiController } from './midi-controller';
 import { MediaSourceController } from './media-source-controller';
 import { SessionLifecycleController } from './session-lifecycle-controller';
 import { CueController } from './cue-controller';
+import { AgentRuntimeController } from './agent-runtime-controller';
 import type { IMidiInput } from '../midi-input/i-midi-input';
 
 interface AppControllerDependencies {
@@ -61,6 +62,7 @@ export class AppController {
   public readonly mediaSource: MediaSourceController;
   public readonly sessionLifecycle: SessionLifecycleController;
   public readonly cue: CueController;
+  public readonly agentRuntime: AgentRuntimeController;
 
   constructor({
     sessionStore,
@@ -125,5 +127,6 @@ export class AppController {
       regionController: this.region,
       sessionStore,
     });
+    this.agentRuntime = new AgentRuntimeController(sessionStore);
   }
 }
